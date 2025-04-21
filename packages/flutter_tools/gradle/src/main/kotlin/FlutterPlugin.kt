@@ -8,6 +8,9 @@ import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.gradle.AbstractAppExtension
 import com.android.build.gradle.BaseExtension
 import com.android.build.gradle.LibraryExtension
+import com.android.build.gradle.internal.tasks.CompressAssetsTask
+import com.android.build.gradle.internal.tasks.PackageBundleTask
+import com.android.build.gradle.tasks.BundleAar
 import com.android.build.gradle.tasks.PackageAndroidArtifact
 import com.android.build.gradle.tasks.ProcessAndroidResources
 import com.flutter.gradle.FlutterPluginUtils.readPropertiesIfExist
@@ -24,6 +27,7 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.kotlin.dsl.support.serviceOf
+import org.gradle.kotlin.dsl.withType
 import org.gradle.process.ExecOperations
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -519,6 +523,13 @@ class FlutterPlugin : Plugin<Project> {
          */
         private const val FLUTTER_BUILD_PREFIX: String = "flutterBuild"
 
+        private inline fun <reified T : Task> findFirstTaskByTypeOrNull(project: Project): Task? =
+            try {
+                project.tasks.withType(T::class.java).first()
+            } catch (ignored: UnknownTaskException) {
+                null
+            }
+
         /**
          * Finds a task by name, returning null if the task does not exist.
          */
@@ -597,11 +608,7 @@ class FlutterPlugin : Plugin<Project> {
             // In add to app scenarios, a Gradle project contains a `:flutter` and `:app` project.
             // `:flutter` is used as a subproject when these tasks exists and the build isn't building an AAR.
             // TODO(gmackall): I think this is just always null? Which is great news! Consider removing.
-            val packageAssets: Task? =
-                findTaskOrNull(
-                    project,
-                    "package${FlutterPluginUtils.capitalize(variant.name)}Assets"
-                )
+            val packageAssets: Task? = findFirstTaskByTypeOrNull<PackageBundleTask>(project)
             val cleanPackageAssets: Task? =
                 findTaskOrNull(
                     project,
@@ -752,24 +759,18 @@ class FlutterPlugin : Plugin<Project> {
                     }
                 processResources.dependsOn(copyFlutterAssetsTask)
             }
+
             // The following tasks use the output of copyFlutterAssetsTask,
             // so it's necessary to declare it as an dependency since Gradle 8.
             // See https://docs.gradle.org/8.1/userguide/validation_problems.html#implicit_dependency.
-            val tasksToCheck =
-                listOf(
-                    "compress${FlutterPluginUtils.capitalize(variant.name)}Assets",
-                    "bundle${FlutterPluginUtils.capitalize(variant.name)}Aar",
-                    "bundle${FlutterPluginUtils.capitalize(variant.name)}LocalLintAar"
-                )
-            tasksToCheck.forEach { taskTocheck ->
-                try {
-                    project.tasks.named(taskTocheck).configure {
-                        dependsOn(copyFlutterAssetsTask)
-                    }
-                } catch (ignored: UnknownTaskException) {
-                    // ignored
-                }
+            project.tasks.withType<BundleAar> {
+                dependsOn(copyFlutterAssetsTask)
             }
+
+            project.tasks.withType<CompressAssetsTask> {
+                dependsOn(copyFlutterAssetsTask)
+            }
+
             return copyFlutterAssetsTask
         }
     }

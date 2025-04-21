@@ -4,12 +4,19 @@ import com.android.build.api.dsl.ApplicationDefaultConfig
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.gradle.AbstractAppExtension
 import com.android.build.gradle.BaseExtension
+import com.android.build.gradle.api.ApplicationVariant
+import com.android.builder.model.BuildType
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.slot
 import io.mockk.verify
+import org.gradle.api.Action
+import org.gradle.api.DomainObjectSet
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.file.Directory
+import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -63,6 +70,34 @@ class FlutterPluginTest {
         // mock method calls that are invoked by the args to NativePluginLoaderReflectionBridge
         every { project.extraProperties } returns mockk()
         every { project.file(flutterExtension.source!!) } returns mockk()
+
+        val variants: MutableList<ApplicationVariant> = mutableListOf()
+        val mockTask = mockk<Task>(relaxed = true)
+        val mockAssembleProvider =
+            mockk<TaskProvider<Task>> {
+                every { get() } returns mockTask
+            }
+        val mockBuildType = mockk<BuildType>(relaxed = true)
+        val variant1 =
+            mockk<ApplicationVariant> {
+                every { name } returns "one"
+                every { applicationId } returns "com.example.FlutterActivity1"
+                every { assembleProvider } returns mockAssembleProvider
+                every { buildType } returns mockBuildType
+                every { flavorName } returns "flavor"
+            }
+        variants.add(variant1)
+        val actionSlot = slot<Action<ApplicationVariant>>()
+        every { mockAbstractAppExtension.applicationVariants } returns
+            mockk<DomainObjectSet<ApplicationVariant>> {
+                every { configureEach(capture(actionSlot)) } answers {
+                    // Execute the action for each variant.
+                    variants.forEach { variant ->
+                        actionSlot.captured.execute(variant)
+                    }
+                }
+            }
+
         val flutterPlugin = FlutterPlugin()
         flutterPlugin.apply(project)
 
