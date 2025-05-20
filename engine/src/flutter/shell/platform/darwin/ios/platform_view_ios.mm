@@ -183,6 +183,11 @@ void PlatformViewIOS::SetAccessibilityFeatures(int32_t flags) {
 }
 
 // |PlatformView|
+void PlatformViewIOS::ResizeView(int64_t view_id, double width, double height) {
+  // TODO(louisehsu): https://github.com/flutter/flutter/issues/169147
+}
+
+// |PlatformView|
 void PlatformViewIOS::UpdateSemantics(int64_t view_id,
                                       flutter::SemanticsNodeUpdates update,
                                       flutter::CustomAccessibilityActionUpdates actions) {

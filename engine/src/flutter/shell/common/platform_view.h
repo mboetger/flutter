@@ -496,6 +496,9 @@ class PlatformView {
   ///
   virtual void SetAccessibilityFeatures(int32_t flags);
 
+  // TODO: Copy-paste the documentation we're gonna write on Engine::Delegate?
+  virtual void ResizeView(int64_t view_id, double width, double height);
+
   //----------------------------------------------------------------------------
   /// @brief      Used by the framework to tell the embedder to apply the
   ///             specified semantics node updates. The default implementation

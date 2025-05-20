@@ -43,7 +43,9 @@
 
 namespace {
 
-static uint64_t NanosFromEpoch(int millis_from_now) {
+constexpr int64_t kImplicitViewId = 0;
+
+uint64_t NanosFromEpoch(int millis_from_now) {
   const auto now = fml::TimePoint::Now();
   const auto delta = fml::TimeDelta::FromMilliseconds(millis_from_now);
   return (now + delta).ToEpochDelta().ToNanoseconds();
@@ -798,6 +800,60 @@ TEST_F(EmbedderTest, CanSetCustomLogTag) {
   auto engine = builder.LaunchEngine();
   ASSERT_TRUE(engine.is_valid());
   callback_latch.Wait();
+}
+
+//------------------------------------------------------------------------------
+/// Tests that resize_view_callback is called if FlutterView.render() is called
+/// with a new size.
+TEST_F(EmbedderTest, ResizeCallbackCalledOnSizeChange) {
+  bool resize_called = false;
+
+  struct Expectations {
+    int64_t view_id;
+    double width;
+    double height;
+  };
+  std::array<Expectations, 2> expectations{
+      Expectations{0, 100.0, 101.0},  // First call.
+      Expectations{0, 200.0, 201.0},  // Second call.
+  };
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  context.SetResizeViewCallback([&resize_called, &expectations](int64_t view_id,
+                                                                double width,
+                                                                double height) {
+    static size_t i = 0;
+    EXPECT_EQ(view_id, expectations[i].view_id);
+    EXPECT_EQ(width, expectations[i].width);
+    EXPECT_EQ(height, expectations[i].height);
+    i++;
+    resize_called = true;
+  });
+
+  UniqueEngine engine;
+  auto task_runner = GetCurrentTaskRunner();
+  EmbedderTestTaskRunner merged_task_runner(task_runner, [&](FlutterTask task) {
+    if (!engine.is_valid()) {
+      return;
+    }
+    FlutterEngineRunTask(engine.get(), &task);
+  });
+  const auto merged_task_runner_description =
+      merged_task_runner.GetFlutterTaskRunnerDescription();
+
+  // Launch the test.
+  EmbedderConfigBuilder builder(context);
+  builder.SetDartEntrypoint("resize_view_called");
+  builder.SetSurface(SkISize::Make(1, 1));
+  builder.SetUITaskRunner(&merged_task_runner_description);
+  builder.SetPlatformTaskRunner(&merged_task_runner_description);
+  engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Spin until resize-view callback triggered.
+  while (!resize_called) {
+    fml::MessageLoop::GetCurrent().RunExpiredTasksNow();
+  }
+  resize_called = false;
 }
 
 //------------------------------------------------------------------------------

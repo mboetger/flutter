@@ -1322,6 +1322,20 @@ void custom_logger(List<String> args) {
 
 @pragma('vm:entry-point')
 // ignore: non_constant_identifier_names
+void resize_view_called(List<String> args) {
+  FlutterView implicitView = PlatformDispatcher.instance.implicitView!;
+  SceneBuilder builder = SceneBuilder();
+  Scene scene = builder.build();
+
+  // First call: new size; triggers a resize callback.
+  implicitView.render(scene, size: Size(100, 101));
+
+  // Second call: new size; triggers a resize callback.
+  implicitView.render(scene, size: Size(200, 201));
+}
+
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
 void dart_entrypoint_args(List<String> args) {
   nativeArgumentsCallback(args);
 }
