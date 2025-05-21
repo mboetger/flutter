@@ -1441,6 +1441,17 @@ public class FlutterJNI {
         / metrics.density;
   }
 
+  @Nullable
+  public void resizeView(int viewId, double width, double height) {
+    Log.d(TAG, "resizeView called with width " + width + ", and height " + height);
+    if (platformViewsController == null) {
+      Log.e(TAG, "platformViewsController must be set before attempting to resize a view");
+      return;
+    }
+    Log.d(TAG, "Calling resizeView on platformViewsController");
+    platformViewsController.onResizeView(viewId, width, height);
+  }
+
   // ----- Start Deferred Components Support ----
 
   /** Sets the deferred component manager that is used to download and install split features. */

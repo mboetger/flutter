@@ -1226,6 +1226,29 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   }
 
   /**
+   * Called when a platform view is resized.
+   *
+   * @param viewId
+   * @param width
+   * @param height
+   */
+  public void onResizeView(int viewId, double width, double height) {
+    Log.d(TAG, "onResizeView: " + width + ", " + height);
+    initializeRootImageViewIfNeeded();
+    if (!initializePlatformViewIfNeeded(viewId)) {
+      Log.e(TAG, "The platform view doesn't exist");
+      return;
+    }
+    Log.d(TAG, "Converting to physical pixels");
+    // Convert to int
+    int widthInt = toPhysicalPixels(width);
+    int heightInt = toPhysicalPixels(height);
+    Log.d(TAG, "onResizeView with Physical: " + widthInt + ", " + heightInt);
+    final FlutterMutatorView parentView = platformViewParent.get(viewId);
+    parentView.setLayoutParams(new FrameLayout.LayoutParams(widthInt, heightInt));
+  }
+
+  /**
    * Called when an overlay surface is displayed in the current frame.
    *
    * @param id The ID of the surface.

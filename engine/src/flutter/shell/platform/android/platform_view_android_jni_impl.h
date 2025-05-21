@@ -29,6 +29,8 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
       int responseId,
       std::unique_ptr<fml::Mapping> data) override;
 
+  void FlutterViewResizeView(int view_id, double width, double height) override;
+
   void FlutterViewUpdateSemantics(
       std::vector<uint8_t> buffer,
       std::vector<std::string> strings,

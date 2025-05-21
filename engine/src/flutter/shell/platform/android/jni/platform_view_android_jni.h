@@ -54,6 +54,13 @@ class PlatformViewAndroidJNI {
       std::unique_ptr<fml::Mapping> data) = 0;
 
   //----------------------------------------------------------------------------
+  /// @brief      Resize a FlutterView
+  ///
+  virtual void FlutterViewResizeView(int view_id,
+                                     double width,
+                                     double height) = 0;
+
+  //----------------------------------------------------------------------------
   /// @brief      Sends semantics tree updates.
   ///
   /// @note       Must be called from the platform thread.

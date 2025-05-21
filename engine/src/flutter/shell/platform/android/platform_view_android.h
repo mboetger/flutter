@@ -127,6 +127,9 @@ class PlatformViewAndroid final : public PlatformView {
   // |PlatformView|
   void SetupImpellerContext() override;
 
+  // |PlatformView|
+  void ResizeView(int64_t view_id, double width, double height) override;
+
  private:
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::shared_ptr<AndroidContext> android_context_;
@@ -137,9 +140,6 @@ class PlatformViewAndroid final : public PlatformView {
   std::unique_ptr<AndroidSurface> android_surface_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
-
-  // |PlatformView|
-  void ResizeView(int64_t view_id, double width, double height) override;
 
   // |PlatformView|
   void UpdateSemantics(

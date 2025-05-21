@@ -3080,3 +3080,31 @@ enum ViewFocusDirection {
   /// This is typically result of the user pressing shift + tab.
   backward,
 }
+
+// Computes the "min" value for a constraint that takes into account user `desired`
+// configuration and the actual available value.
+//
+// Returns the `desired` value unless it is `null`, in which case it returns the
+// `available` value.
+double _computeMinConstraintValue(double? desired, double available) {
+  assert(desired == null || desired >= 0, 'Minimum constraint must be >= 0 if set.');
+  assert(desired == null || desired.isFinite, 'Minimum constraint must be finite.');
+  return desired ?? available;
+}
+
+// Computes the "max" value for a constraint that takes into account user `desired`
+// configuration and the `available` size.
+//
+// Returns the `desired` value unless it is `null`, in which case it returns the
+// `available` value.
+//
+// A `desired` value of `Infinity` or `Number.POSITIVE_INFINITY` (from JS) means
+// "unconstrained".
+//
+// This method allows returning values larger than `available`, so the Flutter
+// app is able to stretch its container up to a certain value, without being
+// fully unconstrained.
+double _computeMaxConstraintValue(double? desired, double available) {
+  assert(desired == null || desired >= 0, 'Maximum constraint must be >= 0 if set.');
+  return desired ?? available;
+}

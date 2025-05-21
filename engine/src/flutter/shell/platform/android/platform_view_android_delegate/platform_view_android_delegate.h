@@ -26,6 +26,7 @@ class PlatformViewAndroidDelegate {
   void UpdateSemantics(
       const flutter::SemanticsNodeUpdates& update,
       const flutter::CustomAccessibilityActionUpdates& actions);
+  void ResizeView(int64_t view_id, double width, double height);
 
  private:
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;

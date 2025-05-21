@@ -21,6 +21,7 @@ import 'dart:isolate' show Isolate, IsolateSpawnException, RawReceivePort, Remot
 import 'dart:math' as math;
 import 'dart:nativewrappers';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 part 'annotations.dart';
 part 'channel_buffers.dart';

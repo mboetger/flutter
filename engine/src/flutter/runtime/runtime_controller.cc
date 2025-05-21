@@ -427,13 +427,18 @@ void RuntimeController::Render(int64_t view_id,
                                Scene* scene,
                                double width,
                                double height) {
+  FML_LOG(ERROR) << "Render called with view_id #" << view_id
+                 << " and width: " << width << " and height: " << height;
   const ViewportMetrics* view_metrics =
       UIDartState::Current()->platform_configuration()->GetMetrics(view_id);
   if (view_metrics == nullptr) {
     return;
   }
+  FML_LOG(ERROR) << "ViewMetrics have width: " << view_metrics->physical_width
+                 << " and height: " << view_metrics->physical_height;
   if (width != view_metrics->physical_width ||
       height != view_metrics->physical_height) {
+    FML_LOG(ERROR) << "Calling client_.ResizeView";
     client_.ResizeView(view_id, width, height);
   }
   client_.Render(view_id, scene->takeLayerTree(width, height),

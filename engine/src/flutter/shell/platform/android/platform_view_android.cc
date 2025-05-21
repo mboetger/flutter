@@ -317,6 +317,7 @@ void PlatformViewAndroid::ResizeView(int64_t view_id,
                                      double width,
                                      double height) {
   // TODO(mboetger): https://github.com/flutter/flutter/issues/149033
+  platform_view_android_delegate_.ResizeView(view_id, width, height);
 }
 
 // |PlatformView|

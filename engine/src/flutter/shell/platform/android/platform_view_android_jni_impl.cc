@@ -141,6 +141,8 @@ static jmethodID g_compute_platform_resolved_locale_method = nullptr;
 
 static jmethodID g_request_dart_deferred_library_method = nullptr;
 
+static jmethodID g_resize_view_method = nullptr;
+
 // Called By Java
 
 static jmethodID g_overlay_surface_id_method = nullptr;
@@ -1218,6 +1220,13 @@ bool PlatformViewAndroid::Register(JNIEnv* env) {
     return false;
   }
 
+  g_resize_view_method =
+      env->GetMethodID(g_flutter_jni_class->obj(), "resizeView", "(IDD)V");
+  if (g_resize_view_method == nullptr) {
+    FML_LOG(ERROR) << "Could not locate resizeView method";
+    return false;
+  }
+
   g_java_long_class = new fml::jni::ScopedJavaGlobalRef<jclass>(
       env, env->FindClass("java/lang/Long"));
   if (g_java_long_class->is_null()) {
@@ -1394,6 +1403,21 @@ double PlatformViewAndroidJNIImpl::FlutterViewGetScaledFontSize(
       static_cast<jfloat>(font_size), static_cast<jint>(configuration_id));
   FML_CHECK(fml::jni::CheckException(env));
   return static_cast<double>(scaledSize);
+}
+
+void PlatformViewAndroidJNIImpl::FlutterViewResizeView(int view_id,
+                                                       double width,
+                                                       double height) {
+  JNIEnv* env = fml::jni::AttachCurrentThread();
+
+  auto java_object = java_object_.get(env);
+  if (java_object.is_null()) {
+    return;
+  }
+  FML_LOG(ERROR) << "FlutterViewResizeView";
+  env->CallVoidMethod(java_object.obj(), g_resize_view_method, view_id, width,
+                      height);
+  FML_CHECK(fml::jni::CheckException(env));
 }
 
 void PlatformViewAndroidJNIImpl::FlutterViewUpdateSemantics(

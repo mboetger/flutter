@@ -139,6 +139,12 @@ PlatformViewAndroidDelegate::PlatformViewAndroidDelegate(
     std::shared_ptr<PlatformViewAndroidJNI> jni_facade)
     : jni_facade_(std::move(jni_facade)){};
 
+void PlatformViewAndroidDelegate::ResizeView(int64_t view_id,
+                                             double width,
+                                             double height) {
+  jni_facade_->FlutterViewResizeView(view_id, width, height);
+}
+
 void PlatformViewAndroidDelegate::UpdateSemantics(
     const flutter::SemanticsNodeUpdates& update,
     const flutter::CustomAccessibilityActionUpdates& actions) {
