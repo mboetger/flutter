@@ -492,6 +492,93 @@ action("flutter_shell_java") {
   ]
 }
 
+action("android_aar") {
+  script = "//build/android/gyp/create_flutter_aar.py"
+
+  if (stripped_symbols) {
+    engine_library = "lib.stripped/libflutter.so"
+  } else {
+    engine_library = "libflutter.so"
+  }
+
+  inputs = [
+    "$root_build_dir/$embedding_jar_filename",
+    "$root_build_dir/$engine_library",
+  ]
+
+  engine_artifact_id =
+      string_replace(android_app_abi, "-", "_") + "_" + flutter_runtime_mode
+
+  engine_aar_filename = "$engine_artifact_id.aar"
+
+  outputs = [
+    "$root_build_dir/flutter.aar",
+    "$root_build_dir/$engine_aar_filename",
+  ]
+
+  args = [
+    "--output",
+    rebase_path("flutter.aar", root_build_dir, root_build_dir),
+    "--output_native_jar",
+    rebase_path(engine_aar_filename, root_build_dir, root_build_dir),
+    "--dist_jar",
+    rebase_path(embedding_jar_filename, root_build_dir, root_build_dir),
+    "--native_lib",
+    rebase_path("$engine_library", root_build_dir, root_build_dir),
+    "--android_abi",
+    "$android_app_abi",
+  ]
+
+  deps = [
+    ":flutter_shell_java",
+    ":flutter_shell_native",
+    ":pom_embedding",
+    ":pom_libflutter",
+  ]
+
+  if (impeller_enable_vulkan_validation_layers) {
+    assert(impeller_enable_vulkan)
+
+    # We use a different toolchain here so that vulkan validation layers are
+    # built against API level 26, which they require, rather than the default.
+    # This is safe because the Engine can do a version check before loading the
+    # .so for the validation layers.
+    apilevel26_toolchain = "//build/toolchain/android:clang_arm64_apilevel26"
+    validation_layer_target =
+        "//third_party/vulkan_validation_layers($apilevel26_toolchain)"
+    deps += [ validation_layer_target ]
+    if (stripped_symbols) {
+      validation_library = "lib.stripped/libVkLayer_khronos_validation.so"
+    } else {
+      validation_layer_out_dir =
+          get_label_info(validation_layer_target, "root_out_dir")
+      validation_library = rebase_path(
+              "$validation_layer_out_dir/libVkLayer_khronos_validation.so")
+    }
+
+    args += [
+      "--native_lib",
+      validation_library,
+    ]
+    if (current_cpu != "arm64") {
+      # This may not be necessarily required anymore. It was kept to maintain
+      # old behavior.
+      assert(false, "Validation layers not supported for arch.")
+    }
+  }
+
+  if (flutter_runtime_mode == "profile") {
+    deps += [ "//flutter/shell/vmservice:vmservice_snapshot" ]
+    args += [
+      "--native_lib",
+      rebase_path(
+          "$root_gen_dir/flutter/shell/vmservice/android/libs/$android_app_abi/libvmservice_snapshot.so",
+          root_build_dir,
+          root_build_dir),
+    ]
+  }
+}
+
 action("android_jar") {
   script = "//build/android/gyp/create_flutter_jar.py"
 
