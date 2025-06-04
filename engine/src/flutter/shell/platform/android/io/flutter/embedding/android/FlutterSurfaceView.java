@@ -49,10 +49,15 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
   // Callbacks are received by this Object and then those messages are forwarded to our
   // FlutterRenderer, and then on to the JNI bridge over to native Flutter code.
   private final SurfaceHolder.Callback surfaceCallback =
-      new SurfaceHolder.Callback() {
+      new SurfaceHolder.Callback2() {
+        @Override
+        public void surfaceRedrawNeeded(@NonNull SurfaceHolder holder) {
+          Log.v(TAG, "SurfaceHolder.Callback2.surfaceRedrawNeeded()");
+        }
+
         @Override
         public void surfaceCreated(@NonNull SurfaceHolder holder) {
-          Log.v(TAG, "SurfaceHolder.Callback.startRenderingToSurface()");
+          Log.v(TAG, "SurfaceHolder.Callback2.startRenderingToSurface()");
           isSurfaceAvailableForRendering = true;
 
           if (shouldNotify()) {
@@ -63,7 +68,7 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
         @Override
         public void surfaceChanged(
             @NonNull SurfaceHolder holder, int format, int width, int height) {
-          Log.v(TAG, "SurfaceHolder.Callback.surfaceChanged()");
+          Log.v(TAG, "SurfaceHolder.Callback2.surfaceChanged()");
           if (shouldNotify()) {
             changeSurfaceSize(width, height);
           }
@@ -71,31 +76,35 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
 
         @Override
         public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-          Log.v(TAG, "SurfaceHolder.Callback.stopRenderingToSurface()");
+          Log.v(TAG, "SurfaceHolder.Callback2.stopRenderingToSurface()");
           isSurfaceAvailableForRendering = false;
 
           if (shouldNotify()) {
             disconnectSurfaceFromRenderer();
           }
         }
-      };
-
-  private final FlutterUiDisplayListener flutterUiDisplayListener =
-      new FlutterUiDisplayListener() {
-        @Override
-        public void onFlutterUiDisplayed() {
-          Log.v(TAG, "onFlutterUiDisplayed()");
-          // Now that a frame is ready to display, take this SurfaceView from transparent to opaque.
-          setAlpha(1.0f);
-
-          if (flutterRenderer != null) {
-            flutterRenderer.removeIsDisplayingFlutterUiListener(this);
-          }
-        }
 
         @Override
-        public void onFlutterUiNoLongerDisplayed() {
-          // no-op
+        public void surfaceRedrawNeededAsync(
+            @NonNull SurfaceHolder holder, @NonNull Runnable finishDrawing) {
+          Log.v(TAG, "SurfaceHolder.Callback2.surfaceRedrawNeededAsync()");
+          // Start an asynchronous drawing operation
+          flutterRenderer.addIsDisplayingFlutterUiListener(
+              new FlutterUiDisplayListener() {
+                @Override
+                public void onFlutterUiDisplayed() {
+                  finishDrawing.run();
+
+                  if (flutterRenderer != null) {
+                    flutterRenderer.removeIsDisplayingFlutterUiListener(this);
+                  }
+                }
+
+                @Override
+                public void onFlutterUiNoLongerDisplayed() {
+                  // no-op
+                }
+              });
         }
       };
 
@@ -135,10 +144,6 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
     // Grab a reference to our underlying Surface and register callbacks with that Surface so we
     // can monitor changes and forward those changes on to native Flutter code.
     getHolder().addCallback(surfaceCallback);
-
-    // Keep this SurfaceView transparent until Flutter has a frame ready to render. This avoids
-    // displaying a black rectangle in our place.
-    setAlpha(0.0f);
   }
 
   // This is a work around for TalkBack.
@@ -194,7 +199,6 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
           "Already connected to a FlutterRenderer. Detaching from old one and attaching to new"
               + " one.");
       this.flutterRenderer.stopRenderingToSurface();
-      this.flutterRenderer.removeIsDisplayingFlutterUiListener(flutterUiDisplayListener);
     }
 
     this.flutterRenderer = flutterRenderer;
@@ -210,6 +214,7 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
    * FlutterSurfaceView}.
    */
   public void detachFromRenderer() {
+    Log.v(TAG, "Detaching from FlutterRenderer.");
     if (flutterRenderer != null) {
       // If we're attached to an Android window then we were rendering a Flutter UI. Now that
       // this FlutterSurfaceView is detached from the FlutterRenderer, we need to stop rendering.
@@ -222,7 +227,6 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
 
       // Make the SurfaceView invisible to avoid showing a black rectangle.
       setAlpha(0.0f);
-      flutterRenderer.removeIsDisplayingFlutterUiListener(flutterUiDisplayListener);
       flutterRenderer = null;
 
     } else {
@@ -247,7 +251,6 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
       Log.w(TAG, "resume() invoked when no FlutterRenderer was attached.");
       return;
     }
-    this.flutterRenderer.addIsDisplayingFlutterUiListener(flutterUiDisplayListener);
 
     // If we're already attached to an Android window then we're now attached to both a renderer
     // and the Android window. We can begin rendering now.
