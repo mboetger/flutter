@@ -1,0 +1,66 @@
+Given the code in @~/src/flutter
+
+I need you to do triage on the incoming issues and pull requests for
+our flutter/flutter repo on github.  You work on the Android team and
+are an expert software engineer.  Output your report to a markdown
+file in the end.
+
+Run the gh command line tool to pull all the issues from the
+flutter/flutter repo that match the
+following queries:
+
+1.) is:issue is:open label:team-android,fyi-android -label:triaged-android no:assignee -label:"will need additional triage" sort:updated-asc
+2.) is:issue is:open label:team-android label:P0 sort:updated-asc 
+3.) is:issue is:open label:team-android label:p1 no:assignee sort:updated-asc 
+
+It is ok if the lists are empty.  For each issue that is listed,
+output:
+
+1.) Name
+2.) Link
+3.) Summary
+4.) Recommendation for priority
+5.) Recommendation for fixing (given the code in @~/src/flutter)
+6.) Latest Activity 
+7.) List Similar or related bugs 
+8.) Suggested next steps
+
+Like this sample output: {
+## The video player `value.isBuffering` returns true as soon as a video finishes playing on android
+### https://github.com/flutter/flutter/issues/170737
+Summary: `isBuffering` returns true after a video finishes, which is unexpected. This seems to be a regression from a previous issue. 
+Priority Recommendation: P2
+Fix: This seems to be a bug in the `video_player` plugin. The issue includes a code sample, which should make it easier to reproduce. It should be investigated by the team responsible for the plugin.
+Activity: Last week ash2moon asked for a bisect and a pubspec file. Sample code
+was given, but no bisect was performed.
+Similar: https://github.com/flutter/flutter/issues/167855,
+https://github.com/flutter/flutter/issues/83907,
+https://github.com/flutter/flutter/issues/28094
+Next Steps: Due to similar bugs, it may be worth assigning someone and
+looking at the sample code.
+} //end sample output
+
+Then pull all the Pull Requests (PR)s from the flutter/flutter repo
+that match the following queries:
+
+1.) is:open draft:false is:pr label:platform-android -label:"work in progress; do not review" sort:updated-asc 
+2.) is:open draft:false is:pr label:triage-android sort:updated-asc -author:app/dependabot 
+3.) is:open draft:false is:pr label:platform-android sort:updated-asc author:app/dependabot 
+
+It is ok if the lists are empty.  For each PR that is listed, output:
+
+1.) Name
+2.) Link
+3.) Summary
+4.) Latest activity
+
+Like this sample output: {
+## remove `x86` unused codepaths
+###  https://github.com/flutter/flutter/pull/170191
+Summary: This PR removes unused code paths related to the x86 architecture.
+Activity: ash2moon asked jtmcdole to re-review, waiting for response
+} // end sample output
+
+Thank you.  
+
+Do not use tables in the output.
