@@ -16,10 +16,12 @@ struct ViewportMetrics {
                   double p_physical_width,
                   double p_physical_height,
                   double p_physical_touch_slop,
-                  size_t display_id);
+                  size_t p_display_id);
   ViewportMetrics(double p_device_pixel_ratio,
-                  double p_physical_width,
-                  double p_physical_height,
+                  double p_physical_width_min,
+                  double p_physical_width_max,
+                  double p_physical_height_min,
+                  double p_physical_height_max,
                   double p_physical_padding_top,
                   double p_physical_padding_right,
                   double p_physical_padding_bottom,
@@ -41,6 +43,10 @@ struct ViewportMetrics {
   double device_pixel_ratio = 1.0;
   double physical_width = 0;
   double physical_height = 0;
+  double physical_width_min = 0;
+  double physical_width_max = 0;
+  double physical_height_min = 0;
+  double physical_height_max = 0;
   double physical_padding_top = 0;
   double physical_padding_right = 0;
   double physical_padding_bottom = 0;

@@ -7,7 +7,6 @@ part of dart.ui;
 @pragma('vm:entry-point')
 void _addView(
   int viewId,
-  double devicePixelRatio,
   double width,
   double height,
   double viewPaddingTop,
@@ -27,9 +26,13 @@ void _addView(
   List<int> displayFeaturesType,
   List<int> displayFeaturesState,
   int displayId,
+  double minWidth,
+  double maxWidth,
+  double minHeight,
+  double maxHeight,
+  double devicePixelRatio,
 ) {
   final _ViewConfiguration viewConfiguration = _buildViewConfiguration(
-    devicePixelRatio,
     width,
     height,
     viewPaddingTop,
@@ -49,6 +52,11 @@ void _addView(
     displayFeaturesType,
     displayFeaturesState,
     displayId,
+    minWidth,
+    maxWidth,
+    minHeight,
+    maxHeight,
+    devicePixelRatio,
   );
   PlatformDispatcher.instance._addView(viewId, viewConfiguration);
 }
@@ -105,7 +113,6 @@ List<DisplayFeature> _decodeDisplayFeatures({
   required List<double> bounds,
   required List<int> type,
   required List<int> state,
-  required double devicePixelRatio,
 }) {
   assert(bounds.length / 4 == type.length, 'Bounds are rectangles, requiring 4 measurements each');
   assert(type.length == state.length);
@@ -115,16 +122,15 @@ List<DisplayFeature> _decodeDisplayFeatures({
     result.add(
       DisplayFeature(
         bounds: Rect.fromLTRB(
-          bounds[rectOffset] / devicePixelRatio,
-          bounds[rectOffset + 1] / devicePixelRatio,
-          bounds[rectOffset + 2] / devicePixelRatio,
-          bounds[rectOffset + 3] / devicePixelRatio,
+          bounds[rectOffset],
+          bounds[rectOffset + 1],
+          bounds[rectOffset + 2],
+          bounds[rectOffset + 3],
         ),
         type: DisplayFeatureType.values[type[i]],
-        state:
-            state[i] < DisplayFeatureState.values.length
-                ? DisplayFeatureState.values[state[i]]
-                : DisplayFeatureState.unknown,
+        state: state[i] < DisplayFeatureState.values.length
+            ? DisplayFeatureState.values[state[i]]
+            : DisplayFeatureState.unknown,
       ),
     );
   }
@@ -132,7 +138,6 @@ List<DisplayFeature> _decodeDisplayFeatures({
 }
 
 _ViewConfiguration _buildViewConfiguration(
-  double devicePixelRatio,
   double width,
   double height,
   double viewPaddingTop,
@@ -152,10 +157,20 @@ _ViewConfiguration _buildViewConfiguration(
   List<int> displayFeaturesType,
   List<int> displayFeaturesState,
   int displayId,
+  double minWidth,
+  double maxWidth,
+  double minHeight,
+  double maxHeight,
+  double devicePixelRatio,
 ) {
   return _ViewConfiguration(
-    devicePixelRatio: devicePixelRatio,
     size: Size(width, height),
+    constraints: ViewConstraints(
+      minWidth: minWidth,
+      maxWidth: maxWidth,
+      minHeight: minHeight,
+      maxHeight: maxHeight,
+    ),
     viewPadding: ViewPadding._(
       top: viewPaddingTop,
       right: viewPaddingRight,
@@ -187,16 +202,13 @@ _ViewConfiguration _buildViewConfiguration(
       bounds: displayFeaturesBounds,
       type: displayFeaturesType,
       state: displayFeaturesState,
-      devicePixelRatio: devicePixelRatio,
     ),
-    displayId: displayId,
   );
 }
 
 @pragma('vm:entry-point')
 void _updateWindowMetrics(
   int viewId,
-  double devicePixelRatio,
   double width,
   double height,
   double viewPaddingTop,
@@ -216,9 +228,13 @@ void _updateWindowMetrics(
   List<int> displayFeaturesType,
   List<int> displayFeaturesState,
   int displayId,
+  double minWidth,
+  double maxWidth,
+  double minHeight,
+  double maxHeight,
+  double devicePixelRatio,
 ) {
   final _ViewConfiguration viewConfiguration = _buildViewConfiguration(
-    devicePixelRatio,
     width,
     height,
     viewPaddingTop,
@@ -238,6 +254,11 @@ void _updateWindowMetrics(
     displayFeaturesType,
     displayFeaturesState,
     displayId,
+    minWidth,
+    maxWidth,
+    minHeight,
+    maxHeight,
+    devicePixelRatio,
   );
   PlatformDispatcher.instance._updateWindowMetrics(viewId, viewConfiguration);
 }

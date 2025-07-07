@@ -15,16 +15,35 @@ ViewportMetrics::ViewportMetrics(double p_device_pixel_ratio,
                                  double p_physical_height,
                                  double p_physical_touch_slop,
                                  size_t p_display_id)
-    : device_pixel_ratio(p_device_pixel_ratio),
-      physical_width(p_physical_width),
-      physical_height(p_physical_height),
-      physical_touch_slop(p_physical_touch_slop),
-      display_id(p_display_id) {}
+    : ViewportMetrics(p_device_pixel_ratio,
+                      p_physical_width,
+                      p_physical_width,
+                      p_physical_height,
+                      p_physical_height,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      p_physical_touch_slop,
+                      {},
+                      {},
+                      {},
+                      p_display_id) {}
 
 ViewportMetrics::ViewportMetrics(
     double p_device_pixel_ratio,
-    double p_physical_width,
-    double p_physical_height,
+    double p_physical_width_min,
+    double p_physical_width_max,
+    double p_physical_height_min,
+    double p_physical_height_max,
     double p_physical_padding_top,
     double p_physical_padding_right,
     double p_physical_padding_bottom,
@@ -43,8 +62,12 @@ ViewportMetrics::ViewportMetrics(
     const std::vector<int>& p_physical_display_features_state,
     size_t p_display_id)
     : device_pixel_ratio(p_device_pixel_ratio),
-      physical_width(p_physical_width),
-      physical_height(p_physical_height),
+      physical_width(p_physical_width_max),
+      physical_height(p_physical_height_max),
+      physical_width_min(p_physical_width_min),
+      physical_width_max(p_physical_width_max),
+      physical_height_min(p_physical_height_min),
+      physical_height_max(p_physical_height_max),
       physical_padding_top(p_physical_padding_top),
       physical_padding_right(p_physical_padding_right),
       physical_padding_bottom(p_physical_padding_bottom),
@@ -69,6 +92,10 @@ bool operator==(const ViewportMetrics& a, const ViewportMetrics& b) {
   return a.device_pixel_ratio == b.device_pixel_ratio &&
          a.physical_width == b.physical_width &&
          a.physical_height == b.physical_height &&
+         a.physical_width_min == b.physical_width_min &&
+         a.physical_width_max == b.physical_width_max &&
+         a.physical_height_min == b.physical_height_min &&
+         a.physical_height_max == b.physical_height_max &&
          a.physical_padding_top == b.physical_padding_top &&
          a.physical_padding_right == b.physical_padding_right &&
          a.physical_padding_bottom == b.physical_padding_bottom &&
@@ -96,14 +123,16 @@ bool operator==(const ViewportMetrics& a, const ViewportMetrics& b) {
 
 std::ostream& operator<<(std::ostream& os, const ViewportMetrics& a) {
   os << "DPR: " << a.device_pixel_ratio << " " << "Size: [" << a.physical_width
-     << "W " << a.physical_height << "H] " << "Padding: ["
-     << a.physical_padding_top << "T " << a.physical_padding_right << "R "
-     << a.physical_padding_bottom << "B " << a.physical_padding_left << "L] "
-     << "Insets: [" << a.physical_view_inset_top << "T "
-     << a.physical_view_inset_right << "R " << a.physical_view_inset_bottom
-     << "B " << a.physical_view_inset_left << "L] " << "Gesture Insets: ["
-     << a.physical_system_gesture_inset_top << "T "
-     << a.physical_system_gesture_inset_right << "R "
+     << "W " << a.physical_height << "H] " << "Constraints: [("
+     << a.physical_width_min << ", " << a.physical_width_max << ")W ("
+     << a.physical_height_min << ", " << a.physical_height_max << ")H] "
+     << "Padding: [" << a.physical_padding_top << "T "
+     << a.physical_padding_right << "R " << a.physical_padding_bottom << "B "
+     << a.physical_padding_left << "L] " << "Insets: ["
+     << a.physical_view_inset_top << "T " << a.physical_view_inset_right << "R "
+     << a.physical_view_inset_bottom << "B " << a.physical_view_inset_left
+     << "L] " << "Gesture Insets: [" << a.physical_system_gesture_inset_top
+     << "T " << a.physical_system_gesture_inset_right << "R "
      << a.physical_system_gesture_inset_bottom << "B "
      << a.physical_system_gesture_inset_left << "L] "
      << "Display Features: " << a.physical_display_features_type.size() << " "

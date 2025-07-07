@@ -1043,6 +1043,14 @@ typedef struct {
   size_t width;
   /// Physical height of the window.
   size_t height;
+  /// Minimum physical width of the window.
+  size_t width_min;
+  /// Maximum physical width of the window.
+  size_t width_max;
+  /// Minimum physical height of the window.
+  size_t height_min;
+  /// Maximum physical height of the window.
+  size_t height_max;
   /// Scale factor for the physical screen.
   double pixel_ratio;
   /// Horizontal physical location of the left side of the window on the screen.

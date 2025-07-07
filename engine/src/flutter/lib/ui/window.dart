@@ -139,7 +139,7 @@ class FlutterView {
   ///    observe when this value changes.
   ///  * [Display.devicePixelRatio], which reports the DPR of the display.
   ///    The value here is equal to the value exposed on [display].
-  double get devicePixelRatio => _viewConfiguration.devicePixelRatio;
+  double get devicePixelRatio => display.devicePixelRatio;
 
   /// The sizing constraints in physical pixels for this view.
   ///
@@ -164,10 +164,7 @@ class FlutterView {
   /// See also:
   ///
   ///  * [physicalSize], which returns the current size of the view.
-  // TODO(goderbauer): Wire this up so embedders can configure it. This will
-  //   also require to message the size provided to the render call back to the
-  //   embedder.
-  ViewConstraints get physicalConstraints => ViewConstraints.tight(physicalSize);
+  ViewConstraints get physicalConstraints => _viewConfiguration.constraints;
 
   /// The current dimensions of the rectangle as last reported by the platform
   /// into which scenes rendered in this view are drawn.
@@ -197,7 +194,15 @@ class FlutterView {
   ///
   ///  * [WidgetsBindingObserver], for a mechanism at the widgets layer to
   ///    observe when this value changes.
-  Size get physicalSize => _viewConfiguration.size;
+  Size get physicalSize {
+    if (_viewConfiguration.constraints.isTight) {
+      return Size(
+        _viewConfiguration.constraints.maxWidth,
+        _viewConfiguration.constraints.maxHeight,
+      );
+    }
+    return _viewConfiguration.size;
+  }
 
   /// The number of physical pixels on each side of the display rectangle into
   /// which the view can render, but over which the operating system will likely
@@ -452,7 +457,7 @@ class SingletonFlutterWindow extends FlutterView {
   // Gets its configuration from the FlutterView with the same ID if it exists.
   @override
   _ViewConfiguration get _viewConfiguration =>
-      platformDispatcher._views[viewId]?._viewConfiguration ?? super._viewConfiguration;
+      platformDispatcher._views[viewId]?._viewConfiguration ?? const _ViewConfiguration();
 
   /// A callback that is invoked whenever the [devicePixelRatio],
   /// [physicalSize], [padding], [viewInsets], [PlatformDispatcher.views], or

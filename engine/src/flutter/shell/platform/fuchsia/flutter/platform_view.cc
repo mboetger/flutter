@@ -336,29 +336,35 @@ void PlatformView::OnGetLayout(fuchsia::ui::composition::LayoutInfo info) {
   }
 
   float pixel_ratio = view_pixel_ratio_ ? *view_pixel_ratio_ : 1.0f;
+  double physical_width =
+      std::round(view_logical_size_.value()[0] * pixel_ratio);
+  double physical_height =
+      std::round(view_logical_size_.value()[1] * pixel_ratio);
   flutter::ViewportMetrics metrics{
-      pixel_ratio,  // device_pixel_ratio
-      std::round(view_logical_size_.value()[0] *
-                 pixel_ratio),  // physical_width
-      std::round(view_logical_size_.value()[1] *
-                 pixel_ratio),  // physical_height
-      0.0f,                     // physical_padding_top
-      0.0f,                     // physical_padding_right
-      0.0f,                     // physical_padding_bottom
-      0.0f,                     // physical_padding_left
-      0.0f,                     // physical_view_inset_top
-      0.0f,                     // physical_view_inset_right
-      0.0f,                     // physical_view_inset_bottom
-      0.0f,                     // physical_view_inset_left
-      0.0f,                     // p_physical_system_gesture_inset_top
-      0.0f,                     // p_physical_system_gesture_inset_right
-      0.0f,                     // p_physical_system_gesture_inset_bottom
-      0.0f,                     // p_physical_system_gesture_inset_left,
-      -1.0,                     // p_physical_touch_slop,
-      {},                       // p_physical_display_features_bounds
-      {},                       // p_physical_display_features_type
-      {},                       // p_physical_display_features_state
-      0,                        // p_display_id
+      pixel_ratio,      // device_pixel_ratio
+      physical_width,   // physical_width
+      physical_height,  // physical_height
+      physical_width,   // physical_width_min
+      physical_width,   // physical_width_max
+      physical_height,  // physical_height_min
+      physical_height,  // physical_height_max
+      0.0f,             // physical_padding_top
+      0.0f,             // physical_padding_right
+      0.0f,             // physical_padding_bottom
+      0.0f,             // physical_padding_left
+      0.0f,             // physical_view_inset_top
+      0.0f,             // physical_view_inset_right
+      0.0f,             // physical_view_inset_bottom
+      0.0f,             // physical_view_inset_left
+      0.0f,             // p_physical_system_gesture_inset_top
+      0.0f,             // p_physical_system_gesture_inset_right
+      0.0f,             // p_physical_system_gesture_inset_bottom
+      0.0f,             // p_physical_system_gesture_inset_left,
+      -1.0,             // p_physical_touch_slop,
+      {},               // p_physical_display_features_bounds
+      {},               // p_physical_display_features_type
+      {},               // p_physical_display_features_state
+      0,                // p_display_id
   };
   SetViewportMetrics(kFlutterImplicitViewId, metrics);
 

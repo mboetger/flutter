@@ -1069,8 +1069,7 @@ void Shell::OnPlatformViewSetViewportMetrics(int64_t view_id,
   FML_DCHECK(is_set_up_);
   FML_DCHECK(task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
 
-  if (metrics.device_pixel_ratio <= 0 || metrics.physical_width <= 0 ||
-      metrics.physical_height <= 0) {
+  if (metrics.device_pixel_ratio <= 0) {
     // Ignore invalid view-port metrics.
     return;
   }
@@ -1078,7 +1077,7 @@ void Shell::OnPlatformViewSetViewportMetrics(int64_t view_id,
   // This is the formula Android uses.
   // https://android.googlesource.com/platform/frameworks/base/+/39ae5bac216757bc201490f4c7b8c0f63006c6cd/libs/hwui/renderthread/CacheManager.cpp#45
   resource_cache_limit_ =
-      metrics.physical_width * metrics.physical_height * 12 * 4;
+      metrics.physical_width_max * metrics.physical_height_max * 12 * 4;
   size_t resource_cache_max_bytes =
       resource_cache_limit_calculator_->GetResourceCacheMaxBytes();
   task_runners_.GetRasterTaskRunner()->PostTask(
@@ -1098,8 +1097,7 @@ void Shell::OnPlatformViewSetViewportMetrics(int64_t view_id,
 
   {
     std::scoped_lock<std::mutex> lock(resize_mutex_);
-    expected_frame_sizes_[view_id] =
-        SkISize::Make(metrics.physical_width, metrics.physical_height);
+    expected_frame_constraints_[view_id] = metrics;
     device_pixel_ratio_ = metrics.device_pixel_ratio;
   }
 }
@@ -1733,9 +1731,21 @@ fml::TimePoint Shell::GetLatestFrameTargetTime() const {
 bool Shell::ShouldDiscardLayerTree(int64_t view_id,
                                    const flutter::LayerTree& tree) {
   std::scoped_lock<std::mutex> lock(resize_mutex_);
-  auto expected_frame_size = ExpectedFrameSize(view_id);
-  return !expected_frame_size.isEmpty() &&
-         ToSkISize(tree.frame_size()) != expected_frame_size;
+  if (expected_frame_constraints_.find(view_id) ==
+      expected_frame_constraints_.end()) {
+    return false;
+  }
+  const auto& constraints = expected_frame_constraints_.at(view_id);
+  const auto& frame_size = tree.frame_size();
+  if (frame_size.width < static_cast<int32_t>(constraints.physical_width_min) ||
+      frame_size.width > static_cast<int32_t>(constraints.physical_width_max) ||
+      frame_size.height <
+          static_cast<int32_t>(constraints.physical_height_min) ||
+      frame_size.height >
+          static_cast<int32_t>(constraints.physical_height_max)) {
+    return true;
+  }
+  return false;
 }
 
 // |ServiceProtocol::Handler|
@@ -2145,7 +2155,7 @@ void Shell::OnPlatformViewRemoveView(int64_t view_id,
       << "Unexpected request to remove the implicit view #"
       << kFlutterImplicitViewId << ". This view should never be removed.";
 
-  expected_frame_sizes_.erase(view_id);
+  expected_frame_constraints_.erase(view_id);
   task_runners_.GetUITaskRunner()->RunNowOrPostTask(
       task_runners_.GetUITaskRunner(),
       [&task_runners = task_runners_,           //
@@ -2336,14 +2346,6 @@ Shell::GetConcurrentWorkerTaskRunner() const {
     return nullptr;
   }
   return vm_->GetConcurrentWorkerTaskRunner();
-}
-
-SkISize Shell::ExpectedFrameSize(int64_t view_id) {
-  auto found = expected_frame_sizes_.find(view_id);
-  if (found == expected_frame_sizes_.end()) {
-    return SkISize::MakeEmpty();
-  }
-  return found->second;
 }
 
 }  // namespace flutter

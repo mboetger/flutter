@@ -26,8 +26,7 @@ typedef FrameCallback = void Function(Duration duration);
 /// overhead (as this is available in the release mode). The list is sorted in
 /// ascending order of time (earliest frame first). The timing of any frame
 /// will be sent within about 1 second (100ms if in the profile/debug mode)
-/// even if there are no later frames to batch. The timing of the first frame
-/// will be sent immediately without batching.
+/// even if there are no later frames to batch.
 /// {@endtemplate}
 typedef TimingsCallback = void Function(List<FrameTiming> timings);
 
@@ -531,21 +530,19 @@ class PlatformDispatcher {
     return PointerDataPacket(data: data);
   }
 
-  static ChannelCallback _keyDataListener(KeyDataCallback onKeyData, Zone zone) => (
-    ByteData? packet,
-    PlatformMessageResponseCallback callback,
-  ) {
-    _invoke1<KeyData>(
-      (KeyData keyData) {
-        final bool handled = onKeyData(keyData);
-        final Uint8List response = Uint8List(1);
-        response[0] = handled ? 1 : 0;
-        callback(response.buffer.asByteData());
-      },
-      zone,
-      _unpackKeyData(packet!),
-    );
-  };
+  static ChannelCallback _keyDataListener(KeyDataCallback onKeyData, Zone zone) =>
+      (ByteData? packet, PlatformMessageResponseCallback callback) {
+        _invoke1<KeyData>(
+          (KeyData keyData) {
+            final bool handled = onKeyData(keyData);
+            final Uint8List response = Uint8List(1);
+            response[0] = handled ? 1 : 0;
+            callback(response.buffer.asByteData());
+          },
+          zone,
+          _unpackKeyData(packet!),
+        );
+      };
 
   /// A callback that is invoked when key data is available.
   ///
@@ -577,12 +574,11 @@ class PlatformDispatcher {
 
     int offset = 0;
     final int charDataSize = packet.getUint64(kStride * offset++, _kFakeHostEndian);
-    final String? character =
-        charDataSize == 0
-            ? null
-            : utf8.decoder.convert(
-              packet.buffer.asUint8List(kStride * (offset + _kKeyDataFieldCount), charDataSize),
-            );
+    final String? character = charDataSize == 0
+        ? null
+        : utf8.decoder.convert(
+            packet.buffer.asUint8List(kStride * (offset + _kKeyDataFieldCount), charDataSize),
+          );
 
     final KeyData keyData = KeyData(
       timeStamp: Duration(microseconds: packet.getUint64(kStride * offset++, _kFakeHostEndian)),
@@ -1310,7 +1306,7 @@ class PlatformDispatcher {
     _onSemanticsActionEventZone = Zone.current;
   }
 
-  // Called from the engine via hooks.dart.
+  // Called from the engine, via hooks.dart.
   void _updateFrameData(int frameNumber) {
     final FrameData previous = _frameData;
     if (previous.frameNumber == frameNumber) {
@@ -1860,15 +1856,16 @@ class _PlatformConfiguration {
 /// An immutable view configuration.
 class _ViewConfiguration {
   const _ViewConfiguration({
+    this.displayId = 0,
     this.devicePixelRatio = 1.0,
     this.size = Size.zero,
+    this.constraints = const ViewConstraints(),
     this.viewInsets = ViewPadding.zero,
     this.viewPadding = ViewPadding.zero,
     this.systemGestureInsets = ViewPadding.zero,
     this.padding = ViewPadding.zero,
     this.gestureSettings = const GestureSettings(),
     this.displayFeatures = const <DisplayFeature>[],
-    this.displayId = 0,
   });
 
   /// The identifier for a display for this view, in
@@ -1877,6 +1874,9 @@ class _ViewConfiguration {
 
   /// The pixel density of the output surface.
   final double devicePixelRatio;
+
+  /// The sizing constraints for the view in physical pixels.
+  final ViewConstraints constraints;
 
   /// The size requested for the view in physical pixels.
   final Size size;

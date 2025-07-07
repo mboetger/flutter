@@ -1621,6 +1621,10 @@ MakeViewportMetricsFromWindowMetrics(
 
   metrics.physical_width = SAFE_ACCESS(flutter_metrics, width, 0.0);
   metrics.physical_height = SAFE_ACCESS(flutter_metrics, height, 0.0);
+  metrics.physical_width_min = SAFE_ACCESS(flutter_metrics, width_min, 0.0);
+  metrics.physical_width_max = SAFE_ACCESS(flutter_metrics, width_max, 0.0);
+  metrics.physical_height_min = SAFE_ACCESS(flutter_metrics, height_min, 0.0);
+  metrics.physical_height_max = SAFE_ACCESS(flutter_metrics, height_max, 0.0);
   metrics.device_pixel_ratio = SAFE_ACCESS(flutter_metrics, pixel_ratio, 1.0);
   metrics.physical_view_inset_top =
       SAFE_ACCESS(flutter_metrics, physical_view_inset_top, 0.0);

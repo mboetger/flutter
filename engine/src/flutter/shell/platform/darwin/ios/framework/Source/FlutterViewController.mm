@@ -1478,6 +1478,10 @@ static flutter::PointerData::DeviceKind DeviceKindFromTouchType(UITouch* touch) 
   CGFloat scale = screen.scale;
   _viewportMetrics.physical_width = self.view.bounds.size.width * scale;
   _viewportMetrics.physical_height = self.view.bounds.size.height * scale;
+  _viewportMetrics.physical_width_min = _viewportMetrics.physical_width;
+  _viewportMetrics.physical_width_max = _viewportMetrics.physical_width;
+  _viewportMetrics.physical_height_min = _viewportMetrics.physical_height;
+  _viewportMetrics.physical_height_max = _viewportMetrics.physical_height;
 }
 
 // Set _viewportMetrics physical paddings.
