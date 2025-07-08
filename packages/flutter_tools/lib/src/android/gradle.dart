@@ -514,10 +514,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
         'Using local engine: ${localEngineInfo.targetOutPath}\n'
         'Local Maven repo: ${localEngineRepo.path}',
       );
-      options.add('-Plocal-engine-repo=${localEngineRepo.path}');
+      options.add('-Plocal-engine-repo="${localEngineRepo.path}"');
       options.add('-Plocal-engine-build-mode=${buildInfo.modeName}');
-      options.add('-Plocal-engine-out=${localEngineInfo.targetOutPath}');
-      options.add('-Plocal-engine-host-out=${localEngineInfo.hostOutPath}');
+      options.add('-Plocal-engine-out="${localEngineInfo.targetOutPath}"');
+      options.add('-Plocal-engine-host-out="${localEngineInfo.hostOutPath}"');
       options.add(
         '-Ptarget-platform=${_getTargetPlatformByLocalEnginePath(localEngineInfo.targetOutPath)}',
       );
@@ -527,7 +527,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
           .join(',');
       options.add('-Ptarget-platform=$targetPlatforms');
     }
-    options.add('-Ptarget=$target');
+    options.add('-Ptarget="$target"');
     // If using v1 embedding, we want to use FlutterApplication as the base app.
     final String baseApplicationName =
         project.android.getEmbeddingVersion() == AndroidEmbeddingVersion.v2
@@ -563,10 +563,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
     }
     options.addAll(androidBuildInfo.buildInfo.toGradleConfig());
     if (buildInfo.fileSystemRoots.isNotEmpty) {
-      options.add('-Pfilesystem-roots=${buildInfo.fileSystemRoots.join('|')}');
+      options.add('-Pfilesystem-roots="${buildInfo.fileSystemRoots.join('|')}"');
     }
     if (buildInfo.fileSystemScheme != null) {
-      options.add('-Pfilesystem-scheme=${buildInfo.fileSystemScheme}');
+      options.add('-Pfilesystem-scheme="${buildInfo.fileSystemScheme}"');
     }
     if (androidBuildInfo.splitPerAbi) {
       options.add('-Psplit-per-abi=true');
@@ -799,9 +799,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
     );
     final List<String> command = <String>[
       _gradleUtils.getExecutable(project),
-      '-I=$initScript',
-      '-Pflutter-root=$flutterRoot',
-      '-Poutput-dir=${outputDirectory.path}',
+      '-I="${initScript}"',
+      '-Pflutter-root="${flutterRoot}"',
+      '-Poutput-dir="${outputDirectory.path}"',
       '-Pis-plugin=${manifest.isPlugin}',
       '-PbuildNumber=$buildNumber',
     ];
@@ -817,7 +817,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     }
 
     if (target.isNotEmpty) {
-      command.add('-Ptarget=$target');
+      command.add('-Ptarget="$target"');
     }
     command.addAll(androidBuildInfo.buildInfo.toGradleConfig());
     if (buildInfo.dartObfuscation && buildInfo.mode != BuildMode.release) {
@@ -838,10 +838,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
         'Using local engine: ${localEngineInfo.targetOutPath}\n'
         'Local Maven repo: ${localEngineRepo.path}',
       );
-      command.add('-Plocal-engine-repo=${localEngineRepo.path}');
+      command.add('-Plocal-engine-repo="${localEngineRepo.path}"');
       command.add('-Plocal-engine-build-mode=${buildInfo.modeName}');
-      command.add('-Plocal-engine-out=${localEngineInfo.targetOutPath}');
-      command.add('-Plocal-engine-host-out=${localEngineInfo.hostOutPath}');
+      command.add('-Plocal-engine-out="${localEngineInfo.targetOutPath}"');
+      command.add('-Plocal-engine-host-out="${localEngineInfo.hostOutPath}"');
 
       // Copy the local engine repo in the output directory.
       try {
