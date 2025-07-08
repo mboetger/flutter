@@ -10,6 +10,8 @@ import android.graphics.Region;
 import android.util.AttributeSet;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
@@ -109,6 +111,7 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
   }
 
   private void init() {
+    Log.setLogLevel(Log.VERBOSE);
     // If transparency is desired then we'll enable a transparent pixel format and place
     // our Window above everything else to get transparent background rendering.
     if (renderTransparently) {
@@ -119,6 +122,77 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
     // Grab a reference to our underlying Surface and register callbacks with that Surface so we
     // can monitor changes and forward those changes on to native Flutter code.
     getHolder().addCallback(surfaceHolderCallbackCompat);
+  }
+
+  @Override
+  protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    Log.d(TAG, "Surface onMeasure(" + widthMeasureSpec + ", " + heightMeasureSpec + ")");
+    int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+    int parentSuggestedWidth = MeasureSpec.getSize(widthMeasureSpec);
+    int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+    int parentSuggestedHeight = MeasureSpec.getSize(heightMeasureSpec);
+
+    int finalHeight;
+
+    // --- Determine Height ---
+    switch (heightMode) {
+      case MeasureSpec.EXACTLY:
+        Log.d(TAG, "onMeasure 1");
+        // Parent has told us to be this exact size.
+        finalHeight = parentSuggestedHeight;
+        break;
+      case MeasureSpec.AT_MOST:
+        Log.d(TAG, "onMeasure 2");
+        // Parent has given us a maximum size. We want to fill it.
+        finalHeight = parentSuggestedHeight;
+        break;
+      case MeasureSpec.UNSPECIFIED:
+        Log.d(TAG, "onMeasure 3");
+        if (parentSuggestedHeight > 0) {
+          finalHeight = parentSuggestedHeight;
+        } else {
+          finalHeight = 1;
+        }
+        break;
+      default:
+        Log.d(TAG, "onMeasure 4");
+        finalHeight = 1; // Fallback
+        break;
+    }
+
+    // At least 1 pixel tall
+    finalHeight = Math.max(finalHeight, 1);
+
+    // Report the final dimensions. This MUST be called.
+    setMeasuredDimension(parentSuggestedWidth, finalHeight);
+  }
+
+  @Override
+  protected void onLayout(boolean changed, int l, int t, int r, int b) {
+    Log.d(TAG, "Surface onLayout(" + changed + ", " + l + ", " + t + ", " + r + ", " + b + ")");
+    ViewParent parent = this.getParent();
+    if (parent != null) {
+      ViewGroup.LayoutParams params = ((ViewGroup) parent).getLayoutParams();
+      if (params != null && params.height == ViewGroup.LayoutParams.WRAP_CONTENT) {
+        Log.d(TAG, "Surface onLayout - FlutterView's parent is set to wrap content.");
+      }
+    }
+    super.onLayout(changed, l, t, r, b);
+  }
+
+  @Override
+  protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
+    super.onSizeChanged(width, height, oldWidth, oldHeight);
+    Log.v(
+        TAG,
+        "Size changed. FlutterSurfaceView was "
+            + oldWidth
+            + " x "
+            + oldHeight
+            + ", it is now "
+            + width
+            + " x "
+            + height);
   }
 
   // This is a work around for TalkBack.
@@ -241,6 +315,8 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
 
   // FlutterRenderer and getSurfaceTexture() must both be non-null.
   private void connectSurfaceToRenderer() {
+    Log.v(TAG, "connectSurfaceToRenderer");
+
     if (flutterRenderer == null || getHolder() == null) {
       throw new IllegalStateException(
           "connectSurfaceToRenderer() should only be called when flutterRenderer and getHolder()"

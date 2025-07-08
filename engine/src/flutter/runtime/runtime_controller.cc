@@ -419,6 +419,7 @@ void RuntimeController::Render(int64_t view_id,
   if (view_metrics == nullptr) {
     return;
   }
+
   client_.Render(view_id, scene->takeLayerTree(width, height),
                  view_metrics->device_pixel_ratio);
   rendered_views_during_frame_.insert(view_id);

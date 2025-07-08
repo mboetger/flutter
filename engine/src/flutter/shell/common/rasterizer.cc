@@ -79,6 +79,7 @@ void Rasterizer::SetImpellerContext(
 }
 
 void Rasterizer::Setup(std::unique_ptr<Surface> surface) {
+  FML_LOG(ERROR) << "Rasterizer Setup";
   surface_ = std::move(surface);
 
   if (max_cache_bytes_.has_value()) {
@@ -477,11 +478,13 @@ Rasterizer::DoDrawResult Rasterizer::DoDraw(
                  .GetRasterTaskRunner()
                  ->RunsTasksOnCurrentThread());
   frame_timings_recorder->AssertInState(FrameTimingsRecorder::State::kBuildEnd);
+  FML_LOG(ERROR) << "Rasterizer doDraw";
 
   if (tasks.empty()) {
     return DoDrawResult{DoDrawStatus::kDone};
   }
   if (!surface_) {
+    FML_LOG(ERROR) << "Rasterizer doDraw - no surface";
     return DoDrawResult{DoDrawStatus::kNotSetUp};
   }
 
@@ -701,6 +704,7 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
     flutter::LayerTree& layer_tree,
     float device_pixel_ratio,
     std::optional<fml::TimePoint> presentation_time) {
+  FML_LOG(ERROR) << "Rasterizer draw to surface unsafe";
   FML_DCHECK(surface_);
 
   DlCanvas* embedder_root_canvas = nullptr;
@@ -717,6 +721,10 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
   // frame after calling `BeginFrame` as this operation resets the GL context.
   auto frame = surface_->AcquireFrame(layer_tree.frame_size());
   if (frame == nullptr) {
+    auto size = ToSkISize(layer_tree.frame_size());
+    FML_LOG(ERROR) << "Rasterizer android failed " << size.width() << ", "
+                   << size.height();
+
     return DrawSurfaceStatus::kFailed;
   }
 
@@ -791,10 +799,12 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
     if (external_view_embedder_ &&
         (!raster_thread_merger_ || raster_thread_merger_->IsMerged())) {
       FML_DCHECK(!frame->IsSubmitted());
+      FML_LOG(ERROR) << "Rasterizer frame flutter view";
       external_view_embedder_->SubmitFlutterView(
           view_id, surface_->GetContext(), surface_->GetAiksContext(),
           std::move(frame));
     } else {
+      FML_LOG(ERROR) << "Rasterizer frame submit";
       frame->Submit();
     }
 
@@ -814,6 +824,7 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
     }
   }
 
+  FML_LOG(ERROR) << "Rasterizer failed";
   return DrawSurfaceStatus::kFailed;
 }
 

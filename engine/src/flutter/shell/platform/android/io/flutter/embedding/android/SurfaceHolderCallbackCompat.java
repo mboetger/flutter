@@ -151,6 +151,12 @@ public class SurfaceHolderCallbackCompat implements SurfaceHolder.Callback2 {
         new FlutterUiDisplayListener() {
           @Override
           public void onFlutterUiDisplayed() {
+            Log.d(TAG, "FlutterUIDisplayed");
+            Log.d(TAG, "NEED TO RESIZE HERE?");
+            // POC
+            /*ViewGroup.LayoutParams params = flutterSurfaceView.getLayoutParams();
+            params.height = 144 * 3;
+            flutterSurfaceView.setLayoutParams(params);*/
             finishDrawing.run();
             if (flutterRenderer != null) {
               flutterRenderer.removeIsDisplayingFlutterUiListener(this);

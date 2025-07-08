@@ -359,6 +359,10 @@ void PlatformView::OnGetLayout(fuchsia::ui::composition::LayoutInfo info) {
       {},                       // p_physical_display_features_type
       {},                       // p_physical_display_features_state
       0,                        // p_display_id
+      physical_width,           // physical_width_min
+      physical_width,           // physical_width_max
+      physical_height,          // physical_height_min
+      physical_height,          // physical_height_max
   };
   SetViewportMetrics(kFlutterImplicitViewId, metrics);
 

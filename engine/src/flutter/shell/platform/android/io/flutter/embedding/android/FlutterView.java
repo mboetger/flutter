@@ -30,6 +30,7 @@ import android.view.Surface;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.ViewStructure;
 import android.view.WindowInsets;
 import android.view.accessibility.AccessibilityManager;
@@ -59,6 +60,7 @@ import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.embedding.engine.renderer.FlutterRenderer.DisplayFeatureState;
 import io.flutter.embedding.engine.renderer.FlutterRenderer.DisplayFeatureType;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
+import io.flutter.embedding.engine.renderer.FlutterUiResizeListener;
 import io.flutter.embedding.engine.renderer.RenderSurface;
 import io.flutter.embedding.engine.systemchannels.SettingsChannel;
 import io.flutter.plugin.common.BinaryMessenger;
@@ -172,6 +174,14 @@ public class FlutterView extends FrameLayout
         public boolean deliverSelfNotifications() {
           // The Flutter app may change system settings.
           return true;
+        }
+      };
+
+  private final FlutterUiResizeListener flutterUiResizeListener =
+      new FlutterUiResizeListener() {
+        @Override
+        public void resizeSurfaceView(int width, int height) {
+          Log.v(TAG, "resize surface view Flutter UI: " + width + "," + height + "");
         }
       };
 
@@ -315,6 +325,7 @@ public class FlutterView extends FrameLayout
       @NonNull RenderMode renderMode,
       @NonNull TransparencyMode transparencyMode) {
     super(context, null);
+    Log.setLogLevel(Log.VERBOSE);
 
     if (renderMode == RenderMode.surface) {
       flutterSurfaceView =
@@ -424,6 +435,25 @@ public class FlutterView extends FrameLayout
    */
   public void removeOnFirstFrameRenderedListener(@NonNull FlutterUiDisplayListener listener) {
     flutterUiDisplayListeners.remove(listener);
+  }
+
+  @Override
+  protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    Log.d(TAG, "onMeasure(" + widthMeasureSpec + ", " + heightMeasureSpec + ")");
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+  }
+
+  @Override
+  protected void onLayout(boolean changed, int l, int t, int r, int b) {
+    Log.d(TAG, "onLayout(" + changed + ", " + l + ", " + t + ", " + r + ", " + b + ")");
+    ViewParent parent = this.getParent();
+    if (parent != null) {
+      ViewGroup.LayoutParams params = ((ViewGroup) parent).getLayoutParams();
+      if (params != null && params.height == ViewGroup.LayoutParams.WRAP_CONTENT) {
+        Log.d(TAG, "onLayout - FlutterView's parent is set to wrap content.");
+      }
+    }
+    super.onLayout(changed, l, t, r, b);
   }
 
   // ------- Start: Process View configuration that Flutter cares about. ------
@@ -1112,6 +1142,31 @@ public class FlutterView extends FrameLayout
     renderSurface.attachToRenderer(flutterRenderer);
     flutterRenderer.addIsDisplayingFlutterUiListener(flutterUiDisplayListener);
 
+    // Should always add?
+    flutterRenderer.addResizingFlutterUiListener(flutterUiResizeListener);
+    ViewGroup.LayoutParams viewParams = getLayoutParams();
+    if (viewParams != null) {
+      if (viewParams != null
+          && (viewParams.height == ViewGroup.LayoutParams.WRAP_CONTENT
+              || viewParams.width == ViewGroup.LayoutParams.WRAP_CONTENT)) {
+        Log.v(TAG, "Flutter view (not parent) set to wrap content");
+      }
+    }
+
+    ViewParent parent = this.getParent();
+    if (parent != null) {
+      ViewGroup.LayoutParams params = ((ViewGroup) parent).getLayoutParams();
+      if (params != null
+          && (params.height == ViewGroup.LayoutParams.WRAP_CONTENT
+              || params.width == ViewGroup.LayoutParams.WRAP_CONTENT)) {
+        Log.v(TAG, "adding resizing listener");
+        flutterRenderer.addResizingFlutterUiListener(flutterUiResizeListener);
+      } else {
+        Log.v(TAG, "removing resizing listener");
+        flutterRenderer.removeResizingFlutterUiListener(flutterUiResizeListener);
+      }
+    }
+
     // Initialize various components that know how to process Android View I/O
     // in a way that Flutter understands.
     mouseCursorPlugin = new MouseCursorPlugin(this, this.flutterEngine.getMouseCursorChannel());
@@ -1184,6 +1239,7 @@ public class FlutterView extends FrameLayout
             false,
             systemSettingsObserver);
 
+    Log.d(TAG, "Send initial viewport metrics.");
     sendViewportMetricsToFlutter();
 
     flutterEngine.getPlatformViewsController().attachToView(this);
@@ -1488,6 +1544,21 @@ public class FlutterView extends FrameLayout
     this.delegate = delegate;
   }
 
+  /*
+   * How do we possible calculate this?
+   */
+  private int[] getMaxSize() {
+    View parent = (View) this.getRootView();
+    // View parent = (View) this.getParent();
+    int width = parent.getWidth();
+    int height = parent.getHeight();
+    int paddingE = parent.getPaddingEnd();
+    int paddingS = parent.getPaddingStart();
+    int totalWidth = width - (paddingE + paddingS);
+    int totalHeight = height - (paddingE + paddingS);
+    return new int[] {totalWidth, totalHeight};
+  }
+
   private void sendViewportMetricsToFlutter() {
     if (!isAttachedToFlutterEngine()) {
       Log.w(
@@ -1499,6 +1570,26 @@ public class FlutterView extends FrameLayout
 
     viewportMetrics.devicePixelRatio = getResources().getDisplayMetrics().density;
     viewportMetrics.physicalTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+
+    ViewParent parent = this.getParent();
+    if (parent != null) {
+      ViewGroup.LayoutParams params = ((ViewGroup) parent).getLayoutParams();
+      if (params != null
+          && (params.height == ViewGroup.LayoutParams.WRAP_CONTENT
+              || params.width == ViewGroup.LayoutParams.WRAP_CONTENT)) {
+        Log.d(TAG, "FlutterView's parent is set to wrap content.");
+        final FlutterRenderer renderer = flutterEngine.getRenderer();
+        int[] metrics = getMaxSize();
+        viewportMetrics.minHeight = 0;
+        viewportMetrics.maxHeight = metrics[1]; // this should
+        // probably be
+        // infinity?
+        viewportMetrics.minWidth = 0;
+        viewportMetrics.maxWidth = metrics[0];
+      }
+    } else {
+      Log.d(TAG, "Parent is null");
+    }
 
     flutterEngine.getRenderer().setViewportMetrics(viewportMetrics);
   }

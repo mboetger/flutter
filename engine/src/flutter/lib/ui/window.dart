@@ -164,43 +164,7 @@ class FlutterView {
   /// See also:
   ///
   ///  * [physicalSize], which returns the current size of the view.
-  // TODO(goderbauer): Wire this up so embedders can configure it. This will
-  //   also require to message the size provided to the render call back to the
-  //   embedder. Change this from ViewConstraints.tight to a lookup of the
-  //   stored view constraints on the FlutterView object.
-  ViewConstraints get physicalConstraints {
-    final double dpr = devicePixelRatio;
-
-    return ViewConstraints(
-      minWidth: _computeMinConstraintValue(
-        _viewConfiguration.viewConstraints.minWidth,
-        physicalSize.width,
-      ),
-      minHeight: _computeMinConstraintValue(
-        _viewConfiguration.viewConstraints.minHeight,
-        physicalSize.height,
-      ),
-      maxWidth: _computeMaxConstraintValue(
-        _viewConfiguration.viewConstraints.maxWidth,
-        physicalSize.width,
-      ),
-      maxHeight: _computeMaxConstraintValue(
-        _viewConfiguration.viewConstraints.maxHeight,
-        physicalSize.height,
-      ),
-    );
-  }
-
-  double _computeMinConstraintValue(double? desired, double available) {
-    assert(desired == null || desired >= 0, 'Minimum constraint must be >= 0 if set.');
-    assert(desired == null || desired.isFinite, 'Minimum constraint must be finite.');
-    return desired ?? available;
-  }
-
-  double _computeMaxConstraintValue(double? desired, double available) {
-    assert(desired == null || desired >= 0, 'Maximum constraint must be >= 0 if set.');
-    return desired ?? available;
-  }
+  ViewConstraints get physicalConstraints => _viewConfiguration.viewConstraints;
 
   /// The current dimensions of the rectangle as last reported by the platform
   /// into which scenes rendered in this view are drawn.
@@ -230,7 +194,16 @@ class FlutterView {
   ///
   ///  * [WidgetsBindingObserver], for a mechanism at the widgets layer to
   ///    observe when this value changes.
-  Size get physicalSize => _viewConfiguration.size;
+  Size get physicalSize {
+    /*if (!_viewConfiguration.viewConstraints.isTight) {
+      print("window.dart constraints are not tight");
+      return Size(
+        _viewConfiguration.viewConstraints.maxWidth,
+        _viewConfiguration.viewConstraints.maxHeight,
+      );
+    }*/
+    return _viewConfiguration.size;
+  }
 
   /// The number of physical pixels on each side of the display rectangle into
   /// which the view can render, but over which the operating system will likely
@@ -408,11 +381,14 @@ class FlutterView {
   /// * [RendererBinding], the Flutter framework class which manages layout and
   ///   painting.
   void render(Scene scene, {Size? size}) {
+    var width = size?.width ?? physicalSize.width;
+    var height = size?.height ?? physicalSize.height;
+    print("window render called: $width x $height");
     _render(
       viewId,
       scene as _NativeScene,
-      600,
-      600
+      size?.width ?? physicalSize.width,
+      size?.height ?? physicalSize.height,
     );
   }
 

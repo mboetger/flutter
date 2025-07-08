@@ -349,6 +349,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
           final int physicalHeight = toPhysicalPixels(request.newLogicalHeight);
           final int viewId = request.viewId;
 
+          Log.d(TAG, "PlatformViewsController resize");
+
           if (usesVirtualDisplay(viewId)) {
             final float originalDisplayDensity = getDisplayDensity();
             final VirtualDisplayController vdController = vdControllers.get(viewId);
@@ -776,6 +778,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     platformViewParent = new SparseArray<>();
 
     motionEventTracker = MotionEventTracker.getInstance();
+    Log.setLogLevel(Log.VERBOSE);
   }
 
   /**

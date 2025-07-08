@@ -67,6 +67,7 @@ void AndroidExternalViewEmbedder::SubmitFlutterView(
     const std::shared_ptr<impeller::AiksContext>& aiks_context,
     std::unique_ptr<SurfaceFrame> frame) {
   TRACE_EVENT0("flutter", "AndroidExternalViewEmbedder::SubmitFlutterView");
+  FML_LOG(ERROR) << "AndroidExternalViewEmbedder::SubmitFlutterView";
   // TODO(dkwingsmt): This class only supports rendering into the implicit view.
   // Properly support multi-view in the future.
   FML_DCHECK(flutter_view_id == kFlutterImplicitViewId);
@@ -217,12 +218,17 @@ void AndroidExternalViewEmbedder::BeginFrame(
 void AndroidExternalViewEmbedder::PrepareFlutterView(
     DlISize frame_size,
     double device_pixel_ratio) {
+  FML_LOG(ERROR) << "AndroidExternalViewEmbedder::PrepareFlutterView";
+  FML_LOG(ERROR) << "Frame Size: " << "frame_size.width: " << frame_size.width
+                 << " frame_size.height: " << frame_size.height;
+
   Reset();
 
   // The surface size changed. Therefore, destroy existing surfaces as
   // the existing surfaces in the pool can't be recycled.
   if (frame_size_ != frame_size) {
     DestroySurfaces();
+    jni_facade_->MaybeResizeSurfaceView(frame_size.width, frame_size.height);
   }
   surface_pool_->SetFrameSize(frame_size);
 

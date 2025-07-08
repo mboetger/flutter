@@ -147,6 +147,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
     : _view = view {
     if (configuration != null) {
       this.configuration = configuration;
+      print("RenderView configuration: $configuration"); 
     }
     this.child = child;
   }
@@ -360,7 +361,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
         _updateSystemChrome();
       }
       assert(configuration.logicalConstraints.isSatisfiedBy(size));
-      _view.render(scene);
+      _view.render(scene, size: configuration.toPhysicalSize(size));
       scene.dispose();
       assert(() {
         if (debugRepaintRainbowEnabled || debugRepaintTextRainbowEnabled) {

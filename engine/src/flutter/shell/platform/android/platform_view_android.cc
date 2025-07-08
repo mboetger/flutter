@@ -529,6 +529,7 @@ void PlatformViewAndroid::InstallFirstFrameCallback() {
         platform_task_runner->PostTask([platform_view]() {
           // Back on Platform Task Runner.
           if (platform_view) {
+            FML_LOG(ERROR) << "PlatformViewAndroid::FireFirstFrameCallback";
             reinterpret_cast<PlatformViewAndroid*>(platform_view.get())
                 ->FireFirstFrameCallback();
           }

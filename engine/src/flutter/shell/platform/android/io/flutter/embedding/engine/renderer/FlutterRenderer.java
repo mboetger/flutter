@@ -88,16 +88,19 @@ public class FlutterRenderer implements TextureRegistry {
       new FlutterUiDisplayListener() {
         @Override
         public void onFlutterUiDisplayed() {
+          Log.v(TAG, "Displaying Flutter UI");
           isDisplayingFlutterUi = true;
         }
 
         @Override
         public void onFlutterUiNoLongerDisplayed() {
+          Log.v(TAG, "No longer displaying Flutter UI");
           isDisplayingFlutterUi = false;
         }
       };
 
   public FlutterRenderer(@NonNull FlutterJNI flutterJNI) {
+    Log.setLogLevel(Log.VERBOSE);
     this.flutterJNI = flutterJNI;
     this.flutterJNI.addIsDisplayingFlutterUiListener(flutterUiDisplayListener);
     ProcessLifecycleOwner.get()
@@ -123,6 +126,18 @@ public class FlutterRenderer implements TextureRegistry {
    */
   public boolean isDisplayingFlutterUi() {
     return isDisplayingFlutterUi;
+  }
+
+  /**
+   * Adds a listener that is invoked whenever this {@code FlutterRenderer} starts and stops painting
+   * pixels to an Android {@code View} hierarchy.
+   */
+  public void addResizingFlutterUiListener(@NonNull FlutterUiResizeListener listener) {
+    flutterJNI.addResizingFlutterUiListener(listener);
+  }
+
+  public void removeResizingFlutterUiListener(@NonNull FlutterUiResizeListener listener) {
+    flutterJNI.removeResizingFlutterUiListener(listener);
   }
 
   /**
@@ -1109,6 +1124,7 @@ public class FlutterRenderer implements TextureRegistry {
       // https://github.com/flutter/flutter/issues/95343
       stopRenderingToSurface();
     }
+    Log.v(TAG, "startRenderingToSurface");
 
     this.surface = surface;
 
@@ -1199,6 +1215,15 @@ public class FlutterRenderer implements TextureRegistry {
             + " x "
             + viewportMetrics.height
             + "\n"
+            + "Size Constraints: "
+            + viewportMetrics.minWidth
+            + ","
+            + viewportMetrics.maxWidth
+            + " x "
+            + viewportMetrics.minHeight
+            + ","
+            + viewportMetrics.maxHeight
+            + "\n"
             + "Padding - L: "
             + viewportMetrics.viewPaddingLeft
             + ", T: "
@@ -1272,7 +1297,11 @@ public class FlutterRenderer implements TextureRegistry {
         viewportMetrics.physicalTouchSlop,
         displayFeaturesBounds,
         displayFeaturesType,
-        displayFeaturesState);
+        displayFeaturesState,
+        viewportMetrics.minWidth,
+        viewportMetrics.maxWidth,
+        viewportMetrics.minHeight,
+        viewportMetrics.maxHeight);
   }
 
   public Bitmap getBitmap() {
@@ -1349,6 +1378,10 @@ public class FlutterRenderer implements TextureRegistry {
     public int systemGestureInsetBottom = 0;
     public int systemGestureInsetLeft = 0;
     public int physicalTouchSlop = unsetValue;
+    public int minWidth = 0;
+    public int maxWidth = 0;
+    public int minHeight = 0;
+    public int maxHeight = 0;
 
     /**
      * Whether this instance contains valid metrics for the Flutter application.
@@ -1356,6 +1389,16 @@ public class FlutterRenderer implements TextureRegistry {
      * @return True if width, height, and devicePixelRatio are > 0; false otherwise.
      */
     boolean validate() {
+      if (width == 0) {
+        Log.d(TAG, "Width is zero. " + minWidth + "," + maxWidth);
+        return minWidth > 0 || maxWidth > 0;
+      }
+
+      if (height == 0) {
+        Log.d(TAG, "Height is zero. " + minHeight + "," + maxHeight);
+        return minHeight > 0 || maxHeight > 0;
+      }
+
       return width > 0 && height > 0 && devicePixelRatio > 0;
     }
 

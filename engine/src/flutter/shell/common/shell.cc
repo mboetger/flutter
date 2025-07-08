@@ -1078,9 +1078,18 @@ void Shell::OnPlatformViewSetViewportMetrics(int64_t view_id,
   FML_DCHECK(is_set_up_);
   FML_DCHECK(task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
 
-  if (metrics.device_pixel_ratio <= 0 || metrics.physical_width <= 0 ||
-      metrics.physical_height <= 0) {
-    // Ignore invalid view-port metrics.
+  if (metrics.device_pixel_ratio <= 0) {
+    return;
+  }
+
+  if (metrics.physical_width == 0 &&
+      !(metrics.min_width_constraint > 0 || metrics.max_width_constraint > 0)) {
+    FML_LOG(ERROR) << "Ignoreing invalid viewport metrics width!";
+    return;
+  }
+  if (metrics.physical_height == 0 && !(metrics.min_height_constraint > 0 ||
+                                        metrics.max_height_constraint > 0)) {
+    FML_LOG(ERROR) << "Ignoreing invalid viewport metrics height!";
     return;
   }
 
@@ -1128,6 +1137,14 @@ void Shell::OnPlatformViewSetViewportMetrics(int64_t view_id,
           .max_height = metrics.physical_height,
       };
     }
+
+    FML_LOG(ERROR) << "expected_frame_constraints_ " << "min_width: "
+                   << expected_frame_constraints_[view_id].min_width << " x "
+                   << expected_frame_constraints_[view_id].max_width
+                   << "min_height: "
+                   << expected_frame_constraints_[view_id].min_height << " x "
+                   << expected_frame_constraints_[view_id].max_height;
+
     device_pixel_ratio_ = metrics.device_pixel_ratio;
   }
 }

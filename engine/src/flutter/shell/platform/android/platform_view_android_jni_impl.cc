@@ -96,9 +96,9 @@ static jfieldID g_jni_shell_holder_field = nullptr;
   V(g_on_engine_restart_method, onPreEngineRestart, "()V")                    \
   V(g_create_overlay_surface_method, createOverlaySurface,                    \
     "()Lio/flutter/embedding/engine/FlutterOverlaySurface;")                  \
-  V(g_destroy_overlay_surfaces_method, destroyOverlaySurfaces, "()V")
-
-//
+  V(g_destroy_overlay_surfaces_method, destroyOverlaySurfaces, "()V")         \
+  V(g_maybe_resize_surface_view, maybeResizeSurfaceView, "(II)V")             \
+  //
 
 #define FLUTTER_DECLARE_JNI(global_field, jni_name, jni_arg) \
   static jmethodID global_field = nullptr;
@@ -258,6 +258,7 @@ static void SurfaceCreated(JNIEnv* env,
   // Note: This frame ensures that any local references used by
   // ANativeWindow_fromSurface are released immediately. This is needed as a
   // workaround for https://code.google.com/p/android/issues/detail?id=68174
+  FML_LOG(ERROR) << "SurfaceCreated";
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
@@ -348,7 +349,11 @@ static void SetViewportMetrics(JNIEnv* env,
                                jint physicalTouchSlop,
                                jintArray javaDisplayFeaturesBounds,
                                jintArray javaDisplayFeaturesType,
-                               jintArray javaDisplayFeaturesState) {
+                               jintArray javaDisplayFeaturesState,
+                               jint physicalMinWidth,
+                               jint physicalMaxWidth,
+                               jint physicalMinHeight,
+                               jint physicalMaxHeight) {
   // Convert java->c++. javaDisplayFeaturesBounds, javaDisplayFeaturesType and
   // javaDisplayFeaturesState cannot be null
   jsize rectSize = env->GetArrayLength(javaDisplayFeaturesBounds);
@@ -371,6 +376,10 @@ static void SetViewportMetrics(JNIEnv* env,
       static_cast<double>(devicePixelRatio),
       static_cast<double>(physicalWidth),
       static_cast<double>(physicalHeight),
+      static_cast<double>(physicalMinWidth),
+      static_cast<double>(physicalMaxWidth),
+      static_cast<double>(physicalMinHeight),
+      static_cast<double>(physicalMaxHeight),
       static_cast<double>(physicalPaddingTop),
       static_cast<double>(physicalPaddingRight),
       static_cast<double>(physicalPaddingBottom),
@@ -389,6 +398,8 @@ static void SetViewportMetrics(JNIEnv* env,
       displayFeaturesState,
       0,  // Display ID
   };
+
+  FML_LOG(ERROR) << "Setting Viewport metrics";
 
   ANDROID_SHELL_HOLDER->GetPlatformView()->SetViewportMetrics(
       kFlutterImplicitViewId, metrics);
@@ -784,7 +795,7 @@ bool RegisterApi(JNIEnv* env) {
       },
       {
           .name = "nativeSetViewportMetrics",
-          .signature = "(JFIIIIIIIIIIIIIII[I[I[I)V",
+          .signature = "(JFIIIIIIIIIIIIIII[I[I[IIIII)V",
           .fnPtr = reinterpret_cast<void*>(&SetViewportMetrics),
       },
       {
@@ -2308,6 +2319,20 @@ void PlatformViewAndroidJNIImpl::hideOverlaySurface2() {
   }
 
   env->CallVoidMethod(java_object.obj(), g_hide_overlay_surface2_method);
+  FML_CHECK(fml::jni::CheckException(env));
+}
+
+void PlatformViewAndroidJNIImpl::MaybeResizeSurfaceView(int32_t width,
+                                                        int32_t height) const {
+  JNIEnv* env = fml::jni::AttachCurrentThread();
+
+  auto java_object = java_object_.get(env);
+  if (java_object.is_null()) {
+    return;
+  }
+
+  env->CallVoidMethod(java_object.obj(), g_maybe_resize_surface_view, width,
+                      height);
   FML_CHECK(fml::jni::CheckException(env));
 }
 
