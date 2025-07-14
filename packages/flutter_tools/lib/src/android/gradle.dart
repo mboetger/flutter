@@ -1101,8 +1101,13 @@ Iterable<String> findApkFilesModule(
   Logger logger,
   Analytics analytics,
 ) {
-  final Iterable<String> apkFileNames = _apkFilesFor(androidBuildInfo);
   final Directory apkDirectory = getApkDirectory(project);
+  final File unsignedApk = apkDirectory.childFile('app-unsigned.apk');
+  if (unsignedApk.existsSync()) {
+    return <String>[unsignedApk.path];
+  }
+
+  final Iterable<String> apkFileNames = _apkFilesFor(androidBuildInfo);
   final Iterable<File> apks = apkFileNames.expand<File>((String apkFileName) {
     File apkFile = apkDirectory.childFile(apkFileName);
     if (apkFile.existsSync()) {
