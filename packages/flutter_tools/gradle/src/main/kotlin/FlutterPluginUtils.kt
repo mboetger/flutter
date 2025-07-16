@@ -742,6 +742,25 @@ object FlutterPluginUtils {
         }
     }
 
+    @JvmStatic
+    @JvmName("addTaskForPrintApks")
+    internal fun addTaskForPrintApks(project: Project) {
+        val androidExtension = project.extensions.getByType(AbstractAppExtension::class.java)
+        project.tasks.register("printBuildApks") {
+            description = "Prints out all apks for this Android project"
+            doLast {
+                androidExtension.applicationVariants.forEach { variant ->
+                    variant.outputs
+                        .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
+                        .forEach { output ->
+                            val outputFileName = output.outputFileName
+                            println("OutputFile: $outputFileName") 
+                        }
+                }
+            }
+        }
+    }
+
     // Add a task that can be called on Flutter projects that prints the available build variants
     // in Gradle.
     //

@@ -53,6 +53,11 @@ import 'migrations/top_level_gradle_build_file_migration.dart';
 final _kBuildVariantRegex = RegExp('^BuildVariant: (?<$_kBuildVariantRegexGroupName>.*)\$');
 const _kBuildVariantRegexGroupName = 'variant';
 const _kBuildVariantTaskName = 'printBuildVariants';
+
+final _kBuildApksRegex = RegExp('^OutputFile: (?<$_kBuildApksRegexGroupName>.*)\$');
+const _kBuildApksRegexGroupName = 'apk';
+const _kBuildApksTaskName = 'printBuildApks';
+
 @visibleForTesting
 const failedToStripDebugSymbolsErrorMessage = r'''
 Release app bundle failed to strip debug symbols from native libraries.
@@ -634,6 +639,12 @@ class AndroidGradleBuilder implements AndroidBuilder {
     final Iterable<String> apkFilesPaths = project.isModule
         ? findApkFilesModule(project, androidBuildInfo, _logger, _analytics)
         : listApkPaths(androidBuildInfo);
+
+    final List<String> apks = await _getBuildApks(project: project);
+    for (final apkPath in apks) {
+      print('${_logger.terminal.successMark} Built ${_fileSystem.path.relative(apkPath)}');
+    }
+
     final Directory apkDirectory = getApkDirectory(project);
 
     // Generate sha1 for every generated APKs.
@@ -903,6 +914,48 @@ class AndroidGradleBuilder implements AndroidBuilder {
       'Built ${_fileSystem.path.relative(repoDirectory.path)}',
       color: TerminalColor.green,
     );
+  }
+
+  Future<List<String>> _getBuildApks({required FlutterProject project}) async {
+    late Stopwatch sw;
+    var exitCode = 1;
+    final results = <String>[];
+
+    try {
+      exitCode = await _runGradleTask(
+        _kBuildApksTaskName,
+        preRunTask: () {
+          sw = Stopwatch()..start();
+        },
+        postRunTask: () {
+          final Duration elapsedDuration = sw.elapsed;
+          _analytics.send(
+            Event.timing(
+              workflow: 'print',
+              variableName: 'android build apks',
+              elapsedMilliseconds: elapsedDuration.inMilliseconds,
+            ),
+          );
+        },
+        options: const <String>['-q'],
+        project: project,
+        localGradleErrors: gradleErrors,
+        gradleExecutablePath: _gradleUtils.getExecutable(project),
+        outputParser: (String line) {
+          if (_kBuildApksRegex.firstMatch(line) case final RegExpMatch match) {
+            results.add(match.namedGroup(_kBuildApksRegexGroupName)!);
+          }
+        },
+      );
+    } on Error catch (error) {
+      _logger.printError(error.toString());
+    }
+
+    if (exitCode != 0) {
+      return const <String>[];
+    }
+
+    return results;
   }
 
   @override

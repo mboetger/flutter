@@ -362,6 +362,7 @@ class FlutterPlugin : Plugin<Project> {
         if (FlutterPluginUtils.isFlutterAppProject(projectToAddTasksTo)) {
             FlutterPluginUtils.addTaskForPrintBuildVariants(projectToAddTasksTo)
             FlutterPluginUtils.addTasksForOutputsAppLinkSettings(projectToAddTasksTo)
+            FlutterPluginUtils.addTaskForPrintApks(projectToAddTasksTo)
         }
 
         val targetPlatforms: List<String> =
