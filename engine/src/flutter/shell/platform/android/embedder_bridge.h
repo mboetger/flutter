@@ -7,11 +7,14 @@
 
 #include "flutter/common/settings.h"
 #include "flutter/common/task_runners.h"
+#include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
+class EmbedderEngine;
+class PlatformViewAndroid;
 namespace shell {
 class Shell;
 }  // namespace shell
@@ -20,7 +23,8 @@ class EmbedderBridge {
  public:
   EmbedderBridge(const flutter::TaskRunners& task_runners,
                  const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-                 const flutter::Settings& settings);
+                 const flutter::Settings& settings,
+                 AndroidRenderingAPI rendering_api);
 
   ~EmbedderBridge();
 
@@ -35,11 +39,15 @@ class EmbedderBridge {
 
   shell::Shell& GetShell();
 
+  fml::WeakPtr<PlatformViewAndroid> GetPlatformView();
+
  private:
-  EmbedderFlutterEngine engine_ = nullptr;
+  std::unique_ptr<EmbedderEngine> embedder_engine_;
+  fml::WeakPtr<PlatformViewAndroid> platform_view_;
   flutter::TaskRunners task_runners_;
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   flutter::Settings settings_;
+  AndroidRenderingAPI rendering_api_;
 
   // Embedder API callbacks
   static bool MakeCurrent(void* user_data);
