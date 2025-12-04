@@ -113,8 +113,9 @@ PlatformViewAndroid::PlatformViewAndroid(
     const flutter::TaskRunners& task_runners,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
     const std::shared_ptr<flutter::AndroidContext>& android_context)
-    : PlatformView(delegate, task_runners),
-      jni_facade_(jni_facade),
+    : jni_facade_(jni_facade),
+      delegate_(delegate),
+      task_runners_(task_runners),
       android_context_(android_context),
       platform_view_android_delegate_(jni_facade),
       platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)) {
