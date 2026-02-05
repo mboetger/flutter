@@ -111,23 +111,6 @@ class PlatformViewAndroid final {
   // |PlatformView|
   void SetupImpellerContext();
 
-  // creates a new AndroidSurface based on the AndroidRenderingAPI of the
-  // context.
-  static std::unique_ptr<AndroidSurface> CreateAndroidSurface(
-      std::shared_ptr<AndroidContext> context);
-
- private:
-  PlatformView::Delegate& delegate_;
-  const TaskRunners task_runners_;
-  const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
-  std::shared_ptr<AndroidContext> android_context_;
-  std::unique_ptr<EmbedderSurfaceAndroid> embedder_surface_;
-
-  PlatformViewAndroidDelegate platform_view_android_delegate_;
-
-  std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
-  bool android_meets_hcpp_criteria_ = false;
-
   // |PlatformView|
   void UpdateSemantics(int64_t view_id,
                        flutter::SemanticsNodeUpdates update,
@@ -135,6 +118,9 @@ class PlatformViewAndroid final {
 
   // |PlatformView|
   void SetApplicationLocale(std::string locale);
+
+  // |PlatformView|
+  void SetSemanticsTreeEnabled(bool enabled);
 
   // |PlatformView|
   void HandlePlatformMessage(std::unique_ptr<flutter::PlatformMessage> message);
@@ -170,12 +156,35 @@ class PlatformViewAndroid final {
   // |PlatformView|
   void RequestDartDeferredLibrary(intptr_t loading_unit_id);
 
+  void AwaitVsync(intptr_t baton);
+
+  fml::WeakPtr<PlatformViewAndroid> GetWeakPtr();
+
+  // creates a new AndroidSurface based on the AndroidRenderingAPI of the
+  // context.
+  static std::unique_ptr<AndroidSurface> CreateAndroidSurface(
+      std::shared_ptr<AndroidContext> context);
+
+ private:
+  PlatformView::Delegate& delegate_;
+  const TaskRunners task_runners_;
+  const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
+  std::shared_ptr<AndroidContext> android_context_;
+  std::unique_ptr<EmbedderSurfaceAndroid> embedder_surface_;
+
+  PlatformViewAndroidDelegate platform_view_android_delegate_;
+
+  std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
+  bool android_meets_hcpp_criteria_ = false;
+
   void InstallFirstFrameCallback();
 
   void FireFirstFrameCallback();
 
   double GetScaledFontSize(double unscaled_font_size,
                            int configuration_id) const;
+
+  fml::WeakPtrFactory<PlatformViewAndroid> weak_factory_{this};
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewAndroid);
 };

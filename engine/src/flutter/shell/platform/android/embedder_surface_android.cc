@@ -69,9 +69,6 @@ EmbedderSurfaceAndroid::EmbedderSurfaceAndroid(
       delegate.OnPlatformViewGetSettings().impeller_enable_lazy_shader_mode  //
   );
   android_surface_ = surface_factory_->CreateSurface();
-=======
-  android_surface_ = surface_factory->CreateSurface();
->>>>>>> 94c2dfcd9b7 (create embedder surface)
 }
 
 EmbedderSurfaceAndroid::~EmbedderSurfaceAndroid() = default;
