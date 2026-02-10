@@ -537,7 +537,7 @@ static void SetSemanticsEnabled(JNIEnv* env,
                                 jobject jcaller,
                                 jlong shell_holder,
                                 jboolean enabled) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->SetSemanticsEnabled(enabled);
+  ANDROID_SHELL_HOLDER->GetPlatformView()->SetSemanticsTreeEnabled(enabled);
 }
 
 static void SetAccessibilityFeatures(JNIEnv* env,

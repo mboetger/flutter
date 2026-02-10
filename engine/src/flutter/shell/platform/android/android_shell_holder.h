@@ -112,7 +112,7 @@ class AndroidShellHolder {
  private:
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
-  fml::WeakPtr<PlatformViewAndroid> platform_view_;
+  std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   std::shared_ptr<ThreadHost> thread_host_;
   std::unique_ptr<Shell> shell_;
   bool is_valid_ = false;
@@ -136,7 +136,7 @@ class AndroidShellHolder {
                      const std::shared_ptr<ThreadHost>& thread_host,
                      std::unique_ptr<Shell> shell,
                      std::unique_ptr<APKAssetProvider> apk_asset_provider,
-                     const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+                     std::unique_ptr<PlatformViewAndroid> platform_view_android,
                      AndroidRenderingAPI rendering_api);
   static void ThreadDestructCallback(void* value);
   std::optional<RunConfiguration> BuildRunConfiguration(

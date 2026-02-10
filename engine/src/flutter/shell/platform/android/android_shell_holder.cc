@@ -26,7 +26,9 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/context/android_context.h"
+#include "flutter/shell/platform/android/embedder_surface_android.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
 namespace flutter {
 
@@ -112,19 +114,66 @@ AndroidShellHolder::AndroidShellHolder(
 
   thread_host_ = std::make_shared<ThreadHost>(host_config);
 
-  fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
   AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, &weak_platform_view, rendering_api](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
-        platform_view_android = std::make_unique<PlatformViewAndroid>(
+      [this, jni_facade, rendering_api](Shell& shell) {
+        platform_view_android_ = std::make_unique<PlatformViewAndroid>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             rendering_api            // rendering API
         );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        return platform_view_android;
+
+        auto embedder_surface = std::make_unique<EmbedderSurfaceAndroid>(
+            platform_view_android_->GetAndroidContext(),  // context
+            shell                                         // delegate
+        );
+
+        fml::WeakPtr<PlatformViewAndroid> weak_platform_view =
+            platform_view_android_->GetWeakPtr();
+        PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
+        dispatch_table.update_semantics_callback =
+            [weak_platform_view](
+                int64_t view_id, flutter::SemanticsNodeUpdates update,
+                flutter::CustomAccessibilityActionUpdates actions) {
+              if (weak_platform_view) {
+                weak_platform_view->UpdateSemantics(view_id, std::move(update),
+                                                    std::move(actions));
+              }
+            };
+        dispatch_table.platform_message_response_callback =
+            [weak_platform_view](std::unique_ptr<PlatformMessage> message) {
+              if (weak_platform_view) {
+                weak_platform_view->HandlePlatformMessage(std::move(message));
+              }
+            };
+        dispatch_table.vsync_callback = [weak_platform_view](intptr_t baton) {
+          if (weak_platform_view) {
+            weak_platform_view->AwaitVsync(baton);
+          }
+        };
+        dispatch_table.compute_platform_resolved_locale_callback =
+            [weak_platform_view](
+                const std::vector<std::string>& supported_locale_data) {
+              if (weak_platform_view) {
+                return weak_platform_view->ComputePlatformResolvedLocales(
+                    supported_locale_data);
+              }
+              return std::unique_ptr<std::vector<std::string>>();
+            };
+        dispatch_table.on_pre_engine_restart_callback = [weak_platform_view]() {
+          if (weak_platform_view) {
+            weak_platform_view->OnPreEngineRestart();
+          }
+        };
+
+        return std::make_unique<PlatformViewEmbedder>(
+            shell,                        // delegate
+            shell.GetTaskRunners(),       // task runners
+            std::move(embedder_surface),  // surface
+            std::move(dispatch_table),    // dispatch table
+            nullptr                       // external view embedder
+        );
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -178,8 +227,7 @@ AndroidShellHolder::AndroidShellHolder(
     FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
   }
 
-  platform_view_ = weak_platform_view;
-  FML_DCHECK(platform_view_);
+  FML_DCHECK(platform_view_android_);
   is_valid_ = shell_ != nullptr;
 }
 
@@ -189,11 +237,11 @@ AndroidShellHolder::AndroidShellHolder(
     const std::shared_ptr<ThreadHost>& thread_host,
     std::unique_ptr<Shell> shell,
     std::unique_ptr<APKAssetProvider> apk_asset_provider,
-    const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+    std::unique_ptr<PlatformViewAndroid> platform_view_android,
     AndroidRenderingAPI rendering_api)
     : settings_(settings),
       jni_facade_(jni_facade),
-      platform_view_(platform_view),
+      platform_view_android_(std::move(platform_view_android)),
       thread_host_(thread_host),
       shell_(std::move(shell)),
       apk_asset_provider_(std::move(apk_asset_provider)),
@@ -201,7 +249,7 @@ AndroidShellHolder::AndroidShellHolder(
   FML_DCHECK(jni_facade);
   FML_DCHECK(shell_);
   FML_DCHECK(shell_->IsSetup());
-  FML_DCHECK(platform_view_);
+  FML_DCHECK(platform_view_android_);
   FML_DCHECK(thread_host_);
   is_valid_ = shell_ != nullptr;
 }
@@ -235,14 +283,14 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   //
   // It's a weak pointer because it's owned by the Shell (which we're also)
   // making below. And the AndroidShellHolder then owns the Shell.
-  fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
+  std::unique_ptr<PlatformViewAndroid> spawned_platform_view_android;
 
   // Take out the old AndroidContext to reuse inside the PlatformViewAndroid
   // of the new Shell.
-  PlatformViewAndroid* android_platform_view = platform_view_.get();
-  // There's some indirection with platform_view_ being a weak pointer but
-  // we just checked that the shell_ exists above and a valid shell is the
-  // owner of the platform view so this weak pointer always exists.
+  PlatformViewAndroid* android_platform_view = platform_view_android_.get();
+  // There's some indirection with platform_view_android_ being a unique pointer
+  // but we just checked that the shell_ exists above and a valid shell is the
+  // owner of the platform view so this pointer always exists.
   FML_DCHECK(android_platform_view);
   std::shared_ptr<flutter::AndroidContext> android_context =
       android_platform_view->GetAndroidContext();
@@ -250,16 +298,65 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   // This is a synchronous call, so the captures don't have race checks.
   Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, android_context, &weak_platform_view](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
-        platform_view_android = std::make_unique<PlatformViewAndroid>(
+      [&jni_facade, android_context,
+       &spawned_platform_view_android](Shell& shell) {
+        spawned_platform_view_android = std::make_unique<PlatformViewAndroid>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             android_context          // Android context
         );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        return platform_view_android;
+
+        auto embedder_surface = std::make_unique<EmbedderSurfaceAndroid>(
+            spawned_platform_view_android->GetAndroidContext(),  // context
+            shell                                                // delegate
+        );
+
+        fml::WeakPtr<PlatformViewAndroid> weak_platform_view =
+            spawned_platform_view_android->GetWeakPtr();
+        PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
+        dispatch_table.update_semantics_callback =
+            [weak_platform_view](
+                int64_t view_id, flutter::SemanticsNodeUpdates update,
+                flutter::CustomAccessibilityActionUpdates actions) {
+              if (weak_platform_view) {
+                weak_platform_view->UpdateSemantics(view_id, std::move(update),
+                                                    std::move(actions));
+              }
+            };
+        dispatch_table.platform_message_response_callback =
+            [weak_platform_view](std::unique_ptr<PlatformMessage> message) {
+              if (weak_platform_view) {
+                weak_platform_view->HandlePlatformMessage(std::move(message));
+              }
+            };
+        dispatch_table.vsync_callback = [weak_platform_view](intptr_t baton) {
+          if (weak_platform_view) {
+            weak_platform_view->AwaitVsync(baton);
+          }
+        };
+        dispatch_table.compute_platform_resolved_locale_callback =
+            [weak_platform_view](
+                const std::vector<std::string>& supported_locale_data) {
+              if (weak_platform_view) {
+                return weak_platform_view->ComputePlatformResolvedLocales(
+                    supported_locale_data);
+              }
+              return std::unique_ptr<std::vector<std::string>>();
+            };
+        dispatch_table.on_pre_engine_restart_callback = [weak_platform_view]() {
+          if (weak_platform_view) {
+            weak_platform_view->OnPreEngineRestart();
+          }
+        };
+
+        return std::make_unique<PlatformViewEmbedder>(
+            shell,                        // delegate
+            shell.GetTaskRunners(),       // task runners
+            std::move(embedder_surface),  // surface
+            std::move(dispatch_table),    // dispatch table
+            nullptr                       // external view embedder
+        );
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -280,7 +377,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
       GetSettings(), jni_facade, thread_host_, std::move(shell),
-      apk_asset_provider_->Clone(), weak_platform_view,
+      apk_asset_provider_->Clone(), std::move(spawned_platform_view_android),
       android_context->RenderingApi()));
 }
 
@@ -314,8 +411,8 @@ Rasterizer::Screenshot AndroidShellHolder::Screenshot(
 }
 
 fml::WeakPtr<PlatformViewAndroid> AndroidShellHolder::GetPlatformView() {
-  FML_DCHECK(platform_view_);
-  return platform_view_;
+  FML_DCHECK(platform_view_android_);
+  return platform_view_android_->GetWeakPtr();
 }
 
 void AndroidShellHolder::NotifyLowMemoryWarning() {
