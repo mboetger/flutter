@@ -85,6 +85,33 @@ void main() {
       );
     });
 
+    testWithoutContext('respects FLUTTER_GRADLE_DIST_URL', () {
+      final Directory sampleAppAndroid = fileSystem.directory('/sample-app/android');
+      sampleAppAndroid.createSync(recursive: true);
+
+      final GradleUtils gradleUtils = GradleUtils(
+        cache: Cache.test(processManager: FakeProcessManager.any(), fileSystem: fileSystem),
+        platform: FakePlatform(environment: <String, String>{'FLUTTER_GRADLE_DIST_URL': 'file:///pre-downloaded/gradle.zip'}),
+        logger: BufferLogger.test(),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
+      );
+
+      gradleUtils.injectGradleWrapperIfNeeded(sampleAppAndroid);
+
+      expect(
+        sampleAppAndroid
+            .childDirectory('gradle')
+            .childDirectory('wrapper')
+            .childFile('gradle-wrapper.properties')
+            .readAsStringSync(),
+        'distributionBase=GRADLE_USER_HOME\n'
+        'distributionPath=wrapper/dists\n'
+        'zipStoreBase=GRADLE_USER_HOME\n'
+        'zipStorePath=wrapper/dists\n'
+        'distributionUrl=file:///pre-downloaded/gradle.zip\n',
+      );
+    });
+
     testWithoutContext('injects the wrapper when some files are missing', () {
       final Directory sampleAppAndroid = fileSystem.directory('/sample-app/android');
       sampleAppAndroid.createSync(recursive: true);

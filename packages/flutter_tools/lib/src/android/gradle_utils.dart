@@ -268,13 +268,15 @@ class GradleUtils {
     }
     propertiesDirectory.createSync(recursive: true);
     final String gradleVersion = getGradleVersionForAndroidPlugin(directory, _logger);
+    final String? gradleDistUrl = _platform.environment['FLUTTER_GRADLE_DIST_URL'];
+    final String distributionUrl = gradleDistUrl ?? 'https\\://services.gradle.org/distributions/gradle-$gradleVersion-all.zip';
     final propertyContents =
         '''
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
-distributionUrl=https\\://services.gradle.org/distributions/gradle-$gradleVersion-all.zip
+distributionUrl=$distributionUrl
 ''';
     propertiesFile.writeAsStringSync(propertyContents);
   }
