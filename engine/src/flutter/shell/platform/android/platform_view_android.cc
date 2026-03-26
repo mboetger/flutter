@@ -550,4 +550,30 @@ void PlatformViewAndroid::SetupImpellerContext() {
   }
 }
 
+void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
+                                             const ViewportMetrics& metrics) {
+  delegate_.OnPlatformViewSetViewportMetrics(view_id, metrics);
+}
+
+void PlatformViewAndroid::DispatchPointerDataPacket(
+    std::unique_ptr<PointerDataPacket> packet) {
+  delegate_.OnPlatformViewDispatchPointerDataPacket(std::move(packet));
+}
+
+void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
+  delegate_.OnPlatformViewSetAccessibilityFeatures(flags);
+}
+
+void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
+  delegate_.OnPlatformViewUnregisterTexture(texture_id);
+}
+
+void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
+  delegate_.OnPlatformViewMarkTextureFrameAvailable(texture_id);
+}
+
+void PlatformViewAndroid::ScheduleFrame() {
+  delegate_.OnPlatformViewScheduleFrame();
+}
+
 }  // namespace flutter

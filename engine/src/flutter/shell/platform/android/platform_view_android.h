@@ -165,13 +165,12 @@ class PlatformViewAndroid final {
   static std::unique_ptr<AndroidSurface> CreateAndroidSurface(
       std::shared_ptr<AndroidContext> context);
 
-  // TODO(boetger): implement
-  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics) {};
-  void DispatchPointerDataPacket(std::unique_ptr<PointerDataPacket> packet) {};
-  void SetAccessibilityFeatures(int32_t flags) {};
-  void UnregisterTexture(int64_t texture_id) {};
-  void MarkTextureFrameAvailable(int64_t texture_id) {};
-  void ScheduleFrame() {};
+  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
+  void DispatchPointerDataPacket(std::unique_ptr<PointerDataPacket> packet);
+  void SetAccessibilityFeatures(int32_t flags);
+  void UnregisterTexture(int64_t texture_id);
+  void MarkTextureFrameAvailable(int64_t texture_id);
+  void ScheduleFrame();
 
  private:
   PlatformView::Delegate& delegate_;
