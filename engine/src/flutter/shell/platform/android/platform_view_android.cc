@@ -124,16 +124,16 @@ PlatformViewAndroid::PlatformViewAndroid(
   if (android_context_) {
     FML_CHECK(android_context_->IsValid())
         << "Could not create surface from invalid Android context.";
-    embedder_surface_ =
-        std::make_unique<EmbedderSurfaceAndroid>(android_context_, delegate);
+    /*embedder_surface_ =
+        std::make_unique<EmbedderSurfaceAndroid>(android_context_, delegate);*/
     android_meets_hcpp_criteria_ =
         delegate.OnPlatformViewGetSettings().enable_surface_control &&
         android_get_device_api_level() >= kMinAPILevelHCPP &&
         delegate.OnPlatformViewGetSettings().enable_impeller;
-    FML_CHECK(embedder_surface_ && embedder_surface_->IsValid())
+    /*FML_CHECK(embedder_surface_ && embedder_surface_->IsValid())
         << "Could not create an OpenGL, Vulkan or Software surface to set "
            "up "
-           "rendering.";
+           "rendering.";*/
   }
 }
 
@@ -141,6 +141,8 @@ PlatformViewAndroid::~PlatformViewAndroid() = default;
 
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
+  FML_LOG(ERROR) << "PlatformViewAndroid::NotifyCreated";
+
   if (embedder_surface_) {
     InstallFirstFrameCallback();
 
@@ -155,7 +157,7 @@ void PlatformViewAndroid::NotifyCreated(
     latch.Wait();
   }
 
-  delegate_.OnPlatformViewCreated(CreateRenderingSurface());
+  platform_view_->NotifyCreated();
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
@@ -172,11 +174,11 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
     latch.Wait();
   }
 
-  delegate_.OnPlatformViewScheduleFrame();
+  platform_view_->ScheduleFrame();
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
-  delegate_.OnPlatformViewDestroyed();
+  platform_view_->NotifyDestroyed();
 
   if (embedder_surface_) {
     fml::AutoResetWaitableEvent latch;
@@ -220,7 +222,7 @@ void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
         response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
   }
 
-  delegate_.OnPlatformViewDispatchPlatformMessage(
+  platform_view_->DispatchPlatformMessage(
       std::make_unique<flutter::PlatformMessage>(
           std::move(name), std::move(message), std::move(response)));
 }
@@ -234,7 +236,7 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
         response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
   }
 
-  delegate_.OnPlatformViewDispatchPlatformMessage(
+  platform_view_->DispatchPlatformMessage(
       std::make_unique<flutter::PlatformMessage>(std::move(name),
                                                  std::move(response)));
 }
@@ -259,7 +261,7 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
   // TODO(team-android): Remove implicit view assumption.
   // https://github.com/flutter/flutter/issues/142845
   if (env->IsSameObject(args, NULL)) {
-    delegate_.OnPlatformViewDispatchSemanticsAction(
+    platform_view_->DispatchSemanticsAction(
         kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
         fml::MallocMapping());
     return;
@@ -268,7 +270,7 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
   uint8_t* args_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(args));
   auto args_vector = fml::MallocMapping::Copy(args_data, args_position);
 
-  delegate_.OnPlatformViewDispatchSemanticsAction(
+  platform_view_->DispatchSemanticsAction(
       kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
       std::move(args_vector));
 }
@@ -297,7 +299,7 @@ void PlatformViewAndroid::RegisterExternalTexture(
   switch (android_context_->RenderingApi()) {
     case AndroidRenderingAPI::kImpellerOpenGLES:
       // Impeller GLES.
-      delegate_.OnPlatformViewRegisterTexture(
+      platform_view_->RegisterTexture(
           std::make_shared<SurfaceTextureExternalTextureGLImpeller>(
               std::static_pointer_cast<impeller::ContextGLES>(
                   android_context_->GetImpellerContext()),  //
@@ -309,7 +311,7 @@ void PlatformViewAndroid::RegisterExternalTexture(
 #if !SLIMPELLER
     case AndroidRenderingAPI::kSkiaOpenGLES:
       // Legacy GL.
-      delegate_.OnPlatformViewRegisterTexture(
+      platform_view_->RegisterTexture(
           std::make_shared<SurfaceTextureExternalTextureGLSkia>(
               texture_id,       //
               surface_texture,  //
@@ -326,7 +328,7 @@ void PlatformViewAndroid::RegisterExternalTexture(
              "register surface textures to the new surface producer "
              "API. See https://docs.flutter.dev/release/breaking-changes/"
              "android-surface-plugins";
-      delegate_.OnPlatformViewRegisterTexture(
+      platform_view_->RegisterTexture(
           std::make_shared<SurfaceTextureExternalTextureVKImpeller>(
               std::static_pointer_cast<impeller::ContextVK>(
                   android_context_->GetImpellerContext()),  //
@@ -350,7 +352,7 @@ void PlatformViewAndroid::RegisterImageTexture(
 #if !SLIMPELLER
     case AndroidRenderingAPI::kSkiaOpenGLES:
       // Legacy GL.
-      delegate_.OnPlatformViewRegisterTexture(
+      platform_view_->RegisterTexture(
           std::make_shared<ImageExternalTextureGLSkia>(
               std::static_pointer_cast<AndroidContextGLSkia>(android_context_),
               texture_id, image_texture_entry, jni_facade_, lifecycle));
@@ -361,14 +363,14 @@ void PlatformViewAndroid::RegisterImageTexture(
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerOpenGLES:
       // Impeller GLES.
-      delegate_.OnPlatformViewRegisterTexture(
+      platform_view_->RegisterTexture(
           std::make_shared<ImageExternalTextureGLImpeller>(
               std::static_pointer_cast<impeller::ContextGLES>(
                   android_context_->GetImpellerContext()),
               texture_id, image_texture_entry, jni_facade_, lifecycle));
       break;
     case AndroidRenderingAPI::kImpellerVulkan:
-      delegate_.OnPlatformViewRegisterTexture(
+      platform_view_->RegisterTexture(
           std::make_shared<ImageExternalTextureVKImpeller>(
               std::static_pointer_cast<impeller::ContextVK>(
                   android_context_->GetImpellerContext()),
@@ -552,28 +554,28 @@ void PlatformViewAndroid::SetupImpellerContext() {
 
 void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
                                              const ViewportMetrics& metrics) {
-  delegate_.OnPlatformViewSetViewportMetrics(view_id, metrics);
+  platform_view_->SetViewportMetrics(view_id, metrics);
 }
 
 void PlatformViewAndroid::DispatchPointerDataPacket(
     std::unique_ptr<PointerDataPacket> packet) {
-  delegate_.OnPlatformViewDispatchPointerDataPacket(std::move(packet));
+  platform_view_->DispatchPointerDataPacket(std::move(packet));
 }
 
 void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
-  delegate_.OnPlatformViewSetAccessibilityFeatures(flags);
+  platform_view_->SetAccessibilityFeatures(flags);
 }
 
 void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
-  delegate_.OnPlatformViewUnregisterTexture(texture_id);
+  platform_view_->UnregisterTexture(texture_id);
 }
 
 void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
-  delegate_.OnPlatformViewMarkTextureFrameAvailable(texture_id);
+  platform_view_->MarkTextureFrameAvailable(texture_id);
 }
 
 void PlatformViewAndroid::ScheduleFrame() {
-  delegate_.OnPlatformViewScheduleFrame();
+  platform_view_->ScheduleFrame();
 }
 
 }  // namespace flutter

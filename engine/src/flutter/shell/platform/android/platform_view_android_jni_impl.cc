@@ -259,6 +259,7 @@ static void SurfaceCreated(JNIEnv* env,
                            jobject jcaller,
                            jlong shell_holder,
                            jobject jsurface) {
+  FML_LOG(ERROR) << "JNI::SurfaceCreated";
   // Note: This frame ensures that any local references used by
   // ANativeWindow_fromSurface are released immediately. This is needed as a
   // workaround for https://code.google.com/p/android/issues/detail?id=68174

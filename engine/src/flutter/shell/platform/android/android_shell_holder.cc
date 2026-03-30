@@ -117,6 +117,7 @@ AndroidShellHolder::AndroidShellHolder(
   AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [this, jni_facade, rendering_api](Shell& shell) {
+        FML_LOG(ERROR) << " WTF 2";
         platform_view_android_ = std::make_unique<PlatformViewAndroid>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
@@ -171,13 +172,17 @@ AndroidShellHolder::AndroidShellHolder(
           }
         };
 
-        return std::make_unique<PlatformViewEmbedder>(
+        auto platform_view = std::make_unique<PlatformViewEmbedder>(
             shell,                        // delegate
             shell.GetTaskRunners(),       // task runners
             std::move(embedder_surface),  // surface
             std::move(dispatch_table),    // dispatch table
             nullptr                       // external view embedder
         );
+
+        platform_view_android_->SetPlatformView(platform_view->GetWeakPtr());
+
+        return platform_view;
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -282,6 +287,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
       << "A new Shell can only be spawned "
          "if the current Shell is properly constructed";
 
+  FML_LOG(ERROR) << "AndroidShellHolder::Spawn";
+
   // Pull out the new PlatformViewAndroid from the new Shell to feed to it to
   // the new AndroidShellHolder.
   //
@@ -304,6 +311,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [&jni_facade, android_context,
        &spawned_platform_view_android](Shell& shell) {
+        FML_LOG(ERROR) << " WTF 1";
         spawned_platform_view_android = std::make_unique<PlatformViewAndroid>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners

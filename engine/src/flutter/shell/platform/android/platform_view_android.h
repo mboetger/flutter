@@ -172,12 +172,17 @@ class PlatformViewAndroid final {
   void MarkTextureFrameAvailable(int64_t texture_id);
   void ScheduleFrame();
 
+  void SetPlatformView(fml::WeakPtr<PlatformView> platform_view) {
+    platform_view_ = platform_view;
+  }
+
  private:
   PlatformView::Delegate& delegate_;
   const TaskRunners task_runners_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::shared_ptr<AndroidContext> android_context_;
   std::unique_ptr<EmbedderSurfaceAndroid> embedder_surface_;
+  fml::WeakPtr<PlatformView> platform_view_;
 
   PlatformViewAndroidDelegate platform_view_android_delegate_;
 
