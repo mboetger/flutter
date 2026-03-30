@@ -129,6 +129,10 @@ AndroidShellHolder::AndroidShellHolder(
             shell                                         // delegate
         );
 
+        /// Need something for this - this is an ANDROID specific
+        /// call.
+        embedder_surface->SetupImpellerContext();
+
         fml::WeakPtr<PlatformViewAndroid> weak_platform_view =
             platform_view_android_->GetWeakPtr();
         PlatformViewEmbedder::PlatformDispatchTable dispatch_table;

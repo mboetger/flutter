@@ -31,7 +31,9 @@ AndroidSurfaceFactoryImpl::AndroidSurfaceFactoryImpl(
 AndroidSurfaceFactoryImpl::~AndroidSurfaceFactoryImpl() = default;
 
 std::unique_ptr<AndroidSurface> AndroidSurfaceFactoryImpl::CreateSurface() {
+  FML_LOG(ERROR) << "Create Surface";
   if (android_context_->IsDynamicSelection()) {
+    FML_LOG(ERROR) << " 1 dynamic selection";
     auto cast_ptr = std::static_pointer_cast<AndroidContextDynamicImpeller>(
         android_context_);
     return std::make_unique<AndroidSurfaceDynamicImpeller>(cast_ptr);
@@ -39,18 +41,23 @@ std::unique_ptr<AndroidSurface> AndroidSurfaceFactoryImpl::CreateSurface() {
   switch (android_context_->RenderingApi()) {
 #if !SLIMPELLER
     case AndroidRenderingAPI::kSoftware:
+      FML_LOG(ERROR) << " 2 kSoftware";
       return std::make_unique<AndroidSurfaceSoftware>();
     case AndroidRenderingAPI::kSkiaOpenGLES:
+      FML_LOG(ERROR) << " 3 GLSkia";
       return std::make_unique<AndroidSurfaceGLSkia>(
           std::static_pointer_cast<AndroidContextGLSkia>(android_context_));
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerOpenGLES:
+      FML_LOG(ERROR) << " 4 OpenGLES";
       return std::make_unique<AndroidSurfaceGLImpeller>(
           std::static_pointer_cast<AndroidContextGLImpeller>(android_context_));
     case AndroidRenderingAPI::kImpellerVulkan:
+      FML_LOG(ERROR) << " 5 Vulkan";
       return std::make_unique<AndroidSurfaceVKImpeller>(
           std::static_pointer_cast<AndroidContextVKImpeller>(android_context_));
     case AndroidRenderingAPI::kImpellerAutoselect: {
+      FML_LOG(ERROR) << " 6 Vulkan";
       auto cast_ptr = std::static_pointer_cast<AndroidContextDynamicImpeller>(
           android_context_);
       return std::make_unique<AndroidSurfaceDynamicImpeller>(cast_ptr);
@@ -160,6 +167,7 @@ AndroidSurface* EmbedderSurfaceAndroid::GetAndroidSurface() const {
 }
 
 void EmbedderSurfaceAndroid::SetupImpellerContext() {
+  FML_LOG(ERROR) << "EmbedderSurfaceAndroid::SetupImpellerContext";
   android_context_->SetupImpellerContext();
   android_surface_->SetupImpellerSurface();
 }

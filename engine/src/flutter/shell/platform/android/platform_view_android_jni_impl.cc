@@ -1453,6 +1453,8 @@ double PlatformViewAndroidJNIImpl::FlutterViewGetScaledFontSize(
     return -3;
   }
 
+  FML_LOG(ERROR) << "PlatformViewAndroidJNIImpl::FlutterViewGetScaledFontSize";
+
   const jfloat scaledSize = env->CallFloatMethod(
       java_object.obj(), g_get_scaled_font_size_method,
       static_cast<jfloat>(font_size), static_cast<jint>(configuration_id));

@@ -69,12 +69,16 @@ bool AndroidSurfaceDynamicImpeller::OnScreenSurfaceResize(const DlISize& size) {
 }
 
 bool AndroidSurfaceDynamicImpeller::ResourceContextMakeCurrent() {
+  FML_LOG(ERROR) << "AndroidSurfaceDynamicImpeller::ResourceContextMakeCurrent";
   if (vulkan_surface_) {
+    FML_LOG(ERROR) << " vulkan";
     return vulkan_surface_->ResourceContextMakeCurrent();
   }
   if (gl_surface_) {
+    FML_LOG(ERROR) << " gl";
     return gl_surface_->ResourceContextMakeCurrent();
   }
+  FML_LOG(ERROR) << " whomp whomp";
   return false;
 }
 

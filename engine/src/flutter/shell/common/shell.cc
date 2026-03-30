@@ -319,6 +319,7 @@ std::unique_ptr<Shell> Shell::CreateShellOnPlatformThread(
            runtime_stage_backend = std::move(runtime_stage_backend),        //
            platform_view_ptr]() mutable {
             TRACE_EVENT0("flutter", "CreateImpellerContext");
+            FML_LOG(ERROR) << "Setup Impeller Context!!!";
             platform_view_ptr->SetupImpellerContext();
             std::shared_ptr<impeller::Context> impeller_context =
                 platform_view_ptr->GetImpellerContext();
