@@ -33,10 +33,6 @@ class JNIMock final : public PlatformViewAndroidJNI {
                std::vector<std::string> strings,
                std::vector<std::vector<uint8_t>> string_attribute_args),
               (override));
-  MOCK_METHOD(void,
-              FlutterViewSetApplicationLocale,
-              (std::string locale),
-              (override));
 
   MOCK_METHOD(void,
               FlutterViewSetSemanticsTreeEnabled,
@@ -162,11 +158,6 @@ class JNIMock final : public PlatformViewAndroidJNI {
   MOCK_METHOD(double, GetDisplayWidth, (), (override));
   MOCK_METHOD(double, GetDisplayHeight, (), (override));
   MOCK_METHOD(double, GetDisplayDensity, (), (override));
-
-  MOCK_METHOD(bool,
-              RequestDartDeferredLibrary,
-              (int loading_unit_id),
-              (override));
 
   MOCK_METHOD(double,
               FlutterViewGetScaledFontSize,

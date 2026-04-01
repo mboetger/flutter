@@ -284,11 +284,6 @@ void PlatformViewAndroid::UpdateSemantics(
 }
 
 // |PlatformView|
-void PlatformViewAndroid::SetApplicationLocale(std::string locale) {
-  jni_facade_->FlutterViewSetApplicationLocale(std::move(locale));
-}
-
-// |PlatformView|
 void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
   jni_facade_->FlutterViewSetSemanticsTreeEnabled(enabled);
 }
@@ -443,14 +438,6 @@ PlatformViewAndroid::ComputePlatformResolvedLocales(
     const std::vector<std::string>& supported_locale_data) {
   return jni_facade_->FlutterViewComputePlatformResolvedLocale(
       supported_locale_data);
-}
-
-// |PlatformView|
-void PlatformViewAndroid::RequestDartDeferredLibrary(intptr_t loading_unit_id) {
-  if (jni_facade_->RequestDartDeferredLibrary(loading_unit_id)) {
-    return;
-  }
-  return;  // TODO(garyq): Call LoadDartDeferredLibraryFailure()
 }
 
 // |PlatformView|

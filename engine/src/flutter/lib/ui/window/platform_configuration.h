@@ -536,6 +536,8 @@ class PlatformConfiguration final {
   ///
   void ReportTimings(std::vector<int64_t> timings);
 
+  void RequestDartDeferredLibrary(intptr_t loading_unit_id);
+
   //----------------------------------------------------------------------------
   /// @brief      Retrieves the viewport metrics with the given ID managed by
   ///             the `PlatformConfiguration`.
@@ -591,6 +593,7 @@ class PlatformConfiguration final {
   tonic::DartPersistentValue begin_frame_;
   tonic::DartPersistentValue draw_frame_;
   tonic::DartPersistentValue report_timings_;
+  tonic::DartPersistentValue on_dart_deferred_library_;
 
   uint64_t last_frame_number_ = 0;
   int64_t last_microseconds_ = 0;

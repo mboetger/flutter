@@ -379,6 +379,13 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     }
 
     this.localizationPlugin = new LocalizationPlugin(context, localizationChannel);
+    this.localizationPlugin.setDelegate(
+        new LocalizationPlugin.Delegate() {
+          @Override
+          public void setApplicationLocale(@NonNull String locale) {
+            FlutterEngine.this.flutterJNI.setApplicationLocale(locale);
+          }
+        });
 
     if (flutterLoader == null) {
       flutterLoader = injector.flutterLoader();

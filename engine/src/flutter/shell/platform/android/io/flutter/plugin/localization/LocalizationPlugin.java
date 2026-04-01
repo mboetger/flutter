@@ -24,6 +24,25 @@ public class LocalizationPlugin {
   @NonNull private final LocalizationChannel localizationChannel;
   @NonNull private final Context context;
 
+  /**
+   * Delegate interface for localization-related operations that need to be handled by the engine.
+   */
+  public interface Delegate {
+    /**
+     * Set the application locale for use in assistive technologies.
+     *
+     * @param locale BCP 47 locale string.
+     */
+    void setApplicationLocale(@NonNull String locale);
+  }
+
+  @Nullable private Delegate delegate;
+
+  /** Sets the delegate for this plugin. */
+  public void setDelegate(@Nullable Delegate delegate) {
+    this.delegate = delegate;
+  }
+
   @SuppressLint({
     "AppBundleLocaleChanges",
     "DiscouragedApi"
@@ -32,26 +51,32 @@ public class LocalizationPlugin {
   final LocalizationChannel.LocalizationMessageHandler localizationMessageHandler =
       new LocalizationChannel.LocalizationMessageHandler() {
         @Override
-        public String getStringResource(@NonNull String key, @Nullable String localeString) {
+        @NonNull
+        public String getStringResource(@NonNull String key, @Nullable String locale) {
           Context localContext = context;
-          String stringToReturn = null;
-
-          if (localeString != null) {
-            Locale locale = localeFromString(localeString);
+          if (locale != null) {
+            Locale localeObj = localeFromString(locale);
 
             Configuration config = new Configuration(context.getResources().getConfiguration());
-            config.setLocale(locale);
+            config.setLocale(localeObj);
             localContext = context.createConfigurationContext(config);
           }
 
-          String packageName = context.getPackageName();
-          int resId = localContext.getResources().getIdentifier(key, "string", packageName);
+          String fakePackageName = context.getPackageName();
+          int resId = localContext.getResources().getIdentifier(key, "string", fakePackageName);
+          String stringToReturn = "";
           if (resId != 0) {
-            // 0 means the resource is not found.
             stringToReturn = localContext.getResources().getString(resId);
           }
 
           return stringToReturn;
+        }
+
+        @Override
+        public void setApplicationLocale(@NonNull String locale) {
+          if (delegate != null) {
+            delegate.setApplicationLocale(locale);
+          }
         }
       };
 

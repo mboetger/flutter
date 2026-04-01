@@ -34,8 +34,6 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
       std::vector<std::string> strings,
       std::vector<std::vector<uint8_t>> string_attribute_args) override;
 
-  void FlutterViewSetApplicationLocale(std::string locale) override;
-
   void FlutterViewUpdateCustomAccessibilityActions(
       std::vector<uint8_t> actions_buffer,
       std::vector<std::string> strings) override;
@@ -101,8 +99,6 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
   double GetDisplayHeight() override;
 
   double GetDisplayDensity() override;
-
-  bool RequestDartDeferredLibrary(int loading_unit_id) override;
 
   double FlutterViewGetScaledFontSize(double unscaled_font_size,
                                       int configuration_id) const override;

@@ -30,8 +30,8 @@ abstract final class DeferredComponent {
   // so this is not possible. The API has been left flexible to allow adding
   // loadingUnitId as a parameter.
 
-  /// Requests that an assets-only deferred component identified by the [componentName]
-  /// be downloaded and installed.
+  /// Requests that a deferred component identified by the [componentName]
+  /// or [loadingUnitId] be downloaded and installed.
   ///
   /// This method returns a Future<void> that will complete when the feature is
   /// installed and any assets are ready to be used. When an error occurs, the
@@ -67,15 +67,15 @@ abstract final class DeferredComponent {
   ///  * [loadLibrary](https://dart.dev/guides/language/language-tour#lazily-loading-a-library),
   ///    the Dart method to trigger the installation of the corresponding deferred component that
   ///    contains the Dart library.
-  static Future<void> installDeferredComponent({required String componentName}) async {
+  static Future<void> installDeferredComponent({String? componentName, int loadingUnitId = -1}) async {
     await SystemChannels.deferredComponent.invokeMethod<void>(
       'installDeferredComponent',
-      <String, dynamic>{'loadingUnitId': -1, 'componentName': componentName},
+      <String, dynamic>{'loadingUnitId': loadingUnitId, 'componentName': componentName},
     );
   }
 
-  /// Requests that a deferred component identified by the [componentName] be
-  /// uninstalled.
+  /// Requests that a deferred component identified by the [componentName] or
+  /// [loadingUnitId] be uninstalled.
   ///
   /// Since uninstallation typically requires significant disk i/o, this method only
   /// signals the intent to uninstall. Completion of the returned future indicates
@@ -95,10 +95,10 @@ abstract final class DeferredComponent {
   ///  * [loadLibrary](https://api.dart.dev/dart-mirrors/LibraryDependencyMirror/loadLibrary.html),
   ///    the dart method to trigger the installation of the corresponding deferred component that
   ///    contains the dart library.
-  static Future<void> uninstallDeferredComponent({required String componentName}) async {
+  static Future<void> uninstallDeferredComponent({String? componentName, int loadingUnitId = -1}) async {
     await SystemChannels.deferredComponent.invokeMethod<void>(
       'uninstallDeferredComponent',
-      <String, dynamic>{'loadingUnitId': -1, 'componentName': componentName},
+      <String, dynamic>{'loadingUnitId': loadingUnitId, 'componentName': componentName},
     );
   }
 }

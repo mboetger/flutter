@@ -143,11 +143,7 @@ class PlatformViewAndroid final {
   void RequestViewFocusChange(const ViewFocusChangeRequest& request);
 
   // |PlatformView| methods that are not in the dispatch table but needed
-  void SetApplicationLocale(std::string locale);
-
   void SetSemanticsTreeEnabled(bool enabled);
-
-  void RequestDartDeferredLibrary(intptr_t loading_unit_id);
 
   void SetSemanticsEnabled(bool enabled);
 

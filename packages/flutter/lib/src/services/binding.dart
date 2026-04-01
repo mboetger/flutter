@@ -20,6 +20,7 @@ import 'package:flutter/scheduler.dart';
 import 'asset_bundle.dart';
 import 'binary_messenger.dart';
 import 'debug.dart';
+import 'deferred_component.dart';
 import 'hardware_keyboard.dart';
 import 'message_codec.dart';
 import 'platform_channel.dart';
@@ -60,6 +61,9 @@ mixin ServicesBinding on BindingBase, SchedulerBinding {
     SystemChannels.lifecycle.setMessageHandler(_handleLifecycleMessage);
     SystemChannels.platform.setMethodCallHandler(_handlePlatformMessage);
     platformDispatcher.onViewFocusChange = handleViewFocusChanged;
+    platformDispatcher.onDartDeferredLibrary = (int loadingUnitId) {
+      DeferredComponent.installDeferredComponent(loadingUnitId: loadingUnitId);
+    };
     TextInput.ensureInitialized();
     readInitialLifecycleStateFromNativeWindow();
     initializationComplete();

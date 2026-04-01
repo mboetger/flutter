@@ -391,6 +391,11 @@ void _reportTimings(List<int> timings) {
 }
 
 @pragma('vm:entry-point')
+void _onDartDeferredLibrary(int loadingUnitId) {
+  PlatformDispatcher.instance._dispatchOnDartDeferredLibrary(loadingUnitId);
+}
+
+@pragma('vm:entry-point')
 void _drawFrame() {
   PlatformDispatcher.instance._drawFrame();
 }

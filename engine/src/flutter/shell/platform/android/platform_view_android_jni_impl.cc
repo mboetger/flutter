@@ -69,8 +69,6 @@ static jfieldID g_jni_shell_holder_field = nullptr;
     "(ILjava/nio/ByteBuffer;)V")                                              \
   V(g_update_semantics_method, updateSemantics,                               \
     "(Ljava/nio/ByteBuffer;[Ljava/lang/String;[Ljava/nio/ByteBuffer;)V")      \
-  V(g_set_application_locale_method, setApplicationLocale,                    \
-    "(Ljava/lang/String;)V")                                                  \
   V(g_set_semantics_tree_enabled_method, setSemanticsTreeEnabled, "(Z)V")     \
   V(g_on_display_platform_view_method, onDisplayPlatformView,                 \
     "(IIIIIIILio/flutter/embedding/engine/mutatorsstack/"                     \
@@ -142,8 +140,6 @@ static jmethodID g_image_close_method = nullptr;
 static jmethodID g_hardware_buffer_close_method = nullptr;
 
 static jmethodID g_compute_platform_resolved_locale_method = nullptr;
-
-static jmethodID g_request_dart_deferred_library_method = nullptr;
 
 // Called By Java
 
@@ -1243,14 +1239,6 @@ bool PlatformViewAndroid::Register(JNIEnv* env) {
     return false;
   }
 
-  g_request_dart_deferred_library_method = env->GetMethodID(
-      g_flutter_jni_class->obj(), "requestDartDeferredLibrary", "(I)V");
-
-  if (g_request_dart_deferred_library_method == nullptr) {
-    FML_LOG(ERROR) << "Could not locate requestDartDeferredLibrary method";
-    return false;
-  }
-
   g_java_long_class = new fml::jni::ScopedJavaGlobalRef<jclass>(
       env, env->FindClass("java/lang/Long"));
   if (g_java_long_class->is_null()) {
@@ -1377,24 +1365,6 @@ void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
     env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
                         java_channel.obj(), nullptr, responseId, nullptr);
   }
-
-  FML_CHECK(fml::jni::CheckException(env));
-}
-
-void PlatformViewAndroidJNIImpl::FlutterViewSetApplicationLocale(
-    std::string locale) {
-  JNIEnv* env = fml::jni::AttachCurrentThread();
-
-  auto java_object = java_object_.get(env);
-  if (java_object.is_null()) {
-    return;
-  }
-
-  fml::jni::ScopedJavaLocalRef<jstring> jlocale =
-      fml::jni::StringToJavaString(env, locale);
-
-  env->CallVoidMethod(java_object.obj(), g_set_application_locale_method,
-                      jlocale.obj());
 
   FML_CHECK(fml::jni::CheckException(env));
 }
@@ -2024,22 +1994,6 @@ double PlatformViewAndroidJNIImpl::GetDisplayDensity() {
 
   jfieldID fid = env->GetStaticFieldID(clazz.obj(), "displayDensity", "F");
   return static_cast<double>(env->GetStaticFloatField(clazz.obj(), fid));
-}
-
-bool PlatformViewAndroidJNIImpl::RequestDartDeferredLibrary(
-    int loading_unit_id) {
-  JNIEnv* env = fml::jni::AttachCurrentThread();
-
-  auto java_object = java_object_.get(env);
-  if (java_object.is_null()) {
-    return true;
-  }
-
-  env->CallVoidMethod(java_object.obj(), g_request_dart_deferred_library_method,
-                      loading_unit_id);
-
-  FML_CHECK(fml::jni::CheckException(env));
-  return true;
 }
 
 // New Platform View Support.

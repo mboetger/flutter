@@ -685,6 +685,8 @@ class RuntimeController : public PlatformConfigurationClient,
   ///
   void ShutdownPlatformIsolates();
 
+  PlatformConfiguration* GetPlatformConfigurationIfAvailable();
+
  protected:
   /// Constructor for Mocks.
   RuntimeController(RuntimeDelegate& p_client, const TaskRunners& task_runners);
@@ -740,14 +742,12 @@ class RuntimeController : public PlatformConfigurationClient,
   // https://github.com/flutter/engine/pull/51186#issuecomment-1977820525 with
   // option a in most cases, except if there are multiple views and only part of
   // them are rendered.
-  // TODO(dkwingsmt): Fix these problems for all cases.
+  // TODO(dkwangmt): Fix these problems for all cases.
   std::unordered_set<uint64_t> rendered_views_during_frame_;
 
   void MarkAsFrameBorder();
 
   void CheckIfAllViewsRendered();
-
-  PlatformConfiguration* GetPlatformConfigurationIfAvailable();
 
   bool FlushRuntimeStateToIsolate();
 

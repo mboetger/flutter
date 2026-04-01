@@ -838,7 +838,7 @@ public class FlutterJNI {
   /** Invoked by native to set application locale in Android. */
   @SuppressWarnings("unused")
   @UiThread
-  private void setApplicationLocale(@NonNull String locale) {
+  public void setApplicationLocale(@NonNull String locale) {
     ensureRunningOnMainThread();
     if (accessibilityDelegate != null) {
       accessibilityDelegate.setLocale(locale);
@@ -1541,29 +1541,6 @@ public class FlutterJNI {
     this.deferredComponentManager = deferredComponentManager;
     if (deferredComponentManager != null) {
       deferredComponentManager.setJNI(this);
-    }
-  }
-
-  /**
-   * Called by dart to request that a Dart deferred library corresponding to loadingUnitId be
-   * downloaded (if necessary) and loaded into the dart vm.
-   *
-   * <p>This method delegates the task to DeferredComponentManager, which handles the download and
-   * loading of the dart library and any assets.
-   *
-   * @param loadingUnitId The loadingUnitId is assigned during compile time by gen_snapshot and is
-   *     automatically retrieved when loadLibrary() is called on a dart deferred library.
-   */
-  @SuppressWarnings("unused")
-  @UiThread
-  public void requestDartDeferredLibrary(int loadingUnitId) {
-    if (deferredComponentManager != null) {
-      deferredComponentManager.installDeferredComponent(loadingUnitId, null);
-    } else {
-      // TODO(garyq): Add link to setup/instructions guide wiki.
-      Log.e(
-          TAG,
-          "No DeferredComponentManager found. Android setup must be completed before using split AOT deferred components.");
     }
   }
 

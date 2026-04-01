@@ -979,6 +979,25 @@ class PlatformDispatcher {
   /// list has not been set or is empty.
   Locale get locale => locales.isEmpty ? const Locale.fromSubtags() : locales.first;
 
+  /// A callback that is invoked when the Dart VM requests a deferred library
+  /// to be loaded.
+  ///
+  /// The framework is responsible for loading the library and notifying the
+  /// engine when it is done.
+  ///
+  /// The callback is invoked in the same zone in which the callback was set.
+  void Function(int)? get onDartDeferredLibrary => _onDartDeferredLibrary;
+  void Function(int)? _onDartDeferredLibrary;
+  Zone _onDartDeferredLibraryZone = Zone.root;
+  set onDartDeferredLibrary(void Function(int)? callback) {
+    _onDartDeferredLibrary = callback;
+    _onDartDeferredLibraryZone = Zone.current;
+  }
+
+  void _dispatchOnDartDeferredLibrary(int loadingUnitId) {
+    _invoke1<int>(onDartDeferredLibrary, instance._onDartDeferredLibraryZone, loadingUnitId);
+  }
+
   /// Sets the locale for the application in engine.
   ///
   /// This is typically called by framework to set the locale based on which

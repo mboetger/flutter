@@ -51,6 +51,11 @@ public class LocalizationChannel {
                 result.error("error", exception.getMessage(), null);
               }
               break;
+            case "Localization.setApplicationLocale":
+              String localeString = call.arguments();
+              localizationMessageHandler.setApplicationLocale(localeString);
+              result.success(null);
+              break;
             default:
               result.notImplemented();
               break;
@@ -110,5 +115,13 @@ public class LocalizationChannel {
      */
     @NonNull
     String getStringResource(@NonNull String key, @NonNull String locale);
+
+    /**
+     * The Flutter application would like to set the application locale for use in assistive
+     * technologies.
+     *
+     * @param locale BCP 47 locale string.
+     */
+    void setApplicationLocale(@NonNull String locale);
   }
 }

@@ -629,6 +629,13 @@ std::optional<int64_t> Engine::GetLastEngineId() const {
 
 // |RuntimeDelegate|
 void Engine::RequestDartDeferredLibrary(intptr_t loading_unit_id) {
+  if (runtime_controller_) {
+    if (auto* platform_configuration =
+            runtime_controller_->GetPlatformConfigurationIfAvailable()) {
+      platform_configuration->RequestDartDeferredLibrary(loading_unit_id);
+      return;
+    }
+  }
   return delegate_.RequestDartDeferredLibrary(loading_unit_id);
 }
 

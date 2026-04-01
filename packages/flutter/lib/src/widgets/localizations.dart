@@ -11,6 +11,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import 'app.dart';
 import 'basic.dart';
@@ -644,7 +645,14 @@ class _LocalizationsState extends State<Localizations> {
     if (_locale == locale) {
       return;
     }
-    WidgetsBinding.instance.platformDispatcher.setApplicationLocale(locale!);
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      SystemChannels.localization.invokeMethod<void>(
+        'Localization.setApplicationLocale',
+        locale!.toLanguageTag(),
+      );
+    } else {
+      WidgetsBinding.instance.platformDispatcher.setApplicationLocale(locale!);
+    }
     _locale = locale;
   }
 

@@ -64,13 +64,6 @@ class PlatformViewAndroidJNI {
       std::vector<std::vector<uint8_t>> string_attribute_args) = 0;
 
   //----------------------------------------------------------------------------
-  /// @brief      Set application locale to a given language.
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual void FlutterViewSetApplicationLocale(std::string locale) = 0;
-
-  //----------------------------------------------------------------------------
   /// @brief      Enables or disables the semantics tree.
   ///
   /// @note       Must be called from the platform thread.
@@ -271,8 +264,6 @@ class PlatformViewAndroidJNI {
   virtual double GetDisplayHeight() = 0;
 
   virtual double GetDisplayDensity() = 0;
-
-  virtual bool RequestDartDeferredLibrary(int loading_unit_id) = 0;
 
   virtual double FlutterViewGetScaledFontSize(double unscaled_font_size,
                                               int configuration_id) const = 0;

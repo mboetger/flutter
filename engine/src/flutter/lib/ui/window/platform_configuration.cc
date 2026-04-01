@@ -86,6 +86,9 @@ void PlatformConfiguration::DidCreateIsolate() {
                   Dart_GetField(library, tonic::ToDart("_drawFrame")));
   report_timings_.Set(tonic::DartState::Current(),
                       Dart_GetField(library, tonic::ToDart("_reportTimings")));
+  on_dart_deferred_library_.Set(
+      tonic::DartState::Current(),
+      Dart_GetField(library, tonic::ToDart("_onDartDeferredLibrary")));
 }
 
 bool PlatformConfiguration::AddView(int64_t view_id,
@@ -489,6 +492,19 @@ void PlatformConfiguration::ReportTimings(std::vector<int64_t> timings) {
       tonic::DartInvoke(report_timings_.Get(), {
                                                    data_handle,
                                                }));
+}
+
+void PlatformConfiguration::RequestDartDeferredLibrary(
+    intptr_t loading_unit_id) {
+  std::shared_ptr<tonic::DartState> dart_state =
+      on_dart_deferred_library_.dart_state().lock();
+  if (!dart_state) {
+    return;
+  }
+  tonic::DartState::Scope scope(dart_state);
+
+  tonic::CheckAndHandleError(tonic::DartInvoke(
+      on_dart_deferred_library_.Get(), {tonic::ToDart(loading_unit_id)}));
 }
 
 const ViewportMetrics* PlatformConfiguration::GetMetrics(int view_id) {
