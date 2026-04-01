@@ -90,7 +90,11 @@ class AndroidShellHolder {
 
   const flutter::Settings& GetSettings() const;
 
-  fml::WeakPtr<PlatformViewAndroid> GetPlatformView();
+  fml::WeakPtr<PlatformView> GetPlatformView();
+
+  PlatformViewAndroid* GetPlatformViewAndroid();
+
+  EmbedderSurfaceAndroid* GetEmbedderSurfaceAndroid();
 
   bool IsSurfaceControlEnabled();
 
@@ -112,7 +116,9 @@ class AndroidShellHolder {
  private:
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
+  std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
+  EmbedderSurfaceAndroid* embedder_surface_ = nullptr;
   std::shared_ptr<ThreadHost> thread_host_;
   std::unique_ptr<Shell> shell_;
   bool is_valid_ = false;
@@ -136,7 +142,8 @@ class AndroidShellHolder {
                      const std::shared_ptr<ThreadHost>& thread_host,
                      std::unique_ptr<Shell> shell,
                      std::unique_ptr<APKAssetProvider> apk_asset_provider,
-                     const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+                     std::unique_ptr<PlatformViewAndroid> platform_view_android,
+                     EmbedderSurfaceAndroid* embedder_surface,
                      AndroidRenderingAPI rendering_api);
   static void ThreadDestructCallback(void* value);
   std::optional<RunConfiguration> BuildRunConfiguration(

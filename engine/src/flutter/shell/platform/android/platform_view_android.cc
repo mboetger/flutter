@@ -38,6 +38,7 @@
 #include "flutter/shell/platform/android/android_surface_vk_impeller.h"
 #include "flutter/shell/platform/android/image_external_texture_vk_impeller.h"
 #endif
+#include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_wrapper.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -45,6 +46,8 @@
 #include "flutter/shell/platform/android/surface/android_surface.h"
 #include "flutter/shell/platform/android/surface/snapshot_surface_producer.h"
 #include "flutter/shell/platform/android/vsync_waiter_android.h"
+#include "flutter/shell/platform/embedder/vsync_waiter_embedder.h"
+#include "impeller/toolkit/android/choreographer.h"
 
 namespace flutter {
 
@@ -53,7 +56,9 @@ namespace {
 static constexpr int kMinAPILevelHCPP = 34;
 static constexpr int64_t kImplicitViewId = 0;
 
-AndroidContext::ContextSettings CreateContextSettings(
+}  // namespace
+
+AndroidContext::ContextSettings PlatformViewAndroid::CreateContextSettings(
     const Settings& p_settings) {
   AndroidContext::ContextSettings settings;
   settings.enable_gpu_tracing = p_settings.enable_vulkan_gpu_tracing;
@@ -63,9 +68,9 @@ AndroidContext::ContextSettings CreateContextSettings(
       p_settings.impeller_antialiased_lines;
   return settings;
 }
-}  // namespace
 
-static std::shared_ptr<flutter::AndroidContext> CreateAndroidContext(
+std::shared_ptr<flutter::AndroidContext>
+PlatformViewAndroid::CreateAndroidContext(
     const flutter::TaskRunners& task_runners,
     AndroidRenderingAPI android_rendering_api,
     bool enable_opengl_gpu_tracing,
@@ -97,40 +102,23 @@ PlatformViewAndroid::PlatformViewAndroid(
     PlatformView::Delegate& delegate,
     const flutter::TaskRunners& task_runners,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-    AndroidRenderingAPI rendering_api)
-    : PlatformViewAndroid(
-          delegate,
-          task_runners,
-          jni_facade,
-          CreateAndroidContext(
-              task_runners,
-              rendering_api,
-              delegate.OnPlatformViewGetSettings().enable_opengl_gpu_tracing,
-              CreateContextSettings(delegate.OnPlatformViewGetSettings()))) {}
-
-PlatformViewAndroid::PlatformViewAndroid(
-    PlatformView::Delegate& delegate,
-    const flutter::TaskRunners& task_runners,
-    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-    const std::shared_ptr<flutter::AndroidContext>& android_context)
-    : PlatformView(delegate, task_runners),
+    const std::shared_ptr<flutter::AndroidContext>& android_context,
+    EmbedderSurfaceAndroid* embedder_surface)
+    : delegate_(delegate),
+      task_runners_(task_runners),
       jni_facade_(jni_facade),
       android_context_(android_context),
+      embedder_surface_(embedder_surface),
       platform_view_android_delegate_(jni_facade),
-      platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)) {
+      platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)),
+      weak_factory_(this) {
   if (android_context_) {
     FML_CHECK(android_context_->IsValid())
         << "Could not create surface from invalid Android context.";
-    embedder_surface_ =
-        std::make_unique<EmbedderSurfaceAndroid>(android_context_, delegate);
     android_meets_hcpp_criteria_ =
-        delegate.OnPlatformViewGetSettings().enable_surface_control &&
+        delegate_.OnPlatformViewGetSettings().enable_surface_control &&
         android_get_device_api_level() >= kMinAPILevelHCPP &&
-        delegate.OnPlatformViewGetSettings().enable_impeller;
-    FML_CHECK(embedder_surface_ && embedder_surface_->IsValid())
-        << "Could not create an OpenGL, Vulkan or Software surface to set "
-           "up "
-           "rendering.";
+        delegate_.OnPlatformViewGetSettings().enable_impeller;
   }
 }
 
@@ -140,19 +128,27 @@ void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
   if (embedder_surface_) {
     InstallFirstFrameCallback();
-
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = embedder_surface_.get(),
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->NotifyCreated(native_window, jni_facade);
-          latch.Signal();
-        });
-    latch.Wait();
   }
 
-  PlatformView::NotifyCreated();
+  fml::AutoResetWaitableEvent latch;
+  std::unique_ptr<Surface> surface;
+  fml::TaskRunner::RunNowOrPostTask(
+      task_runners_.GetRasterTaskRunner(),
+      [this, &latch, &surface, native_window = std::move(native_window)]() {
+        if (embedder_surface_) {
+          embedder_surface_->NotifyCreated(native_window, jni_facade_);
+          surface = embedder_surface_->CreateGPUSurface();
+        }
+        if (surface && !surface->IsValid()) {
+          surface.reset();
+        }
+        latch.Signal();
+      });
+  latch.Wait();
+
+  if (surface) {
+    delegate_.OnPlatformViewCreated(std::move(surface));
+  }
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
@@ -161,7 +157,7 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = embedder_surface_.get(),
+        [&latch, surface = embedder_surface_,
          native_window = std::move(native_window), jni_facade = jni_facade_]() {
           surface->NotifySurfaceWindowChanged(native_window, jni_facade);
           latch.Signal();
@@ -169,20 +165,21 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
     latch.Wait();
   }
 
-  PlatformView::ScheduleFrame();
+  if (platform_view_) {
+    platform_view_->ScheduleFrame();
+  }
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
-  PlatformView::NotifyDestroyed();
+  delegate_.OnPlatformViewDestroyed();
 
   if (embedder_surface_) {
     fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = embedder_surface_.get()]() {
-          surface->TeardownOnScreenContext();
-          latch.Signal();
-        });
+    fml::TaskRunner::RunNowOrPostTask(task_runners_.GetRasterTaskRunner(),
+                                      [&latch, surface = embedder_surface_]() {
+                                        surface->TeardownOnScreenContext();
+                                        latch.Signal();
+                                      });
     latch.Wait();
   }
 }
@@ -194,7 +191,7 @@ void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
   fml::AutoResetWaitableEvent latch;
   fml::TaskRunner::RunNowOrPostTask(
       task_runners_.GetRasterTaskRunner(),  //
-      [&latch, surface = embedder_surface_.get(), size]() {
+      [&latch, surface = embedder_surface_, size]() {
         surface->NotifyChanged(size);
         latch.Signal();
       });
@@ -217,9 +214,11 @@ void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
         response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
   }
 
-  PlatformView::DispatchPlatformMessage(
-      std::make_unique<flutter::PlatformMessage>(
-          std::move(name), std::move(message), std::move(response)));
+  if (platform_view_) {
+    platform_view_->DispatchPlatformMessage(
+        std::make_unique<flutter::PlatformMessage>(
+            std::move(name), std::move(message), std::move(response)));
+  }
 }
 
 void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
@@ -231,9 +230,11 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
         response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
   }
 
-  PlatformView::DispatchPlatformMessage(
-      std::make_unique<flutter::PlatformMessage>(std::move(name),
-                                                 std::move(response)));
+  if (platform_view_) {
+    platform_view_->DispatchPlatformMessage(
+        std::make_unique<flutter::PlatformMessage>(std::move(name),
+                                                   std::move(response)));
+  }
 }
 
 // |PlatformView|
@@ -255,8 +256,12 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
                                                   jint args_position) {
   // TODO(team-android): Remove implicit view assumption.
   // https://github.com/flutter/flutter/issues/142845
+  if (!platform_view_) {
+    return;
+  }
+
   if (env->IsSameObject(args, NULL)) {
-    PlatformView::DispatchSemanticsAction(
+    platform_view_->DispatchSemanticsAction(
         kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
         fml::MallocMapping());
     return;
@@ -265,7 +270,7 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
   uint8_t* args_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(args));
   auto args_vector = fml::MallocMapping::Copy(args_data, args_position);
 
-  PlatformView::DispatchSemanticsAction(
+  platform_view_->DispatchSemanticsAction(
       kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
       std::move(args_vector));
 }
@@ -291,25 +296,26 @@ void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
 void PlatformViewAndroid::RegisterExternalTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+  std::shared_ptr<flutter::Texture> texture;
   switch (android_context_->RenderingApi()) {
     case AndroidRenderingAPI::kImpellerOpenGLES:
       // Impeller GLES.
-      RegisterTexture(std::make_shared<SurfaceTextureExternalTextureGLImpeller>(
+      texture = std::make_shared<SurfaceTextureExternalTextureGLImpeller>(
           std::static_pointer_cast<impeller::ContextGLES>(
               android_context_->GetImpellerContext()),  //
           texture_id,                                   //
           surface_texture,                              //
           jni_facade_                                   //
-          ));
+      );
       break;
 #if !SLIMPELLER
     case AndroidRenderingAPI::kSkiaOpenGLES:
       // Legacy GL.
-      RegisterTexture(std::make_shared<SurfaceTextureExternalTextureGLSkia>(
+      texture = std::make_shared<SurfaceTextureExternalTextureGLSkia>(
           texture_id,       //
           surface_texture,  //
           jni_facade_       //
-          ));
+      );
       break;
     case AndroidRenderingAPI::kSoftware:
       FML_LOG(INFO) << "Software rendering does not support external textures.";
@@ -321,18 +327,21 @@ void PlatformViewAndroid::RegisterExternalTexture(
              "register surface textures to the new surface producer "
              "API. See https://docs.flutter.dev/release/breaking-changes/"
              "android-surface-plugins";
-      RegisterTexture(std::make_shared<SurfaceTextureExternalTextureVKImpeller>(
+      texture = std::make_shared<SurfaceTextureExternalTextureVKImpeller>(
           std::static_pointer_cast<impeller::ContextVK>(
               android_context_->GetImpellerContext()),  //
           texture_id,                                   //
           surface_texture,                              //
           jni_facade_                                   //
-          ));
+      );
       break;
     case AndroidRenderingAPI::kImpellerAutoselect:
     default:
       FML_CHECK(false);
       break;
+  }
+  if (texture) {
+    delegate_.OnPlatformViewRegisterTexture(std::move(texture));
   }
 }
 
@@ -340,13 +349,14 @@ void PlatformViewAndroid::RegisterImageTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
     ImageExternalTexture::ImageLifecycle lifecycle) {
+  std::shared_ptr<flutter::Texture> texture;
   switch (android_context_->RenderingApi()) {
 #if !SLIMPELLER
     case AndroidRenderingAPI::kSkiaOpenGLES:
       // Legacy GL.
-      RegisterTexture(std::make_shared<ImageExternalTextureGLSkia>(
+      texture = std::make_shared<ImageExternalTextureGLSkia>(
           std::static_pointer_cast<AndroidContextGLSkia>(android_context_),
-          texture_id, image_texture_entry, jni_facade_, lifecycle));
+          texture_id, image_texture_entry, jni_facade_, lifecycle);
       break;
     case AndroidRenderingAPI::kSoftware:
       FML_LOG(INFO) << "Software rendering does not support external textures.";
@@ -354,82 +364,80 @@ void PlatformViewAndroid::RegisterImageTexture(
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerOpenGLES:
       // Impeller GLES.
-      RegisterTexture(std::make_shared<ImageExternalTextureGLImpeller>(
+      texture = std::make_shared<ImageExternalTextureGLImpeller>(
           std::static_pointer_cast<impeller::ContextGLES>(
               android_context_->GetImpellerContext()),
-          texture_id, image_texture_entry, jni_facade_, lifecycle));
+          texture_id, image_texture_entry, jni_facade_, lifecycle);
       break;
     case AndroidRenderingAPI::kImpellerVulkan:
-      RegisterTexture(std::make_shared<ImageExternalTextureVKImpeller>(
+      texture = std::make_shared<ImageExternalTextureVKImpeller>(
           std::static_pointer_cast<impeller::ContextVK>(
               android_context_->GetImpellerContext()),
-          texture_id, image_texture_entry, jni_facade_, lifecycle));
+          texture_id, image_texture_entry, jni_facade_, lifecycle);
       break;
     case AndroidRenderingAPI::kImpellerAutoselect:
       FML_CHECK(false);
       break;
   }
-}
-
-// |PlatformView|
-std::unique_ptr<VsyncWaiter> PlatformViewAndroid::CreateVSyncWaiter() {
-  return std::make_unique<VsyncWaiterAndroid>(task_runners_);
-}
-
-// |PlatformView|
-std::unique_ptr<Surface> PlatformViewAndroid::CreateRenderingSurface() {
-  if (!embedder_surface_) {
-    return nullptr;
-  }
-  return embedder_surface_->CreateGPUSurface();
-}
-
-// |PlatformView|
-std::shared_ptr<ExternalViewEmbedder>
-PlatformViewAndroid::CreateExternalViewEmbedder() {
-  if (!embedder_surface_) {
-    return nullptr;
-  }
-  return std::make_shared<AndroidExternalViewEmbedderWrapper>(
-      android_meets_hcpp_criteria_, *android_context_, jni_facade_,
-      embedder_surface_->GetAndroidSurfaceFactory(), task_runners_);
-}
-
-// |PlatformView|
-std::unique_ptr<SnapshotSurfaceProducer>
-PlatformViewAndroid::CreateSnapshotSurfaceProducer() {
-  if (!embedder_surface_) {
-    return nullptr;
-  }
-  return std::make_unique<AndroidSnapshotSurfaceProducer>(
-      *embedder_surface_->GetAndroidSurface());
-}
-
-// |PlatformView|
-sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
-  if (!embedder_surface_) {
-    return nullptr;
-  }
-  return embedder_surface_->CreateResourceContext();
-}
-
-// |PlatformView|
-void PlatformViewAndroid::ReleaseResourceContext() const {
-  if (embedder_surface_) {
-    embedder_surface_->ReleaseResourceContext();
+  if (texture) {
+    delegate_.OnPlatformViewRegisterTexture(std::move(texture));
   }
 }
 
-// |PlatformView|
-std::shared_ptr<impeller::Context> PlatformViewAndroid::GetImpellerContext()
-    const {
-  if (embedder_surface_) {
-    return embedder_surface_->CreateImpellerContext();
+// |PlatformDispatchTable|
+void PlatformViewAndroid::OnVsyncCallback(intptr_t baton) {
+  const static bool use_choreographer =
+      impeller::android::Choreographer::IsAvailableOnPlatform();
+  if (use_choreographer) {
+    fml::TaskRunner::RunNowOrPostTask(
+        task_runners_.GetUITaskRunner(),
+        [baton, task_runners = task_runners_]() {
+          const auto& choreographer =
+              impeller::android::Choreographer::GetInstance();
+          choreographer.PostFrameCallback([baton, task_runners](auto time) {
+            auto time_ns =
+                std::chrono::time_point_cast<std::chrono::nanoseconds>(time)
+                    .time_since_epoch()
+                    .count();
+            auto frame_time = fml::TimePoint::FromEpochDelta(
+                fml::TimeDelta::FromNanoseconds(time_ns));
+            auto now = fml::TimePoint::Now();
+            if (frame_time > now) {
+              frame_time = now;
+            }
+            // TODO(team-android): Get the actual refresh rate from the display.
+            // https://github.com/flutter/flutter/issues/142845
+            auto target_time = frame_time + fml::TimeDelta::FromNanoseconds(
+                                                1000000000.0 / 60.0);
+            VsyncWaiterEmbedder::OnEmbedderVsync(task_runners, baton,
+                                                 frame_time, target_time);
+          });
+        });
+  } else {
+    // TODO(99798): Remove it when we drop support for API level < 29 and 32-bit
+    // devices.
+    task_runners_.GetPlatformTaskRunner()->PostTask(
+        [task_runners = task_runners_]() {
+          JNIEnv* env = fml::jni::AttachCurrentThread();
+          // We need a way to trigger Java vsync and get back to
+          // VsyncWaiterEmbedder::OnEmbedderVsync.
+          // For now, this is a gap that needs to be addressed if we care
+          // about API < 29.
+          FML_LOG(ERROR) << "Java-based Vsync is not yet implemented in the "
+                            "new Android embedder.";
+        });
   }
-  return android_context_->GetImpellerContext();
 }
 
-// |PlatformView|
+// |PlatformDispatchTable|
+void PlatformViewAndroid::SendChannelUpdate(const std::string& name,
+                                            bool listening) {}
+
+// |PlatformDispatchTable|
+void PlatformViewAndroid::RequestViewFocusChange(
+    const ViewFocusChangeRequest& request) {}
+
+// |PlatformDispatchTable|
 std::unique_ptr<std::vector<std::string>>
 PlatformViewAndroid::ComputePlatformResolvedLocales(
     const std::vector<std::string>& supported_locale_data) {
@@ -472,15 +480,14 @@ void PlatformViewAndroid::UpdateAssetResolverByType(
 
 void PlatformViewAndroid::InstallFirstFrameCallback() {
   // On Platform Task Runner.
-  SetNextFrameCallback(
+  delegate_.OnPlatformViewSetNextFrameCallback(
       [platform_view = GetWeakPtr(),
        platform_task_runner = task_runners_.GetPlatformTaskRunner()]() {
         // On GPU Task Runner.
         platform_task_runner->PostTask([platform_view]() {
           // Back on Platform Task Runner.
           if (platform_view) {
-            reinterpret_cast<PlatformViewAndroid*>(platform_view.get())
-                ->FireFirstFrameCallback();
+            platform_view->FireFirstFrameCallback();
           }
         });
       });
@@ -508,6 +515,59 @@ bool PlatformViewAndroid::IsSurfaceControlEnabled() const {
 void PlatformViewAndroid::SetupImpellerContext() {
   if (embedder_surface_) {
     embedder_surface_->SetupImpellerContext();
+  }
+}
+
+fml::WeakPtr<PlatformViewAndroid> PlatformViewAndroid::GetWeakPtr() const {
+  return weak_factory_.GetWeakPtr();
+}
+
+void PlatformViewAndroid::SetPlatformView(
+    fml::WeakPtr<PlatformView> platform_view) {
+  platform_view_ = platform_view;
+}
+
+void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {
+  if (platform_view_) {
+    platform_view_->SetSemanticsEnabled(enabled);
+  }
+}
+
+void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
+  if (platform_view_) {
+    platform_view_->SetAccessibilityFeatures(flags);
+  }
+}
+
+void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
+                                             const ViewportMetrics& metrics) {
+  if (platform_view_) {
+    platform_view_->SetViewportMetrics(view_id, metrics);
+  }
+}
+
+void PlatformViewAndroid::DispatchPointerDataPacket(
+    std::unique_ptr<PointerDataPacket> packet) {
+  if (platform_view_) {
+    platform_view_->DispatchPointerDataPacket(std::move(packet));
+  }
+}
+
+void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
+  if (platform_view_) {
+    platform_view_->UnregisterTexture(texture_id);
+  }
+}
+
+void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
+  if (platform_view_) {
+    platform_view_->MarkTextureFrameAvailable(texture_id);
+  }
+}
+
+void PlatformViewAndroid::ScheduleFrame() {
+  if (platform_view_) {
+    platform_view_->ScheduleFrame();
   }
 }
 

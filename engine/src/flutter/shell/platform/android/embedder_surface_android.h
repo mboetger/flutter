@@ -65,7 +65,7 @@ class EmbedderSurfaceAndroid final : public EmbedderSurface {
 
   void TeardownOnScreenContext();
 
-  void SetupImpellerContext();
+  void SetupImpellerContext() override;
 
   AndroidSurface* GetAndroidSurface() const;
 
