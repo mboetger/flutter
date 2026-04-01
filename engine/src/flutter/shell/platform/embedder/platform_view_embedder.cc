@@ -37,8 +37,26 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
 
   virtual void InvokePlatformMessageResponseCallback(
       int response_id,
-      std::unique_ptr<fml::Mapping> mapping) {}
-  virtual void InvokePlatformMessageEmptyResponseCallback(int response_id) {}
+      std::unique_ptr<fml::Mapping> mapping) {
+    platform_task_runner_->PostTask(fml::MakeCopyable(
+        [parent = parent_, response_id, mapping = std::move(mapping)]() mutable {
+          if (parent) {
+            static_cast<PlatformViewEmbedder*>(parent.get())
+                ->InvokePlatformMessageResponseCallback(response_id,
+                                                        std::move(mapping));
+          }
+        }));
+  }
+
+  virtual void InvokePlatformMessageEmptyResponseCallback(int response_id) {
+    platform_task_runner_->PostTask(
+        [parent = parent_, response_id]() mutable {
+          if (parent) {
+            static_cast<PlatformViewEmbedder*>(parent.get())
+                ->InvokePlatformMessageEmptyResponseCallback(response_id);
+          }
+        });
+  }
 
  private:
   fml::WeakPtr<PlatformView> parent_;
@@ -160,6 +178,11 @@ std::shared_ptr<impeller::Context> PlatformViewEmbedder::GetImpellerContext()
 }
 
 // |PlatformView|
+void PlatformViewEmbedder::SetupImpellerContext() {
+  embedder_surface_->SetupImpellerContext();
+}
+
+// |PlatformView|
 sk_sp<GrDirectContext> PlatformViewEmbedder::CreateResourceContext() const {
   if (embedder_surface_ == nullptr) {
     FML_LOG(ERROR) << "Embedder surface was null.";
@@ -218,6 +241,24 @@ void PlatformViewEmbedder::RequestViewFocusChange(
 std::shared_ptr<PlatformMessageHandler>
 PlatformViewEmbedder::GetPlatformMessageHandler() const {
   return platform_message_handler_;
+}
+
+void PlatformViewEmbedder::InvokePlatformMessageResponseCallback(
+    int response_id,
+    std::unique_ptr<fml::Mapping> mapping) {
+  if (platform_dispatch_table_.platform_message_response_completion_callback) {
+    platform_dispatch_table_.platform_message_response_completion_callback(
+        response_id, std::move(mapping));
+  }
+}
+
+void PlatformViewEmbedder::InvokePlatformMessageEmptyResponseCallback(
+    int response_id) {
+  if (platform_dispatch_table_
+          .platform_message_empty_response_completion_callback) {
+    platform_dispatch_table_
+        .platform_message_empty_response_completion_callback(response_id);
+  }
 }
 
 }  // namespace flutter
