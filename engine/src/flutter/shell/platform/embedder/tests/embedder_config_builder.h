@@ -42,6 +42,8 @@ class EmbedderConfigBuilder {
 
   ~EmbedderConfigBuilder();
 
+  EmbedderTestContext& GetEmbedderContext() { return context_; }
+
   FlutterProjectArgs& GetProjectArgs();
 
   void SetAssetsPath();

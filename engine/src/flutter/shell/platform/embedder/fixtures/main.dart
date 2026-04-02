@@ -16,6 +16,21 @@ import 'dart:ui';
 void main() {}
 
 @pragma('vm:entry-point')
+void canSpawnEngine1() {
+  notifyNative1();
+}
+
+@pragma('vm:entry-point')
+void canSpawnEngine2() {
+  notifyNative2();
+}
+
+@pragma('vm:external-name', 'NotifyNative1')
+external void notifyNative1();
+@pragma('vm:external-name', 'NotifyNative2')
+external void notifyNative2();
+
+@pragma('vm:entry-point')
 void customEntrypoint() {
   sayHiFromCustomEntrypoint();
 }

@@ -446,6 +446,49 @@ TEST_F(EmbedderTest, UITaskRunnerFlushesMicrotasks) {
   kill_latch.Wait();
 }
 
+TEST_F(EmbedderTest, CanSpawnEngine) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  fml::AutoResetWaitableEvent latch1;
+  fml::AutoResetWaitableEvent latch2;
+
+  context.AddNativeCallback(
+      "NotifyNative1",
+      CREATE_NATIVE_ENTRY([&](Dart_NativeArguments args) { latch1.Signal(); }));
+  context.AddNativeCallback(
+      "NotifyNative2",
+      CREATE_NATIVE_ENTRY([&](Dart_NativeArguments args) { latch2.Signal(); }));
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("canSpawnEngine1");
+  auto engine1 = builder.LaunchEngine();
+  ASSERT_TRUE(engine1.is_valid());
+
+  latch1.Wait();
+
+  // Now spawn a second engine.
+  FlutterProjectArgs args = builder.GetProjectArgs();
+  args.custom_dart_entrypoint = "canSpawnEngine2";
+
+  FlutterRendererConfig config = context.GetRendererConfig();
+
+  FlutterEngine engine2_ptr = nullptr;
+  auto result = FlutterEngineSpawn(engine1.get(), &config, &args,
+                                   builder.GetEmbedderContext().GetUserData(),
+                                   &engine2_ptr);
+  ASSERT_EQ(result, kSuccess);
+  ASSERT_NE(engine2_ptr, nullptr);
+
+  UniqueEngine engine2(engine2_ptr);
+  ASSERT_EQ(FlutterEngineRunInitialized(engine2.get()), kSuccess);
+
+  latch2.Wait();
+
+  engine2.reset();
+  engine1.reset();
+}
+
 TEST_F(EmbedderTest, CanSpecifyCustomPlatformTaskRunner) {
   auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
   fml::AutoResetWaitableEvent latch;

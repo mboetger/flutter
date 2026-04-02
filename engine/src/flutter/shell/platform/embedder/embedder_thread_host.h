@@ -25,8 +25,12 @@ class EmbedderThreadHost {
       const flutter::ThreadConfigSetter& config_setter =
           fml::Thread::SetCurrentThreadName);
 
+  static std::unique_ptr<EmbedderThreadHost> Create(
+      std::shared_ptr<ThreadHost> host,
+      const flutter::TaskRunners& runners);
+
   EmbedderThreadHost(
-      ThreadHost host,
+      std::shared_ptr<ThreadHost> host,
       const flutter::TaskRunners& runners,
       const std::set<fml::RefPtr<EmbedderTaskRunner>>& embedder_task_runners);
 
@@ -43,7 +47,7 @@ class EmbedderThreadHost {
   void InvalidateActiveRunners();
 
  private:
-  ThreadHost host_;
+  std::shared_ptr<ThreadHost> host_;
   flutter::TaskRunners runners_;
   std::map<intptr_t, fml::RefPtr<EmbedderTaskRunner>> runners_map_;
 

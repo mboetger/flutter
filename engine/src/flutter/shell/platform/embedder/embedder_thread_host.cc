@@ -247,8 +247,8 @@ EmbedderThreadHost::CreateEmbedderManagedThreadHost(
   }
 
   auto embedder_host = std::make_unique<EmbedderThreadHost>(
-      std::move(thread_host), std::move(task_runners),
-      std::move(embedder_task_runners));
+      std::make_shared<ThreadHost>(std::move(thread_host)),
+      std::move(task_runners), std::move(embedder_task_runners));
 
   if (embedder_host->IsValid()) {
     return embedder_host;
@@ -273,7 +273,7 @@ EmbedderThreadHost::CreateEngineManagedThreadHost(
 
   // Create a thread host with the current thread as the platform thread and all
   // other threads managed.
-  ThreadHost thread_host(thread_host_config);
+  auto thread_host = std::make_shared<ThreadHost>(thread_host_config);
 
   // For embedder platforms that don't have native message loop interop, this
   // will reference a task runner that points to a null message loop
@@ -282,10 +282,10 @@ EmbedderThreadHost::CreateEngineManagedThreadHost(
 
   flutter::TaskRunners task_runners(
       kFlutterThreadName,
-      platform_task_runner,                        // platform
-      thread_host.raster_thread->GetTaskRunner(),  // raster
-      thread_host.ui_thread->GetTaskRunner(),      // ui
-      thread_host.io_thread->GetTaskRunner()       // io
+      platform_task_runner,                         // platform
+      thread_host->raster_thread->GetTaskRunner(),  // raster
+      thread_host->ui_thread->GetTaskRunner(),      // ui
+      thread_host->io_thread->GetTaskRunner()       // io
   );
 
   if (!task_runners.IsValid()) {
@@ -305,8 +305,15 @@ EmbedderThreadHost::CreateEngineManagedThreadHost(
   return nullptr;
 }
 
+std::unique_ptr<EmbedderThreadHost> EmbedderThreadHost::Create(
+    std::shared_ptr<ThreadHost> host,
+    const flutter::TaskRunners& runners) {
+  return std::make_unique<EmbedderThreadHost>(
+      std::move(host), runners, std::set<fml::RefPtr<EmbedderTaskRunner>>{});
+}
+
 EmbedderThreadHost::EmbedderThreadHost(
-    ThreadHost host,
+    std::shared_ptr<ThreadHost> host,
     const flutter::TaskRunners& runners,
     const std::set<fml::RefPtr<EmbedderTaskRunner>>& embedder_task_runners)
     : host_(std::move(host)), runners_(runners) {
@@ -317,7 +324,9 @@ EmbedderThreadHost::EmbedderThreadHost(
   }
 }
 
-EmbedderThreadHost::~EmbedderThreadHost() = default;
+EmbedderThreadHost::~EmbedderThreadHost() {
+  InvalidateActiveRunners();
+}
 
 void EmbedderThreadHost::InvalidateActiveRunners() {
   std::lock_guard guard(active_runners_mutex_);
@@ -332,7 +341,7 @@ bool EmbedderThreadHost::RunnerIsValid(intptr_t runner) {
 }
 
 bool EmbedderThreadHost::IsValid() const {
-  return runners_.IsValid();
+  return host_ && runners_.IsValid();
 }
 
 const flutter::TaskRunners& EmbedderThreadHost::GetTaskRunners() const {

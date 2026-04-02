@@ -61,6 +61,8 @@ class EmbedderTestContext {
 
   virtual ~EmbedderTestContext();
 
+  void* GetUserData() { return reinterpret_cast<void*>(this); }
+
   const std::string& GetAssetsPath() const;
 
   const fml::Mapping* GetVMSnapshotData() const;
