@@ -2831,6 +2831,93 @@ typedef struct {
   size_t data_length;
 } FlutterSendSemanticsActionInfo;
 
+//------------------------------------------------------------------------------
+/// @brief      The type of the screenshot to obtain of the previously
+///             rendered layer tree.
+typedef enum {
+  kFlutterScreenshotTypeSkiaPicture,
+  kFlutterScreenshotTypeUncompressedImage,
+  kFlutterScreenshotTypeCompressedImage,
+  kFlutterScreenshotTypeSurfaceData,
+} FlutterScreenshotType;
+
+//------------------------------------------------------------------------------
+/// @brief      A POD type used to return the screenshot data along with the
+///             size of the frame.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterScreenshot).
+  size_t struct_size;
+  /// The data used to describe the screenshot. The data format depends on the
+  /// type of screenshot taken.
+  const uint8_t* data;
+  /// The length of the screenshot data.
+  size_t data_length;
+  /// The size of the screenshot in texels.
+  FlutterUIntSize frame_size;
+  /// Characterization of the format of the data in `data`.
+  const char* format;
+} FlutterScreenshot;
+
+/// Callback made by the engine in response to `FlutterEngineScreenshot`.
+typedef void (*FlutterScreenshotCallback)(const FlutterScreenshot* screenshot,
+                                          void* user_data);
+
+//------------------------------------------------------------------------------
+/// An opaque object that describes an image generator.
+typedef struct _FlutterImageGenerator* FlutterImageGenerator;
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageInfo).
+  size_t struct_size;
+  /// The width of the image.
+  uint32_t width;
+  /// The height of the image.
+  uint32_t height;
+} FlutterImageInfo;
+
+/// Callback made by the engine to decode the image into a given buffer.
+typedef bool (*FlutterImageGeneratorGetPixelsCallback)(
+    void* user_data,
+    void* pixels,
+    size_t row_bytes,
+    unsigned int frame_index);
+
+/// Callback made by the engine when it no longer needs the image generator.
+typedef void (*FlutterImageGeneratorDestructionCallback)(void* user_data);
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageGeneratorDescription).
+  size_t struct_size;
+  /// User data to be passed back to the embedder in callbacks.
+  void* user_data;
+  /// Basic information about the contents of the image.
+  FlutterImageInfo info;
+  /// Callback made by the engine to decode the image into a given buffer.
+  FlutterImageGeneratorGetPixelsCallback get_pixels;
+  /// Callback made by the engine when it no longer needs the image generator.
+  FlutterImageGeneratorDestructionCallback destruction;
+} FlutterImageGeneratorDescription;
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterParsedSettings).
+  size_t struct_size;
+  /// If true, the engine will use software rendering.
+  bool enable_software_rendering;
+  /// If true, the engine will use the Impeller rendering backend.
+  bool enable_impeller;
+  /// If true, the engine will use SurfaceControl on Android.
+  bool enable_surface_control;
+  /// Requests a specific rendering backend.
+  const char* requested_rendering_backend;
+} FlutterParsedSettings;
+
+/// Callback made by the engine to create an image generator for compatible
+/// input data.
+typedef FlutterImageGenerator (*FlutterImageDecoderCallback)(
+    const uint8_t* data,
+    size_t length,
+    void* user_data);
+
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 // NOLINTBEGIN(google-objc-function-naming)
@@ -2998,6 +3085,66 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                                        void* user_data,
                                        FLUTTER_API_SYMBOL(FlutterEngine) *
                                            engine_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Screenshots the last layer tree rendered by the engine.
+///
+/// @param[in]  engine         A running engine instance.
+/// @param[in]  type           The type of the screenshot to gather.
+/// @param[in]  base64_encode  Whether Base 64 encoding must be applied to the
+///                            data after a screenshot has been captured.
+/// @param[in]  callback       The callback invoked by the engine with the
+///                            screenshot data. The callback is guaranteed to be
+///                            called exactly once.
+/// @param[in]  user_data      The context associated with the callback.
+///
+/// @return     The result of the call.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineScreenshot(FLUTTER_API_SYMBOL(FlutterEngine)
+                                                engine,
+                                            FlutterScreenshotType type,
+                                            bool base64_encode,
+                                            FlutterScreenshotCallback callback,
+                                            void* user_data);
+
+//------------------------------------------------------------------------------
+/// @brief      Registers an external image decoder.
+///
+/// @param[in]  engine    A running engine instance.
+/// @param[in]  callback  The callback invoked by the engine to create an image
+///                       generator for compatible input data.
+/// @param[in]  user_data The context associated with the callback.
+///
+/// @return     The result of the call.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineRegisterImageDecoder(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterImageDecoderCallback callback,
+    void* user_data);
+
+//------------------------------------------------------------------------------
+/// @brief      Creates an image generator.
+///
+/// @param[in]  description The description of the image generator.
+///
+/// @return     The image generator.
+FLUTTER_EXPORT
+FlutterImageGenerator FlutterEngineCreateImageGenerator(
+    const FlutterImageGeneratorDescription* description);
+
+//------------------------------------------------------------------------------
+/// @brief      Parses command line arguments into a set of settings.
+///
+/// @param[in]  argc          The number of command line arguments.
+/// @param[in]  argv          The command line arguments.
+/// @param[out] settings_out  The parsed settings.
+///
+/// @return     The result of the call.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineParseCommandLineArguments(
+    int argc,
+    const char* const* argv,
+    FlutterParsedSettings* settings_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Adds a view.
@@ -3665,6 +3812,23 @@ typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
     const FlutterProjectArgs* args,
     void* user_data,
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
+typedef FlutterEngineResult (*FlutterEngineScreenshotFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterScreenshotType type,
+    bool base64_encode,
+    FlutterScreenshotCallback callback,
+    void* user_data);
+typedef FlutterEngineResult (*FlutterEngineRegisterImageDecoderFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterImageDecoderCallback callback,
+    void* user_data);
+typedef FlutterImageGenerator (*FlutterEngineCreateImageGeneratorFnPtr)(
+    const FlutterImageGeneratorDescription* description);
+
+typedef FlutterEngineResult (*FlutterEngineParseCommandLineArgumentsFnPtr)(
+    int argc,
+    const char* const* argv,
+    FlutterParsedSettings* settings_out);
 typedef FlutterEngineResult (*FlutterEngineSendWindowMetricsEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterWindowMetricsEvent* event);
@@ -3824,6 +3988,10 @@ typedef struct {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineScreenshotFnPtr Screenshot;
+  FlutterEngineRegisterImageDecoderFnPtr RegisterImageDecoder;
+  FlutterEngineCreateImageGeneratorFnPtr CreateImageGenerator;
+  FlutterEngineParseCommandLineArgumentsFnPtr ParseCommandLineArguments;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

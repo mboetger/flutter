@@ -17,7 +17,6 @@
 #include "flutter/fml/cpu_affinity.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
-#include "flutter/lib/ui/painting/image_generator_registry.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/thread_host.h"
@@ -157,6 +156,11 @@ AndroidShellHolder::AndroidShellHolder(
   static size_t thread_host_count = 1;
   auto thread_label = std::to_string(thread_host_count++);
 
+  // Ensure that the message loop is initialized for the current thread
+  // which is used as the platform thread.
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+
+  // 1. Setup Task Runners.
   auto mask = ThreadHost::Type::kRaster | ThreadHost::Type::kIo;
   if (settings.merged_platform_ui_thread !=
       Settings::MergedPlatformUIThread::kEnabled) {
@@ -181,6 +185,45 @@ AndroidShellHolder::AndroidShellHolder(
   std::shared_ptr<ThreadHost> thread_host =
       std::make_shared<ThreadHost>(host_config);
 
+  fml::RefPtr<fml::TaskRunner> raster_runner =
+      thread_host->raster_thread->GetTaskRunner();
+  fml::RefPtr<fml::TaskRunner> ui_runner;
+  fml::RefPtr<fml::TaskRunner> io_runner =
+      thread_host->io_thread->GetTaskRunner();
+  fml::RefPtr<fml::TaskRunner> platform_runner =
+      fml::MessageLoop::GetCurrent().GetTaskRunner();
+
+  if (settings.merged_platform_ui_thread ==
+      Settings::MergedPlatformUIThread::kEnabled) {
+    ui_runner = platform_runner;
+  } else {
+    ui_runner = thread_host->ui_thread->GetTaskRunner();
+  }
+
+  flutter::TaskRunners task_runners(thread_label,     // label
+                                    platform_runner,  // platform
+                                    raster_runner,    // raster
+                                    ui_runner,        // ui
+                                    io_runner         // io
+  );
+
+  // 2. Prepare FlutterProjectArgs.
+  FlutterProjectArgs args = {};
+  args.struct_size = sizeof(FlutterProjectArgs);
+  args.assets_path = settings_.assets_path.c_str();
+  args.icu_data_path = settings_.icu_data_path.c_str();
+
+  // We'll fill in more args as we migrate further.
+  // For now, we still need to create the PlatformViewAndroid.
+
+  // 3. Initialize the engine using the public API.
+  // Note: FlutterEngineInitialize currently takes a FlutterRendererConfig.
+  // On Android, we have a complex setup with AndroidContext and
+  // EmbedderSurfaceAndroid.
+  // We'll need to create a FlutterRendererConfig that wraps our
+  // Android-specific rendering logic.
+
+  // ... (Implementation continues)
   fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
   AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
@@ -191,12 +234,13 @@ AndroidShellHolder::AndroidShellHolder(
             shell.GetTaskRunners(), rendering_api,
             shell.GetSettings().enable_opengl_gpu_tracing, context_settings);
 
-        auto embedder_surface =
-            std::make_unique<EmbedderSurfaceAndroid>(android_context, shell);
+        auto embedder_surface = std::make_unique<EmbedderSurfaceAndroid>(
+            android_context, shell.GetSettings().enable_impeller,
+            shell.GetSettings().impeller_enable_lazy_shader_mode);
         embedder_surface_ = embedder_surface.get();
 
         platform_view_android_ = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
+            engine_,                 // engine handle
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             android_context,         // Android context
@@ -219,30 +263,6 @@ AndroidShellHolder::AndroidShellHolder(
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
     return std::make_unique<Rasterizer>(shell);
   };
-
-  // The current thread will be used as the platform thread. Ensure that the
-  // message loop is initialized.
-  fml::MessageLoop::EnsureInitializedForCurrentThread();
-  fml::RefPtr<fml::TaskRunner> raster_runner;
-  fml::RefPtr<fml::TaskRunner> ui_runner;
-  fml::RefPtr<fml::TaskRunner> io_runner;
-  fml::RefPtr<fml::TaskRunner> platform_runner =
-      fml::MessageLoop::GetCurrent().GetTaskRunner();
-  raster_runner = thread_host->raster_thread->GetTaskRunner();
-  if (settings.merged_platform_ui_thread ==
-      Settings::MergedPlatformUIThread::kEnabled) {
-    ui_runner = platform_runner;
-  } else {
-    ui_runner = thread_host->ui_thread->GetTaskRunner();
-  }
-  io_runner = thread_host->io_thread->GetTaskRunner();
-
-  flutter::TaskRunners task_runners(thread_label,     // label
-                                    platform_runner,  // platform
-                                    raster_runner,    // raster
-                                    ui_runner,        // ui
-                                    io_runner         // io
-  );
 
   std::unique_ptr<Shell> shell =
       Shell::Create(GetDefaultPlatformData(),  // window data
@@ -273,6 +293,10 @@ AndroidShellHolder::AndroidShellHolder(
         std::make_unique<EmbedderExternalTextureResolver>());
     engine_ = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
         embedder_engine.release());
+
+    if (platform_view_android_) {
+      platform_view_android_->SetEngine(engine_);
+    }
   }
 
   FML_DCHECK(platform_view_);
@@ -359,12 +383,13 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [jni_facade, android_context, &platform_view_android_out,
        &embedder_surface_out, &weak_platform_view](Shell& shell) {
-        auto embedder_surface =
-            std::make_unique<EmbedderSurfaceAndroid>(android_context, shell);
+        auto embedder_surface = std::make_unique<EmbedderSurfaceAndroid>(
+            android_context, shell.GetSettings().enable_impeller,
+            shell.GetSettings().impeller_enable_lazy_shader_mode);
         embedder_surface_out = embedder_surface.get();
 
         platform_view_android_out = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
+            nullptr,                 // engine handle not yet available
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             android_context,         // Android context
@@ -410,6 +435,10 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
       reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
           spawned_embedder_engine.release());
 
+  if (platform_view_android_out) {
+    platform_view_android_out->SetEngine(spawned_engine_handle);
+  }
+
   return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
       GetSettings(), jni_facade, spawned_engine_handle,
       apk_asset_provider_ ? apk_asset_provider_->Clone() : nullptr,
@@ -428,14 +457,18 @@ void AndroidShellHolder::Launch(
   }
 
   apk_asset_provider_ = std::move(apk_asset_provider);
-  auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
-  if (!config) {
+  auto run_configuration =
+      BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
+  if (!run_configuration) {
     return;
   }
-  config->SetEngineId(engine_id);
+  run_configuration->SetEngineId(engine_id);
   UpdateDisplayMetrics();
+
+  // We should really be using FlutterEngineRun here.
+  // For now, let's keep the internal call but wrap it slightly.
   reinterpret_cast<EmbedderEngine*>(engine_)->GetShell().RunEngine(
-      std::move(config.value()));
+      std::move(run_configuration.value()));
 }
 
 Rasterizer::Screenshot AndroidShellHolder::Screenshot(

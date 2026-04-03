@@ -61,13 +61,11 @@ std::unique_ptr<AndroidSurface> AndroidSurfaceFactoryImpl::CreateSurface() {
 
 EmbedderSurfaceAndroid::EmbedderSurfaceAndroid(
     const std::shared_ptr<flutter::AndroidContext>& android_context,
-    PlatformView::Delegate& delegate)
+    bool enable_impeller,
+    bool lazy_shader_mode)
     : android_context_(android_context) {
   surface_factory_ = std::make_shared<AndroidSurfaceFactoryImpl>(
-      android_context_,                                                      //
-      delegate.OnPlatformViewGetSettings().enable_impeller,                  //
-      delegate.OnPlatformViewGetSettings().impeller_enable_lazy_shader_mode  //
-  );
+      android_context_, enable_impeller, lazy_shader_mode);
   android_surface_ = surface_factory_->CreateSurface();
 }
 

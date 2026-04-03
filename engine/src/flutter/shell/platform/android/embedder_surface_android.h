@@ -34,7 +34,8 @@ class EmbedderSurfaceAndroid final : public EmbedderSurface {
  public:
   EmbedderSurfaceAndroid(
       const std::shared_ptr<flutter::AndroidContext>& android_context,
-      PlatformView::Delegate& delegate);
+      bool enable_impeller,
+      bool lazy_shader_mode);
 
   ~EmbedderSurfaceAndroid() override;
 

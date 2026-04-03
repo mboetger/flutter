@@ -11,6 +11,7 @@
 #include "flutter/fml/macros.h"
 #include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -26,7 +27,7 @@ class FlutterMain {
   flutter::AndroidRenderingAPI GetAndroidRenderingAPI();
 
   static AndroidRenderingAPI SelectedRenderingAPI(
-      const flutter::Settings& settings,
+      const FlutterParsedSettings& settings,
       int api_level);
 
  private:

@@ -21,6 +21,7 @@
 #include "flutter/shell/platform/android/platform_view_android_delegate/platform_view_android_delegate.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 #include "shell/platform/android/image_external_texture.h"
 
 namespace flutter {
@@ -39,7 +40,7 @@ class PlatformViewAndroid final {
       const Settings& settings);
 
   PlatformViewAndroid(
-      PlatformView::Delegate& delegate,
+      FLUTTER_API_SYMBOL(FlutterEngine) engine,
       const flutter::TaskRunners& task_runners,
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
       const std::shared_ptr<flutter::AndroidContext>& android_context,
@@ -161,8 +162,10 @@ class PlatformViewAndroid final {
 
   void SetPlatformView(fml::WeakPtr<PlatformView> platform_view);
 
+  void SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
  private:
-  PlatformView::Delegate& delegate_;
+  FLUTTER_API_SYMBOL(FlutterEngine) engine_;
   const flutter::TaskRunners task_runners_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::shared_ptr<AndroidContext> android_context_;

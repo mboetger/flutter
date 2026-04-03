@@ -50,6 +50,8 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/lib/ui/painting/image_generator.h"
+#include "flutter/lib/ui/painting/image_generator_registry.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -66,6 +68,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "rapidjson/rapidjson.h"
 #include "rapidjson/writer.h"
+#include "third_party/skia/include/codec/SkCodecAnimation.h"
 
 // Note: the IMPELLER_SUPPORTS_RENDERING may be defined even when the
 // embedder/BUILD.gn variable impeller_supports_rendering is disabled.
@@ -106,6 +109,59 @@ extern const intptr_t kPlatformStrongDillSize;
 
 const int32_t kFlutterSemanticsNodeIdBatchEnd = -1;
 const int32_t kFlutterSemanticsCustomActionIdBatchEnd = -1;
+
+namespace flutter {
+
+class EmbedderImageGenerator : public ImageGenerator {
+ public:
+  EmbedderImageGenerator(const FlutterImageGeneratorDescription& description)
+      : description_(description) {
+    image_info_ =
+        SkImageInfo::Make(description.info.width, description.info.height,
+                          kRGBA_8888_SkColorType, kPremul_SkAlphaType);
+  }
+
+  ~EmbedderImageGenerator() override {
+    if (description_.destruction) {
+      description_.destruction(description_.user_data);
+    }
+  }
+
+  const SkImageInfo& GetInfo() override { return image_info_; }
+
+  unsigned int GetFrameCount() const override { return 1; }
+
+  unsigned int GetPlayCount() const override { return 1; }
+
+  const ImageGenerator::FrameInfo GetFrameInfo(
+      unsigned int frame_index) override {
+    return {.required_frame = std::nullopt,
+            .duration = 0,
+            .disposal_method = SkCodecAnimation::DisposalMethod::kKeep};
+  }
+
+  SkISize GetScaledDimensions(float desired_scale) override {
+    return image_info_.dimensions();
+  }
+
+  bool GetPixels(const SkImageInfo& info,
+                 void* pixels,
+                 size_t row_bytes,
+                 unsigned int frame_index,
+                 std::optional<unsigned int> prior_frame) override {
+    if (description_.get_pixels) {
+      return description_.get_pixels(description_.user_data, pixels, row_bytes,
+                                     frame_index);
+    }
+    return false;
+  }
+
+ private:
+  FlutterImageGeneratorDescription description_;
+  SkImageInfo image_info_;
+};
+
+}  // namespace flutter
 
 static constexpr FlutterViewId kFlutterImplicitViewId = 0;
 
@@ -2524,6 +2580,112 @@ FlutterEngineResult FlutterEngineRunInitialized(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineScreenshot(FLUTTER_API_SYMBOL(FlutterEngine)
+                                                engine,
+                                            FlutterScreenshotType type,
+                                            bool base64_encode,
+                                            FlutterScreenshotCallback callback,
+                                            void* user_data) {
+  if (engine == nullptr || callback == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid arguments.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  auto screenshot_type = static_cast<flutter::Rasterizer::ScreenshotType>(type);
+
+  auto screenshot =
+      embedder_engine->GetShell().Screenshot(screenshot_type, base64_encode);
+
+  if (screenshot.data == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not capture screenshot.");
+  }
+
+  FlutterScreenshot flutter_screenshot = {};
+  flutter_screenshot.struct_size = sizeof(FlutterScreenshot);
+  flutter_screenshot.data = screenshot.data->bytes();
+  flutter_screenshot.data_length = screenshot.data->size();
+  flutter_screenshot.frame_size = {
+      static_cast<uint32_t>(screenshot.frame_size.width),
+      static_cast<uint32_t>(screenshot.frame_size.height)};
+  flutter_screenshot.format = screenshot.format.c_str();
+
+  callback(&flutter_screenshot, user_data);
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineRegisterImageDecoder(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterImageDecoderCallback callback,
+    void* user_data) {
+  if (engine == nullptr || callback == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid arguments.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+
+  auto factory = [callback, user_data](sk_sp<SkData> buffer) {
+    FlutterImageGenerator generator =
+        callback(buffer->bytes(), buffer->size(), user_data);
+    if (generator == nullptr) {
+      return std::shared_ptr<flutter::ImageGenerator>(nullptr);
+    }
+    return std::shared_ptr<flutter::ImageGenerator>(
+        reinterpret_cast<flutter::ImageGenerator*>(generator));
+  };
+
+  embedder_engine->GetShell().RegisterImageDecoder(factory, 1);
+
+  return kSuccess;
+}
+
+FlutterImageGenerator FlutterEngineCreateImageGenerator(
+    const FlutterImageGeneratorDescription* description) {
+  if (description == nullptr || !SAFE_EXISTS(description, get_pixels)) {
+    return nullptr;
+  }
+
+  return reinterpret_cast<FlutterImageGenerator>(
+      new flutter::EmbedderImageGenerator(*description));
+}
+
+FlutterEngineResult FlutterEngineParseCommandLineArguments(
+    int argc,
+    const char* const* argv,
+    FlutterParsedSettings* settings_out) {
+  if (settings_out == nullptr || argc <= 0 || argv == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid arguments.");
+  }
+
+  std::vector<std::string> args;
+  for (int i = 0; i < argc; ++i) {
+    if (argv[i] == nullptr) {
+      return LOG_EMBEDDER_ERROR(kInvalidArguments, "Null argument provided.");
+    }
+    args.push_back(argv[i]);
+  }
+
+  auto command_line = fml::CommandLineFromIterators(args.begin(), args.end());
+  auto settings = flutter::SettingsFromCommandLine(command_line);
+
+  settings_out->enable_software_rendering = settings.enable_software_rendering;
+  settings_out->enable_impeller = settings.enable_impeller;
+  settings_out->enable_surface_control = settings.enable_surface_control;
+
+  if (settings.requested_rendering_backend.has_value()) {
+    // Note: This string is leaked but it's only called once per engine init
+    // in typical embedders. A better fix would be to have the caller provide
+    // a buffer or have a way to free this.
+    settings_out->requested_rendering_backend =
+        strdup(settings.requested_rendering_backend.value().c_str());
+  } else {
+    settings_out->requested_rendering_backend = nullptr;
+  }
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                                        const FlutterRendererConfig* config,
                                        const FlutterProjectArgs* args,
@@ -4144,7 +4306,12 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(AddView, FlutterEngineAddView);
   SET_PROC(RemoveView, FlutterEngineRemoveView);
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
-#undef SET_PROC
+  SET_PROC(Screenshot, FlutterEngineScreenshot);
+  SET_PROC(RegisterImageDecoder, FlutterEngineRegisterImageDecoder);
+  SET_PROC(CreateImageGenerator, FlutterEngineCreateImageGenerator);
+  SET_PROC(ParseCommandLineArguments, FlutterEngineParseCommandLineArguments);
 
   return kSuccess;
 }
+
+// NOLINTEND(google-objc-function-naming)

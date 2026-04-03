@@ -23,6 +23,7 @@
 #include "flutter/shell/platform/android/image_external_texture_gl_impeller.h"
 #include "flutter/shell/platform/android/surface_texture_external_texture_gl_impeller.h"
 #include "flutter/shell/platform/android/surface_texture_external_texture_vk_impeller.h"
+#include "flutter/shell/platform/embedder/embedder_engine.h"
 
 #if !SLIMPELLER
 #include "flutter/shell/platform/android/android_context_gl_skia.h"
@@ -55,6 +56,12 @@ namespace {
 
 static constexpr int kMinAPILevelHCPP = 34;
 static constexpr int64_t kImplicitViewId = 0;
+
+static PlatformView::Delegate& GetDelegate(FLUTTER_API_SYMBOL(FlutterEngine)
+                                               engine) {
+  return static_cast<PlatformView::Delegate&>(
+      reinterpret_cast<EmbedderEngine*>(engine)->GetShell());
+}
 
 }  // namespace
 
@@ -99,12 +106,12 @@ PlatformViewAndroid::CreateAndroidContext(
 }
 
 PlatformViewAndroid::PlatformViewAndroid(
-    PlatformView::Delegate& delegate,
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const flutter::TaskRunners& task_runners,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
     const std::shared_ptr<flutter::AndroidContext>& android_context,
     EmbedderSurfaceAndroid* embedder_surface)
-    : delegate_(delegate),
+    : engine_(engine),
       task_runners_(task_runners),
       jni_facade_(jni_facade),
       android_context_(android_context),
@@ -115,10 +122,10 @@ PlatformViewAndroid::PlatformViewAndroid(
   if (android_context_) {
     FML_CHECK(android_context_->IsValid())
         << "Could not create surface from invalid Android context.";
-    android_meets_hcpp_criteria_ =
-        delegate_.OnPlatformViewGetSettings().enable_surface_control &&
-        android_get_device_api_level() >= kMinAPILevelHCPP &&
-        delegate_.OnPlatformViewGetSettings().enable_impeller;
+  }
+
+  if (engine_) {
+    SetEngine(engine_);
   }
 }
 
@@ -147,7 +154,7 @@ void PlatformViewAndroid::NotifyCreated(
   latch.Wait();
 
   if (surface) {
-    delegate_.OnPlatformViewCreated(std::move(surface));
+    GetDelegate(engine_).OnPlatformViewCreated(std::move(surface));
   }
 }
 
@@ -171,7 +178,7 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
-  delegate_.OnPlatformViewDestroyed();
+  GetDelegate(engine_).OnPlatformViewDestroyed();
 
   if (embedder_surface_) {
     fml::AutoResetWaitableEvent latch;
@@ -336,7 +343,7 @@ void PlatformViewAndroid::RegisterExternalTexture(
       break;
   }
   if (texture) {
-    delegate_.OnPlatformViewRegisterTexture(std::move(texture));
+    GetDelegate(engine_).OnPlatformViewRegisterTexture(std::move(texture));
   }
 }
 
@@ -375,7 +382,7 @@ void PlatformViewAndroid::RegisterImageTexture(
       break;
   }
   if (texture) {
-    delegate_.OnPlatformViewRegisterTexture(std::move(texture));
+    GetDelegate(engine_).OnPlatformViewRegisterTexture(std::move(texture));
   }
 }
 
@@ -445,8 +452,9 @@ void PlatformViewAndroid::LoadDartDeferredLibrary(
     intptr_t loading_unit_id,
     std::unique_ptr<const fml::Mapping> snapshot_data,
     std::unique_ptr<const fml::Mapping> snapshot_instructions) {
-  delegate_.LoadDartDeferredLibrary(loading_unit_id, std::move(snapshot_data),
-                                    std::move(snapshot_instructions));
+  GetDelegate(engine_).LoadDartDeferredLibrary(
+      loading_unit_id, std::move(snapshot_data),
+      std::move(snapshot_instructions));
 }
 
 // |PlatformView|
@@ -454,20 +462,21 @@ void PlatformViewAndroid::LoadDartDeferredLibraryError(
     intptr_t loading_unit_id,
     const std::string error_message,
     bool transient) {
-  delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
-                                         transient);
+  GetDelegate(engine_).LoadDartDeferredLibraryError(loading_unit_id,
+                                                    error_message, transient);
 }
 
 // |PlatformView|
 void PlatformViewAndroid::UpdateAssetResolverByType(
     std::unique_ptr<AssetResolver> updated_asset_resolver,
     AssetResolver::AssetResolverType type) {
-  delegate_.UpdateAssetResolverByType(std::move(updated_asset_resolver), type);
+  GetDelegate(engine_).UpdateAssetResolverByType(
+      std::move(updated_asset_resolver), type);
 }
 
 void PlatformViewAndroid::InstallFirstFrameCallback() {
   // On Platform Task Runner.
-  delegate_.OnPlatformViewSetNextFrameCallback(
+  GetDelegate(engine_).OnPlatformViewSetNextFrameCallback(
       [platform_view = GetWeakPtr(),
        platform_task_runner = task_runners_.GetPlatformTaskRunner()]() {
         // On GPU Task Runner.
@@ -512,6 +521,18 @@ fml::WeakPtr<PlatformViewAndroid> PlatformViewAndroid::GetWeakPtr() const {
 void PlatformViewAndroid::SetPlatformView(
     fml::WeakPtr<PlatformView> platform_view) {
   platform_view_ = platform_view;
+}
+
+void PlatformViewAndroid::SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+  engine_ = engine;
+  if (engine_ && android_context_) {
+    const auto& settings =
+        reinterpret_cast<EmbedderEngine*>(engine_)->GetShell().GetSettings();
+    android_meets_hcpp_criteria_ =
+        settings.enable_surface_control &&
+        android_get_device_api_level() >= kMinAPILevelHCPP &&
+        settings.enable_impeller;
+  }
 }
 
 void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {

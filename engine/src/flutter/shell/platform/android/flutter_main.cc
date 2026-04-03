@@ -100,8 +100,21 @@ void FlutterMain::Init(JNIEnv* env,
   for (auto& arg : fml::jni::StringArrayToVector(env, jargs)) {
     args.push_back(std::move(arg));
   }
-  auto command_line = fml::CommandLineFromIterators(args.begin(), args.end());
+  std::vector<const char*> argv;
+  for (const auto& arg : args) {
+    argv.push_back(arg.c_str());
+  }
 
+  FlutterParsedSettings parsed_settings = {};
+  parsed_settings.struct_size = sizeof(FlutterParsedSettings);
+  if (FlutterEngineParseCommandLineArguments(argv.size(), argv.data(),
+                                             &parsed_settings) != kSuccess) {
+    FML_LOG(FATAL) << "Could not parse command line arguments.";
+  }
+
+  // We still need the full Settings object for other things, but we'll use
+  // the parsed_settings for rendering API selection to confirm the API works.
+  auto command_line = fml::CommandLineFromIterators(args.begin(), args.end());
   auto settings = SettingsFromCommandLine(command_line, true);
 
   // Turn systracing on if ATrace_isEnabled is true and the user did not already
@@ -122,7 +135,7 @@ void FlutterMain::Init(JNIEnv* env,
   // Flutter still supports 21, 22, and 23.
 
   AndroidRenderingAPI android_rendering_api =
-      SelectedRenderingAPI(settings, api_level);
+      SelectedRenderingAPI(parsed_settings, api_level);
 
   settings.warn_on_impeller_opt_out = true;
 #if !SLIMPELLER
@@ -266,7 +279,7 @@ bool FlutterMain::Register(JNIEnv* env) {
 
 // static
 AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
-    const flutter::Settings& settings,
+    const FlutterParsedSettings& settings,
     int api_level) {
 #if !SLIMPELLER
   if (settings.enable_software_rendering) {
@@ -281,11 +294,13 @@ AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
   // Debug/Profile only functionality for testing a specific
   // backend configuration.
 #ifndef FLUTTER_RELEASE
-  if (settings.requested_rendering_backend == "opengles" &&
+  if (settings.requested_rendering_backend != nullptr &&
+      strcmp(settings.requested_rendering_backend, "opengles") == 0 &&
       settings.enable_impeller) {
     return AndroidRenderingAPI::kImpellerOpenGLES;
   }
-  if (settings.requested_rendering_backend == "vulkan" &&
+  if (settings.requested_rendering_backend != nullptr &&
+      strcmp(settings.requested_rendering_backend, "vulkan") == 0 &&
       settings.enable_impeller) {
     return AndroidRenderingAPI::kImpellerVulkan;
   }
