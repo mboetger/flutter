@@ -17,8 +17,8 @@ TEST(JNIMock, FlutterViewHandlePlatformMessage) {
   auto response_id = 1;
 
   EXPECT_CALL(mock, FlutterViewHandlePlatformMessage(::testing::StrEq(channel),
-                                                     ::testing::_,
-                                                     ::testing::_, response_id));
+                                                     ::testing::_, ::testing::_,
+                                                     response_id));
 
   mock.FlutterViewHandlePlatformMessage(channel, nullptr, 0, response_id);
 }

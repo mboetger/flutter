@@ -11,7 +11,8 @@
 
 namespace flutter {
 
-std::vector<AndroidMutator> ToAndroidMutators(const MutatorsStack& mutators_stack);
+std::vector<AndroidMutator> ToAndroidMutators(
+    const MutatorsStack& mutators_stack);
 
 }  // namespace flutter
 

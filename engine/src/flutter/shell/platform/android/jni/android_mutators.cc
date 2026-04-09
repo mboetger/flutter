@@ -6,15 +6,17 @@
 
 #include <algorithm>
 
-#include "flutter/display_list/geometry/dl_path.h"
 #include "flutter/display_list/geometry/dl_geometry_types.h"
+#include "flutter/display_list/geometry/dl_path.h"
 #include "flutter/flow/embedded_views.h"
 
 namespace flutter {
 
-std::vector<AndroidMutator> ToAndroidMutators(const MutatorsStack& mutators_stack) {
+std::vector<AndroidMutator> ToAndroidMutators(
+    const MutatorsStack& mutators_stack) {
   std::vector<AndroidMutator> mutators;
-  for (auto iter = mutators_stack.Begin(); iter != mutators_stack.End(); ++iter) {
+  for (auto iter = mutators_stack.Begin(); iter != mutators_stack.End();
+       ++iter) {
     AndroidMutator mutator;
     switch ((*iter)->GetType()) {
       case MutatorType::kTransform: {

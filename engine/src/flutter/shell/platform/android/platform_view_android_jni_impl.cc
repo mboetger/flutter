@@ -1742,7 +1742,8 @@ void PlatformViewAndroidJNIImpl::SurfaceTextureUpdateTexImage(
   FML_CHECK(fml::jni::CheckException(env));
 }
 
-std::array<float, 16> PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
+std::array<float, 16>
+PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
     JavaLocalRef surface_texture) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
 

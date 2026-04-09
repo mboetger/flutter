@@ -79,10 +79,9 @@ class PlatformViewAndroidJNI {
   //----------------------------------------------------------------------------
   /// @brief      Responds to a platform message. The data may be a `nullptr`.
   ///
-  virtual void FlutterViewHandlePlatformMessageResponse(
-      int responseId,
-      const uint8_t* data,
-      size_t data_size) = 0;
+  virtual void FlutterViewHandlePlatformMessageResponse(int responseId,
+                                                        const uint8_t* data,
+                                                        size_t data_size) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Sends semantics tree updates.
@@ -312,6 +311,5 @@ class PlatformViewAndroidJNI {
 };
 
 }  // namespace flutter
-
 
 #endif  // FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_

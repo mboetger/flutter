@@ -3,11 +3,11 @@
 // found in the LICENSE file.
 
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder.h"
-#include "flutter/shell/platform/android/jni/android_mutators.h"
 #include "flow/view_slicer.h"
 #include "flutter/common/constants.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/shell/platform/android/jni/android_mutators.h"
 #include "fml/make_copyable.h"
 
 namespace flutter {

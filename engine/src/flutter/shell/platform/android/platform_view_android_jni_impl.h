@@ -68,14 +68,15 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void HardwareBufferClose(JavaLocalRef hardware_buffer) override;
 
-  void FlutterViewOnDisplayPlatformView(int view_id,
-                                        int x,
-                                        int y,
-                                        int width,
-                                        int height,
-                                        int viewWidth,
-                                        int viewHeight,
-                                        const std::vector<AndroidMutator>& mutators) override;
+  void FlutterViewOnDisplayPlatformView(
+      int view_id,
+      int x,
+      int y,
+      int width,
+      int height,
+      int viewWidth,
+      int viewHeight,
+      const std::vector<AndroidMutator>& mutators) override;
 
   void FlutterViewDisplayOverlaySurface(int surface_id,
                                         int x,
@@ -121,15 +122,15 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void destroyOverlaySurface2() override;
 
-  void onDisplayPlatformView2(int32_t view_id,
-                              int32_t x,
-                              int32_t y,
-                              int32_t width,
-                              int32_t height,
-                              int32_t viewWidth,
-                              int32_t viewHeight,
-                              const std::vector<AndroidMutator>& mutators)
-      override;
+  void onDisplayPlatformView2(
+      int32_t view_id,
+      int32_t x,
+      int32_t y,
+      int32_t width,
+      int32_t height,
+      int32_t viewWidth,
+      int32_t viewHeight,
+      const std::vector<AndroidMutator>& mutators) override;
 
   void hidePlatformView2(int32_t view_id) override;
 
