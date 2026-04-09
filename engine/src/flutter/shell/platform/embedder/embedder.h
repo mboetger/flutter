@@ -182,6 +182,53 @@ typedef enum {
   kFlutterSemanticsActionCollapse = 1 << 25,
 } FlutterSemanticsAction;
 
+/// C/C++ representation of `SemanticsRole` defined in `semantics.dart`.
+///
+/// @see https://api.flutter.dev/flutter/semantics/SemanticsRole.html
+typedef enum {
+  kFlutterSemanticsRoleNone = 0,
+  kFlutterSemanticsRoleTab = 1,
+  kFlutterSemanticsRoleTabBar = 2,
+  kFlutterSemanticsRoleTabPanel = 3,
+  kFlutterSemanticsRoleDialog = 4,
+  kFlutterSemanticsRoleAlertDialog = 5,
+  kFlutterSemanticsRoleTable = 6,
+  kFlutterSemanticsRoleCell = 7,
+  kFlutterSemanticsRoleRow = 8,
+  kFlutterSemanticsRoleColumnHeader = 9,
+  kFlutterSemanticsRoleDragHandle = 10,
+  kFlutterSemanticsRoleSpinButton = 11,
+  kFlutterSemanticsRoleComboBox = 12,
+  kFlutterSemanticsRoleMenuBar = 13,
+  kFlutterSemanticsRoleMenu = 14,
+  kFlutterSemanticsRoleMenuItem = 15,
+  kFlutterSemanticsRoleMenuItemCheckbox = 16,
+  kFlutterSemanticsRoleMenuItemRadio = 17,
+  kFlutterSemanticsRoleList = 18,
+  kFlutterSemanticsRoleListItem = 19,
+  kFlutterSemanticsRoleForm = 20,
+  kFlutterSemanticsRoleTooltip = 21,
+  kFlutterSemanticsRoleLoadingSpinner = 22,
+  kFlutterSemanticsRoleProgressBar = 23,
+  kFlutterSemanticsRoleHotKey = 24,
+  kFlutterSemanticsRoleRadioGroup = 25,
+  kFlutterSemanticsRoleStatus = 26,
+  kFlutterSemanticsRoleAlert = 27,
+  kFlutterSemanticsRoleComplementary = 28,
+  kFlutterSemanticsRoleContentInfo = 29,
+  kFlutterSemanticsRoleMain = 30,
+  kFlutterSemanticsRoleNavigation = 31,
+  kFlutterSemanticsRoleRegion = 32,
+} FlutterSemanticsRole;
+
+/// C/C++ representation of `SemanticsValidationResult` defined in
+/// `semantics.dart`.
+typedef enum {
+  kFlutterSemanticsValidationResultNone = 0,
+  kFlutterSemanticsValidationResultValid = 1,
+  kFlutterSemanticsValidationResultInvalid = 2,
+} FlutterSemanticsValidationResult;
+
 /// The set of properties that may be associated with a semantics node.
 ///
 /// Must match the `SemanticsFlag` enum in semantics.dart.
@@ -1750,6 +1797,25 @@ typedef struct {
   /// This is usually used for UI testing with tools that work by querying the
   /// native accessibility, like UI Automator, XCUITest, or Appium.
   const char* identifier;
+  /// The maximum length of the value that can be entered into this node.
+  int32_t max_value_length;
+  /// The current length of the value that has been entered into this node.
+  int32_t current_value_length;
+  /// The ID of the node that is the parent of this node in the traversal
+  /// order.
+  int32_t traversal_parent;
+  /// The semantics role of this node.
+  FlutterSemanticsRole role;
+  /// A URL that this node represents.
+  const char* link_url;
+  /// The locale of this node in BCP 47 format.
+  const char* locale;
+  /// The minimum value that this node can represent.
+  const char* min_value;
+  /// The maximum value that this node can represent.
+  const char* max_value;
+  /// The validation result of this node.
+  FlutterSemanticsValidationResult validation_result;
 } FlutterSemanticsNode2;
 
 /// `FlutterSemanticsCustomAction` ID used as a sentinel to signal the end of a

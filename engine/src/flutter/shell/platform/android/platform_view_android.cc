@@ -45,6 +45,7 @@
 #include "flutter/shell/platform/android/surface/android_surface.h"
 #include "flutter/shell/platform/android/surface/snapshot_surface_producer.h"
 #include "flutter/shell/platform/android/vsync_waiter_android.h"
+#include "flutter/shell/platform/embedder/embedder_semantics_update.h"
 
 namespace flutter {
 
@@ -320,7 +321,8 @@ void PlatformViewAndroid::UpdateSemantics(
     int64_t view_id,
     flutter::SemanticsNodeUpdates update,
     flutter::CustomAccessibilityActionUpdates actions) {
-  platform_view_android_delegate_.UpdateSemantics(update, actions);
+  EmbedderSemanticsUpdate2 embedder_update(view_id, update, actions);
+  platform_view_android_delegate_.UpdateSemantics(embedder_update.get());
 }
 
 // |PlatformView|

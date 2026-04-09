@@ -29,6 +29,18 @@ FlutterTristate ToFlutterTristate(flutter::SemanticsTristate state) {
   }
 }
 
+FlutterSemanticsValidationResult ToFlutterSemanticsValidationResult(
+    flutter::SemanticsValidationResult result) {
+  switch (result) {
+    case flutter::SemanticsValidationResult::kNone:
+      return kFlutterSemanticsValidationResultNone;
+    case flutter::SemanticsValidationResult::kValid:
+      return kFlutterSemanticsValidationResultValid;
+    case flutter::SemanticsValidationResult::kInvalid:
+      return kFlutterSemanticsValidationResultInvalid;
+  }
+}
+
 std::unique_ptr<FlutterSemanticsFlags> ConvertToFlutterSemanticsFlags(
     const flutter::SemanticsFlags& source) {
   return std::make_unique<FlutterSemanticsFlags>(FlutterSemanticsFlags{
@@ -344,6 +356,15 @@ void EmbedderSemanticsUpdate2::AddNode(const SemanticsNode& node) {
       flags_.back().get(),
       node.headingLevel,
       node.identifier.c_str(),
+      node.maxValueLength,
+      node.currentValueLength,
+      node.traversalParent,
+      static_cast<FlutterSemanticsRole>(node.role),
+      node.linkUrl.c_str(),
+      node.locale.c_str(),
+      node.minValue.c_str(),
+      node.maxValue.c_str(),
+      ToFlutterSemanticsValidationResult(node.validationResult),
   });
 }
 

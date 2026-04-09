@@ -151,11 +151,8 @@ source_set("flutter_shell_native_src") {
     ]
   }
 
-  sources += get_target_outputs(":icudtl_asm")
-
   public_deps = [
     ":android_gpu_configuration",
-    ":icudtl_asm",
     ":image_generator",
     "//flutter/assets",
     "//flutter/common",
@@ -177,6 +174,7 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface",
     "//flutter/shell/platform/android/surface:native_window",
+    "//flutter/shell/platform/embedder:embedder_as_internal_library",
     "//flutter/skia",
     "//flutter/txt",
     "//flutter/vulkan",
