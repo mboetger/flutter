@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <array>
 #include <memory>
 
+#include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "shell/platform/android/jni/platform_view_android_jni.h"
 
 namespace flutter {
 namespace testing {
@@ -16,12 +18,14 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
  public:
   MOCK_METHOD(void,
               FlutterViewHandlePlatformMessage,
-              (std::unique_ptr<flutter::PlatformMessage> message,
+              (const char* channel,
+               const uint8_t* message,
+               size_t message_size,
                int responseId),
               (override));
   MOCK_METHOD(void,
               FlutterViewHandlePlatformMessageResponse,
-              (int responseId, std::unique_ptr<fml::Mapping> data),
+              (int responseId, const uint8_t* data, size_t data_size),
               (override));
   MOCK_METHOD(void,
               FlutterViewUpdateSemantics,
@@ -56,7 +60,7 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
               SurfaceTextureUpdateTexImage,
               (JavaLocalRef surface_texture),
               (override));
-  MOCK_METHOD(SkM44,
+  MOCK_METHOD((std::array<float, 16>),
               SurfaceTextureGetTransformMatrix,
               (JavaLocalRef surface_texture),
               (override));
@@ -86,7 +90,7 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
                int height,
                int viewWidth,
                int viewHeight,
-               MutatorsStack mutators_stack),
+               const std::vector<AndroidMutator>& mutators),
               (override));
   MOCK_METHOD(void,
               FlutterViewDisplayOverlaySurface,
@@ -116,7 +120,7 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
                int32_t height,
                int32_t viewWidth,
                int32_t viewHeight,
-               MutatorsStack mutators_stack),
+               const std::vector<AndroidMutator>& mutators),
               (override));
   MOCK_METHOD(void, hidePlatformView2, (int32_t view_id), (override));
   MOCK_METHOD(void, onEndFrame2, (), (override));
@@ -189,8 +193,9 @@ TEST(AndroidShellHolder, HandlePlatformMessage) {
   auto message = std::make_unique<PlatformMessage>(
       /*channel=*/"foo", /*data=*/std::move(bytes), /*response=*/response);
   int response_id = 1;
-  EXPECT_CALL(*jni,
-              FlutterViewHandlePlatformMessage(::testing::_, response_id));
+  EXPECT_CALL(*jni, FlutterViewHandlePlatformMessage(
+                        ::testing::StrEq("foo"), ::testing::_, data_size,
+                        response_id));
   EXPECT_CALL(*response, CompleteEmpty());
   holder->GetPlatformMessageHandler()->HandlePlatformMessage(
       std::move(message));

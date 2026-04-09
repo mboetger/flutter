@@ -8,6 +8,8 @@
 #include <android/sensor.h>
 
 #include "flutter/fml/platform/android/jni_util.h"
+#include "flutter/display_list/geometry/dl_geometry_conversions.h"
+#include "third_party/skia/include/core/SkRect.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 

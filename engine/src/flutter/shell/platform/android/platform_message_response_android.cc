@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "flutter/fml/make_copyable.h"
+#include "flutter/fml/mapping.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 
 namespace flutter {
@@ -28,8 +29,9 @@ void PlatformMessageResponseAndroid::Complete(
       fml::MakeCopyable([response_id = response_id_,  //
                          data = std::move(data),      //
                          jni_facade = jni_facade_]() mutable {
-        jni_facade->FlutterViewHandlePlatformMessageResponse(response_id,
-                                                             std::move(data));
+        jni_facade->FlutterViewHandlePlatformMessageResponse(
+            response_id, data ? data->GetMapping() : nullptr,
+            data ? data->GetSize() : 0);
       }));
 }
 
@@ -41,7 +43,7 @@ void PlatformMessageResponseAndroid::CompleteEmpty() {
   ]() {
         // Make the response call into Java.
         jni_facade->FlutterViewHandlePlatformMessageResponse(response_id,
-                                                             nullptr);
+                                                             nullptr, 0);
       }));
 }
 }  // namespace flutter

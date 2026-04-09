@@ -21,13 +21,14 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   ~PlatformViewAndroidJNIImpl() override;
 
-  void FlutterViewHandlePlatformMessage(
-      std::unique_ptr<flutter::PlatformMessage> message,
-      int responseId) override;
+  void FlutterViewHandlePlatformMessage(const char* channel,
+                                        const uint8_t* message,
+                                        size_t message_size,
+                                        int responseId) override;
 
-  void FlutterViewHandlePlatformMessageResponse(
-      int responseId,
-      std::unique_ptr<fml::Mapping> data) override;
+  void FlutterViewHandlePlatformMessageResponse(int responseId,
+                                                const uint8_t* data,
+                                                size_t data_size) override;
 
   void FlutterViewUpdateSemantics(
       std::vector<uint8_t> buffer,
@@ -53,7 +54,8 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) override;
 
-  SkM44 SurfaceTextureGetTransformMatrix(JavaLocalRef surface_texture) override;
+  std::array<float, 16> SurfaceTextureGetTransformMatrix(
+      JavaLocalRef surface_texture) override;
 
   void SurfaceTextureDetachFromGLContext(JavaLocalRef surface_texture) override;
 
@@ -73,7 +75,7 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
                                         int height,
                                         int viewWidth,
                                         int viewHeight,
-                                        MutatorsStack mutators_stack) override;
+                                        const std::vector<AndroidMutator>& mutators) override;
 
   void FlutterViewDisplayOverlaySurface(int surface_id,
                                         int x,
@@ -126,7 +128,8 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
                               int32_t height,
                               int32_t viewWidth,
                               int32_t viewHeight,
-                              MutatorsStack mutators_stack) override;
+                              const std::vector<AndroidMutator>& mutators)
+      override;
 
   void hidePlatformView2(int32_t view_id) override;
 

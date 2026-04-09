@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "flutter/shell/platform/android/platform_message_handler_android.h"
+#include "flutter/lib/ui/window/platform_message.h"
 
 namespace flutter {
 
@@ -62,8 +63,10 @@ void PlatformMessageHandlerAndroid::HandlePlatformMessage(
     pending_responses_[response_id] = response;
   }
   // This call can re-enter in InvokePlatformMessageXxxResponseCallback.
-  jni_facade_->FlutterViewHandlePlatformMessage(std::move(message),
-                                                response_id);
+  jni_facade_->FlutterViewHandlePlatformMessage(
+      message->channel().c_str(),
+      message->hasData() ? message->data().GetMapping() : nullptr,
+      message->hasData() ? message->data().GetSize() : 0, response_id);
 }
 
 }  // namespace flutter

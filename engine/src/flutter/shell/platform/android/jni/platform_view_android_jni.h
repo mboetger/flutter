@@ -5,13 +5,14 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 
+#include <array>
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
-#include "flutter/fml/mapping.h"
-
-#include "flutter/flow/embedded_views.h"
-#include "flutter/lib/ui/window/platform_message.h"
-#include "flutter/shell/platform/android/surface/android_native_window.h"
+#include "flutter/fml/build_config.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 #if FML_OS_ANDROID
 #include "flutter/fml/platform/android/scoped_java_ref.h"
@@ -26,6 +27,34 @@ using JavaLocalRef = fml::jni::ScopedJavaLocalRef<jobject>;
 #else
 using JavaLocalRef = std::nullptr_t;
 #endif
+
+enum class AndroidMutatorType {
+  kTransform,
+  kClipRect,
+  kClipRRect,
+  kClipPath,
+  kOpacity,
+};
+
+/// A simplified representation of a mutator for platform views.
+struct AndroidMutator {
+  AndroidMutatorType type;
+  union {
+    float transformation[16];
+    struct {
+      float left, top, right, bottom;
+    } rect;
+    struct {
+      float left, top, right, bottom;
+      float radii[8];
+    } rrect;
+    void* path;  // DlPath*
+    float opacity;
+  };
+
+  AndroidMutator() : type(AndroidMutatorType::kOpacity), opacity(1.0f) {}
+  ~AndroidMutator() = default;
+};
 
 //------------------------------------------------------------------------------
 /// Allows to call Java code running in the JVM from any thread. However, most
@@ -42,16 +71,18 @@ class PlatformViewAndroidJNI {
   //----------------------------------------------------------------------------
   /// @brief      Sends a platform message. The message may be empty.
   ///
-  virtual void FlutterViewHandlePlatformMessage(
-      std::unique_ptr<flutter::PlatformMessage> message,
-      int responseId) = 0;
+  virtual void FlutterViewHandlePlatformMessage(const char* channel,
+                                                const uint8_t* message,
+                                                size_t message_size,
+                                                int responseId) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Responds to a platform message. The data may be a `nullptr`.
   ///
   virtual void FlutterViewHandlePlatformMessageResponse(
       int responseId,
-      std::unique_ptr<fml::Mapping> data) = 0;
+      const uint8_t* data,
+      size_t data_size) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Sends semantics tree updates.
@@ -121,7 +152,7 @@ class PlatformViewAndroidJNI {
   ///             Then, it updates the `transform` matrix, so it fill the canvas
   ///             and preserve the aspect ratio.
   ///
-  virtual SkM44 SurfaceTextureGetTransformMatrix(
+  virtual std::array<float, 16> SurfaceTextureGetTransformMatrix(
       JavaLocalRef surface_texture) = 0;
 
   //----------------------------------------------------------------------------
@@ -165,7 +196,7 @@ class PlatformViewAndroidJNI {
       int height,
       int viewWidth,
       int viewHeight,
-      MutatorsStack mutators_stack) = 0;
+      const std::vector<AndroidMutator>& mutators) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Positions and sizes an overlay surface in hybrid composition.
@@ -199,8 +230,7 @@ class PlatformViewAndroidJNI {
   /// by |SurfacePool|.
   ///
   struct OverlayMetadata {
-    OverlayMetadata(int id, fml::RefPtr<AndroidNativeWindow> window)
-        : id(id), window(std::move(window)) {};
+    OverlayMetadata(int id, void* window) : id(id), window(window) {};
 
     ~OverlayMetadata() = default;
 
@@ -209,7 +239,7 @@ class PlatformViewAndroidJNI {
 
     // Holds a reference to the native window. That is, an `ANativeWindow`,
     // which is the C counterpart of the `android.view.Surface` object in Java.
-    const fml::RefPtr<AndroidNativeWindow> window;
+    void* window;
   };
 
   //----------------------------------------------------------------------------
@@ -242,14 +272,15 @@ class PlatformViewAndroidJNI {
 
   virtual void onEndFrame2() = 0;
 
-  virtual void onDisplayPlatformView2(int32_t view_id,
-                                      int32_t x,
-                                      int32_t y,
-                                      int32_t width,
-                                      int32_t height,
-                                      int32_t viewWidth,
-                                      int32_t viewHeight,
-                                      MutatorsStack mutators_stack) = 0;
+  virtual void onDisplayPlatformView2(
+      int32_t view_id,
+      int32_t x,
+      int32_t y,
+      int32_t width,
+      int32_t height,
+      int32_t viewWidth,
+      int32_t viewHeight,
+      const std::vector<AndroidMutator>& mutators) = 0;
 
   virtual void hidePlatformView2(int32_t view_id) = 0;
 
@@ -281,5 +312,6 @@ class PlatformViewAndroidJNI {
 };
 
 }  // namespace flutter
+
 
 #endif  // FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_

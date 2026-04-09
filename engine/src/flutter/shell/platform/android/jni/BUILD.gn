@@ -7,13 +7,18 @@ import("//flutter/testing/testing.gni")
 
 source_set("jni") {
   sources = [
+    "android_mutators.cc",
+    "android_mutators.h",
     "platform_view_android_jni.cc",
     "platform_view_android_jni.h",
   ]
 
   public_configs = [ "//flutter:config" ]
 
+  public_deps = [ "//flutter/shell/platform/embedder:embedder_headers" ]
+
   deps = [
+    "//flutter/display_list",
     "//flutter/flow",
     "//flutter/fml",
     "//flutter/lib/ui",

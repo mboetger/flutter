@@ -6,9 +6,12 @@
 
 #include <GLES/glext.h>
 
+#include <array>
 #include <utility>
 
 #include "flutter/display_list/effects/dl_color_source.h"
+#include "flutter/display_list/geometry/dl_geometry_conversions.h"
+#include "third_party/skia/include/core/SkRect.h"
 #include "third_party/skia/include/core/SkAlphaType.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkColorType.h"
@@ -134,8 +137,9 @@ bool SurfaceTextureExternalTexture::ShouldUpdate() {
 void SurfaceTextureExternalTexture::Update() {
   jni_facade_->SurfaceTextureUpdateTexImage(
       fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
-  transform_ = jni_facade_->SurfaceTextureGetTransformMatrix(
+  std::array<float, 16> matrix = jni_facade_->SurfaceTextureGetTransformMatrix(
       fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
+  transform_ = SkM44::ColMajor(matrix.data());
 }
 
 const SkM44& SurfaceTextureExternalTexture::GetCurrentUVTransformation() const {

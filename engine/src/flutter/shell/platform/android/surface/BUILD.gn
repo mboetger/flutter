@@ -14,8 +14,9 @@ source_set("surface") {
 
   public_configs = [ "//flutter:config" ]
 
+  public_deps = [ ":native_window" ]
+
   deps = [
-    ":native_window",
     "//flutter/flow",
     "//flutter/fml",
     "//flutter/shell/common",

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder.h"
+#include "flutter/shell/platform/android/jni/android_mutators.h"
 #include "flow/view_slicer.h"
 #include "flutter/common/constants.h"
 #include "flutter/fml/synchronization/waitable_event.h"
@@ -112,7 +113,7 @@ void AndroidExternalViewEmbedder::SubmitFlutterView(
         view_rect.GetHeight(),  //
         params.sizePoints().width * device_pixel_ratio_,
         params.sizePoints().height * device_pixel_ratio_,
-        params.mutatorsStack()  //
+        ToAndroidMutators(params.mutatorsStack())  //
     );
     std::unordered_map<int64_t, DlRect>::const_iterator overlay =
         overlay_layers.find(view_id);

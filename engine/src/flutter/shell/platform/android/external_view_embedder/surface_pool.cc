@@ -6,6 +6,11 @@
 
 #include <utility>
 
+#include "flutter/fml/logging.h"
+#include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
+#include "flutter/shell/platform/android/surface/android_native_window.h"
+#include "flutter/shell/platform/android/surface/android_surface.h"
+
 namespace flutter {
 
 OverlayLayer::OverlayLayer(int id,
@@ -48,7 +53,13 @@ std::shared_ptr<OverlayLayer> SurfacePool::GetLayer(
             : jni_facade->FlutterViewCreateOverlaySurface();
 
     FML_CHECK(java_metadata->window);
-    android_surface->SetNativeWindow(java_metadata->window, jni_facade);
+#if FML_OS_ANDROID
+    auto handle = static_cast<ANativeWindow*>(java_metadata->window);
+#else
+    auto handle = nullptr;
+#endif
+    android_surface->SetNativeWindow(
+        fml::MakeRefCounted<AndroidNativeWindow>(handle), jni_facade);
     android_surface->SetupImpellerSurface();
 
     std::unique_ptr<Surface> surface =

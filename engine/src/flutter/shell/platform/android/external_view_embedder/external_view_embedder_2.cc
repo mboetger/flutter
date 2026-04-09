@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_2.h"
+#include "flutter/shell/platform/android/jni/android_mutators.h"
 #include "display_list/dl_color.h"
 #include "flow/view_slicer.h"
 #include "flutter/fml/synchronization/waitable_event.h"
@@ -189,7 +190,7 @@ void AndroidExternalViewEmbedder2::SubmitFlutterView(
               view_rect.GetHeight(),  //
               params.sizePoints().width * device_pixel_ratio,
               params.sizePoints().height * device_pixel_ratio,
-              params.mutatorsStack()  //
+              ToAndroidMutators(params.mutatorsStack())  //
           );
           // Remove from views visible last frame, so we can hide the rest.
           views_visible_last_frame.erase(view_id);
