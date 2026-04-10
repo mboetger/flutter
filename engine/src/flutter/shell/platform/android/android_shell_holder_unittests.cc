@@ -213,8 +213,8 @@ TEST(AndroidShellHolder, CreateWithMergedPlatformAndUIThread) {
   holder->GetPlatformView()->NotifyCreated(window);
 
   EXPECT_EQ(
-      holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
-      holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+      holder->GetShellForTesting().GetTaskRunners().GetUITaskRunner(),
+      holder->GetShellForTesting().GetTaskRunners().GetPlatformTaskRunner());
 }
 
 TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
@@ -229,8 +229,8 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
   holder->GetPlatformView()->NotifyCreated(window);
 
   EXPECT_NE(
-      holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
-      holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+      holder->GetShellForTesting().GetTaskRunners().GetUITaskRunner(),
+      holder->GetShellForTesting().GetTaskRunners().GetPlatformTaskRunner());
 }
 
 }  // namespace testing
