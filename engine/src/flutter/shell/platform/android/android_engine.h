@@ -40,9 +40,8 @@ class AndroidEngine {
       Shell::CreateCallback<PlatformView> on_create_platform_view,
       Shell::CreateCallback<Rasterizer> on_create_rasterizer) const = 0;
 
-  virtual Rasterizer::Screenshot Screenshot(
-      Rasterizer::ScreenshotType type,
-      bool base64_encode) = 0;
+  virtual Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
+                                            bool base64_encode) = 0;
 
   virtual void NotifyLowMemoryWarning() = 0;
 

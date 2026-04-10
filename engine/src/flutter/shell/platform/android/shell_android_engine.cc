@@ -32,8 +32,9 @@ std::unique_ptr<AndroidEngine> ShellAndroidEngine::Spawn(
     Shell::CreateCallback<PlatformView> on_create_platform_view,
     Shell::CreateCallback<Rasterizer> on_create_rasterizer) const {
   FML_DCHECK(shell_);
-  auto spawned_shell = shell_->Spawn(std::move(run_configuration), initial_route,
-                                     on_create_platform_view, on_create_rasterizer);
+  auto spawned_shell =
+      shell_->Spawn(std::move(run_configuration), initial_route,
+                    on_create_platform_view, on_create_rasterizer);
   if (!spawned_shell) {
     return nullptr;
   }

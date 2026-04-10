@@ -169,11 +169,14 @@ AndroidShellHolder::AndroidShellHolder(
   }
 
   if (engine_) {
-    engine_->GetShell().GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers([]() {
-      if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
-        FML_LOG(ERROR) << "Failed to set Workers task runner priority";
-      }
-    });
+    engine_->GetShell()
+        .GetDartVM()
+        ->GetConcurrentMessageLoop()
+        ->PostTaskToAllWorkers([]() {
+          if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
+            FML_LOG(ERROR) << "Failed to set Workers task runner priority";
+          }
+        });
 
     engine_->RegisterImageDecoder(
         [runner = task_runners.GetIOTaskRunner()](sk_sp<SkData> buffer) {
