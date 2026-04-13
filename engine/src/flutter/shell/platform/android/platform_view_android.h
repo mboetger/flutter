@@ -116,8 +116,7 @@ class PlatformViewAndroid final {
     return android_context_;
   }
 
-  std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
-      const {
+  std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler() const {
     return platform_message_handler_;
   }
 
@@ -152,10 +151,9 @@ class PlatformViewAndroid final {
   }
 
   // |PlatformView|
-  void UpdateSemantics(
-      int64_t view_id,
-      flutter::SemanticsNodeUpdates update,
-      flutter::CustomAccessibilityActionUpdates actions);
+  void UpdateSemantics(int64_t view_id,
+                       flutter::SemanticsNodeUpdates update,
+                       flutter::CustomAccessibilityActionUpdates actions);
 
   // |PlatformView|
   void SetApplicationLocale(std::string locale);
@@ -164,8 +162,7 @@ class PlatformViewAndroid final {
   void SetSemanticsTreeEnabled(bool enabled);
 
   // |PlatformView|
-  void HandlePlatformMessage(
-      std::unique_ptr<flutter::PlatformMessage> message);
+  void HandlePlatformMessage(std::unique_ptr<flutter::PlatformMessage> message);
 
   // |PlatformView|
   void OnPreEngineRestart() const;
@@ -205,8 +202,8 @@ class PlatformViewAndroid final {
   double GetScaledFontSize(double unscaled_font_size,
                            int configuration_id) const;
 
-   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewAndroid);
-  
+  FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewAndroid);
+
   fml::WeakPtrFactory<PlatformViewAndroid> weak_factory_;
 };
 }  // namespace flutter

@@ -23,7 +23,7 @@ struct ShellArgs;
 class EmbedderEngine {
  public:
   EmbedderEngine(
-      std::unique_ptr<EmbedderThreadHost> thread_host,
+      std::shared_ptr<EmbedderThreadHost> thread_host,
       const TaskRunners& task_runners,
       const Settings& settings,
       RunConfiguration run_configuration,
@@ -31,6 +31,13 @@ class EmbedderEngine {
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
           external_texture_resolver);
+
+  EmbedderEngine(std::shared_ptr<EmbedderThreadHost> thread_host,
+                 const TaskRunners& task_runners,
+                 RunConfiguration run_configuration,
+                 std::unique_ptr<Shell> shell,
+                 std::unique_ptr<EmbedderExternalTextureResolver>
+                     external_texture_resolver);
 
   ~EmbedderEngine();
 
@@ -41,6 +48,7 @@ class EmbedderEngine {
   void CollectThreadHost();
 
   const TaskRunners& GetTaskRunners() const;
+  std::shared_ptr<EmbedderThreadHost> GetThreadHost() const;
 
   bool NotifyCreated();
 
@@ -91,7 +99,7 @@ class EmbedderEngine {
   Shell& GetShell();
 
  private:
-  std::unique_ptr<EmbedderThreadHost> thread_host_;
+  std::shared_ptr<EmbedderThreadHost> thread_host_;
   TaskRunners task_runners_;
   RunConfiguration run_configuration_;
   std::unique_ptr<ShellArgs> shell_args_;

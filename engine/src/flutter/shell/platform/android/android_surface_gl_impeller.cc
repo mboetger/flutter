@@ -35,8 +35,9 @@ bool AndroidSurfaceGLImpeller::IsValid() const {
 // |AndroidSurface|
 std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
     GrDirectContext* gr_context) {
-  // Make the context current on the raster thread before creating GPUSurfaceGLImpeller,
-  // as its constructor may invoke graphics APIs and requires reactions to be allowed.
+  // Make the context current on the raster thread before creating
+  // GPUSurfaceGLImpeller, as its constructor may invoke graphics APIs and
+  // requires reactions to be allowed.
   if (!OnGLContextMakeCurrent()) {
     FML_LOG(ERROR) << "Could not make GL context current in CreateGPUSurface";
     return nullptr;
@@ -47,7 +48,7 @@ std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
       android_context_->GetImpellerContext(),  // context
       true                                     // render to surface
   );
-  
+
   // Clear the context so that it's not bound to the current thread,
   // allowing other threads (or this thread in AcquireFrame) to acquire it.
   GLContextClearCurrent();
