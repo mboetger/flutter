@@ -18,7 +18,6 @@
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
 #include "flutter/lib/ui/painting/image_generator_registry.h"
-#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/thread_host.h"
@@ -30,6 +29,7 @@
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_thread_host.h"
+#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
 namespace flutter {
 
@@ -80,9 +80,11 @@ static void AndroidPlatformThreadConfigSetter(
 AndroidShellHolder::AndroidShellHolder(
     const flutter::Settings& settings,
     std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
-    AndroidRenderingAPI android_rendering_api)
+    AndroidRenderingAPI android_rendering_api,
+    std::unique_ptr<APKAssetProvider> apk_asset_provider)
     : settings_(settings),
       jni_facade_(jni_facade),
+      apk_asset_provider_(std::move(apk_asset_provider)),
       android_rendering_api_(android_rendering_api) {
   static size_t thread_host_count = 1;
   auto thread_label = std::to_string(thread_host_count++);
@@ -121,7 +123,8 @@ AndroidShellHolder::AndroidShellHolder(
             rendering_api            // rendering API
         );
 
-        // Setup Impeller context on the raster thread, as expected by Shell::Create
+        // Setup Impeller context on the raster thread, as expected by
+        // Shell::Create
         fml::AutoResetWaitableEvent latch;
         fml::TaskRunner::RunNowOrPostTask(
             shell.GetTaskRunners().GetRasterTaskRunner(),
@@ -132,10 +135,11 @@ AndroidShellHolder::AndroidShellHolder(
         latch.Wait();
 
         auto embedder_surface = platform_view_android->TakeSurface();
-        FML_LOG(ERROR) << "AndroidShellHolder: embedder_surface is " << (embedder_surface ? "not null" : "null");
+        FML_LOG(ERROR) << "AndroidShellHolder: embedder_surface is "
+                       << (embedder_surface ? "not null" : "null");
 
         PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
-        
+
         dispatch_table.update_semantics_callback =
             [platform_view = platform_view_android.get()](
                 int64_t view_id, flutter::SemanticsNodeUpdates update,
@@ -158,9 +162,8 @@ AndroidShellHolder::AndroidShellHolder(
         return std::make_unique<PlatformViewEmbedder>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
-            std::move(embedder_surface),
-            dispatch_table,
-            nullptr                  // external view embedder
+            std::move(embedder_surface), dispatch_table,
+            nullptr  // external view embedder
         );
       };
 
@@ -193,28 +196,32 @@ AndroidShellHolder::AndroidShellHolder(
   );
 
   thread_host_ = std::make_shared<EmbedderThreadHost>(
-      std::move(thread_host), task_runners, std::set<fml::RefPtr<EmbedderTaskRunner>>{});
+      std::move(thread_host), task_runners,
+      std::set<fml::RefPtr<EmbedderTaskRunner>>{});
 
-  RunConfiguration run_configuration(IsolateConfiguration::CreateForAppSnapshot());
+  RunConfiguration run_configuration(
+      IsolateConfiguration::CreateForAppSnapshot());
+  if (apk_asset_provider_) {
+    run_configuration.AddAssetResolver(apk_asset_provider_->Clone());
+  }
 
   embedder_engine_ = std::make_unique<EmbedderEngine>(
-      thread_host_,
-      task_runners,
-      settings_,
-      std::move(run_configuration),
-      on_create_platform_view,
-      on_create_rasterizer,
-      nullptr // external_texture_resolver
+      thread_host_, task_runners, settings_, std::move(run_configuration),
+      on_create_platform_view, on_create_rasterizer,
+      nullptr  // external_texture_resolver
   );
 
   is_valid_ = embedder_engine_->LaunchShell();
 
   if (is_valid_) {
-    embedder_engine_->GetShell().GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers([]() {
-      if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
-        FML_LOG(ERROR) << "Failed to set Workers task runner priority";
-      }
-    });
+    embedder_engine_->GetShell()
+        .GetDartVM()
+        ->GetConcurrentMessageLoop()
+        ->PostTaskToAllWorkers([]() {
+          if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
+            FML_LOG(ERROR) << "Failed to set Workers task runner priority";
+          }
+        });
 
     embedder_engine_->GetShell().RegisterImageDecoder(
         [runner = task_runners.GetIOTaskRunner()](sk_sp<SkData> buffer) {
@@ -286,8 +293,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   // of the new Shell.
   PlatformViewAndroid* android_platform_view = platform_view_.get();
   // There's some indirection with platform_view_ being a weak pointer but
-  // we just checked that the embedder_engine_ exists above and a valid shell is the
-  // owner of the platform view so this weak pointer always exists.
+  // we just checked that the embedder_engine_ exists above and a valid shell is
+  // the owner of the platform view so this weak pointer always exists.
   FML_DCHECK(android_platform_view);
   std::shared_ptr<flutter::AndroidContext> android_context =
       android_platform_view->GetAndroidContext();
@@ -295,7 +302,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   // This is a synchronous call, so the captures don't have race checks.
   std::unique_ptr<PlatformViewAndroid> platform_view_android;
-  
+
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [&jni_facade, &platform_view_android, android_context](Shell& shell) {
         platform_view_android = std::make_unique<PlatformViewAndroid>(
@@ -308,7 +315,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
         auto embedder_surface = platform_view_android->TakeSurface();
 
         PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
-        
+
         dispatch_table.update_semantics_callback =
             [platform_view = platform_view_android.get()](
                 int64_t view_id, flutter::SemanticsNodeUpdates update,
@@ -331,9 +338,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
         return std::make_unique<PlatformViewEmbedder>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
-            std::move(embedder_surface),
-            dispatch_table,
-            nullptr                  // external view embedder
+            std::move(embedder_surface), dispatch_table,
+            nullptr  // external view embedder
         );
       };
 
@@ -352,45 +358,47 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   config2->SetEngineId(engine_id);
 
   std::unique_ptr<flutter::Shell> spawned_shell =
-      embedder_engine_->GetShell().Spawn(std::move(config.value()), initial_route,
-                    on_create_platform_view, on_create_rasterizer);
+      embedder_engine_->GetShell().Spawn(std::move(config.value()),
+                                         initial_route, on_create_platform_view,
+                                         on_create_rasterizer);
 
   if (!spawned_shell) {
     return nullptr;
   }
 
   auto spawned_embedder_engine = std::make_unique<EmbedderEngine>(
-      thread_host_,
-      embedder_engine_->GetTaskRunners(),
-      std::move(config2.value()),
-      std::move(spawned_shell),
-      nullptr // external_texture_resolver
+      thread_host_, embedder_engine_->GetTaskRunners(),
+      std::move(config2.value()), std::move(spawned_shell),
+      nullptr  // external_texture_resolver
   );
 
   return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
-      GetSettings(), jni_facade, thread_host_, std::move(spawned_embedder_engine),
-      apk_asset_provider_->Clone(), std::move(platform_view_android),
-      android_context->RenderingApi()));
+      GetSettings(), jni_facade, thread_host_,
+      std::move(spawned_embedder_engine), apk_asset_provider_->Clone(),
+      std::move(platform_view_android), android_context->RenderingApi()));
 }
 
-void AndroidShellHolder::Launch(
-    std::unique_ptr<APKAssetProvider> apk_asset_provider,
-    const std::string& entrypoint,
-    const std::string& libraryUrl,
-    const std::vector<std::string>& entrypoint_args,
-    int64_t engine_id) {
+void AndroidShellHolder::Launch(const std::string& entrypoint,
+                                const std::string& libraryUrl,
+                                const std::vector<std::string>& entrypoint_args,
+                                int64_t engine_id) {
   if (!IsValid()) {
     return;
   }
 
-  apk_asset_provider_ = std::move(apk_asset_provider);
   auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
   if (!config) {
     return;
   }
   config->SetEngineId(engine_id);
   UpdateDisplayMetrics();
-  embedder_engine_->GetShell().RunEngine(std::move(config.value()));
+  embedder_engine_->SetRunConfiguration(std::move(config.value()));
+  embedder_engine_->RunRootIsolate();
+}
+
+void AndroidShellHolder::SetAPKAssetProvider(
+    std::unique_ptr<APKAssetProvider> apk_asset_provider) {
+  apk_asset_provider_ = std::move(apk_asset_provider);
 }
 
 Rasterizer::Screenshot AndroidShellHolder::Screenshot(
@@ -437,7 +445,9 @@ std::optional<RunConfiguration> AndroidShellHolder::BuildRunConfiguration(
   }
 
   RunConfiguration config(std::move(isolate_configuration));
-  config.AddAssetResolver(apk_asset_provider_->Clone());
+  if (apk_asset_provider_) {
+    config.AddAssetResolver(apk_asset_provider_->Clone());
+  }
 
   {
     if (!entrypoint.empty() && !libraryUrl.empty()) {

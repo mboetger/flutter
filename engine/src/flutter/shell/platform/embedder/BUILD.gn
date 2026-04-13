@@ -110,8 +110,8 @@ template("embedder_source_set") {
 
     public_deps = [ ":embedder_headers" ]
     deps = [
-      ":embedder_surface",
       ":embedder_gpu_configuration",
+      ":embedder_surface",
       "$dart_src/runtime/bin:common_embedder_dart_io",
       "$dart_src/runtime/bin:elf_loader",
       "//flutter/assets",

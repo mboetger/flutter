@@ -185,13 +185,9 @@ source_set("flutter_shell_native_src") {
 
   sources += get_target_outputs(":icudtl_asm")
 
-  public_deps = [
-    ":android_engine_deps",
-  ]
+  public_deps = [ ":android_engine_deps" ]
 
-  deps = [
-    "//flutter/shell/platform/embedder:embedder",
-  ]
+  deps = [ "//flutter/shell/platform/embedder" ]
 
   public_configs = [ "//flutter:config" ]
 

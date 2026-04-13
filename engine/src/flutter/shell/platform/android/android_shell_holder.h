@@ -40,7 +40,8 @@ class AndroidShellHolder {
  public:
   AndroidShellHolder(const flutter::Settings& settings,
                      std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
-                     AndroidRenderingAPI android_rendering_api);
+                     AndroidRenderingAPI android_rendering_api,
+                     std::unique_ptr<APKAssetProvider> apk_asset_provider);
 
   ~AndroidShellHolder();
 
@@ -83,11 +84,13 @@ class AndroidShellHolder {
       const std::vector<std::string>& entrypoint_args,
       int64_t engine_id) const;
 
-  void Launch(std::unique_ptr<APKAssetProvider> apk_asset_provider,
-              const std::string& entrypoint,
+  void Launch(const std::string& entrypoint,
               const std::string& libraryUrl,
               const std::vector<std::string>& entrypoint_args,
               int64_t engine_id);
+
+  void SetAPKAssetProvider(
+      std::unique_ptr<APKAssetProvider> apk_asset_provider);
 
   const flutter::Settings& GetSettings() const;
 
@@ -110,7 +113,9 @@ class AndroidShellHolder {
   void UpdateDisplayMetrics();
 
   // Visible for testing.
-  const Shell& GetShellForTesting() const { return embedder_engine_->GetShell(); }
+  const Shell& GetShellForTesting() const {
+    return embedder_engine_->GetShell();
+  }
 
  private:
   const flutter::Settings settings_;

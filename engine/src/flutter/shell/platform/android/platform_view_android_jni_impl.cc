@@ -182,13 +182,24 @@ static jfieldID g_path_fill_type_winding_field = nullptr;
 static jfieldID g_path_fill_type_even_odd_field = nullptr;
 
 // Called By Java
-static jlong AttachJNI(JNIEnv* env, jclass clazz, jobject flutterJNI) {
+static jlong AttachJNI(JNIEnv* env,
+                       jclass clazz,
+                       jobject flutterJNI,
+                       jobject jAssetManager) {
   fml::jni::JavaObjectWeakGlobalRef java_object(env, flutterJNI);
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade =
       std::make_shared<PlatformViewAndroidJNIImpl>(java_object);
+
+  std::unique_ptr<APKAssetProvider> apk_asset_provider;
+  if (jAssetManager) {
+    apk_asset_provider =
+        std::make_unique<APKAssetProvider>(env, jAssetManager, "");
+  }
+
   auto shell_holder = std::make_unique<AndroidShellHolder>(
       FlutterMain::Get().GetSettings(), jni_facade,
-      FlutterMain::Get().GetAndroidRenderingAPI());
+      FlutterMain::Get().GetAndroidRenderingAPI(),
+      std::move(apk_asset_provider));
   if (shell_holder->IsValid()) {
     return reinterpret_cast<jlong>(shell_holder.release());
   } else {
@@ -266,7 +277,8 @@ static void SurfaceCreated(JNIEnv* env,
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
   ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyCreated(std::move(window));
-  if (auto engine_platform_view = ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
+  if (auto engine_platform_view =
+          ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
     engine_platform_view->NotifyCreated();
   }
 }
@@ -296,7 +308,8 @@ static void SurfaceChanged(JNIEnv* env,
 
 static void SurfaceDestroyed(JNIEnv* env, jobject jcaller, jlong shell_holder) {
   ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyDestroyed();
-  if (auto engine_platform_view = ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
+  if (auto engine_platform_view =
+          ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
     engine_platform_view->NotifyDestroyed();
   }
 }
@@ -315,12 +328,14 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
       jAssetManager,                                  // asset manager
       fml::jni::JavaStringToString(env, jBundlePath)  // apk asset dir
   );
+  ANDROID_SHELL_HOLDER->SetAPKAssetProvider(std::move(apk_asset_provider));
+
   auto entrypoint = fml::jni::JavaStringToString(env, jEntrypoint);
   auto libraryUrl = fml::jni::JavaStringToString(env, jLibraryUrl);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  ANDROID_SHELL_HOLDER->Launch(std::move(apk_asset_provider), entrypoint,
-                               libraryUrl, entrypoint_args, engineId);
+  ANDROID_SHELL_HOLDER->Launch(entrypoint, libraryUrl, entrypoint_args,
+                               engineId);
 }
 
 static jobject LookupCallbackInformation(JNIEnv* env,
@@ -550,7 +565,8 @@ static void SetAccessibilityFeatures(JNIEnv* env,
                                      jobject jcaller,
                                      jlong shell_holder,
                                      jint flags) {
-  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->SetAccessibilityFeatures(flags);
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->SetAccessibilityFeatures(
+      flags);
 }
 
 static jboolean GetIsSoftwareRendering(JNIEnv* env, jobject jcaller) {
@@ -739,7 +755,8 @@ bool RegisterApi(JNIEnv* env) {
       // Start of methods from FlutterJNI
       {
           .name = "nativeAttach",
-          .signature = "(Lio/flutter/embedding/engine/FlutterJNI;)J",
+          .signature = "(Lio/flutter/embedding/engine/FlutterJNI;Landroid/"
+                       "content/res/AssetManager;)J",
           .fnPtr = reinterpret_cast<void*>(&AttachJNI),
       },
       {

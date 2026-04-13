@@ -2992,13 +2992,14 @@ FlutterEngineResult FlutterEngineRunInitialized(
 /// @return     The result of the call to spawn the Flutter engine.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineSpawn(
-    size_t version,
-    FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
-    const FlutterRendererConfig* config,
-    const FlutterProjectArgs* args,
-    void* user_data,
-    FLUTTER_API_SYMBOL(FlutterEngine)* engine_out);
+FlutterEngineResult FlutterEngineSpawn(size_t version,
+                                       FLUTTER_API_SYMBOL(FlutterEngine)
+                                           parent_engine,
+                                       const FlutterRendererConfig* config,
+                                       const FlutterProjectArgs* args,
+                                       void* user_data,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Adds a view.

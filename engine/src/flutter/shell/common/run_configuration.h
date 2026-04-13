@@ -83,6 +83,8 @@ class RunConfiguration {
   RunConfiguration(std::unique_ptr<IsolateConfiguration> configuration,
                    std::shared_ptr<AssetManager> asset_manager);
 
+  RunConfiguration& operator=(RunConfiguration&&) = default;
+
   //----------------------------------------------------------------------------
   /// @brief      Run configurations cannot be copied because it may not always
   ///             be possible to copy the underlying isolate snapshots. If

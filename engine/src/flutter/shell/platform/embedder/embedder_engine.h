@@ -32,13 +32,12 @@ class EmbedderEngine {
       std::unique_ptr<EmbedderExternalTextureResolver>
           external_texture_resolver);
 
-  EmbedderEngine(
-      std::shared_ptr<EmbedderThreadHost> thread_host,
-      const TaskRunners& task_runners,
-      RunConfiguration run_configuration,
-      std::unique_ptr<Shell> shell,
-      std::unique_ptr<EmbedderExternalTextureResolver>
-          external_texture_resolver);
+  EmbedderEngine(std::shared_ptr<EmbedderThreadHost> thread_host,
+                 const TaskRunners& task_runners,
+                 RunConfiguration run_configuration,
+                 std::unique_ptr<Shell> shell,
+                 std::unique_ptr<EmbedderExternalTextureResolver>
+                     external_texture_resolver);
 
   ~EmbedderEngine();
 
@@ -56,6 +55,8 @@ class EmbedderEngine {
   bool NotifyDestroyed();
 
   bool RunRootIsolate();
+
+  void SetRunConfiguration(RunConfiguration run_configuration);
 
   bool IsValid() const;
 

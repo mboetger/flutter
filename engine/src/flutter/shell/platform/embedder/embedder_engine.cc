@@ -129,6 +129,10 @@ bool EmbedderEngine::RunRootIsolate() {
   return true;
 }
 
+void EmbedderEngine::SetRunConfiguration(RunConfiguration run_configuration) {
+  run_configuration_ = std::move(run_configuration);
+}
+
 bool EmbedderEngine::IsValid() const {
   return static_cast<bool>(shell_);
 }

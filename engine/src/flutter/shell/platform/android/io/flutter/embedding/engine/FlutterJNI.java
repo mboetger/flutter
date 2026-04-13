@@ -412,22 +412,28 @@ public class FlutterJNI {
    */
   @UiThread
   public void attachToNative() {
+    attachToNative(null);
+  }
+
+  public void attachToNative(@Nullable AssetManager assetManager) {
     ensureRunningOnMainThread();
     ensureNotAttachedToNative();
     shellHolderLock.writeLock().lock();
     try {
-      nativeShellHolderId = performNativeAttach(this);
+      nativeShellHolderId = performNativeAttach(this, assetManager);
     } finally {
       shellHolderLock.writeLock().unlock();
     }
   }
 
   @VisibleForTesting
-  public long performNativeAttach(@NonNull FlutterJNI flutterJNI) {
-    return nativeAttach(flutterJNI);
+  public long performNativeAttach(
+      @NonNull FlutterJNI flutterJNI, @Nullable AssetManager assetManager) {
+    return nativeAttach(flutterJNI, assetManager);
   }
 
-  private native long nativeAttach(@NonNull FlutterJNI flutterJNI);
+  private native long nativeAttach(
+      @NonNull FlutterJNI flutterJNI, @Nullable AssetManager assetManager);
 
   /**
    * Spawns a new FlutterJNI instance from the current instance.

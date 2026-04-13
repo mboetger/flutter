@@ -406,7 +406,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     // is already attached to a native shell. In that case, the Java FlutterEngine is created around
     // an existing shell.
     if (!flutterJNI.isAttached()) {
-      attachToJni();
+      attachToJni(assetManager);
     }
 
     this.renderer = new FlutterRenderer(flutterJNI);
@@ -434,9 +434,9 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     this.pluginRegistry.add(processTextPlugin);
   }
 
-  private void attachToJni() {
+  private void attachToJni(@NonNull AssetManager assetManager) {
     Log.v(TAG, "Attaching to JNI.");
-    flutterJNI.attachToNative();
+    flutterJNI.attachToNative(assetManager);
 
     if (!isAttachedToJni()) {
       throw new RuntimeException("FlutterEngine failed to attach to its native Object reference.");

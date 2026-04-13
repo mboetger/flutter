@@ -2529,13 +2529,14 @@ FlutterEngineResult FlutterEngineRunInitialized(
 }
 
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineSpawn(
-    size_t version,
-    FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
-    const FlutterRendererConfig* config,
-    const FlutterProjectArgs* args,
-    void* user_data,
-    FLUTTER_API_SYMBOL(FlutterEngine)* engine_out) {
+FlutterEngineResult FlutterEngineSpawn(size_t version,
+                                       FLUTTER_API_SYMBOL(FlutterEngine)
+                                           parent_engine,
+                                       const FlutterRendererConfig* config,
+                                       const FlutterProjectArgs* args,
+                                       void* user_data,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out) {
   if (version != FLUTTER_ENGINE_VERSION) {
     return LOG_EMBEDDER_ERROR(kInvalidLibraryVersion, "Version mismatch.");
   }
@@ -2543,13 +2544,16 @@ FlutterEngineResult FlutterEngineSpawn(
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Parent engine was null.");
   }
   if (!engine_out) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine out parameter was null.");
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine out parameter was null.");
   }
   if (!args) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Project arguments were null.");
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Project arguments were null.");
   }
 
-  auto parent_embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(parent_engine);
+  auto parent_embedder_engine =
+      reinterpret_cast<flutter::EmbedderEngine*>(parent_engine);
   if (!parent_embedder_engine->IsValid()) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Parent engine is not valid.");
   }
@@ -2562,10 +2566,11 @@ FlutterEngineResult FlutterEngineSpawn(
         SAFE_ACCESS(args, command_line_argv, nullptr));
   }
   flutter::Settings settings = flutter::SettingsFromCommandLine(command_line);
-  
-  flutter::RunConfiguration run_configuration = flutter::RunConfiguration::InferFromSettings(
-      settings, nullptr, flutter::IsolateLaunchType::kExistingGroup);
-  
+
+  flutter::RunConfiguration run_configuration =
+      flutter::RunConfiguration::InferFromSettings(
+          settings, nullptr, flutter::IsolateLaunchType::kExistingGroup);
+
   if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
     if (!dart_entrypoint.empty()) {
@@ -2620,19 +2625,17 @@ FlutterEngineResult FlutterEngineSpawn(
       config, user_data, platform_dispatch_table,
       std::move(external_view_embedder_result.value()),
       settings.enable_impeller);
-      
+
   flutter::Shell::CreateCallback<flutter::Rasterizer> on_create_rasterizer =
       [](flutter::Shell& shell) {
         return std::make_unique<flutter::Rasterizer>(shell);
       };
 
   auto parent_shell = &parent_embedder_engine->GetShell();
-  
-  auto spawned_shell = parent_shell->Spawn(
-      std::move(run_configuration),
-      settings.route,
-      on_create_platform_view,
-      on_create_rasterizer);
+
+  auto spawned_shell =
+      parent_shell->Spawn(std::move(run_configuration), settings.route,
+                          on_create_platform_view, on_create_rasterizer);
 
   if (!spawned_shell) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency, "Could not spawn shell.");
@@ -2643,14 +2646,12 @@ FlutterEngineResult FlutterEngineSpawn(
 
   auto embedder_engine = std::make_unique<flutter::EmbedderEngine>(
       parent_embedder_engine->GetThreadHost(),
-      parent_embedder_engine->GetTaskRunners(),
-      std::move(run_configuration),
-      std::move(spawned_shell),
-      std::move(external_texture_resolver));
+      parent_embedder_engine->GetTaskRunners(), std::move(run_configuration),
+      std::move(spawned_shell), std::move(external_texture_resolver));
 
   *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
       embedder_engine.release());
-      
+
   return kSuccess;
 }
 
