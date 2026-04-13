@@ -12,6 +12,7 @@
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
+#include "flutter/shell/platform/embedder/embedder_surface.h"
 
 namespace impeller {
 class Context;
@@ -21,16 +22,21 @@ namespace flutter {
 
 class AndroidExternalViewEmbedder;
 
-class AndroidSurface {
+class AndroidSurface : public EmbedderSurface {
  public:
   virtual ~AndroidSurface();
 
-  virtual bool IsValid() const = 0;
+  virtual bool IsValid() const override = 0;
 
   virtual void TeardownOnScreenContext() = 0;
 
   virtual std::unique_ptr<Surface> CreateGPUSurface(
-      GrDirectContext* gr_context = nullptr) = 0;
+      GrDirectContext* gr_context) = 0;
+
+  // |EmbedderSurface|
+  std::unique_ptr<Surface> CreateGPUSurface() override {
+    return CreateGPUSurface(nullptr);
+  }
 
   virtual bool OnScreenSurfaceResize(const DlISize& size) = 0;
 
@@ -44,9 +50,14 @@ class AndroidSurface {
 
   virtual std::unique_ptr<Surface> CreateSnapshotSurface();
 
-  virtual std::shared_ptr<impeller::Context> GetImpellerContext();
+  virtual std::shared_ptr<impeller::Context> GetImpellerContext() const;
 
   virtual void SetupImpellerSurface();
+
+  // |EmbedderSurface|
+  std::shared_ptr<impeller::Context> CreateImpellerContext() const override {
+    return GetImpellerContext();
+  }
 
  protected:
   AndroidSurface();

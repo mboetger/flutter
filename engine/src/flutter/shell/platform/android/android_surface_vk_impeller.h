@@ -43,7 +43,7 @@ class AndroidSurfaceVKImpeller : public AndroidSurface {
   bool ResourceContextClearCurrent() override;
 
   // |AndroidSurface|
-  std::shared_ptr<impeller::Context> GetImpellerContext() override;
+  std::shared_ptr<impeller::Context> GetImpellerContext() const override;
 
   // |AndroidSurface|
   bool SetNativeWindow(

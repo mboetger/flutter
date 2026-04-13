@@ -108,7 +108,7 @@ bool AndroidSurfaceVKImpeller::SetNativeWindow(
 }
 
 std::shared_ptr<impeller::Context>
-AndroidSurfaceVKImpeller::GetImpellerContext() {
+AndroidSurfaceVKImpeller::GetImpellerContext() const {
   return surface_context_vk_;
 }
 

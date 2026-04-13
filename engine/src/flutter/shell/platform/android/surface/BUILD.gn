@@ -21,6 +21,7 @@ source_set("surface") {
     "//flutter/shell/common",
     "//flutter/shell/platform/android/context",
     "//flutter/shell/platform/android/jni",
+    "//flutter/shell/platform/embedder:embedder_surface",
     "//flutter/skia",
   ]
 }
