@@ -20,15 +20,24 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
         platform_task_runner_(std::move(platform_task_runner)) {}
 
   virtual void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) {
-    platform_task_runner_->PostTask(fml::MakeCopyable(
-        [parent = parent_, message = std::move(message)]() mutable {
-          if (parent) {
-            parent->HandlePlatformMessage(std::move(message));
-          } else {
-            FML_DLOG(WARNING) << "Deleted engine dropping message on channel "
-                              << message->channel();
-          }
-        }));
+    if (platform_task_runner_->RunsTasksOnCurrentThread()) {
+      if (parent_) {
+        parent_->HandlePlatformMessage(std::move(message));
+      } else {
+        FML_DLOG(WARNING) << "Deleted engine dropping message on channel "
+                          << message->channel();
+      }
+    } else {
+      platform_task_runner_->PostTask(fml::MakeCopyable(
+          [parent = parent_, message = std::move(message)]() mutable {
+            if (parent) {
+              parent->HandlePlatformMessage(std::move(message));
+            } else {
+              FML_DLOG(WARNING) << "Deleted engine dropping message on channel "
+                                << message->channel();
+            }
+          }));
+    }
   }
 
   virtual bool DoesHandlePlatformMessageOnPlatformThread() const {
