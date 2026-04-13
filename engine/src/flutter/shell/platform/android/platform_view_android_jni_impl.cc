@@ -266,6 +266,9 @@ static void SurfaceCreated(JNIEnv* env,
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
   ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyCreated(std::move(window));
+  if (auto engine_platform_view = ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
+    engine_platform_view->NotifyCreated();
+  }
 }
 
 static void SurfaceWindowChanged(JNIEnv* env,
@@ -293,6 +296,9 @@ static void SurfaceChanged(JNIEnv* env,
 
 static void SurfaceDestroyed(JNIEnv* env, jobject jcaller, jlong shell_holder) {
   ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyDestroyed();
+  if (auto engine_platform_view = ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
+    engine_platform_view->NotifyDestroyed();
+  }
 }
 
 static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,

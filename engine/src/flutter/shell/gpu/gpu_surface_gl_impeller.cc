@@ -15,8 +15,7 @@ namespace flutter {
 GPUSurfaceGLImpeller::GPUSurfaceGLImpeller(
     GPUSurfaceGLDelegate* delegate,
     std::shared_ptr<impeller::Context> context,
-    bool render_to_surface)
-    : weak_factory_(this) {
+    bool render_to_surface) {
   if (delegate == nullptr) {
     return;
   }
