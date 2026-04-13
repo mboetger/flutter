@@ -189,14 +189,15 @@ TEST(AndroidShellHolder, HandlePlatformMessage) {
   auto message = std::make_unique<PlatformMessage>(
       /*channel=*/"foo", /*data=*/std::move(bytes), /*response=*/response);
   int response_id = 1;
-  
+
   EXPECT_CALL(*jni,
               FlutterViewHandlePlatformMessage(::testing::_, response_id));
   EXPECT_CALL(*response, CompleteEmpty());
-  
+
   holder->GetPlatformView()->HandlePlatformMessage(std::move(message));
-  
-  holder->GetPlatformView()->GetPlatformMessageHandler()
+
+  holder->GetPlatformView()
+      ->GetPlatformMessageHandler()
       ->InvokePlatformMessageEmptyResponseCallback(response_id);
 }
 

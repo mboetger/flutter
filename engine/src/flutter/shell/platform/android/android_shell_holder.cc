@@ -18,7 +18,6 @@
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
 #include "flutter/lib/ui/painting/image_generator_registry.h"
-#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/thread_host.h"
@@ -28,6 +27,7 @@
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
 namespace flutter {
 
@@ -124,7 +124,8 @@ AndroidShellHolder::AndroidShellHolder(
             rendering_api            // rendering API
         );
 
-        // Setup Impeller context on the raster thread, as expected by Shell::Create
+        // Setup Impeller context on the raster thread, as expected by
+        // Shell::Create
         fml::AutoResetWaitableEvent latch;
         fml::TaskRunner::RunNowOrPostTask(
             shell.GetTaskRunners().GetRasterTaskRunner(),
@@ -135,10 +136,11 @@ AndroidShellHolder::AndroidShellHolder(
         latch.Wait();
 
         auto embedder_surface = platform_view_android->TakeSurface();
-        FML_LOG(ERROR) << "AndroidShellHolder: embedder_surface is " << (embedder_surface ? "not null" : "null");
+        FML_LOG(ERROR) << "AndroidShellHolder: embedder_surface is "
+                       << (embedder_surface ? "not null" : "null");
 
         PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
-        
+
         dispatch_table.update_semantics_callback =
             [platform_view = platform_view_android.get()](
                 int64_t view_id, flutter::SemanticsNodeUpdates update,
@@ -161,9 +163,8 @@ AndroidShellHolder::AndroidShellHolder(
         return std::make_unique<PlatformViewEmbedder>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
-            std::move(embedder_surface),
-            dispatch_table,
-            nullptr                  // external view embedder
+            std::move(embedder_surface), dispatch_table,
+            nullptr  // external view embedder
         );
       };
 
@@ -200,7 +201,8 @@ AndroidShellHolder::AndroidShellHolder(
                  << "raster=" << (raster_runner ? "valid" : "null") << ", "
                  << "ui=" << (ui_runner ? "valid" : "null") << ", "
                  << "io=" << (io_runner ? "valid" : "null");
-  FML_LOG(ERROR) << "task_runners.IsValid()=" << (task_runners.IsValid() ? "true" : "false");
+  FML_LOG(ERROR) << "task_runners.IsValid()="
+                 << (task_runners.IsValid() ? "true" : "false");
 
   shell_ =
       Shell::Create(GetDefaultPlatformData(),  // window data
@@ -297,7 +299,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   // This is a synchronous call, so the captures don't have race checks.
   std::unique_ptr<PlatformViewAndroid> platform_view_android;
-  
+
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [&jni_facade, &platform_view_android, android_context](Shell& shell) {
         platform_view_android = std::make_unique<PlatformViewAndroid>(
@@ -310,7 +312,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
         auto embedder_surface = platform_view_android->TakeSurface();
 
         PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
-        
+
         dispatch_table.update_semantics_callback =
             [platform_view = platform_view_android.get()](
                 int64_t view_id, flutter::SemanticsNodeUpdates update,
@@ -333,9 +335,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
         return std::make_unique<PlatformViewEmbedder>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
-            std::move(embedder_surface),
-            dispatch_table,
-            nullptr                  // external view embedder
+            std::move(embedder_surface), dispatch_table,
+            nullptr  // external view embedder
         );
       };
 

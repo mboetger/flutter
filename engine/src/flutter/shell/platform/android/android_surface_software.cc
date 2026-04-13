@@ -72,7 +72,9 @@ std::unique_ptr<Surface> AndroidSurfaceSoftware::CreateGPUSurface(
   auto surface =
       std::make_unique<GPUSurfaceSoftware>(this, true /* render to surface */);
 
-  FML_LOG(ERROR) << "AndroidSurfaceSoftware::CreateGPUSurface: surface->IsValid() = " << surface->IsValid();
+  FML_LOG(ERROR)
+      << "AndroidSurfaceSoftware::CreateGPUSurface: surface->IsValid() = "
+      << surface->IsValid();
   if (!surface->IsValid()) {
     return nullptr;
   }

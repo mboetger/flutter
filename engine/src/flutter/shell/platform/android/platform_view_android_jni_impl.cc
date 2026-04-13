@@ -266,7 +266,8 @@ static void SurfaceCreated(JNIEnv* env,
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
   ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyCreated(std::move(window));
-  if (auto engine_platform_view = ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
+  if (auto engine_platform_view =
+          ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
     engine_platform_view->NotifyCreated();
   }
 }
@@ -296,7 +297,8 @@ static void SurfaceChanged(JNIEnv* env,
 
 static void SurfaceDestroyed(JNIEnv* env, jobject jcaller, jlong shell_holder) {
   ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyDestroyed();
-  if (auto engine_platform_view = ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
+  if (auto engine_platform_view =
+          ANDROID_SHELL_HOLDER->GetEnginePlatformView()) {
     engine_platform_view->NotifyDestroyed();
   }
 }
@@ -550,7 +552,8 @@ static void SetAccessibilityFeatures(JNIEnv* env,
                                      jobject jcaller,
                                      jlong shell_holder,
                                      jint flags) {
-  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->SetAccessibilityFeatures(flags);
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->SetAccessibilityFeatures(
+      flags);
 }
 
 static jboolean GetIsSoftwareRendering(JNIEnv* env, jobject jcaller) {

@@ -22,7 +22,7 @@ struct ShellArgs {
 };
 
 EmbedderEngine::EmbedderEngine(
-    std::unique_ptr<EmbedderThreadHost> thread_host,
+    std::shared_ptr<EmbedderThreadHost> thread_host,
     const flutter::TaskRunners& task_runners,
     const flutter::Settings& settings,
     RunConfiguration run_configuration,
@@ -37,9 +37,25 @@ EmbedderEngine::EmbedderEngine(
                                               on_create_rasterizer)),
       external_texture_resolver_(std::move(external_texture_resolver)) {}
 
+EmbedderEngine::EmbedderEngine(
+    std::shared_ptr<EmbedderThreadHost> thread_host,
+    const flutter::TaskRunners& task_runners,
+    RunConfiguration run_configuration,
+    std::unique_ptr<Shell> shell,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver)
+    : thread_host_(std::move(thread_host)),
+      task_runners_(task_runners),
+      run_configuration_(std::move(run_configuration)),
+      shell_(std::move(shell)),
+      external_texture_resolver_(std::move(external_texture_resolver)) {}
+
 EmbedderEngine::~EmbedderEngine() = default;
 
 bool EmbedderEngine::LaunchShell() {
+  if (shell_) {
+    return true;
+  }
+
   if (!shell_args_) {
     FML_DLOG(ERROR) << "Invalid shell arguments.";
     return false;
@@ -119,6 +135,10 @@ bool EmbedderEngine::IsValid() const {
 
 const TaskRunners& EmbedderEngine::GetTaskRunners() const {
   return task_runners_;
+}
+
+std::shared_ptr<EmbedderThreadHost> EmbedderEngine::GetThreadHost() const {
+  return thread_host_;
 }
 
 bool EmbedderEngine::NotifyCreated() {
