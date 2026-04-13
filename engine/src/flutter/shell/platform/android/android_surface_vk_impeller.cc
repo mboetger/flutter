@@ -40,8 +40,15 @@ void AndroidSurfaceVKImpeller::TeardownOnScreenContext() {
 
 std::unique_ptr<Surface> AndroidSurfaceVKImpeller::CreateGPUSurface(
     GrDirectContext* gr_context) {
+  FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::CreateGPUSurface called";
   if (!IsValid()) {
+    FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::CreateGPUSurface: IsValid() is false";
     return nullptr;
+  }
+
+  FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::CreateGPUSurface: native_window_ is " << (native_window_ ? "not null" : "null");
+  if (native_window_) {
+    FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::CreateGPUSurface: native_window_->IsValid() = " << native_window_->IsValid();
   }
 
   if (!native_window_ || !native_window_->IsValid()) {
@@ -51,6 +58,7 @@ std::unique_ptr<Surface> AndroidSurfaceVKImpeller::CreateGPUSurface(
   std::unique_ptr<GPUSurfaceVulkanImpeller> gpu_surface =
       std::make_unique<GPUSurfaceVulkanImpeller>(nullptr, surface_context_vk_);
 
+  FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::CreateGPUSurface: gpu_surface->IsValid() = " << gpu_surface->IsValid();
   if (!gpu_surface->IsValid()) {
     return nullptr;
   }
@@ -75,13 +83,16 @@ bool AndroidSurfaceVKImpeller::ResourceContextClearCurrent() {
 bool AndroidSurfaceVKImpeller::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
+  FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::SetNativeWindow called";
   if (window && (native_window_ == window)) {
+    FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::SetNativeWindow: window is same as native_window_";
     return OnScreenSurfaceResize(window->GetSize());
   }
 
   native_window_ = nullptr;
 
   if (!window || !window->IsValid()) {
+    FML_LOG(ERROR) << "AndroidSurfaceVKImpeller::SetNativeWindow: window is null or invalid";
     return false;
   }
 

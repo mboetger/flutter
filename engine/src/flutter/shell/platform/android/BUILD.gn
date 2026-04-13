@@ -187,6 +187,10 @@ source_set("flutter_shell_native_src") {
 
   public_deps = [ ":android_engine_deps" ]
 
+  deps = [
+    "//flutter/shell/platform/embedder:embedder",
+  ]
+
   public_configs = [ "//flutter:config" ]
 
   defines = []

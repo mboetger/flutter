@@ -49,17 +49,23 @@ bool AndroidSurfaceGLSkia::IsValid() const {
 
 std::unique_ptr<Surface> AndroidSurfaceGLSkia::CreateGPUSurface(
     GrDirectContext* gr_context) {
+  FML_LOG(ERROR) << "AndroidSurfaceGLSkia::CreateGPUSurface called with gr_context " << (gr_context ? "not null" : "null");
   if (gr_context) {
-    return std::make_unique<GPUSurfaceGLSkia>(sk_ref_sp(gr_context), this,
+    auto surface = std::make_unique<GPUSurfaceGLSkia>(sk_ref_sp(gr_context), this,
                                               true);
+    FML_LOG(ERROR) << "AndroidSurfaceGLSkia::CreateGPUSurface returning surface " << (surface ? "not null" : "null");
+    return surface;
   } else {
     sk_sp<GrDirectContext> main_skia_context =
         android_context_->GetMainSkiaContext();
     if (!main_skia_context) {
+      FML_LOG(ERROR) << "AndroidSurfaceGLSkia::CreateGPUSurface: main_skia_context is null, making one";
       main_skia_context = GPUSurfaceGLSkia::MakeGLContext(this);
       android_context_->SetMainSkiaContext(main_skia_context);
     }
-    return std::make_unique<GPUSurfaceGLSkia>(main_skia_context, this, true);
+    auto surface = std::make_unique<GPUSurfaceGLSkia>(main_skia_context, this, true);
+    FML_LOG(ERROR) << "AndroidSurfaceGLSkia::CreateGPUSurface returning surface " << (surface ? "not null" : "null");
+    return surface;
   }
 }
 
