@@ -1488,6 +1488,33 @@ TEST_F(EmbedderTest, CanRunInitializedEngine) {
 }
 
 //------------------------------------------------------------------------------
+/// Test that an engine can be spawned from an existing one.
+///
+TEST_F(EmbedderTest, CanSpawnEngine) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  FlutterProjectArgs spawn_args = builder.GetProjectArgs();
+  
+  FLUTTER_API_SYMBOL(FlutterEngine) spawned_engine = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(
+                FLUTTER_ENGINE_VERSION,
+                parent_engine.get(),
+                &context.GetRendererConfig(),
+                &spawn_args,
+                &context,
+                &spawned_engine),
+            kSuccess);
+            
+  ASSERT_NE(spawned_engine, nullptr);
+  
+  ASSERT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+}
+
+//------------------------------------------------------------------------------
 /// Test that an engine can be deinitialized.
 ///
 TEST_F(EmbedderTest, CanDeinitializeAnEngine) {

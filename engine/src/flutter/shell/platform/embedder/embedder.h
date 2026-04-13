@@ -2974,6 +2974,33 @@ FlutterEngineResult FlutterEngineRunInitialized(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
 //------------------------------------------------------------------------------
+/// @brief      Creates a new engine instance that shares resources with an
+///             existing engine instance (the parent).
+///
+///             This allows creating lightweight engine instances (spawning)
+///             that share the Dart VM, isolate group, and other resources.
+///
+/// @param[in]  version    The Flutter embedder API version. Must be
+///                        FLUTTER_ENGINE_VERSION.
+/// @param[in]  parent_engine A running engine instance to spawn from.
+/// @param[in]  config     The renderer configuration for the new engine.
+/// @param[in]  args       The Flutter project arguments for the new engine.
+/// @param      user_data  A user data baton passed back to embedders in
+///                        callbacks.
+/// @param[out] engine_out The engine handle on successful engine creation.
+///
+/// @return     The result of the call to spawn the Flutter engine.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(
+    size_t version,
+    FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
+    const FlutterRendererConfig* config,
+    const FlutterProjectArgs* args,
+    void* user_data,
+    FLUTTER_API_SYMBOL(FlutterEngine)* engine_out);
+
+//------------------------------------------------------------------------------
 /// @brief      Adds a view.
 ///
 ///             This is an asynchronous operation. The view should not be used

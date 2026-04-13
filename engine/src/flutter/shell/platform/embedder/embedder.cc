@@ -1995,6 +1995,133 @@ CreateEmbedderSemanticsUpdateCallback(const FlutterProjectArgs* args,
   return nullptr;
 }
 
+static flutter::PlatformViewEmbedder::PlatformDispatchTable
+CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
+  auto update_semantics_callback =
+      CreateEmbedderSemanticsUpdateCallback(args, user_data);
+
+  flutter::PlatformViewEmbedder::PlatformMessageResponseCallback
+      platform_message_response_callback = nullptr;
+  if (SAFE_ACCESS(args, platform_message_callback, nullptr) != nullptr) {
+    platform_message_response_callback =
+        [ptr = args->platform_message_callback,
+         user_data](std::unique_ptr<flutter::PlatformMessage> message) {
+          auto handle = new FlutterPlatformMessageResponseHandle();
+          const FlutterPlatformMessage incoming_message = {
+              sizeof(FlutterPlatformMessage),  // struct_size
+              message->channel().c_str(),      // channel
+              message->data().GetMapping(),    // message
+              message->data().GetSize(),       // message_size
+              handle,                          // response_handle
+          };
+          handle->message = std::move(message);
+          return ptr(&incoming_message, user_data);
+        };
+  }
+
+  flutter::VsyncWaiterEmbedder::VsyncCallback vsync_callback = nullptr;
+  if (SAFE_ACCESS(args, vsync_callback, nullptr) != nullptr) {
+    vsync_callback = [ptr = args->vsync_callback, user_data](intptr_t baton) {
+      return ptr(user_data, baton);
+    };
+  }
+
+  flutter::PlatformViewEmbedder::ComputePlatformResolvedLocaleCallback
+      compute_platform_resolved_locale_callback = nullptr;
+  if (SAFE_ACCESS(args, compute_platform_resolved_locale_callback, nullptr) !=
+      nullptr) {
+    compute_platform_resolved_locale_callback =
+        [ptr = args->compute_platform_resolved_locale_callback](
+            const std::vector<std::string>& supported_locales_data) {
+          const size_t number_of_strings_per_locale = 3;
+          size_t locale_count =
+              supported_locales_data.size() / number_of_strings_per_locale;
+          std::vector<FlutterLocale> supported_locales;
+          std::vector<const FlutterLocale*> supported_locales_ptr;
+          for (size_t i = 0; i < locale_count; ++i) {
+            supported_locales.push_back(
+                {.struct_size = sizeof(FlutterLocale),
+                 .language_code =
+                     supported_locales_data[i * number_of_strings_per_locale +
+                                            0]
+                         .c_str(),
+                 .country_code =
+                     supported_locales_data[i * number_of_strings_per_locale +
+                                            1]
+                         .c_str(),
+                 .script_code =
+                     supported_locales_data[i * number_of_strings_per_locale +
+                                            2]
+                         .c_str(),
+                 .variant_code = nullptr});
+            supported_locales_ptr.push_back(&supported_locales[i]);
+          }
+
+          const FlutterLocale* result =
+              ptr(supported_locales_ptr.data(), locale_count);
+
+          std::unique_ptr<std::vector<std::string>> out =
+              std::make_unique<std::vector<std::string>>();
+          if (result) {
+            std::string language_code(SAFE_ACCESS(result, language_code, ""));
+            if (language_code != "") {
+              out->push_back(language_code);
+              out->emplace_back(SAFE_ACCESS(result, country_code, ""));
+              out->emplace_back(SAFE_ACCESS(result, script_code, ""));
+            }
+          }
+          return out;
+        };
+  }
+
+  flutter::PlatformViewEmbedder::OnPreEngineRestartCallback
+      on_pre_engine_restart_callback = nullptr;
+  if (SAFE_ACCESS(args, on_pre_engine_restart_callback, nullptr) != nullptr) {
+    on_pre_engine_restart_callback = [ptr =
+                                          args->on_pre_engine_restart_callback,
+                                      user_data]() { return ptr(user_data); };
+  }
+
+  flutter::PlatformViewEmbedder::ChanneUpdateCallback channel_update_callback =
+      nullptr;
+  if (SAFE_ACCESS(args, channel_update_callback, nullptr) != nullptr) {
+    channel_update_callback = [ptr = args->channel_update_callback, user_data](
+                                  const std::string& name, bool listening) {
+      FlutterChannelUpdate update{sizeof(FlutterChannelUpdate), name.c_str(),
+                                  listening};
+      ptr(&update, user_data);
+    };
+  }
+
+  flutter::PlatformViewEmbedder::ViewFocusChangeRequestCallback
+      view_focus_change_request_callback = nullptr;
+  if (SAFE_ACCESS(args, view_focus_change_request_callback, nullptr) !=
+      nullptr) {
+    view_focus_change_request_callback =
+        [ptr = args->view_focus_change_request_callback,
+         user_data](const flutter::ViewFocusChangeRequest& request) {
+          FlutterViewFocusChangeRequest embedder_request{
+              .struct_size = sizeof(FlutterViewFocusChangeRequest),
+              .view_id = request.view_id(),
+              .state = static_cast<FlutterViewFocusState>(request.state()),
+              .direction =
+                  static_cast<FlutterViewFocusDirection>(request.direction()),
+          };
+          ptr(&embedder_request, user_data);
+        };
+  }
+
+  return {
+      update_semantics_callback,
+      platform_message_response_callback,
+      vsync_callback,
+      compute_platform_resolved_locale_callback,
+      on_pre_engine_restart_callback,
+      channel_update_callback,
+      view_focus_change_request_callback,
+  };
+}
+
 FlutterEngineResult FlutterEngineRun(size_t version,
                                      const FlutterRendererConfig* config,
                                      const FlutterProjectArgs* args,
@@ -2174,121 +2301,6 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
         "`update_semantics_custom_action_callback`.");
   }
 
-  flutter::PlatformViewEmbedder::UpdateSemanticsCallback
-      update_semantics_callback =
-          CreateEmbedderSemanticsUpdateCallback(args, user_data);
-
-  flutter::PlatformViewEmbedder::PlatformMessageResponseCallback
-      platform_message_response_callback = nullptr;
-  if (SAFE_ACCESS(args, platform_message_callback, nullptr) != nullptr) {
-    platform_message_response_callback =
-        [ptr = args->platform_message_callback,
-         user_data](std::unique_ptr<flutter::PlatformMessage> message) {
-          auto handle = new FlutterPlatformMessageResponseHandle();
-          const FlutterPlatformMessage incoming_message = {
-              sizeof(FlutterPlatformMessage),  // struct_size
-              message->channel().c_str(),      // channel
-              message->data().GetMapping(),    // message
-              message->data().GetSize(),       // message_size
-              handle,                          // response_handle
-          };
-          handle->message = std::move(message);
-          return ptr(&incoming_message, user_data);
-        };
-  }
-
-  flutter::VsyncWaiterEmbedder::VsyncCallback vsync_callback = nullptr;
-  if (SAFE_ACCESS(args, vsync_callback, nullptr) != nullptr) {
-    vsync_callback = [ptr = args->vsync_callback, user_data](intptr_t baton) {
-      return ptr(user_data, baton);
-    };
-  }
-
-  flutter::PlatformViewEmbedder::ComputePlatformResolvedLocaleCallback
-      compute_platform_resolved_locale_callback = nullptr;
-  if (SAFE_ACCESS(args, compute_platform_resolved_locale_callback, nullptr) !=
-      nullptr) {
-    compute_platform_resolved_locale_callback =
-        [ptr = args->compute_platform_resolved_locale_callback](
-            const std::vector<std::string>& supported_locales_data) {
-          const size_t number_of_strings_per_locale = 3;
-          size_t locale_count =
-              supported_locales_data.size() / number_of_strings_per_locale;
-          std::vector<FlutterLocale> supported_locales;
-          std::vector<const FlutterLocale*> supported_locales_ptr;
-          for (size_t i = 0; i < locale_count; ++i) {
-            supported_locales.push_back(
-                {.struct_size = sizeof(FlutterLocale),
-                 .language_code =
-                     supported_locales_data[i * number_of_strings_per_locale +
-                                            0]
-                         .c_str(),
-                 .country_code =
-                     supported_locales_data[i * number_of_strings_per_locale +
-                                            1]
-                         .c_str(),
-                 .script_code =
-                     supported_locales_data[i * number_of_strings_per_locale +
-                                            2]
-                         .c_str(),
-                 .variant_code = nullptr});
-            supported_locales_ptr.push_back(&supported_locales[i]);
-          }
-
-          const FlutterLocale* result =
-              ptr(supported_locales_ptr.data(), locale_count);
-
-          std::unique_ptr<std::vector<std::string>> out =
-              std::make_unique<std::vector<std::string>>();
-          if (result) {
-            std::string language_code(SAFE_ACCESS(result, language_code, ""));
-            if (language_code != "") {
-              out->push_back(language_code);
-              out->emplace_back(SAFE_ACCESS(result, country_code, ""));
-              out->emplace_back(SAFE_ACCESS(result, script_code, ""));
-            }
-          }
-          return out;
-        };
-  }
-
-  flutter::PlatformViewEmbedder::OnPreEngineRestartCallback
-      on_pre_engine_restart_callback = nullptr;
-  if (SAFE_ACCESS(args, on_pre_engine_restart_callback, nullptr) != nullptr) {
-    on_pre_engine_restart_callback = [ptr =
-                                          args->on_pre_engine_restart_callback,
-                                      user_data]() { return ptr(user_data); };
-  }
-
-  flutter::PlatformViewEmbedder::ChanneUpdateCallback channel_update_callback =
-      nullptr;
-  if (SAFE_ACCESS(args, channel_update_callback, nullptr) != nullptr) {
-    channel_update_callback = [ptr = args->channel_update_callback, user_data](
-                                  const std::string& name, bool listening) {
-      FlutterChannelUpdate update{sizeof(FlutterChannelUpdate), name.c_str(),
-                                  listening};
-      ptr(&update, user_data);
-    };
-  }
-
-  flutter::PlatformViewEmbedder::ViewFocusChangeRequestCallback
-      view_focus_change_request_callback = nullptr;
-  if (SAFE_ACCESS(args, view_focus_change_request_callback, nullptr) !=
-      nullptr) {
-    view_focus_change_request_callback =
-        [ptr = args->view_focus_change_request_callback,
-         user_data](const flutter::ViewFocusChangeRequest& request) {
-          FlutterViewFocusChangeRequest embedder_request{
-              .struct_size = sizeof(FlutterViewFocusChangeRequest),
-              .view_id = request.view_id(),
-              .state = static_cast<FlutterViewFocusState>(request.state()),
-              .direction =
-                  static_cast<FlutterViewFocusDirection>(request.direction()),
-          };
-          ptr(&embedder_request, user_data);
-        };
-  }
-
   auto external_view_embedder_result = InferExternalViewEmbedderFromArgs(
       SAFE_ACCESS(args, compositor, nullptr), settings.enable_impeller);
   if (!external_view_embedder_result.ok()) {
@@ -2298,15 +2310,7 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   }
 
   flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
-      {
-          update_semantics_callback,                  //
-          platform_message_response_callback,         //
-          vsync_callback,                             //
-          compute_platform_resolved_locale_callback,  //
-          on_pre_engine_restart_callback,             //
-          channel_update_callback,                    //
-          view_focus_change_request_callback,         //
-      };
+      CreatePlatformDispatchTable(args, user_data);
 
   auto on_create_platform_view = InferPlatformViewCreationCallback(
       config, user_data, platform_dispatch_table,
@@ -2521,6 +2525,132 @@ FlutterEngineResult FlutterEngineRunInitialized(
         "project arguments specified.");
   }
 
+  return kSuccess;
+}
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(
+    size_t version,
+    FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
+    const FlutterRendererConfig* config,
+    const FlutterProjectArgs* args,
+    void* user_data,
+    FLUTTER_API_SYMBOL(FlutterEngine)* engine_out) {
+  if (version != FLUTTER_ENGINE_VERSION) {
+    return LOG_EMBEDDER_ERROR(kInvalidLibraryVersion, "Version mismatch.");
+  }
+  if (!parent_engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Parent engine was null.");
+  }
+  if (!engine_out) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine out parameter was null.");
+  }
+  if (!args) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Project arguments were null.");
+  }
+
+  auto parent_embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(parent_engine);
+  if (!parent_embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Parent engine is not valid.");
+  }
+
+  fml::CommandLine command_line;
+  if (SAFE_ACCESS(args, command_line_argc, 0) != 0 &&
+      SAFE_ACCESS(args, command_line_argv, nullptr) != nullptr) {
+    command_line = fml::CommandLineFromArgcArgv(
+        SAFE_ACCESS(args, command_line_argc, 0),
+        SAFE_ACCESS(args, command_line_argv, nullptr));
+  }
+  flutter::Settings settings = flutter::SettingsFromCommandLine(command_line);
+  
+  flutter::RunConfiguration run_configuration = flutter::RunConfiguration::InferFromSettings(
+      settings, nullptr, flutter::IsolateLaunchType::kExistingGroup);
+  
+  if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
+    auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
+    if (!dart_entrypoint.empty()) {
+      run_configuration.SetEntrypoint(std::move(dart_entrypoint));
+    }
+  }
+
+  if (SAFE_ACCESS(args, dart_entrypoint_argc, 0) > 0) {
+    std::vector<std::string> arguments(args->dart_entrypoint_argc);
+    for (int i = 0; i < args->dart_entrypoint_argc; ++i) {
+      arguments[i] = std::string{args->dart_entrypoint_argv[i]};
+    }
+    run_configuration.SetEntrypointArgs(std::move(arguments));
+  }
+
+  // Check semantics callbacks count
+  bool has_update_semantics_2_callback =
+      SAFE_ACCESS(args, update_semantics_callback2, nullptr) != nullptr;
+  bool has_update_semantics_callback =
+      SAFE_ACCESS(args, update_semantics_callback, nullptr) != nullptr;
+  bool has_legacy_update_semantics_callback =
+      SAFE_ACCESS(args, update_semantics_node_callback, nullptr) != nullptr ||
+      SAFE_ACCESS(args, update_semantics_custom_action_callback, nullptr) !=
+          nullptr;
+
+  int semantic_callback_count = (has_update_semantics_2_callback ? 1 : 0) +
+                                (has_update_semantics_callback ? 1 : 0) +
+                                (has_legacy_update_semantics_callback ? 1 : 0);
+
+  if (semantic_callback_count > 1) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Multiple semantics update callbacks provided. "
+        "Embedders should provide either `update_semantics_callback2`, "
+        "`update_semantics_callback`, or both "
+        "`update_semantics_node_callback` and "
+        "`update_semantics_custom_action_callback`.");
+  }
+
+  auto external_view_embedder_result = InferExternalViewEmbedderFromArgs(
+      SAFE_ACCESS(args, compositor, nullptr), settings.enable_impeller);
+  if (!external_view_embedder_result.ok()) {
+    FML_LOG(ERROR) << external_view_embedder_result.status().message();
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Compositor arguments were invalid.");
+  }
+
+  flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
+      CreatePlatformDispatchTable(args, user_data);
+
+  auto on_create_platform_view = InferPlatformViewCreationCallback(
+      config, user_data, platform_dispatch_table,
+      std::move(external_view_embedder_result.value()),
+      settings.enable_impeller);
+      
+  flutter::Shell::CreateCallback<flutter::Rasterizer> on_create_rasterizer =
+      [](flutter::Shell& shell) {
+        return std::make_unique<flutter::Rasterizer>(shell);
+      };
+
+  auto parent_shell = &parent_embedder_engine->GetShell();
+  
+  auto spawned_shell = parent_shell->Spawn(
+      std::move(run_configuration),
+      settings.route,
+      on_create_platform_view,
+      on_create_rasterizer);
+
+  if (!spawned_shell) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency, "Could not spawn shell.");
+  }
+
+  auto external_texture_resolver =
+      std::make_unique<flutter::EmbedderExternalTextureResolver>();
+
+  auto embedder_engine = std::make_unique<flutter::EmbedderEngine>(
+      parent_embedder_engine->GetThreadHost(),
+      parent_embedder_engine->GetTaskRunners(),
+      std::move(run_configuration),
+      std::move(spawned_shell),
+      std::move(external_texture_resolver));
+
+  *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
+      embedder_engine.release());
+      
   return kSuccess;
 }
 
