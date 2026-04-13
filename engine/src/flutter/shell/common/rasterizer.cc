@@ -86,9 +86,13 @@ void Rasterizer::Setup(std::unique_ptr<Surface> surface) {
                              user_override_resource_cache_bytes_);
   }
 
-  auto context_switch = surface_->MakeRenderContextCurrent();
-  if (context_switch->GetResult()) {
-    compositor_context_->OnGrContextCreated();
+  if (surface_) {
+    auto context_switch = surface_->MakeRenderContextCurrent();
+    if (context_switch->GetResult()) {
+      compositor_context_->OnGrContextCreated();
+    }
+  } else {
+    FML_LOG(ERROR) << "Rasterizer::Setup called with null surface!";
   }
 
   if (external_view_embedder_ &&

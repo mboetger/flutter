@@ -18,6 +18,7 @@
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
 #include "flutter/lib/ui/painting/image_generator_registry.h"
+#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/thread_host.h"
@@ -112,19 +113,58 @@ AndroidShellHolder::AndroidShellHolder(
 
   thread_host_ = std::make_shared<ThreadHost>(host_config);
 
-  fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
+  std::unique_ptr<PlatformViewAndroid> platform_view_android;
   AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, &weak_platform_view, rendering_api](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
+      [&jni_facade, &platform_view_android, rendering_api](Shell& shell) {
         platform_view_android = std::make_unique<PlatformViewAndroid>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             rendering_api            // rendering API
         );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        return platform_view_android;
+
+        // Setup Impeller context on the raster thread, as expected by Shell::Create
+        fml::AutoResetWaitableEvent latch;
+        fml::TaskRunner::RunNowOrPostTask(
+            shell.GetTaskRunners().GetRasterTaskRunner(),
+            [&latch, platform_view = platform_view_android.get()]() {
+              platform_view->SetupImpellerContext();
+              latch.Signal();
+            });
+        latch.Wait();
+
+        auto embedder_surface = platform_view_android->TakeSurface();
+        FML_LOG(ERROR) << "AndroidShellHolder: embedder_surface is " << (embedder_surface ? "not null" : "null");
+
+        PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
+        
+        dispatch_table.update_semantics_callback =
+            [platform_view = platform_view_android.get()](
+                int64_t view_id, flutter::SemanticsNodeUpdates update,
+                flutter::CustomAccessibilityActionUpdates actions) {
+              platform_view->UpdateSemantics(view_id, std::move(update),
+                                             std::move(actions));
+            };
+
+        dispatch_table.platform_message_response_callback =
+            [platform_view = platform_view_android.get()](
+                std::unique_ptr<PlatformMessage> message) {
+              platform_view->HandlePlatformMessage(std::move(message));
+            };
+
+        dispatch_table.on_pre_engine_restart_callback =
+            [platform_view = platform_view_android.get()]() {
+              platform_view->OnPreEngineRestart();
+            };
+
+        return std::make_unique<PlatformViewEmbedder>(
+            shell,                   // delegate
+            shell.GetTaskRunners(),  // task runners
+            std::move(embedder_surface),
+            dispatch_table,
+            nullptr                  // external view embedder
+        );
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -155,6 +195,13 @@ AndroidShellHolder::AndroidShellHolder(
                                     io_runner         // io
   );
 
+  FML_LOG(ERROR) << "TaskRunners: "
+                 << "platform=" << (platform_runner ? "valid" : "null") << ", "
+                 << "raster=" << (raster_runner ? "valid" : "null") << ", "
+                 << "ui=" << (ui_runner ? "valid" : "null") << ", "
+                 << "io=" << (io_runner ? "valid" : "null");
+  FML_LOG(ERROR) << "task_runners.IsValid()=" << (task_runners.IsValid() ? "true" : "false");
+
   shell_ =
       Shell::Create(GetDefaultPlatformData(),  // window data
                     task_runners,              // task runners
@@ -178,7 +225,7 @@ AndroidShellHolder::AndroidShellHolder(
     FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
   }
 
-  platform_view_ = weak_platform_view;
+  platform_view_ = std::move(platform_view_android);
   FML_DCHECK(platform_view_);
   is_valid_ = shell_ != nullptr;
 }
@@ -189,11 +236,11 @@ AndroidShellHolder::AndroidShellHolder(
     const std::shared_ptr<ThreadHost>& thread_host,
     std::unique_ptr<Shell> shell,
     std::unique_ptr<APKAssetProvider> apk_asset_provider,
-    const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+    std::unique_ptr<PlatformViewAndroid> platform_view,
     AndroidRenderingAPI rendering_api)
     : settings_(settings),
       jni_facade_(jni_facade),
-      platform_view_(platform_view),
+      platform_view_(std::move(platform_view)),
       thread_host_(thread_host),
       shell_(std::move(shell)),
       apk_asset_provider_(std::move(apk_asset_provider)),
@@ -249,17 +296,47 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   FML_DCHECK(android_context);
 
   // This is a synchronous call, so the captures don't have race checks.
+  std::unique_ptr<PlatformViewAndroid> platform_view_android;
+  
   Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, android_context, &weak_platform_view](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
+      [&jni_facade, &platform_view_android, android_context](Shell& shell) {
         platform_view_android = std::make_unique<PlatformViewAndroid>(
             shell,                   // delegate
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             android_context          // Android context
         );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        return platform_view_android;
+
+        auto embedder_surface = platform_view_android->TakeSurface();
+
+        PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
+        
+        dispatch_table.update_semantics_callback =
+            [platform_view = platform_view_android.get()](
+                int64_t view_id, flutter::SemanticsNodeUpdates update,
+                flutter::CustomAccessibilityActionUpdates actions) {
+              platform_view->UpdateSemantics(view_id, std::move(update),
+                                             std::move(actions));
+            };
+
+        dispatch_table.platform_message_response_callback =
+            [platform_view = platform_view_android.get()](
+                std::unique_ptr<PlatformMessage> message) {
+              platform_view->HandlePlatformMessage(std::move(message));
+            };
+
+        dispatch_table.on_pre_engine_restart_callback =
+            [platform_view = platform_view_android.get()]() {
+              platform_view->OnPreEngineRestart();
+            };
+
+        return std::make_unique<PlatformViewEmbedder>(
+            shell,                   // delegate
+            shell.GetTaskRunners(),  // task runners
+            std::move(embedder_surface),
+            dispatch_table,
+            nullptr                  // external view embedder
+        );
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -280,7 +357,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
       GetSettings(), jni_facade, thread_host_, std::move(shell),
-      apk_asset_provider_->Clone(), weak_platform_view,
+      apk_asset_provider_->Clone(), std::move(platform_view_android),
       android_context->RenderingApi()));
 }
 
@@ -315,7 +392,12 @@ Rasterizer::Screenshot AndroidShellHolder::Screenshot(
 
 fml::WeakPtr<PlatformViewAndroid> AndroidShellHolder::GetPlatformView() {
   FML_DCHECK(platform_view_);
-  return platform_view_;
+  return platform_view_->GetWeakPtr();
+}
+
+fml::WeakPtr<PlatformView> AndroidShellHolder::GetEnginePlatformView() const {
+  FML_DCHECK(shell_);
+  return shell_->GetPlatformView();
 }
 
 void AndroidShellHolder::NotifyLowMemoryWarning() {

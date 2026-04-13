@@ -422,7 +422,7 @@ static void SetViewportMetrics(JNIEnv* env,
           physicalDisplayCornerRadiusBottomLeft),  // p_physical_display_corner_radius_bottom_left
   };
 
-  ANDROID_SHELL_HOLDER->GetPlatformView()->SetViewportMetrics(
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->SetViewportMetrics(
       kFlutterImplicitViewId, metrics);
 }
 
@@ -513,7 +513,7 @@ static void DispatchPointerDataPacket(JNIEnv* env,
                                       jint position) {
   uint8_t* data = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
   auto packet = std::make_unique<flutter::PointerDataPacket>(data, position);
-  ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchPointerDataPacket(
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->DispatchPointerDataPacket(
       std::move(packet));
 }
 
@@ -537,14 +537,14 @@ static void SetSemanticsEnabled(JNIEnv* env,
                                 jobject jcaller,
                                 jlong shell_holder,
                                 jboolean enabled) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->SetSemanticsEnabled(enabled);
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->SetSemanticsEnabled(enabled);
 }
 
 static void SetAccessibilityFeatures(JNIEnv* env,
                                      jobject jcaller,
                                      jlong shell_holder,
                                      jint flags) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->SetAccessibilityFeatures(flags);
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->SetAccessibilityFeatures(flags);
 }
 
 static jboolean GetIsSoftwareRendering(JNIEnv* env, jobject jcaller) {
@@ -583,7 +583,7 @@ static void UnregisterTexture(JNIEnv* env,
                               jobject jcaller,
                               jlong shell_holder,
                               jlong texture_id) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->UnregisterTexture(
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->UnregisterTexture(
       static_cast<int64_t>(texture_id));
 }
 
@@ -591,12 +591,12 @@ static void MarkTextureFrameAvailable(JNIEnv* env,
                                       jobject jcaller,
                                       jlong shell_holder,
                                       jlong texture_id) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->MarkTextureFrameAvailable(
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->MarkTextureFrameAvailable(
       static_cast<int64_t>(texture_id));
 }
 
 static void ScheduleFrame(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->ScheduleFrame();
+  ANDROID_SHELL_HOLDER->GetEnginePlatformView()->ScheduleFrame();
 }
 
 static void InvokePlatformMessageResponseCallback(JNIEnv* env,

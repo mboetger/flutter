@@ -64,6 +64,7 @@ std::unique_ptr<Surface> AndroidSurfaceSoftware::CreateGPUSurface(
     // The software AndroidSurface neither uses any passed in Skia context
     // nor does it interact with the AndroidContext's raster Skia context.
     GrDirectContext* gr_context) {
+  FML_LOG(ERROR) << "AndroidSurfaceSoftware::CreateGPUSurface called";
   if (!IsValid()) {
     return nullptr;
   }
@@ -71,6 +72,7 @@ std::unique_ptr<Surface> AndroidSurfaceSoftware::CreateGPUSurface(
   auto surface =
       std::make_unique<GPUSurfaceSoftware>(this, true /* render to surface */);
 
+  FML_LOG(ERROR) << "AndroidSurfaceSoftware::CreateGPUSurface: surface->IsValid() = " << surface->IsValid();
   if (!surface->IsValid()) {
     return nullptr;
   }

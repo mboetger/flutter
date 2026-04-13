@@ -94,8 +94,6 @@ template("embedder_source_set") {
       "embedder_semantics_update.cc",
       "embedder_semantics_update.h",
       "embedder_struct_macros.h",
-      "embedder_surface.cc",
-      "embedder_surface.h",
       "embedder_surface_software.cc",
       "embedder_surface_software.h",
       "embedder_task_runner.cc",
@@ -112,6 +110,7 @@ template("embedder_source_set") {
 
     public_deps = [ ":embedder_headers" ]
     deps = [
+      ":embedder_surface",
       ":embedder_gpu_configuration",
       "$dart_src/runtime/bin:common_embedder_dart_io",
       "$dart_src/runtime/bin:elf_loader",
@@ -198,10 +197,6 @@ template("embedder_source_set") {
     }
 
     # Depend on 'icudtl.dat.S' to avoid dynamic lookups of engine library symbols.
-    if (is_android) {
-      deps += [ "//flutter/shell/platform/android:icudtl_asm" ]
-      sources += [ "$root_build_dir/gen/flutter/shell/platform/android/flutter/third_party/icu/flutter/icudtl.dat.S" ]
-    }
 
     public_configs += [
       ":embedder_gpu_configuration_config",
@@ -476,6 +471,10 @@ shared_library("flutter_engine_library") {
   }
 
   deps = [ ":embedder" ]
+  if (is_android) {
+    deps += [ "//flutter/shell/platform/android:icudtl_asm" ]
+    sources = [ "$root_build_dir/gen/flutter/shell/platform/android/flutter/third_party/icu/flutter/icudtl.dat.S" ]
+  }
 
   public_configs = [ "//flutter:config" ]
 }

@@ -55,19 +55,16 @@ std::unique_ptr<SurfaceFrame> GPUSurfaceGLImpeller::AcquireFrame(
     return nullptr;
   }
 
-  auto swap_callback = [weak = weak_factory_.GetWeakPtr(),
-                        delegate = delegate_]() -> bool {
-    if (weak) {
-      GLPresentInfo present_info = {
-          .fbo_id = 0u,
-          .frame_damage = std::nullopt,
-          // TODO (https://github.com/flutter/flutter/issues/105597): wire-up
-          // presentation time to impeller backend.
-          .presentation_time = std::nullopt,
-          .buffer_damage = std::nullopt,
-      };
-      delegate->GLContextPresent(present_info);
-    }
+  auto swap_callback = [delegate = delegate_]() -> bool {
+    GLPresentInfo present_info = {
+        .fbo_id = 0u,
+        .frame_damage = std::nullopt,
+        // TODO (https://github.com/flutter/flutter/issues/105597): wire-up
+        // presentation time to impeller backend.
+        .presentation_time = std::nullopt,
+        .buffer_damage = std::nullopt,
+    };
+    delegate->GLContextPresent(present_info);
     return true;
   };
 
