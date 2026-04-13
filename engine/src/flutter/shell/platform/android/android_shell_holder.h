@@ -15,6 +15,7 @@
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/embedder/embedder_engine.h"
 
 namespace flutter {
 
@@ -103,20 +104,20 @@ class AndroidShellHolder {
 
   const std::shared_ptr<PlatformMessageHandler>& GetPlatformMessageHandler()
       const {
-    return shell_->GetPlatformMessageHandler();
+    return embedder_engine_->GetShell().GetPlatformMessageHandler();
   }
 
   void UpdateDisplayMetrics();
 
   // Visible for testing.
-  const std::unique_ptr<Shell>& GetShellForTesting() const { return shell_; }
+  const Shell& GetShellForTesting() const { return embedder_engine_->GetShell(); }
 
  private:
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::unique_ptr<PlatformViewAndroid> platform_view_;
-  std::shared_ptr<ThreadHost> thread_host_;
-  std::unique_ptr<Shell> shell_;
+  std::shared_ptr<EmbedderThreadHost> thread_host_;
+  std::unique_ptr<EmbedderEngine> embedder_engine_;
   bool is_valid_ = false;
   uint64_t next_pointer_flow_id_ = 0;
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
@@ -135,8 +136,8 @@ class AndroidShellHolder {
   ///
   AndroidShellHolder(const flutter::Settings& settings,
                      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-                     const std::shared_ptr<ThreadHost>& thread_host,
-                     std::unique_ptr<Shell> shell,
+                     const std::shared_ptr<EmbedderThreadHost>& thread_host,
+                     std::unique_ptr<EmbedderEngine> embedder_engine,
                      std::unique_ptr<APKAssetProvider> apk_asset_provider,
                      std::unique_ptr<PlatformViewAndroid> platform_view,
                      AndroidRenderingAPI rendering_api);
