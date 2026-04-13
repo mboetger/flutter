@@ -190,8 +190,7 @@ void PlatformViewAndroid::NotifyCreated(
         task_runners_.GetRasterTaskRunner(),
         [&latch, surface = android_surface_.get(),
          native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          static_cast<AndroidSurface*>(surface)->SetNativeWindow(native_window,
-                                                                 jni_facade);
+          static_cast<AndroidSurface*>(surface)->SetNativeWindow(native_window, jni_facade);
           latch.Signal();
         });
     latch.Wait();
@@ -428,8 +427,8 @@ std::unique_ptr<Surface> PlatformViewAndroid::CreateRenderingSurface() {
   if (!android_surface_) {
     return nullptr;
   }
-  return static_cast<AndroidSurface*>(android_surface_.get())
-      ->CreateGPUSurface(android_context_->GetMainSkiaContext().get());
+  return static_cast<AndroidSurface*>(android_surface_.get())->CreateGPUSurface(
+      android_context_->GetMainSkiaContext().get());
 }
 
 // |PlatformView|
@@ -457,8 +456,7 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
   }
 #if !SLIMPELLER
   sk_sp<GrDirectContext> resource_context;
-  if (static_cast<AndroidSurface*>(android_surface_.get())
-          ->ResourceContextMakeCurrent()) {
+  if (static_cast<AndroidSurface*>(android_surface_.get())->ResourceContextMakeCurrent()) {
     // TODO(chinmaygarde): Currently, this code depends on the fact that only
     // the OpenGL surface will be able to make a resource context current. If
     // this changes, this assumption breaks. Handle the same.
@@ -470,8 +468,7 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
   }
   return resource_context;
 #else
-  static_cast<AndroidSurface*>(android_surface_.get())
-      ->ResourceContextMakeCurrent();
+  static_cast<AndroidSurface*>(android_surface_.get())->ResourceContextMakeCurrent();
   return nullptr;
 #endif  //  !SLIMPELLER
 }
@@ -479,8 +476,7 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
 // |PlatformView|
 void PlatformViewAndroid::ReleaseResourceContext() const {
   if (android_surface_) {
-    static_cast<AndroidSurface*>(android_surface_.get())
-        ->ResourceContextClearCurrent();
+    static_cast<AndroidSurface*>(android_surface_.get())->ResourceContextClearCurrent();
   }
 }
 
