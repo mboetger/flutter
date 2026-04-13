@@ -190,7 +190,7 @@ void PlatformViewAndroid::NotifyCreated(
         task_runners_.GetRasterTaskRunner(),
         [&latch, surface = android_surface_.get(),
          native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->SetNativeWindow(native_window, jni_facade);
+          static_cast<AndroidSurface*>(surface)->SetNativeWindow(native_window, jni_facade);
           latch.Signal();
         });
     latch.Wait();
@@ -207,8 +207,9 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
         task_runners_.GetRasterTaskRunner(),
         [&latch, surface = android_surface_.get(),
          native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->TeardownOnScreenContext();
-          surface->SetNativeWindow(native_window, jni_facade);
+          auto* android_surface = static_cast<AndroidSurface*>(surface);
+          android_surface->TeardownOnScreenContext();
+          android_surface->SetNativeWindow(native_window, jni_facade);
           latch.Signal();
         });
     latch.Wait();
@@ -225,7 +226,7 @@ void PlatformViewAndroid::NotifyDestroyed() {
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),
         [&latch, surface = android_surface_.get()]() {
-          surface->TeardownOnScreenContext();
+          static_cast<AndroidSurface*>(surface)->TeardownOnScreenContext();
           latch.Signal();
         });
     latch.Wait();
@@ -240,7 +241,7 @@ void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
   fml::TaskRunner::RunNowOrPostTask(
       task_runners_.GetRasterTaskRunner(),  //
       [&latch, surface = android_surface_.get(), size]() {
-        surface->OnScreenSurfaceResize(size);
+        static_cast<AndroidSurface*>(surface)->OnScreenSurfaceResize(size);
         latch.Signal();
       });
   latch.Wait();
@@ -426,7 +427,7 @@ std::unique_ptr<Surface> PlatformViewAndroid::CreateRenderingSurface() {
   if (!android_surface_) {
     return nullptr;
   }
-  return android_surface_->CreateGPUSurface(
+  return static_cast<AndroidSurface*>(android_surface_.get())->CreateGPUSurface(
       android_context_->GetMainSkiaContext().get());
 }
 
@@ -444,7 +445,8 @@ PlatformViewAndroid::CreateSnapshotSurfaceProducer() {
   if (!android_surface_) {
     return nullptr;
   }
-  return std::make_unique<AndroidSnapshotSurfaceProducer>(*android_surface_);
+  return std::make_unique<AndroidSnapshotSurfaceProducer>(
+      *static_cast<AndroidSurface*>(android_surface_.get()));
 }
 
 // |PlatformView|
@@ -454,7 +456,7 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
   }
 #if !SLIMPELLER
   sk_sp<GrDirectContext> resource_context;
-  if (android_surface_->ResourceContextMakeCurrent()) {
+  if (static_cast<AndroidSurface*>(android_surface_.get())->ResourceContextMakeCurrent()) {
     // TODO(chinmaygarde): Currently, this code depends on the fact that only
     // the OpenGL surface will be able to make a resource context current. If
     // this changes, this assumption breaks. Handle the same.
@@ -466,7 +468,7 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
   }
   return resource_context;
 #else
-  android_surface_->ResourceContextMakeCurrent();
+  static_cast<AndroidSurface*>(android_surface_.get())->ResourceContextMakeCurrent();
   return nullptr;
 #endif  //  !SLIMPELLER
 }
@@ -474,7 +476,7 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
 // |PlatformView|
 void PlatformViewAndroid::ReleaseResourceContext() const {
   if (android_surface_) {
-    android_surface_->ResourceContextClearCurrent();
+    static_cast<AndroidSurface*>(android_surface_.get())->ResourceContextClearCurrent();
   }
 }
 
@@ -482,7 +484,7 @@ void PlatformViewAndroid::ReleaseResourceContext() const {
 std::shared_ptr<impeller::Context> PlatformViewAndroid::GetImpellerContext()
     const {
   if (android_surface_) {
-    return android_surface_->GetImpellerContext();
+    return android_surface_->CreateImpellerContext();
   }
   return android_context_->GetImpellerContext();
 }
@@ -565,7 +567,7 @@ bool PlatformViewAndroid::IsSurfaceControlEnabled() const {
 
 void PlatformViewAndroid::SetupImpellerContext() {
   android_context_->SetupImpellerContext();
-  android_surface_->SetupImpellerSurface();
+  static_cast<AndroidSurface*>(android_surface_.get())->SetupImpellerSurface();
 }
 
 }  // namespace flutter

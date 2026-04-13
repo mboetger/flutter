@@ -134,7 +134,7 @@ class PlatformViewAndroid final : public PlatformView {
 
   PlatformViewAndroidDelegate platform_view_android_delegate_;
 
-  std::unique_ptr<AndroidSurface> android_surface_;
+  std::unique_ptr<EmbedderSurface> android_surface_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
 
