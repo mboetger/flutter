@@ -79,6 +79,38 @@ bin_to_assembly("icudtl_asm") {
   executable = false
 }
 
+source_set("android_engine_deps") {
+  visibility = [ ":*" ]
+  public_deps = [
+    ":android_gpu_configuration",
+    ":icudtl_asm",
+    ":image_generator",
+    "//flutter/assets",
+    "//flutter/common",
+    "//flutter/common/graphics",
+    "//flutter/flow",
+    "//flutter/fml",
+    "//flutter/impeller",
+    "//flutter/impeller/toolkit/android",
+    "//flutter/impeller/toolkit/egl",
+    "//flutter/impeller/toolkit/gles",
+    "//flutter/impeller/toolkit/glvk",
+    "//flutter/lib/ui",
+    "//flutter/runtime",
+    "//flutter/runtime:libdart",
+    "//flutter/shell/common",
+    "//flutter/shell/platform/android/context",
+    "//flutter/shell/platform/android/external_view_embedder",
+    "//flutter/shell/platform/android/jni",
+    "//flutter/shell/platform/android/platform_view_android_delegate",
+    "//flutter/shell/platform/android/surface",
+    "//flutter/shell/platform/android/surface:native_window",
+    "//flutter/skia",
+    "//flutter/txt",
+    "//flutter/vulkan",
+  ]
+}
+
 source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
@@ -153,34 +185,7 @@ source_set("flutter_shell_native_src") {
 
   sources += get_target_outputs(":icudtl_asm")
 
-  public_deps = [
-    ":android_gpu_configuration",
-    ":icudtl_asm",
-    ":image_generator",
-    "//flutter/assets",
-    "//flutter/common",
-    "//flutter/common/graphics",
-    "//flutter/flow",
-    "//flutter/fml",
-    "//flutter/impeller",
-    "//flutter/impeller/toolkit/android",
-    "//flutter/impeller/toolkit/egl",
-    "//flutter/impeller/toolkit/gles",
-    "//flutter/impeller/toolkit/glvk",
-    "//flutter/lib/ui",
-    "//flutter/runtime",
-    "//flutter/runtime:libdart",
-    "//flutter/shell/common",
-    "//flutter/shell/platform/android/context",
-    "//flutter/shell/platform/android/external_view_embedder",
-    "//flutter/shell/platform/android/jni",
-    "//flutter/shell/platform/android/platform_view_android_delegate",
-    "//flutter/shell/platform/android/surface",
-    "//flutter/shell/platform/android/surface:native_window",
-    "//flutter/skia",
-    "//flutter/txt",
-    "//flutter/vulkan",
-  ]
+  public_deps = [ ":android_engine_deps" ]
 
   public_configs = [ "//flutter:config" ]
 
