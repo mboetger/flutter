@@ -104,7 +104,7 @@ std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateSnapshotSurface() {
 
 // |AndroidSurface|
 std::shared_ptr<impeller::Context>
-AndroidSurfaceGLImpeller::GetImpellerContext() {
+AndroidSurfaceGLImpeller::GetImpellerContext() const {
   return android_context_->GetImpellerContext();
 }
 

@@ -51,7 +51,7 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
   std::unique_ptr<Surface> CreateSnapshotSurface() override;
 
   // |AndroidSurface|
-  std::shared_ptr<impeller::Context> GetImpellerContext() override;
+  std::shared_ptr<impeller::Context> GetImpellerContext() const override;
 
   // |GPUSurfaceGLDelegate|
   std::unique_ptr<GLContextResult> GLContextMakeCurrent() override;

@@ -30,6 +30,19 @@ config("embedder_header_config") {
   include_dirs = [ "." ]
 }
 
+source_set("embedder_surface") {
+  sources = [
+    "embedder_surface.cc",
+    "embedder_surface.h",
+  ]
+  deps = [
+    "//flutter/flow",
+    "//flutter/fml",
+    "//flutter/skia",
+  ]
+  public_configs = [ "//flutter:config" ]
+}
+
 config("embedder_jit_snapshot_setup") {
   _lib_snapshot_label = "//flutter/lib/snapshot:vm_isolate_snapshot.bin"
   _lib_snapshot_gen_dir = get_label_info(_lib_snapshot_label, "target_gen_dir")

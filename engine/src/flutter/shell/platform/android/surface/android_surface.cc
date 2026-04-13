@@ -15,7 +15,7 @@ std::unique_ptr<Surface> AndroidSurface::CreateSnapshotSurface() {
   return nullptr;
 }
 
-std::shared_ptr<impeller::Context> AndroidSurface::GetImpellerContext() {
+std::shared_ptr<impeller::Context> AndroidSurface::GetImpellerContext() const {
   return nullptr;
 }
 

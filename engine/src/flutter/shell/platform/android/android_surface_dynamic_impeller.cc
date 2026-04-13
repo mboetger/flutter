@@ -114,7 +114,7 @@ AndroidSurfaceDynamicImpeller::CreateSnapshotSurface() {
 }
 
 std::shared_ptr<impeller::Context>
-AndroidSurfaceDynamicImpeller::GetImpellerContext() {
+AndroidSurfaceDynamicImpeller::GetImpellerContext() const {
   return android_context_->GetImpellerContext();
 }
 
