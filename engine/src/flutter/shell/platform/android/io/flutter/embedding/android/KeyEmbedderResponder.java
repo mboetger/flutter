@@ -5,6 +5,7 @@
 package io.flutter.embedding.android;
 
 import android.view.InputDevice;
+import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -276,18 +277,20 @@ public class KeyEmbedderResponder implements KeyboardManager.Responder {
     final Long logicalKey = getLogicalKey(event);
 
     final ArrayList<Runnable> postSynchronizeEvents = new ArrayList<>();
-    for (final PressingGoal goal : KeyboardMap.pressingGoals) {
-      synchronizePressingKey(
-          goal,
-          (event.getMetaState() & goal.mask) != 0,
-          logicalKey,
-          physicalKey,
-          event,
-          postSynchronizeEvents);
-    }
+    if (event.getDeviceId() != KeyCharacterMap.VIRTUAL_KEYBOARD) {
+      for (final PressingGoal goal : KeyboardMap.pressingGoals) {
+        synchronizePressingKey(
+            goal,
+            (event.getMetaState() & goal.mask) != 0,
+            logicalKey,
+            physicalKey,
+            event,
+            postSynchronizeEvents);
+      }
 
-    for (final TogglingGoal goal : togglingGoals.values()) {
-      synchronizeTogglingKey(goal, (event.getMetaState() & goal.mask) != 0, logicalKey, event);
+      for (final TogglingGoal goal : togglingGoals.values()) {
+        synchronizeTogglingKey(goal, (event.getMetaState() & goal.mask) != 0, logicalKey, event);
+      }
     }
 
     boolean isDownEvent;
