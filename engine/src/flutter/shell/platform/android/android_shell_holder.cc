@@ -20,6 +20,7 @@
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/thread_host.h"
+#include "flutter/shell/platform/android/android_compositor_vulkan.h"
 #include "flutter/shell/platform/android/android_display.h"
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
@@ -27,6 +28,7 @@
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
+#include "flutter/shell/platform/embedder/embedder_external_view_embedder.h"
 #include "flutter/shell/platform/embedder/embedder_thread_host.h"
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
@@ -251,9 +253,46 @@ AndroidShellHolder::AndroidShellHolder(
 
         auto dispatch_table = CreateDispatchTable(weak_platform_view);
 
+        std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+
+        if (shell.GetSettings().enable_impeller &&
+            rendering_api == AndroidRenderingAPI::kImpellerVulkan) {
+          auto impeller_context = android_context->GetImpellerContext();
+          if (impeller_context) {
+            auto context_vk =
+                std::static_pointer_cast<impeller::ContextVK>(impeller_context);
+            android_compositor_vulkan_ =
+                std::make_unique<AndroidCompositorVulkan>(context_vk);
+            platform_view_android_->SetCompositor(
+                android_compositor_vulkan_.get());
+
+            external_view_embedder =
+                std::make_shared<EmbedderExternalViewEmbedder>(
+                    false,  // avoid_backing_store_cache
+                    [this](GrDirectContext* context,
+                           const std::shared_ptr<impeller::AiksContext>&
+                               aiks_context,
+                           const FlutterBackingStoreConfig& config) {
+                      return android_compositor_vulkan_->CreateRenderTarget(
+                          aiks_context, config);
+                    },
+                    [this](FlutterViewId view_id,
+                           const std::vector<const FlutterLayer*>& layers) {
+                      FlutterPresentViewInfo info = {};
+                      info.struct_size = sizeof(FlutterPresentViewInfo);
+                      info.view_id = view_id;
+                      info.layers =
+                          const_cast<const FlutterLayer**>(layers.data());
+                      info.layers_count = layers.size();
+                      info.user_data = android_compositor_vulkan_.get();
+                      return android_compositor_vulkan_->PresentView(&info);
+                    });
+          }
+        }
+
         auto platform_view_embedder = std::make_unique<PlatformViewEmbedder>(
             shell, shell.GetTaskRunners(), std::move(embedder_surface),
-            dispatch_table, nullptr);
+            dispatch_table, external_view_embedder);
         platform_view_android_->SetPlatformView(
             platform_view_embedder->GetWeakPtr());
 

@@ -40,6 +40,7 @@
 #include "flutter/shell/platform/android/image_external_texture_vk_impeller.h"
 #endif
 #include "flutter/fml/platform/android/jni_util.h"
+#include "flutter/shell/platform/android/android_compositor_vulkan.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_wrapper.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -137,6 +138,10 @@ void PlatformViewAndroid::NotifyCreated(
     InstallFirstFrameCallback();
   }
 
+  if (compositor_) {
+    compositor_->SetNativeWindow(native_window->handle());
+  }
+
   fml::AutoResetWaitableEvent latch;
   std::unique_ptr<Surface> surface;
   fml::TaskRunner::RunNowOrPostTask(
@@ -179,6 +184,10 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
 
 void PlatformViewAndroid::NotifyDestroyed() {
   GetDelegate(engine_).OnPlatformViewDestroyed();
+
+  if (compositor_) {
+    compositor_->SetNativeWindow(nullptr);
+  }
 
   if (embedder_surface_) {
     fml::AutoResetWaitableEvent latch;
@@ -533,6 +542,10 @@ void PlatformViewAndroid::SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
         android_get_device_api_level() >= kMinAPILevelHCPP &&
         settings.enable_impeller;
   }
+}
+
+void PlatformViewAndroid::SetCompositor(AndroidCompositorVulkan* compositor) {
+  compositor_ = compositor;
 }
 
 void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {

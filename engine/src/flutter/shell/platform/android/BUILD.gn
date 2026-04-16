@@ -83,6 +83,8 @@ source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
   sources = [
+    "android_compositor_vulkan.cc",
+    "android_compositor_vulkan.h",
     "android_context_dynamic_impeller.cc",
     "android_context_dynamic_impeller.h",
     "android_context_gl_impeller.cc",

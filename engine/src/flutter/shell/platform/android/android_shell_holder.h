@@ -18,6 +18,7 @@
 namespace flutter {
 
 class EmbedderEngine;
+class AndroidCompositorVulkan;
 
 //----------------------------------------------------------------------------
 /// @brief      This is the Android owner of the core engine Shell.
@@ -125,6 +126,7 @@ class AndroidShellHolder {
   uint64_t next_pointer_flow_id_ = 0;
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
   const AndroidRenderingAPI android_rendering_api_;
+  std::unique_ptr<AndroidCompositorVulkan> android_compositor_vulkan_;
 
   //----------------------------------------------------------------------------
   /// @brief      Constructor with its components injected.

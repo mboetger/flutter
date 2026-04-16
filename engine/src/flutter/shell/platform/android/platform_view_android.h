@@ -26,6 +26,8 @@
 
 namespace flutter {
 
+class AndroidCompositorVulkan;
+
 class PlatformViewAndroid final {
  public:
   static bool Register(JNIEnv* env);
@@ -164,9 +166,12 @@ class PlatformViewAndroid final {
 
   void SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
+  void SetCompositor(AndroidCompositorVulkan* compositor);
+
  private:
   FLUTTER_API_SYMBOL(FlutterEngine) engine_;
   const flutter::TaskRunners task_runners_;
+  AndroidCompositorVulkan* compositor_ = nullptr;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::shared_ptr<AndroidContext> android_context_;
   EmbedderSurfaceAndroid* embedder_surface_;

@@ -175,6 +175,8 @@ template("embedder_source_set") {
         sources += [
           "embedder_surface_vulkan_impeller.cc",
           "embedder_surface_vulkan_impeller.h",
+          "embedder_vulkan_utils.cc",
+          "embedder_vulkan_utils.h",
         ]
       }
 
