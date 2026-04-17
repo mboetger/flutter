@@ -20,6 +20,8 @@
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/thread_host.h"
+#include "flutter/shell/platform/android/android_compositor_opengl.h"
+#include "flutter/shell/platform/android/android_compositor_software.h"
 #include "flutter/shell/platform/android/android_compositor_vulkan.h"
 #include "flutter/shell/platform/android/android_display.h"
 #include "flutter/shell/platform/android/android_image_generator.h"
@@ -29,8 +31,11 @@
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_view_embedder.h"
+#include "flutter/shell/platform/embedder/embedder_render_target_skia.h"
 #include "flutter/shell/platform/embedder/embedder_thread_host.h"
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
 
 namespace flutter {
 
@@ -77,6 +82,7 @@ static void AndroidPlatformThreadConfigSetter(
       }
   }
 }
+
 static PlatformData GetDefaultPlatformData() {
   PlatformData platform_data;
   platform_data.lifecycle_state = "AppLifecycleState.detached";
@@ -218,31 +224,22 @@ AndroidShellHolder::AndroidShellHolder(
   // We'll fill in more args as we migrate further.
   // For now, we still need to create the PlatformViewAndroid.
 
-  // 3. Initialize the engine using the public API.
-  // Note: FlutterEngineInitialize currently takes a FlutterRendererConfig.
-  // On Android, we have a complex setup with AndroidContext and
-  // EmbedderSurfaceAndroid.
-  // We'll need to create a FlutterRendererConfig that wraps our
-  // Android-specific rendering logic.
+  // 3. Create AndroidContext.
+  auto context_settings = PlatformViewAndroid::CreateContextSettings(settings_);
+  auto android_context = PlatformViewAndroid::CreateAndroidContext(
+      task_runners, android_rendering_api_, settings_.enable_opengl_gpu_tracing,
+      context_settings);
 
-  // ... (Implementation continues)
   fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
-  AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [jni_facade, &weak_platform_view, rendering_api, this](Shell& shell) {
-        auto context_settings =
-            PlatformViewAndroid::CreateContextSettings(shell.GetSettings());
-        auto android_context = PlatformViewAndroid::CreateAndroidContext(
-            shell.GetTaskRunners(), rendering_api,
-            shell.GetSettings().enable_opengl_gpu_tracing, context_settings);
-
+      [jni_facade, android_context, this, &weak_platform_view](Shell& shell) {
         auto embedder_surface = std::make_unique<EmbedderSurfaceAndroid>(
             android_context, shell.GetSettings().enable_impeller,
             shell.GetSettings().impeller_enable_lazy_shader_mode);
         embedder_surface_ = embedder_surface.get();
 
         platform_view_android_ = std::make_unique<PlatformViewAndroid>(
-            engine_,                 // engine handle
+            nullptr,                 // engine handle not yet available
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             android_context,         // Android context
@@ -255,8 +252,8 @@ AndroidShellHolder::AndroidShellHolder(
 
         std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
 
-        if (shell.GetSettings().enable_impeller &&
-            rendering_api == AndroidRenderingAPI::kImpellerVulkan) {
+        if (android_context->RenderingApi() ==
+            AndroidRenderingAPI::kImpellerVulkan) {
           auto impeller_context = android_context->GetImpellerContext();
           if (impeller_context) {
             auto context_vk =
@@ -288,6 +285,74 @@ AndroidShellHolder::AndroidShellHolder(
                       return android_compositor_vulkan_->PresentView(&info);
                     });
           }
+        } else if (android_context->RenderingApi() ==
+                       AndroidRenderingAPI::kImpellerOpenGLES ||
+                   android_context->RenderingApi() ==
+                       AndroidRenderingAPI::kSkiaOpenGLES) {
+          android_compositor_opengl_ =
+              std::make_unique<AndroidCompositorOpenGL>(
+                  embedder_surface->GetAndroidSurface(),
+                  android_context->RenderingApi());
+
+          EmbedderExternalViewEmbedder::CreateRenderTargetCallback
+              create_callback =
+                  [this](GrDirectContext* context,
+                         const std::shared_ptr<impeller::AiksContext>&
+                             aiks_context,
+                         const FlutterBackingStoreConfig& config)
+              -> std::unique_ptr<EmbedderRenderTarget> {
+            FlutterBackingStore backing_store = {};
+            backing_store.struct_size = sizeof(FlutterBackingStore);
+            if (android_compositor_opengl_->CreateBackingStoreCallback(
+                    &config, &backing_store,
+                    android_compositor_opengl_.get())) {
+              if (backing_store.open_gl.type ==
+                  kFlutterOpenGLTargetTypeFramebuffer) {
+                GrGLFramebufferInfo fb_info;
+                fb_info.fFBOID = backing_store.open_gl.framebuffer.name;
+                fb_info.fFormat = backing_store.open_gl.framebuffer.target;
+
+                GrBackendRenderTarget backend_target =
+                    GrBackendRenderTargets::MakeGL(
+                        config.size.width, config.size.height, 0, 0, fb_info);
+
+                auto sk_surface = SkSurfaces::WrapBackendRenderTarget(
+                    context, backend_target, kTopLeft_GrSurfaceOrigin,
+                    kRGBA_8888_SkColorType, nullptr, nullptr);
+
+                if (sk_surface) {
+                  return std::make_unique<EmbedderRenderTargetSkia>(
+                      backing_store, std::move(sk_surface), fml::closure(),
+                      []() {
+                        return EmbedderRenderTarget::SetCurrentResult{true,
+                                                                      false};
+                      },
+                      []() {
+                        return EmbedderRenderTarget::SetCurrentResult{true,
+                                                                      false};
+                      });
+                }
+              }
+            }
+            return nullptr;
+          };
+
+          EmbedderExternalViewEmbedder::PresentCallback present_callback =
+              [this](FlutterViewId view_id,
+                     const std::vector<const FlutterLayer*>& layers) -> bool {
+            FlutterPresentViewInfo info = {};
+            info.struct_size = sizeof(FlutterPresentViewInfo);
+            info.view_id = view_id;
+            info.layers = const_cast<const FlutterLayer**>(layers.data());
+            info.layers_count = layers.size();
+            info.user_data = android_compositor_opengl_.get();
+            return android_compositor_opengl_->PresentView(&info);
+          };
+
+          external_view_embedder =
+              std::make_shared<EmbedderExternalViewEmbedder>(
+                  false,  // avoid_backing_store_cache
+                  create_callback, present_callback);
         }
 
         auto platform_view_embedder = std::make_unique<PlatformViewEmbedder>(
