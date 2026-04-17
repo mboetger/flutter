@@ -77,6 +77,40 @@ TEST_F(EmbedderTest, CanLaunchAndShutdownWithValidProjectArgs) {
   engine.reset();
 }
 
+TEST_F(EmbedderTest, CanLaunchWithKernelData) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  fml::AutoResetWaitableEvent latch;
+  context.AddIsolateCreateCallback([&latch]() { latch.Signal(); });
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  std::string assets_path = builder.GetProjectArgs().assets_path;
+  std::string kernel_path =
+      fml::paths::JoinPaths({assets_path, "kernel_blob.bin"});
+
+  auto mapping = fml::FileMapping::CreateReadOnly(kernel_path);
+  ASSERT_TRUE(mapping);
+
+  FlutterProjectArgs args = builder.GetProjectArgs();
+  args.application_kernel_data = mapping->GetMapping();
+  args.application_kernel_data_size = mapping->GetSize();
+
+  FlutterRendererConfig config = context.GetRendererConfig();
+
+  FlutterEngine engine = nullptr;
+  auto result = FlutterEngineInitialize(FLUTTER_ENGINE_VERSION, &config, &args,
+                                        context.GetUserData(), &engine);
+
+  ASSERT_EQ(result, kSuccess);
+  ASSERT_NE(engine, nullptr);
+
+  UniqueEngine unique_engine(engine);
+  ASSERT_EQ(FlutterEngineRunInitialized(unique_engine.get()), kSuccess);
+
+  latch.Wait();
+  unique_engine.reset();
+}
+
 // TODO(41999): Disabled because flaky.
 TEST_F(EmbedderTest, DISABLED_CanLaunchAndShutdownMultipleTimes) {
   auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();

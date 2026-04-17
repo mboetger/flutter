@@ -2808,6 +2808,14 @@ typedef struct {
 
   /// The initial route to use when starting the engine.
   const char* initial_route;
+
+  /// The application kernel data mapped in memory.
+  /// Only used in JIT mode.
+  const uint8_t* application_kernel_data;
+
+  /// The size of the application kernel data.
+  /// Only used in JIT mode.
+  size_t application_kernel_data_size;
 } FlutterProjectArgs;
 
 typedef struct {

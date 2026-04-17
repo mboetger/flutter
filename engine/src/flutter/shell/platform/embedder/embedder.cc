@@ -2262,16 +2262,32 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   settings.enable_wide_gamut = SAFE_ACCESS(args, enable_wide_gamut, false);
 
   if (!flutter::DartVM::IsRunningPrecompiledCode()) {
-    // Verify the assets path contains Dart 2 kernel assets.
-    const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
-    std::string application_kernel_path = fml::paths::JoinPaths(
-        {settings.assets_path, kApplicationKernelSnapshotFileName});
-    if (!fml::IsFile(application_kernel_path)) {
-      return LOG_EMBEDDER_ERROR(
-          kInvalidArguments,
-          "Not running in AOT mode but could not resolve the kernel binary.");
+    bool has_kernel_data = false;
+    if (SAFE_ACCESS(args, application_kernel_data, nullptr) != nullptr) {
+      size_t size = SAFE_ACCESS(args, application_kernel_data_size, 0);
+      if (size > 0) {
+        settings.application_kernels = [args, size]() -> flutter::Mappings {
+          flutter::Mappings mappings;
+          mappings.push_back(std::make_unique<fml::NonOwnedMapping>(
+              args->application_kernel_data, size));
+          return mappings;
+        };
+        has_kernel_data = true;
+      }
     }
-    settings.application_kernel_asset = kApplicationKernelSnapshotFileName;
+
+    if (!has_kernel_data) {
+      // Verify the assets path contains Dart 2 kernel assets.
+      const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
+      std::string application_kernel_path = fml::paths::JoinPaths(
+          {settings.assets_path, kApplicationKernelSnapshotFileName});
+      if (!fml::IsFile(application_kernel_path)) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "Not running in AOT mode but could not resolve the kernel binary.");
+      }
+      settings.application_kernel_asset = kApplicationKernelSnapshotFileName;
+    }
   }
 
   if (SAFE_ACCESS(args, root_isolate_create_callback, nullptr) != nullptr) {
