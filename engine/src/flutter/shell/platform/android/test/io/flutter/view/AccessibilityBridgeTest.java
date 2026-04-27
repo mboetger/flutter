@@ -830,6 +830,34 @@ public class AccessibilityBridgeTest {
     assertEquals(expectedText, nodeInfo.getText().toString());
   }
 
+  @Config(sdk = API_LEVELS.API_31)
+  @TargetApi(API_LEVELS.API_31)
+  @Test
+  public void itSetsBoldTextFlagOnApi31WhenFontWeightAdjustmentIsLarge() {
+    AccessibilityChannel mockChannel = mock(AccessibilityChannel.class);
+    View mockRootView = mock(View.class);
+    Resources mockResources = mock(Resources.class);
+    Configuration mockConfiguration = mock(Configuration.class);
+
+    when(mockRootView.getResources()).thenReturn(mockResources);
+    when(mockResources.getConfiguration()).thenReturn(mockConfiguration);
+    mockConfiguration.fontWeightAdjustment = 300; // BOLD_TEXT_WEIGHT_ADJUSTMENT
+
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    ContentResolver mockResolver = mock(ContentResolver.class);
+    AccessibilityViewEmbedder mockEmbedder = mock(AccessibilityViewEmbedder.class);
+    PlatformViewsAccessibilityDelegate mockDelegate =
+        mock(PlatformViewsAccessibilityDelegate.class);
+
+    AccessibilityBridge bridge =
+        setUpBridge(
+            mockRootView, mockChannel, mockManager, mockResolver, mockEmbedder, mockDelegate);
+
+    verify(mockChannel)
+        .setAccessibilityFeatures(
+            ACCESSIBILITY_FEATURE_NO_ANNOUNCE | ACCESSIBILITY_FEATURE_BOLD_TEXT);
+  }
+
   @Test
   @Config(minSdk = API_LEVELS.FLUTTER_MIN)
   public void itBuildsAttributedString() {

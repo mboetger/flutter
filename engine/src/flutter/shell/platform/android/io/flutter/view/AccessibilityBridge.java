@@ -654,12 +654,20 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
   }
 
   @RequiresApi(API_LEVELS.API_31)
+  private static class Api31Helper {
+    static int getFontWeightAdjustment(Configuration configuration) {
+      return configuration.fontWeightAdjustment;
+    }
+  }
+
+  @RequiresApi(API_LEVELS.API_31)
   private void setBoldTextFlag() {
     if (rootAccessibilityView == null || rootAccessibilityView.getResources() == null) {
       return;
     }
     int fontWeightAdjustment =
-        rootAccessibilityView.getResources().getConfiguration().fontWeightAdjustment;
+        Api31Helper.getFontWeightAdjustment(
+            rootAccessibilityView.getResources().getConfiguration());
     boolean shouldBold =
         fontWeightAdjustment != Configuration.FONT_WEIGHT_ADJUSTMENT_UNDEFINED
             && fontWeightAdjustment >= BOLD_TEXT_WEIGHT_ADJUSTMENT;
