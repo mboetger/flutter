@@ -481,6 +481,82 @@ Review licenses that have not been accepted (y/N)?
     expect(sdkMessage.message, 'Emulator version unknown');
   });
 
+  testUsingContext('warns when hardware acceleration is not configured', () async {
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = false
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..emulatorPath = 'path/to/emulator';
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-version'],
+        stdout: 'INFO    | Android emulator version 35.2.10.0 (build_id 12414864) (CL:N/A)',
+      ),
+    );
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-accel-check'],
+        stdout: 'accel:\n0\nMock failure output',
+      ),
+    );
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) => message.message.contains(
+          'Android emulator hardware acceleration is not configured correctly',
+        ),
+      ),
+      isTrue,
+    );
+  });
+
+  testUsingContext('does not warn when hardware acceleration is configured', () async {
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = false
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..emulatorPath = 'path/to/emulator';
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-version'],
+        stdout: 'INFO    | Android emulator version 35.2.10.0 (build_id 12414864) (CL:N/A)',
+      ),
+    );
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-accel-check'],
+        stdout: 'accel:\n1\nusable',
+      ),
+    );
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) => message.message.contains(
+          'Android emulator hardware acceleration is not configured correctly',
+        ),
+      ),
+      isFalse,
+    );
+  });
+
   testUsingContext('detects license-only SDK installation with cmdline-tools', () async {
     sdk
       ..licensesAvailable = true

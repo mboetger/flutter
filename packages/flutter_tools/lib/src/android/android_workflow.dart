@@ -220,6 +220,29 @@ class AndroidValidator extends DoctorValidator {
       ),
     );
 
+    _task = 'Validating hardware acceleration';
+    final String? emulatorPath = androidSdk.emulatorPath;
+    if (emulatorPath != null && _processManager.canRun(emulatorPath)) {
+      try {
+        final ProcessResult result = await _processManager.run(<Object>[
+          emulatorPath,
+          '-accel-check',
+        ]);
+        final String output = result.stdout.toString().trim();
+        if (result.exitCode != 0 || output.contains('accel:\n0') || !output.contains('usable')) {
+          messages.add(
+            const ValidationMessage.hint(
+              'Android emulator hardware acceleration is not configured correctly.\n'
+              'Flutter will run very slow without it.\n'
+              'See https://developer.android.com/studio/run/emulator-acceleration.html for instructions.',
+            ),
+          );
+        }
+      } on Exception catch (e) {
+        _logger.printTrace('Failed to check emulator acceleration: $e');
+      }
+    }
+
     _task = 'Validating Android SDK command line tools are available';
     if (!androidSdk.cmdlineToolsAvailable) {
       messages.add(
