@@ -1732,6 +1732,35 @@ void main() {
     );
     expect(tester.getSize(find.byType(MaterialApp)), Size.zero);
   });
+
+  testWidgets('System back button pops route on MaterialApp', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: const Material(child: Text('Home')),
+        routes: <String, WidgetBuilder>{
+          '/next': (BuildContext context) => const Material(child: Text('Next')),
+        },
+      ),
+    );
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed('/next');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Next'), findsOneWidget);
+    expect(find.text('Home'), findsNothing);
+
+    // Simulate system back button.
+    final ByteData message = const JSONMethodCodec().encodeMethodCall(const MethodCall('popRoute'));
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/navigation',
+      message,
+      (_) {},
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Next'), findsNothing);
+  });
 }
 
 class MockScrollBehavior extends ScrollBehavior {
