@@ -351,7 +351,9 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     }
     this.flutterJNI = flutterJNI;
 
-    this.dartExecutor = new DartExecutor(flutterJNI, assetManager, engineId);
+    this.dartExecutor =
+        new DartExecutor(
+            flutterJNI, assetManager, engineId, context.getCacheDir().getAbsolutePath());
     this.dartExecutor.onAttachedToJNI();
 
     DeferredComponentManager deferredComponentManager =

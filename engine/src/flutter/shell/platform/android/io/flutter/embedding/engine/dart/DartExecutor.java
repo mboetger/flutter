@@ -42,6 +42,7 @@ public class DartExecutor implements BinaryMessenger {
   @NonNull private final FlutterJNI flutterJNI;
   @NonNull private final AssetManager assetManager;
   private final long engineId;
+  @NonNull private final String cacheDirPath;
   @NonNull private final DartMessenger dartMessenger;
   @NonNull private final BinaryMessenger binaryMessenger;
   private boolean isApplicationRunning = false;
@@ -61,14 +62,18 @@ public class DartExecutor implements BinaryMessenger {
 
   @VisibleForTesting
   public DartExecutor(@NonNull FlutterJNI flutterJNI, @NonNull AssetManager assetManager) {
-    this(flutterJNI, assetManager, 0);
+    this(flutterJNI, assetManager, 0, "");
   }
 
   public DartExecutor(
-      @NonNull FlutterJNI flutterJNI, @NonNull AssetManager assetManager, long engineId) {
+      @NonNull FlutterJNI flutterJNI,
+      @NonNull AssetManager assetManager,
+      long engineId,
+      @NonNull String cacheDirPath) {
     this.flutterJNI = flutterJNI;
     this.assetManager = assetManager;
     this.engineId = engineId;
+    this.cacheDirPath = cacheDirPath;
     this.dartMessenger = new DartMessenger(flutterJNI);
     dartMessenger.setMessageHandler("flutter/isolate", isolateChannelMessageHandler);
     this.binaryMessenger = new DefaultBinaryMessenger(dartMessenger);
@@ -158,7 +163,8 @@ public class DartExecutor implements BinaryMessenger {
           dartEntrypoint.dartEntrypointLibrary,
           assetManager,
           dartEntrypointArgs,
-          engineId);
+          engineId,
+          cacheDirPath);
 
       isApplicationRunning = true;
     }
@@ -185,7 +191,8 @@ public class DartExecutor implements BinaryMessenger {
           dartCallback.callbackHandle.callbackLibraryPath,
           dartCallback.androidAssetManager,
           null,
-          engineId);
+          engineId,
+          cacheDirPath);
 
       isApplicationRunning = true;
     }

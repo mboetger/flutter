@@ -551,6 +551,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
 void AndroidShellHolder::Launch(
     std::unique_ptr<APKAssetProvider> apk_asset_provider,
+    const std::string& assets_path,
     const std::string& entrypoint,
     const std::string& libraryUrl,
     const std::vector<std::string>& entrypoint_args,

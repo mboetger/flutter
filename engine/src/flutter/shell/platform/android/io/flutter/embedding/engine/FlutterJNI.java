@@ -1056,7 +1056,8 @@ public class FlutterJNI {
       @Nullable String pathToEntrypointFunction,
       @NonNull AssetManager assetManager,
       @Nullable List<String> entrypointArgs,
-      long engineId) {
+      long engineId,
+      @NonNull String cacheDirPath) {
     ensureRunningOnMainThread();
     ensureAttachedToNative();
     nativeRunBundleAndSnapshotFromLibrary(
@@ -1066,7 +1067,8 @@ public class FlutterJNI {
         pathToEntrypointFunction,
         assetManager,
         entrypointArgs,
-        engineId);
+        engineId,
+        cacheDirPath);
   }
 
   private native void nativeRunBundleAndSnapshotFromLibrary(
@@ -1076,7 +1078,8 @@ public class FlutterJNI {
       @Nullable String pathToEntrypointFunction,
       @NonNull AssetManager manager,
       @Nullable List<String> entrypointArgs,
-      long engineId);
+      long engineId,
+      @NonNull String cacheDirPath);
   // ------ End Dart Execution Support -------
 
   // --------- Start Platform Message Support ------

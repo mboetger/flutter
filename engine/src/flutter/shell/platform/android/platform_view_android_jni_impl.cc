@@ -8,6 +8,8 @@
 #include <android/native_window_jni.h>
 #include <dlfcn.h>
 #include <jni.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <memory>
 #include <utility>
 
@@ -300,18 +302,74 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
                                             jstring jLibraryUrl,
                                             jobject jAssetManager,
                                             jobject jEntrypointArgs,
-                                            jlong engineId) {
+                                            jlong engineId,
+                                            jstring jCacheDirPath) {
+  auto cache_dir_path = fml::jni::JavaStringToString(env, jCacheDirPath);
   auto apk_asset_provider = std::make_unique<flutter::APKAssetProvider>(
       env,                                            // jni environment
       jAssetManager,                                  // asset manager
       fml::jni::JavaStringToString(env, jBundlePath)  // apk asset dir
   );
+
+  // Extract icudtl.dat to cache directory
+  AssetResolver* resolver = apk_asset_provider.get();
+  auto icu_mapping = resolver->GetAsMapping("icudtl.dat");
+  if (icu_mapping) {
+    std::string icu_file_path = cache_dir_path + "/icudtl.dat";
+    FILE* file = fopen(icu_file_path.c_str(), "wb");
+    if (file) {
+      fwrite(icu_mapping->GetMapping(), 1, icu_mapping->GetSize(), file);
+      fclose(file);
+      FML_LOG(INFO) << "Extracted icudtl.dat to: " << icu_file_path;
+    } else {
+      FML_LOG(ERROR) << "Could not open file for writing ICU data!";
+    }
+  } else {
+    FML_LOG(WARNING) << "Could not find icudtl.dat in APK!";
+  }
+
+  // Extract FontManifest.json to cache directory
+  auto font_manifest_mapping = resolver->GetAsMapping("FontManifest.json");
+  if (font_manifest_mapping) {
+    std::string path = cache_dir_path + "/FontManifest.json";
+    FILE* file = fopen(path.c_str(), "wb");
+    if (file) {
+      fwrite(font_manifest_mapping->GetMapping(), 1,
+             font_manifest_mapping->GetSize(), file);
+      fclose(file);
+      FML_LOG(INFO) << "Extracted FontManifest.json to: " << path;
+    } else {
+      FML_LOG(ERROR) << "Could not open file for writing FontManifest.json!";
+    }
+  } else {
+    FML_LOG(WARNING) << "Could not find FontManifest.json in APK!";
+  }
+
+  // Extract fonts/MaterialIcons-Regular.otf to cache directory
+  auto font_mapping = resolver->GetAsMapping("fonts/MaterialIcons-Regular.otf");
+  if (font_mapping) {
+    std::string fonts_dir = cache_dir_path + "/fonts";
+    mkdir(fonts_dir.c_str(), 0777);
+    std::string path = fonts_dir + "/MaterialIcons-Regular.otf";
+    FILE* file = fopen(path.c_str(), "wb");
+    if (file) {
+      fwrite(font_mapping->GetMapping(), 1, font_mapping->GetSize(), file);
+      fclose(file);
+      FML_LOG(INFO) << "Extracted MaterialIcons-Regular.otf to: " << path;
+    } else {
+      FML_LOG(ERROR) << "Could not open file for writing MaterialIcons font!";
+    }
+  } else {
+    FML_LOG(WARNING) << "Could not find MaterialIcons font in APK!";
+  }
+
   auto entrypoint = fml::jni::JavaStringToString(env, jEntrypoint);
   auto libraryUrl = fml::jni::JavaStringToString(env, jLibraryUrl);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  ANDROID_SHELL_HOLDER->Launch(std::move(apk_asset_provider), entrypoint,
-                               libraryUrl, entrypoint_args, engineId);
+  ANDROID_SHELL_HOLDER->Launch(std::move(apk_asset_provider), cache_dir_path,
+                               entrypoint, libraryUrl, entrypoint_args,
+                               engineId);
 }
 
 static jobject LookupCallbackInformation(JNIEnv* env,
@@ -750,7 +808,7 @@ bool RegisterApi(JNIEnv* env) {
           .name = "nativeRunBundleAndSnapshotFromLibrary",
           .signature = "(JLjava/lang/String;Ljava/lang/String;"
                        "Ljava/lang/String;Landroid/content/res/"
-                       "AssetManager;Ljava/util/List;J)V",
+                       "AssetManager;Ljava/util/List;JLjava/lang/String;)V",
           .fnPtr = reinterpret_cast<void*>(&RunBundleAndSnapshotFromLibrary),
       },
       {
