@@ -5,6 +5,9 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_CONTEXT_GL_IMPELLER_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_CONTEXT_GL_IMPELLER_H_
 
+#include <map>
+#include <mutex>
+#include <thread>
 #include "flutter/fml/macros.h"
 #include "flutter/impeller/toolkit/egl/display.h"
 #include "flutter/shell/platform/android/context/android_context.h"
@@ -41,6 +44,10 @@ class AndroidContextGLImpeller : public AndroidContext {
   std::unique_ptr<impeller::egl::Config> offscreen_config_;
   std::unique_ptr<impeller::egl::Context> onscreen_context_;
   std::unique_ptr<impeller::egl::Context> offscreen_context_;
+  mutable std::map<std::thread::id, std::unique_ptr<impeller::egl::Context>>
+      thread_contexts_;
+  mutable std::mutex contexts_mutex_;
+  std::thread::id platform_thread_id_;
   bool is_valid_ = false;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidContextGLImpeller);

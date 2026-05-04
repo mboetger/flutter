@@ -210,6 +210,7 @@ AndroidContextGLImpeller::AndroidContextGLImpeller(
   offscreen_context_ = std::move(offscreen_context);
   SetImpellerContext(impeller_context);
 
+  platform_thread_id_ = std::this_thread::get_id();
   is_valid_ = true;
 }
 
@@ -246,16 +247,72 @@ bool AndroidContextGLImpeller::OnscreenContextMakeCurrent(
   if (!onscreen_surface || !onscreen_context_) {
     return false;
   }
-
-  return onscreen_context_->MakeCurrent(*onscreen_surface);
+  auto thread_id = std::this_thread::get_id();
+  impeller::egl::Context* context = nullptr;
+  if (thread_id == platform_thread_id_) {
+    context = onscreen_context_.get();
+  } else {
+    std::lock_guard<std::mutex> lock(contexts_mutex_);
+    auto found = thread_contexts_.find(thread_id);
+    if (found != thread_contexts_.end()) {
+      context = found->second.get();
+    } else {
+      FML_LOG(INFO) << "EGL: Creating new shared context for thread "
+                    << thread_id;
+      auto new_context =
+          display_->CreateContext(*onscreen_config_, onscreen_context_.get());
+      if (new_context) {
+        impeller::egl::Context::LifecycleListener listener =
+            [worker = reactor_worker_](
+                impeller::egl::Context::LifecycleEvent event) {
+              switch (event) {
+                case impeller::egl::Context::LifecycleEvent::kDidMakeCurrent:
+                  worker->SetReactionsAllowedOnCurrentThread(true);
+                  break;
+                case impeller::egl::Context::LifecycleEvent::kWillClearCurrent:
+                  worker->SetReactionsAllowedOnCurrentThread(false);
+                  break;
+              }
+            };
+        if (!new_context->AddLifecycleListener(listener).has_value()) {
+          FML_LOG(ERROR)
+              << "EGL: Could not add lifecycle listener to new context";
+        }
+        thread_contexts_[thread_id] = std::move(new_context);
+        context = thread_contexts_[thread_id].get();
+      }
+    }
+  }
+  if (!context) {
+    FML_LOG(ERROR) << "EGL: No context available for thread " << thread_id;
+    return false;
+  }
+  FML_LOG(INFO) << "EGL: Making context " << context->GetHandle()
+                << " current on thread " << thread_id << " with surface "
+                << onscreen_surface;
+  return context->MakeCurrent(*onscreen_surface);
 }
 
 bool AndroidContextGLImpeller::OnscreenContextClearCurrent() {
-  if (!onscreen_context_) {
+  auto thread_id = std::this_thread::get_id();
+  impeller::egl::Context* context = nullptr;
+  if (thread_id == platform_thread_id_) {
+    context = onscreen_context_.get();
+  } else {
+    std::lock_guard<std::mutex> lock(contexts_mutex_);
+    auto found = thread_contexts_.find(thread_id);
+    if (found != thread_contexts_.end()) {
+      context = found->second.get();
+    }
+  }
+  if (!context) {
+    FML_LOG(WARNING) << "EGL: No context found to clear on thread "
+                     << thread_id;
     return false;
   }
-
-  return onscreen_context_->ClearCurrent();
+  FML_LOG(INFO) << "EGL: Clearing context " << context->GetHandle()
+                << " on thread " << thread_id;
+  return context->ClearCurrent();
 }
 
 std::unique_ptr<impeller::egl::Surface>
