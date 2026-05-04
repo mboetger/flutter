@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "flutter/fml/macros.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
@@ -128,13 +129,16 @@ class AndroidShellHolder {
   std::unique_ptr<EmbedderSurfaceAndroid> owned_embedder_surface_;
   FLUTTER_API_SYMBOL(FlutterEngine) engine_ = nullptr;
   bool is_valid_ = false;
+  DartServiceIsolate::CallbackHandle vm_service_callback_handle_ = 0;
   uint64_t next_pointer_flow_id_ = 0;
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
   const AndroidRenderingAPI android_rendering_api_;
+  std::unique_ptr<fml::Mapping> kernel_mapping_;
+  std::unique_ptr<TaskRunners> task_runners_;
+  std::shared_ptr<ThreadHost> thread_host_;
   std::unique_ptr<AndroidCompositorVulkan> android_compositor_vulkan_;
   std::unique_ptr<AndroidCompositorOpenGL> android_compositor_opengl_;
   std::unique_ptr<AndroidCompositorSoftware> android_compositor_software_;
-  std::shared_ptr<ThreadHost> thread_host_;
 
   //----------------------------------------------------------------------------
   /// @brief      Constructor with its components injected.

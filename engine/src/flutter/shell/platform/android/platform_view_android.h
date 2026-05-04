@@ -6,6 +6,7 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_PLATFORM_VIEW_ANDROID_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -162,6 +163,8 @@ class PlatformViewAndroid final {
 
   void ScheduleFrame();
 
+  bool HasViewportMetrics() const;
+
   void SetPlatformView(fml::WeakPtr<PlatformView> platform_view);
 
   void SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine);
@@ -182,6 +185,8 @@ class PlatformViewAndroid final {
 
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
+  fml::RefPtr<AndroidNativeWindow> pending_native_window_;
+  std::optional<ViewportMetrics> pending_viewport_metrics_;
 
   void InstallFirstFrameCallback();
 

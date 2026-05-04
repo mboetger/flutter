@@ -65,8 +65,11 @@ bool IsVivante() {
 }  // anonymous namespace
 
 FlutterMain::FlutterMain(const flutter::Settings& settings,
-                         flutter::AndroidRenderingAPI android_rendering_api)
-    : settings_(settings), android_rendering_api_(android_rendering_api) {}
+                         flutter::AndroidRenderingAPI android_rendering_api,
+                         std::vector<std::string> args)
+    : settings_(settings),
+      android_rendering_api_(android_rendering_api),
+      args_(std::move(args)) {}
 
 FlutterMain::~FlutterMain() = default;
 
@@ -84,6 +87,10 @@ const flutter::Settings& FlutterMain::GetSettings() const {
 
 flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() {
   return android_rendering_api_;
+}
+
+const std::vector<std::string>& FlutterMain::GetArgs() const {
+  return args_;
 }
 
 void FlutterMain::Init(JNIEnv* env,
@@ -215,7 +222,7 @@ void FlutterMain::Init(JNIEnv* env,
 
   // Not thread safe. Will be removed when FlutterMain is refactored to no
   // longer be a singleton.
-  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api));
+  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api, args));
   g_flutter_main->SetupDartVMServiceUriCallback(env);
 }
 
@@ -308,7 +315,7 @@ AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
 
   if (settings.enable_impeller &&
       api_level >= kMinimumAndroidApiLevelForImpeller && !IsVivante()) {
-    return AndroidRenderingAPI::kImpellerAutoselect;
+    return AndroidRenderingAPI::kImpellerOpenGLES;
   }
 
   return AndroidRenderingAPI::kSkiaOpenGLES;

@@ -134,6 +134,13 @@ PlatformViewAndroid::~PlatformViewAndroid() = default;
 
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
+  FML_LOG(INFO) << "PlatformViewAndroid::NotifyCreated called";
+  if (!engine_) {
+    FML_LOG(INFO) << "PlatformViewAndroid::NotifyCreated: No engine, pending.";
+    pending_native_window_ = native_window;
+    return;
+  }
+
   if (embedder_surface_) {
     InstallFirstFrameCallback();
   }
@@ -527,9 +534,22 @@ fml::WeakPtr<PlatformViewAndroid> PlatformViewAndroid::GetWeakPtr() const {
   return weak_factory_.GetWeakPtr();
 }
 
+bool PlatformViewAndroid::HasViewportMetrics() const {
+  return pending_viewport_metrics_.has_value();
+}
+
 void PlatformViewAndroid::SetPlatformView(
     fml::WeakPtr<PlatformView> platform_view) {
+  FML_LOG(INFO) << "PlatformViewAndroid::SetPlatformView called, valid: "
+                << (platform_view ? "yes" : "no");
   platform_view_ = platform_view;
+  if (platform_view_ && pending_viewport_metrics_) {
+    FML_LOG(INFO) << "Applying cached pending viewport metrics: "
+                  << pending_viewport_metrics_->physical_width << "x"
+                  << pending_viewport_metrics_->physical_height;
+    platform_view_->SetViewportMetrics(0, *pending_viewport_metrics_);
+    pending_viewport_metrics_ = std::nullopt;
+  }
 }
 
 void PlatformViewAndroid::SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
@@ -541,6 +561,11 @@ void PlatformViewAndroid::SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
         settings.enable_surface_control &&
         android_get_device_api_level() >= kMinAPILevelHCPP &&
         settings.enable_impeller;
+  }
+
+  if (pending_native_window_) {
+    NotifyCreated(pending_native_window_);
+    pending_native_window_ = nullptr;
   }
 }
 
@@ -562,15 +587,28 @@ void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
 
 void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
                                              const ViewportMetrics& metrics) {
+  FML_LOG(INFO) << "PlatformViewAndroid::SetViewportMetrics called, "
+                   "platform_view_ valid: "
+                << (platform_view_ ? "yes" : "no");
   if (platform_view_) {
     platform_view_->SetViewportMetrics(view_id, metrics);
+  } else {
+    FML_LOG(INFO) << "Caching pending viewport metrics: "
+                  << metrics.physical_width << "x" << metrics.physical_height;
+    pending_viewport_metrics_ = metrics;
   }
 }
 
 void PlatformViewAndroid::DispatchPointerDataPacket(
     std::unique_ptr<PointerDataPacket> packet) {
+  FML_DLOG(INFO)
+      << "PlatformViewAndroid::DispatchPointerDataPacket called, length: "
+      << packet->GetLength();
   if (platform_view_) {
     platform_view_->DispatchPointerDataPacket(std::move(packet));
+  } else {
+    FML_LOG(WARNING) << "PlatformViewAndroid::DispatchPointerDataPacket "
+                        "failed: platform_view_ is NULL!";
   }
 }
 

@@ -13,10 +13,14 @@
 #include <string>
 #include <utility>
 
+#include <EGL/egl.h>
+#include <dlfcn.h>
 #include "common/settings.h"
 #include "flutter/fml/cpu_affinity.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
+#include "flutter/fml/platform/android/jni_util.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/thread_host.h"
@@ -27,7 +31,10 @@
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/android_surface_gl_impeller.h"
+#include "flutter/shell/platform/android/android_surface_gl_skia.h"
 #include "flutter/shell/platform/android/context/android_context.h"
+#include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_view_embedder.h"
@@ -81,12 +88,6 @@ static void AndroidPlatformThreadConfigSetter(
         FML_LOG(ERROR) << "Failed to set priority";
       }
   }
-}
-
-static PlatformData GetDefaultPlatformData() {
-  PlatformData platform_data;
-  platform_data.lifecycle_state = "AppLifecycleState.detached";
-  return platform_data;
 }
 
 static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
@@ -214,6 +215,8 @@ AndroidShellHolder::AndroidShellHolder(
                                     io_runner         // io
   );
 
+  task_runners_ = std::make_unique<TaskRunners>(task_runners);
+
   // 2. Prepare FlutterProjectArgs.
   FlutterProjectArgs args = {};
   args.struct_size = sizeof(FlutterProjectArgs);
@@ -230,180 +233,26 @@ AndroidShellHolder::AndroidShellHolder(
       context_settings);
 
   fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
-  Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [jni_facade, android_context, this, &weak_platform_view](Shell& shell) {
-        auto embedder_surface = std::make_unique<EmbedderSurfaceAndroid>(
-            android_context, shell.GetSettings().enable_impeller,
-            shell.GetSettings().impeller_enable_lazy_shader_mode);
-        embedder_surface_ = embedder_surface.get();
 
-        platform_view_android_ = std::make_unique<PlatformViewAndroid>(
-            nullptr,                 // engine handle not yet available
-            shell.GetTaskRunners(),  // task runners
-            jni_facade,              // JNI interop
-            android_context,         // Android context
-            embedder_surface.get()   // Embedder surface
-        );
-        weak_platform_view = platform_view_android_->GetWeakPtr();
-        platform_view_ = weak_platform_view;
+  owned_embedder_surface_ = std::make_unique<EmbedderSurfaceAndroid>(
+      android_context, settings_.enable_impeller,
+      settings_.impeller_enable_lazy_shader_mode);
+  embedder_surface_ = owned_embedder_surface_.get();
 
-        auto dispatch_table = CreateDispatchTable(weak_platform_view);
-
-        std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
-
-        if (android_context->RenderingApi() ==
-            AndroidRenderingAPI::kImpellerVulkan) {
-          auto impeller_context = android_context->GetImpellerContext();
-          if (impeller_context) {
-            auto context_vk =
-                std::static_pointer_cast<impeller::ContextVK>(impeller_context);
-            android_compositor_vulkan_ =
-                std::make_unique<AndroidCompositorVulkan>(context_vk);
-            platform_view_android_->SetCompositor(
-                android_compositor_vulkan_.get());
-
-            external_view_embedder =
-                std::make_shared<EmbedderExternalViewEmbedder>(
-                    false,  // avoid_backing_store_cache
-                    [this](GrDirectContext* context,
-                           const std::shared_ptr<impeller::AiksContext>&
-                               aiks_context,
-                           const FlutterBackingStoreConfig& config) {
-                      return android_compositor_vulkan_->CreateRenderTarget(
-                          aiks_context, config);
-                    },
-                    [this](FlutterViewId view_id,
-                           const std::vector<const FlutterLayer*>& layers) {
-                      FlutterPresentViewInfo info = {};
-                      info.struct_size = sizeof(FlutterPresentViewInfo);
-                      info.view_id = view_id;
-                      info.layers =
-                          const_cast<const FlutterLayer**>(layers.data());
-                      info.layers_count = layers.size();
-                      info.user_data = android_compositor_vulkan_.get();
-                      return android_compositor_vulkan_->PresentView(&info);
-                    });
-          }
-        } else if (android_context->RenderingApi() ==
-                       AndroidRenderingAPI::kImpellerOpenGLES ||
-                   android_context->RenderingApi() ==
-                       AndroidRenderingAPI::kSkiaOpenGLES) {
-          android_compositor_opengl_ =
-              std::make_unique<AndroidCompositorOpenGL>(
-                  embedder_surface->GetAndroidSurface(),
-                  android_context->RenderingApi());
-
-          EmbedderExternalViewEmbedder::CreateRenderTargetCallback
-              create_callback =
-                  [this](GrDirectContext* context,
-                         const std::shared_ptr<impeller::AiksContext>&
-                             aiks_context,
-                         const FlutterBackingStoreConfig& config)
-              -> std::unique_ptr<EmbedderRenderTarget> {
-            FlutterBackingStore backing_store = {};
-            backing_store.struct_size = sizeof(FlutterBackingStore);
-            if (android_compositor_opengl_->CreateBackingStoreCallback(
-                    &config, &backing_store,
-                    android_compositor_opengl_.get())) {
-              if (backing_store.open_gl.type ==
-                  kFlutterOpenGLTargetTypeFramebuffer) {
-                GrGLFramebufferInfo fb_info;
-                fb_info.fFBOID = backing_store.open_gl.framebuffer.name;
-                fb_info.fFormat = backing_store.open_gl.framebuffer.target;
-
-                GrBackendRenderTarget backend_target =
-                    GrBackendRenderTargets::MakeGL(
-                        config.size.width, config.size.height, 0, 0, fb_info);
-
-                auto sk_surface = SkSurfaces::WrapBackendRenderTarget(
-                    context, backend_target, kTopLeft_GrSurfaceOrigin,
-                    kRGBA_8888_SkColorType, nullptr, nullptr);
-
-                if (sk_surface) {
-                  return std::make_unique<EmbedderRenderTargetSkia>(
-                      backing_store, std::move(sk_surface), fml::closure(),
-                      []() {
-                        return EmbedderRenderTarget::SetCurrentResult{true,
-                                                                      false};
-                      },
-                      []() {
-                        return EmbedderRenderTarget::SetCurrentResult{true,
-                                                                      false};
-                      });
-                }
-              }
-            }
-            return nullptr;
-          };
-
-          EmbedderExternalViewEmbedder::PresentCallback present_callback =
-              [this](FlutterViewId view_id,
-                     const std::vector<const FlutterLayer*>& layers) -> bool {
-            FlutterPresentViewInfo info = {};
-            info.struct_size = sizeof(FlutterPresentViewInfo);
-            info.view_id = view_id;
-            info.layers = const_cast<const FlutterLayer**>(layers.data());
-            info.layers_count = layers.size();
-            info.user_data = android_compositor_opengl_.get();
-            return android_compositor_opengl_->PresentView(&info);
-          };
-
-          external_view_embedder =
-              std::make_shared<EmbedderExternalViewEmbedder>(
-                  false,  // avoid_backing_store_cache
-                  create_callback, present_callback);
-        }
-
-        auto platform_view_embedder = std::make_unique<PlatformViewEmbedder>(
-            shell, shell.GetTaskRunners(), std::move(embedder_surface),
-            dispatch_table, external_view_embedder);
-        platform_view_android_->SetPlatformView(
-            platform_view_embedder->GetWeakPtr());
-
-        return platform_view_embedder;
-      };
-
-  Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
-    return std::make_unique<Rasterizer>(shell);
-  };
-
-  std::unique_ptr<Shell> shell =
-      Shell::Create(GetDefaultPlatformData(),  // window data
-                    task_runners,              // task runners
-                    settings_,                 // settings
-                    on_create_platform_view,   // platform view create callback
-                    on_create_rasterizer       // rasterizer create callback
-      );
-
-  if (shell) {
-    shell->GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers([]() {
-      if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
-        FML_LOG(ERROR) << "Failed to set Workers task runner priority";
-      }
-    });
-
-    shell->RegisterImageDecoder(
-        [runner = task_runners.GetIOTaskRunner()](sk_sp<SkData> buffer) {
-          return AndroidImageGenerator::MakeFromData(std::move(buffer), runner);
-        },
-        -1);
-    FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
-
-    auto embedder_thread_host =
-        EmbedderThreadHost::Create(std::move(thread_host_), task_runners);
-    auto embedder_engine = EmbedderEngine::Create(
-        std::move(embedder_thread_host), task_runners, std::move(shell),
-        std::make_unique<EmbedderExternalTextureResolver>());
-    engine_ = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
-        embedder_engine.release());
-
-    if (platform_view_android_) {
-      platform_view_android_->SetEngine(engine_);
-    }
-  }
+  platform_view_android_ = std::make_unique<PlatformViewAndroid>(
+      nullptr,           // engine handle not yet available
+      task_runners,      // task runners
+      jni_facade,        // JNI interop
+      android_context,   // Android context
+      embedder_surface_  // Embedder surface
+  );
+  FML_LOG(INFO) << "AndroidShellHolder: Created platform_view_android_: "
+                << platform_view_android_.get();
+  weak_platform_view = platform_view_android_->GetWeakPtr();
+  platform_view_ = weak_platform_view;
 
   FML_DCHECK(platform_view_);
-  is_valid_ = engine_ != nullptr;
+  is_valid_ = platform_view_android_ != nullptr;
 }
 
 AndroidShellHolder::AndroidShellHolder(
@@ -432,6 +281,9 @@ AndroidShellHolder::AndroidShellHolder(
 }
 
 AndroidShellHolder::~AndroidShellHolder() {
+  if (vm_service_callback_handle_ != 0) {
+    DartServiceIsolate::RemoveServerStatusCallback(vm_service_callback_handle_);
+  }
   if (engine_) {
     FlutterEngineShutdown(engine_);
     engine_ = nullptr;
@@ -556,23 +408,224 @@ void AndroidShellHolder::Launch(
     const std::string& libraryUrl,
     const std::vector<std::string>& entrypoint_args,
     int64_t engine_id) {
-  if (!IsValid()) {
-    return;
-  }
-
   apk_asset_provider_ = std::move(apk_asset_provider);
-  auto run_configuration =
-      BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
-  if (!run_configuration) {
+
+  // Prepare FlutterRendererConfig based on API
+  FlutterRendererConfig config = {};
+  auto* android_platform_view = platform_view_android_.get();
+  auto android_context = android_platform_view->GetAndroidContext();
+
+  if (android_context->RenderingApi() == AndroidRenderingAPI::kSkiaOpenGLES ||
+      android_context->RenderingApi() ==
+          AndroidRenderingAPI::kImpellerOpenGLES) {
+    config.type = kOpenGL;
+    config.open_gl.struct_size = sizeof(FlutterOpenGLRendererConfig);
+    config.open_gl.make_current = [](void* user_data) -> bool {
+      auto* holder = static_cast<AndroidShellHolder*>(user_data);
+      auto* surface = holder->GetEmbedderSurfaceAndroid()->GetAndroidSurface();
+      if (holder->android_rendering_api_ ==
+          AndroidRenderingAPI::kImpellerOpenGLES) {
+        auto* gl_surface = static_cast<AndroidSurfaceGLImpeller*>(surface);
+        return gl_surface->GLContextMakeCurrent()->GetResult();
+      } else {
+        auto* gl_surface = static_cast<AndroidSurfaceGLSkia*>(surface);
+        return gl_surface->GLContextMakeCurrent()->GetResult();
+      }
+    };
+    config.open_gl.clear_current = [](void* user_data) -> bool {
+      auto* holder = static_cast<AndroidShellHolder*>(user_data);
+      auto* surface = holder->GetEmbedderSurfaceAndroid()->GetAndroidSurface();
+      if (holder->android_rendering_api_ ==
+          AndroidRenderingAPI::kImpellerOpenGLES) {
+        auto* gl_surface = static_cast<AndroidSurfaceGLImpeller*>(surface);
+        return gl_surface->GLContextClearCurrent();
+      } else {
+        auto* gl_surface = static_cast<AndroidSurfaceGLSkia*>(surface);
+        return gl_surface->GLContextClearCurrent();
+      }
+    };
+    config.open_gl.present = [](void* user_data) -> bool {
+      auto* holder = static_cast<AndroidShellHolder*>(user_data);
+      auto* surface = holder->GetEmbedderSurfaceAndroid()->GetAndroidSurface();
+      std::optional<DlIRect> frame_damage = std::nullopt;
+      std::optional<DlIRect> buffer_damage = std::nullopt;
+      GLPresentInfo present_info = {
+          .fbo_id = 0,
+          .frame_damage = frame_damage,
+          .buffer_damage = buffer_damage,
+      };
+      if (holder->android_rendering_api_ ==
+          AndroidRenderingAPI::kImpellerOpenGLES) {
+        auto* gl_surface = static_cast<AndroidSurfaceGLImpeller*>(surface);
+        return gl_surface->GLContextPresent(present_info);
+      } else {
+        auto* gl_surface = static_cast<AndroidSurfaceGLSkia*>(surface);
+        return gl_surface->GLContextPresent(present_info);
+      }
+    };
+    config.open_gl.fbo_callback = [](void* user_data) -> unsigned int {
+      return 0;
+    };
+    config.open_gl.make_resource_current = [](void* user_data) -> bool {
+      auto* holder = static_cast<AndroidShellHolder*>(user_data);
+      auto* surface = holder->GetEmbedderSurfaceAndroid()->GetAndroidSurface();
+      if (holder->android_rendering_api_ ==
+          AndroidRenderingAPI::kImpellerOpenGLES) {
+        auto* gl_surface = static_cast<AndroidSurfaceGLImpeller*>(surface);
+        return gl_surface->ResourceContextMakeCurrent();
+      } else {
+        auto* gl_surface = static_cast<AndroidSurfaceGLSkia*>(surface);
+        return gl_surface->ResourceContextMakeCurrent();
+      }
+    };
+    config.open_gl.gl_proc_resolver = [](void* user_data,
+                                         const char* name) -> void* {
+      void* address = reinterpret_cast<void*>(eglGetProcAddress(name));
+      if (address != nullptr) {
+        return address;
+      }
+      static void* gles_handle = []() {
+        void* handle = dlopen("libGLESv3.so", RTLD_LAZY);
+        if (handle == nullptr) {
+          handle = dlopen("libGLESv2.so", RTLD_LAZY);
+        }
+        return handle;
+      }();
+      if (gles_handle != nullptr) {
+        return dlsym(gles_handle, name);
+      }
+      return nullptr;
+    };
+  } else if (android_context->RenderingApi() ==
+             AndroidRenderingAPI::kImpellerVulkan) {
+    config.type = kVulkan;
+    // Fill in Vulkan callbacks if needed
+  }
+
+  FML_LOG(INFO) << "Rendering API: "
+                << static_cast<int>(android_context->RenderingApi());
+
+  // Prepare FlutterProjectArgs
+  FlutterProjectArgs args = {};
+  args.struct_size = sizeof(FlutterProjectArgs);
+  args.vsync_callback = [](void* user_data, intptr_t baton) {
+    auto* holder = static_cast<AndroidShellHolder*>(user_data);
+    holder->GetPlatformViewAndroid()->OnVsyncCallback(baton);
+  };
+  args.assets_path = assets_path.c_str();
+  // args.icu_data_path = icu_path.c_str();
+
+  FML_LOG(INFO) << "assets_path: " << args.assets_path;
+  FML_LOG(INFO) << "icu_data_path: "
+                << (args.icu_data_path ? args.icu_data_path : "NULL");
+
+  AssetResolver* resolver = apk_asset_provider_.get();
+  kernel_mapping_ = resolver->GetAsMapping("kernel_blob.bin");
+  if (kernel_mapping_) {
+    args.application_kernel_data = kernel_mapping_->GetMapping();
+    args.application_kernel_data_size = kernel_mapping_->GetSize();
+    FML_LOG(INFO) << "Loaded kernel_blob.bin from APK, size: "
+                  << args.application_kernel_data_size;
+  } else {
+    FML_LOG(WARNING) << "Could not load kernel_blob.bin from APK.";
+  }
+
+  if (!entrypoint.empty()) {
+    args.custom_dart_entrypoint = entrypoint.c_str();
+  }
+
+  std::vector<const char*> argv;
+  if (!entrypoint_args.empty()) {
+    for (const auto& arg : entrypoint_args) {
+      argv.push_back(arg.c_str());
+    }
+    args.dart_entrypoint_argc = argv.size();
+    args.dart_entrypoint_argv = argv.data();
+  }
+
+  const auto& engine_args = FlutterMain::Get().GetArgs();
+  FML_LOG(INFO) << "engine_args count: " << engine_args.size();
+  for (const auto& arg : engine_args) {
+    FML_LOG(INFO) << "engine_arg: " << arg;
+  }
+  std::vector<const char*> engine_argv;
+  for (const auto& arg : engine_args) {
+    if (arg != "--start-paused") {
+      engine_argv.push_back(arg.c_str());
+    }
+  }
+  engine_argv.push_back("--enable-vm-service");
+  engine_argv.push_back("--disable-service-auth-codes");
+  engine_argv.push_back("--verbose-logging");
+  args.command_line_argc = engine_argv.size();
+  args.command_line_argv = engine_argv.data();
+  FML_LOG(INFO) << "engine_argv count: " << args.command_line_argc;
+  for (int i = 0; i < args.command_line_argc; ++i) {
+    FML_LOG(INFO) << "engine_argv[" << i << "]: " << args.command_line_argv[i];
+  }
+
+  // 4. Setup Custom Task Runners.
+  args.custom_task_runners = nullptr;
+
+  // Call FlutterEngineRun (convenience method)
+  FlutterEngineResult result =
+      FlutterEngineRun(FLUTTER_ENGINE_VERSION, &config, &args, this, &engine_);
+
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "Could not run Flutter engine. Result: " << result;
+    is_valid_ = false;
     return;
   }
-  run_configuration->SetEngineId(engine_id);
-  UpdateDisplayMetrics();
 
-  // We should really be using FlutterEngineRun here.
-  // For now, let's keep the internal call but wrap it slightly.
-  reinterpret_cast<EmbedderEngine*>(engine_)->GetShell().RunEngine(
-      std::move(run_configuration.value()));
+  FML_LOG(INFO)
+      << "Launch: FlutterEngineRun completed. platform_view_android_ is "
+      << (platform_view_android_ ? "NON-NULL" : "NULL");
+  if (platform_view_android_) {
+    platform_view_android_->SetEngine(engine_);
+    auto* embedder_engine = reinterpret_cast<EmbedderEngine*>(engine_);
+    auto platform_view = embedder_engine->GetShell().GetPlatformView();
+    platform_view_android_->SetPlatformView(platform_view);
+    FML_LOG(INFO)
+        << "Synchronously bound PlatformViewAndroid to primary PlatformView!";
+  }
+
+  is_valid_ = engine_ != nullptr;
+  UpdateDisplayMetrics();
+  FML_LOG(INFO) << "UpdateDisplayMetrics called";
+
+  // Setup VM service URI callback to notify Java
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  FML_LOG(INFO) << "EnsureInitializedForCurrentThread called";
+  fml::RefPtr<fml::TaskRunner> platform_runner =
+      fml::MessageLoop::GetCurrent().GetTaskRunner();
+  FML_LOG(INFO) << "GetCurrent TaskRunner called";
+
+  JNIEnv* env = fml::jni::AttachCurrentThread();
+  FML_LOG(INFO) << "AttachCurrentThread called, env: " << env;
+
+  jclass local_class = env->FindClass("io/flutter/embedding/engine/FlutterJNI");
+  auto flutter_jni_class =
+      fml::jni::ScopedJavaGlobalRef<jclass>(env, local_class);
+  FML_LOG(INFO) << "FindClass FlutterJNI called, class: " << local_class;
+  if (!flutter_jni_class.is_null()) {
+    jfieldID uri_field = env->GetStaticFieldID(
+        flutter_jni_class.obj(), "vmServiceUri", "Ljava/lang/String;");
+    if (uri_field != nullptr) {
+      auto set_uri = [flutter_jni_class, uri_field](const std::string& uri) {
+        FML_LOG(INFO) << "The Dart VM service is listening on " << uri;
+        JNIEnv* env = fml::jni::AttachCurrentThread();
+        fml::jni::ScopedJavaLocalRef<jstring> java_uri =
+            fml::jni::StringToJavaString(env, uri);
+        env->SetStaticObjectField(flutter_jni_class.obj(), uri_field,
+                                  java_uri.obj());
+      };
+
+      vm_service_callback_handle_ = DartServiceIsolate::AddServerStatusCallback(
+          [platform_runner, set_uri](const std::string& uri) {
+            platform_runner->PostTask([uri, set_uri] { set_uri(uri); });
+          });
+    }
+  }
 }
 
 Rasterizer::Screenshot AndroidShellHolder::Screenshot(
@@ -643,10 +696,31 @@ std::optional<RunConfiguration> AndroidShellHolder::BuildRunConfiguration(
 }
 
 void AndroidShellHolder::UpdateDisplayMetrics() {
-  std::vector<std::unique_ptr<Display>> displays;
-  displays.push_back(std::make_unique<AndroidDisplay>(jni_facade_));
-  reinterpret_cast<EmbedderEngine*>(engine_)->GetShell().OnDisplayUpdates(
-      std::move(displays));
+  if (!engine_) {
+    return;
+  }
+  if (GetPlatformViewAndroid()->HasViewportMetrics()) {
+    FML_LOG(INFO) << "UpdateDisplayMetrics: Skipping hardcoded fallback "
+                     "because Java already provided metrics.";
+    return;
+  }
+  FML_LOG(INFO)
+      << "UpdateDisplayMetrics: Java provided no metrics (headless/driver "
+         "mode). Sending hardcoded fallback: 1280x2856 @ 3.0";
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.width = 1280;
+  event.height = 2856;
+  event.pixel_ratio = 3.0;
+
+  auto result = FlutterEngineSendWindowMetricsEvent(engine_, &event);
+  if (result == kSuccess) {
+    FML_LOG(INFO)
+        << "Successfully sent hardcoded window metrics: 1280x2856 @ 3.0";
+  } else {
+    FML_LOG(ERROR) << "Failed to send hardcoded window metrics, result: "
+                   << result;
+  }
 }
 
 bool AndroidShellHolder::IsSurfaceControlEnabled() {

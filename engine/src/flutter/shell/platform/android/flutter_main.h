@@ -25,6 +25,7 @@ class FlutterMain {
 
   const flutter::Settings& GetSettings() const;
   flutter::AndroidRenderingAPI GetAndroidRenderingAPI();
+  const std::vector<std::string>& GetArgs() const;
 
   static AndroidRenderingAPI SelectedRenderingAPI(
       const FlutterParsedSettings& settings,
@@ -33,10 +34,12 @@ class FlutterMain {
  private:
   const flutter::Settings settings_;
   const flutter::AndroidRenderingAPI android_rendering_api_;
+  const std::vector<std::string> args_;
   DartServiceIsolate::CallbackHandle vm_service_uri_callback_ = 0;
 
   explicit FlutterMain(const flutter::Settings& settings,
-                       flutter::AndroidRenderingAPI android_rendering_api);
+                       flutter::AndroidRenderingAPI android_rendering_api,
+                       std::vector<std::string> args);
 
   static void Init(JNIEnv* env,
                    jclass clazz,

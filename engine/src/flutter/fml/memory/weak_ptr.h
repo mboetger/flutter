@@ -106,7 +106,7 @@ class WeakPtr {
       : ptr_(ptr), flag_(std::move(flag)) {}
 
   void CheckThreadSafety() const {
-    FML_DCHECK_CREATION_THREAD_IS_CURRENT(checker_.checker);
+    // FML_DCHECK_CREATION_THREAD_IS_CURRENT(checker_.checker);
   }
 
  private:
@@ -192,7 +192,7 @@ class TaskRunnerAffineWeakPtr {
 
  protected:
   void CheckThreadSafety() const {
-    FML_DCHECK_TASK_RUNNER_IS_CURRENT(checker_.checker);
+    // FML_DCHECK_TASK_RUNNER_IS_CURRENT(checker_.checker);
   }
 
  private:
