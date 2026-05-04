@@ -138,7 +138,7 @@ public class PlatformViewsControllerTest {
             128,
             View.LAYOUT_DIRECTION_LTR,
             null);
-    PlatformView pView = platformViewsController.createPlatformView(request, true);
+    PlatformView pView = platformViewsController.createPlatformView(request);
     assertTrue(pView instanceof CountingPlatformView);
     CountingPlatformView cpv = (CountingPlatformView) pView;
     platformViewsController.configureForTextureLayerComposition(pView, request);
@@ -184,7 +184,7 @@ public class PlatformViewsControllerTest {
             128,
             View.LAYOUT_DIRECTION_LTR,
             null);
-    PlatformView pView = platformViewsController.createPlatformView(request, true);
+    PlatformView pView = platformViewsController.createPlatformView(request);
     assertTrue(pView instanceof CountingPlatformView);
     CountingPlatformView cpv = (CountingPlatformView) pView;
     platformViewsController.configureForTextureLayerComposition(pView, request);
@@ -224,7 +224,7 @@ public class PlatformViewsControllerTest {
             128,
             View.LAYOUT_DIRECTION_LTR,
             null);
-    PlatformView pView = platformViewsController.createPlatformView(request, true);
+    PlatformView pView = platformViewsController.createPlatformView(request);
     assertTrue(pView instanceof CountingPlatformView);
     CountingPlatformView cpv = (CountingPlatformView) pView;
     assertEquals(1, cpv.attachCalls);
