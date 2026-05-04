@@ -190,14 +190,13 @@ AndroidShellHolder::AndroidShellHolder(
           flutter::ThreadHost::Type::kIo, thread_label),
       fml::Thread::ThreadPriority::kNormal);
 
-  std::shared_ptr<ThreadHost> thread_host =
-      std::make_shared<ThreadHost>(host_config);
+  thread_host_ = std::make_shared<ThreadHost>(host_config);
 
   fml::RefPtr<fml::TaskRunner> raster_runner =
-      thread_host->raster_thread->GetTaskRunner();
+      thread_host_->raster_thread->GetTaskRunner();
   fml::RefPtr<fml::TaskRunner> ui_runner;
   fml::RefPtr<fml::TaskRunner> io_runner =
-      thread_host->io_thread->GetTaskRunner();
+      thread_host_->io_thread->GetTaskRunner();
   fml::RefPtr<fml::TaskRunner> platform_runner =
       fml::MessageLoop::GetCurrent().GetTaskRunner();
 
@@ -205,7 +204,7 @@ AndroidShellHolder::AndroidShellHolder(
       Settings::MergedPlatformUIThread::kEnabled) {
     ui_runner = platform_runner;
   } else {
-    ui_runner = thread_host->ui_thread->GetTaskRunner();
+    ui_runner = thread_host_->ui_thread->GetTaskRunner();
   }
 
   flutter::TaskRunners task_runners(thread_label,     // label
@@ -391,7 +390,7 @@ AndroidShellHolder::AndroidShellHolder(
     FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
 
     auto embedder_thread_host =
-        EmbedderThreadHost::Create(std::move(thread_host), task_runners);
+        EmbedderThreadHost::Create(std::move(thread_host_), task_runners);
     auto embedder_engine = EmbedderEngine::Create(
         std::move(embedder_thread_host), task_runners, std::move(shell),
         std::make_unique<EmbedderExternalTextureResolver>());

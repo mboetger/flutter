@@ -21,6 +21,7 @@ class EmbedderEngine;
 class AndroidCompositorVulkan;
 class AndroidCompositorOpenGL;
 class AndroidCompositorSoftware;
+struct ThreadHost;
 
 //----------------------------------------------------------------------------
 /// @brief      This is the Android owner of the core engine Shell.
@@ -132,6 +133,7 @@ class AndroidShellHolder {
   std::unique_ptr<AndroidCompositorVulkan> android_compositor_vulkan_;
   std::unique_ptr<AndroidCompositorOpenGL> android_compositor_opengl_;
   std::unique_ptr<AndroidCompositorSoftware> android_compositor_software_;
+  std::shared_ptr<ThreadHost> thread_host_;
 
   //----------------------------------------------------------------------------
   /// @brief      Constructor with its components injected.
