@@ -14,9 +14,10 @@ AndroidSurfaceGLImpeller::AndroidSurfaceGLImpeller(
     const std::shared_ptr<AndroidContextGLImpeller>& android_context)
     : android_context_(android_context) {
   offscreen_surface_ = android_context_->CreateOffscreenSurface();
+  headless_surface_ = android_context_->CreateOffscreenSurface();
 
-  if (!offscreen_surface_) {
-    FML_DLOG(ERROR) << "Could not create offscreen surface.";
+  if (!offscreen_surface_ || !headless_surface_) {
+    FML_DLOG(ERROR) << "Could not create offscreen/headless surfaces.";
     return;
   }
 
@@ -116,7 +117,11 @@ AndroidSurfaceGLImpeller::GLContextMakeCurrent() {
 
 bool AndroidSurfaceGLImpeller::OnGLContextMakeCurrent() {
   if (!onscreen_surface_) {
-    return false;
+    if (!headless_surface_) {
+      return false;
+    }
+    return android_context_->OnscreenContextMakeCurrent(
+        headless_surface_.get());
   }
 
   return android_context_->OnscreenContextMakeCurrent(onscreen_surface_.get());
@@ -124,7 +129,7 @@ bool AndroidSurfaceGLImpeller::OnGLContextMakeCurrent() {
 
 // |GPUSurfaceGLDelegate|
 bool AndroidSurfaceGLImpeller::GLContextClearCurrent() {
-  if (!onscreen_surface_) {
+  if (!onscreen_surface_ && !headless_surface_) {
     return false;
   }
 
@@ -149,8 +154,7 @@ void AndroidSurfaceGLImpeller::GLContextSetDamageRegion(
 // |GPUSurfaceGLDelegate|
 bool AndroidSurfaceGLImpeller::GLContextPresent(
     const GLPresentInfo& present_info) {
-  // The FBO ID is superfluous and was introduced for iOS where the default
-  // framebuffer was not FBO0.
+  FML_DLOG(INFO) << "AndroidSurfaceGLImpeller::GLContextPresent called";
   if (!onscreen_surface_) {
     return false;
   }

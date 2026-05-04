@@ -78,6 +78,7 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
   std::shared_ptr<AndroidContextGLImpeller> android_context_;
   std::unique_ptr<impeller::egl::Surface> onscreen_surface_;
   std::unique_ptr<impeller::egl::Surface> offscreen_surface_;
+  std::unique_ptr<impeller::egl::Surface> headless_surface_;
   fml::RefPtr<AndroidNativeWindow> native_window_;
 
   bool is_valid_ = false;
