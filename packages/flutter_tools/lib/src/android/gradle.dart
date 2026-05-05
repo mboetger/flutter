@@ -323,7 +323,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
       if (trimmed.isEmpty) {
         return true;
       }
-      return trimmed.startsWith('Configure project :') ||
+      return trimmed.contains('Configure project :') ||
           trimmed.startsWith('Note: ') ||
           trimmed.contains('Deprecated Gradle features') ||
           trimmed.contains('warning-mode') ||
