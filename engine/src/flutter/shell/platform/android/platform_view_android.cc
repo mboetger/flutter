@@ -12,8 +12,6 @@
 #include "common/settings.h"
 #include "flutter/common/graphics/texture.h"
 #include "flutter/fml/synchronization/waitable_event.h"
-#include "flutter/shell/common/shell_io_manager.h"
-#include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/android_context_dynamic_impeller.h"
 #include "flutter/shell/platform/android/android_context_gl_impeller.h"
 #include "flutter/shell/platform/android/android_context_vk_impeller.h"
