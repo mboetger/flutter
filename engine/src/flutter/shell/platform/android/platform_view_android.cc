@@ -359,7 +359,7 @@ void PlatformViewAndroid::RegisterExternalTexture(
       break;
   }
   if (texture) {
-    GetDelegate(engine_).OnPlatformViewRegisterTexture(std::move(texture));
+    FlutterEngineRegisterExternalTexture(engine_, texture_id);
   }
 }
 
@@ -398,7 +398,7 @@ void PlatformViewAndroid::RegisterImageTexture(
       break;
   }
   if (texture) {
-    GetDelegate(engine_).OnPlatformViewRegisterTexture(std::move(texture));
+    FlutterEngineRegisterExternalTexture(engine_, texture_id);
   }
 }
 
@@ -614,15 +614,11 @@ void PlatformViewAndroid::DispatchPointerDataPacket(
 }
 
 void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
-  if (platform_view_) {
-    platform_view_->UnregisterTexture(texture_id);
-  }
+  FlutterEngineUnregisterExternalTexture(engine_, texture_id);
 }
 
 void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
-  if (platform_view_) {
-    platform_view_->MarkTextureFrameAvailable(texture_id);
-  }
+  FlutterEngineMarkExternalTextureFrameAvailable(engine_, texture_id);
 }
 
 void PlatformViewAndroid::ScheduleFrame() {
