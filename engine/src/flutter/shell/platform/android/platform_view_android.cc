@@ -409,27 +409,28 @@ void PlatformViewAndroid::OnVsyncCallback(intptr_t baton) {
   if (use_choreographer) {
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetUITaskRunner(),
-        [baton, task_runners = task_runners_]() {
+        [baton, task_runners = task_runners_, engine = engine_]() {
           const auto& choreographer =
               impeller::android::Choreographer::GetInstance();
-          choreographer.PostFrameCallback([baton, task_runners](auto time) {
-            auto time_ns =
-                std::chrono::time_point_cast<std::chrono::nanoseconds>(time)
-                    .time_since_epoch()
-                    .count();
-            auto frame_time = fml::TimePoint::FromEpochDelta(
-                fml::TimeDelta::FromNanoseconds(time_ns));
-            auto now = fml::TimePoint::Now();
-            if (frame_time > now) {
-              frame_time = now;
-            }
-            // TODO(team-android): Get the actual refresh rate from the display.
-            // https://github.com/flutter/flutter/issues/142845
-            auto target_time = frame_time + fml::TimeDelta::FromNanoseconds(
-                                                1000000000.0 / 60.0);
-            VsyncWaiterEmbedder::OnEmbedderVsync(task_runners, baton,
-                                                 frame_time, target_time);
-          });
+          choreographer.PostFrameCallback(
+              [baton, task_runners, engine](auto time) {
+                auto time_ns =
+                    std::chrono::time_point_cast<std::chrono::nanoseconds>(time)
+                        .time_since_epoch()
+                        .count();
+                auto frame_time = fml::TimePoint::FromEpochDelta(
+                    fml::TimeDelta::FromNanoseconds(time_ns));
+                auto now = fml::TimePoint::Now();
+                if (frame_time > now) {
+                  frame_time = now;
+                }
+                // TODO(team-android): Get the actual refresh rate from the
+                // display. https://github.com/flutter/flutter/issues/142845
+                auto target_time = frame_time + fml::TimeDelta::FromNanoseconds(
+                                                    1000000000.0 / 60.0);
+                FlutterEngineOnVsync(engine, baton, time_ns,
+                                     time_ns + 16666666);  // 60Hz default
+              });
         });
   } else {
     // TODO(99798): Remove it when we drop support for API level < 29 and 32-bit
