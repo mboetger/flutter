@@ -333,25 +333,6 @@ class AndroidGradleBuilder implements AndroidBuilder {
           trimmed.startsWith('BUILD FAILED');
     }
 
-    String? formatGradleTask(String taskName) {
-      if (taskName.endsWith('Kotlin')) {
-        return 'Compiling Kotlin code...';
-      }
-      if (taskName.endsWith('JavaWithJavac')) {
-        return 'Compiling Java code...';
-      }
-      if (taskName.endsWith('Resources') && taskName.startsWith('merge')) {
-        return 'Merging Android resources...';
-      }
-      if (taskName.startsWith('minify')) {
-        return 'Shrinking code with R8...';
-      }
-      if (taskName.startsWith('package')) {
-        return 'Packaging APK...';
-      }
-      return null;
-    }
-
     String? consumeLog(String line) {
       if (outputParser != null) {
         outputParser(line);
@@ -373,10 +354,17 @@ class AndroidGradleBuilder implements AndroidBuilder {
         final Match? match = taskPattern.firstMatch(cleanLine);
         if (match != null) {
           final String taskName = match.group(1)!;
-          final String? formattedTask = formatGradleTask(taskName);
-          if (formattedTask != null) {
+          final bool isMilestone =
+              taskName.endsWith('Kotlin') ||
+              taskName.endsWith('JavaWithJavac') ||
+              taskName == 'mergeReleaseResources' ||
+              taskName == 'mergeDebugResources' ||
+              taskName.startsWith('minify') ||
+              taskName == 'packageRelease' ||
+              taskName == 'packageDebug';
+          if (isMilestone) {
             status?.pause();
-            _logger.printStatus('  $formattedTask');
+            _logger.printStatus(cleanLine.replaceFirst('> ', ''));
             status?.resume();
           }
           return null;
