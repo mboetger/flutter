@@ -655,9 +655,7 @@ EmbedderSurfaceAndroid* AndroidShellHolder::GetEmbedderSurfaceAndroid() {
 
 void AndroidShellHolder::NotifyLowMemoryWarning() {
   FML_DCHECK(engine_);
-  reinterpret_cast<EmbedderEngine*>(engine_)
-      ->GetShell()
-      .NotifyLowMemoryWarning();
+  FlutterEngineNotifyLowMemoryWarning(engine_);
 }
 
 std::optional<RunConfiguration> AndroidShellHolder::BuildRunConfiguration(
