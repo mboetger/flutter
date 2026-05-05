@@ -316,6 +316,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     String? detectedGradleErrorLine;
     Status? status;
     final taskPattern = RegExp(r'^> Task :(\S+)');
+    final ansiEscapePattern = RegExp(r'\x1B\[[0-9;]*[a-zA-Z]');
 
     bool isGradleNoise(String line) {
       final String trimmed = line.trim();
@@ -337,8 +338,20 @@ class AndroidGradleBuilder implements AndroidBuilder {
         outputParser(line);
       }
 
+      if (detectedGradleError == null || detectedGradleError == incompatibleKotlinVersionHandler) {
+        for (final gradleError in localGradleErrors) {
+          if (gradleError.test(line)) {
+            detectedGradleErrorLine = line;
+            detectedGradleError = gradleError;
+            break;
+          }
+        }
+      }
+
+      final String cleanLine = line.replaceAll(ansiEscapePattern, '');
+
       if (!_logger.isVerbose) {
-        final Match? match = taskPattern.firstMatch(line);
+        final Match? match = taskPattern.firstMatch(cleanLine);
         if (match != null) {
           final String taskName = match.group(1)!;
           final bool isMilestone =
@@ -351,33 +364,17 @@ class AndroidGradleBuilder implements AndroidBuilder {
               taskName == 'packageDebug';
           if (isMilestone) {
             status?.pause();
-            _logger.printStatus('  $line');
+            _logger.printStatus('  $cleanLine');
             status?.resume();
           }
           return null;
         }
-        if (isGradleNoise(line)) {
+        if (isGradleNoise(cleanLine)) {
           return null;
         }
+        return cleanLine;
       }
 
-      // The log lines that trigger incompatibleKotlinVersionHandler don't
-      // always indicate an error, and there are times that that handler
-      // covers up a more important error handler. Uniquely set it to be
-      // the lowest priority handler by allowing it to be overridden.
-      if (detectedGradleError != null && detectedGradleError != incompatibleKotlinVersionHandler) {
-        // Pipe stdout/stderr from Gradle.
-        return line;
-      }
-      for (final gradleError in localGradleErrors) {
-        if (gradleError.test(line)) {
-          detectedGradleErrorLine = line;
-          detectedGradleError = gradleError;
-          // The first error match wins.
-          break;
-        }
-      }
-      // Pipe stdout/stderr from Gradle.
       return line;
     }
 
