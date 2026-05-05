@@ -39,6 +39,7 @@
 #include "flutter/shell/platform/android/android_surface_vk_impeller.h"
 #include "flutter/shell/platform/android/image_external_texture_vk_impeller.h"
 #endif
+#include "flutter/fml/make_copyable.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/shell/platform/android/android_compositor_vulkan.h"
 #include "flutter/shell/platform/android/context/android_context.h"
@@ -51,7 +52,16 @@
 #include "flutter/shell/platform/embedder/vsync_waiter_embedder.h"
 #include "impeller/toolkit/android/choreographer.h"
 
+#include <atomic>
+#include <map>
+#include <mutex>
+
 namespace flutter {
+
+extern std::map<int, const FlutterPlatformMessageResponseHandle*>
+    g_pending_responses;
+extern std::atomic<int> g_next_response_id;
+extern std::mutex g_responses_mutex;
 
 namespace {
 
@@ -229,34 +239,96 @@ void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
   uint8_t* message_data =
       static_cast<uint8_t*>(env->GetDirectBufferAddress(java_message_data));
   fml::MallocMapping message =
-      fml::MallocMapping::Copy(message_data, java_message_position);
+      (message_data && java_message_position > 0)
+          ? fml::MallocMapping::Copy(message_data, java_message_position)
+          : fml::MallocMapping();
 
-  fml::RefPtr<flutter::PlatformMessageResponse> response;
+  FlutterPlatformMessageResponseHandle* response_handle = nullptr;
   if (response_id) {
-    response = fml::MakeRefCounted<PlatformMessageResponseAndroid>(
-        response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
+    struct ResponseUserData {
+      int response_id;
+      std::shared_ptr<PlatformViewAndroidJNI> jni_facade;
+      fml::RefPtr<fml::TaskRunner> platform_runner;
+    };
+    auto* user_data = new ResponseUserData{
+        .response_id = response_id,
+        .jni_facade = jni_facade_,
+        .platform_runner = task_runners_.GetPlatformTaskRunner(),
+    };
+    FlutterPlatformMessageCreateResponseHandle(
+        engine_,
+        [](const uint8_t* data, size_t size, void* user_data) {
+          auto* ud = static_cast<ResponseUserData*>(user_data);
+          auto mapping = std::make_unique<fml::MallocMapping>(
+              fml::MallocMapping::Copy(data, data + size));
+          ud->platform_runner->PostTask(
+              fml::MakeCopyable([ud, mapping = std::move(mapping)]() mutable {
+                ud->jni_facade->FlutterViewHandlePlatformMessageResponse(
+                    ud->response_id, std::move(mapping));
+                delete ud;
+              }));
+        },
+        user_data, &response_handle);
   }
 
-  if (platform_view_) {
-    platform_view_->DispatchPlatformMessage(
-        std::make_unique<flutter::PlatformMessage>(
-            std::move(name), std::move(message), std::move(response)));
+  const FlutterPlatformMessage platform_message = {
+      .struct_size = sizeof(FlutterPlatformMessage),
+      .channel = name.c_str(),
+      .message = message.GetMapping(),
+      .message_size = message.GetSize(),
+      .response_handle = response_handle,
+  };
+
+  FlutterEngineSendPlatformMessage(engine_, &platform_message);
+
+  if (response_handle) {
+    FlutterPlatformMessageReleaseResponseHandle(engine_, response_handle);
   }
 }
 
 void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
                                                        std::string name,
                                                        jint response_id) {
-  fml::RefPtr<flutter::PlatformMessageResponse> response;
+  FlutterPlatformMessageResponseHandle* response_handle = nullptr;
   if (response_id) {
-    response = fml::MakeRefCounted<PlatformMessageResponseAndroid>(
-        response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
+    struct ResponseUserData {
+      int response_id;
+      std::shared_ptr<PlatformViewAndroidJNI> jni_facade;
+      fml::RefPtr<fml::TaskRunner> platform_runner;
+    };
+    auto* user_data = new ResponseUserData{
+        .response_id = response_id,
+        .jni_facade = jni_facade_,
+        .platform_runner = task_runners_.GetPlatformTaskRunner(),
+    };
+    FlutterPlatformMessageCreateResponseHandle(
+        engine_,
+        [](const uint8_t* data, size_t size, void* user_data) {
+          auto* ud = static_cast<ResponseUserData*>(user_data);
+          auto mapping = std::make_unique<fml::MallocMapping>(
+              fml::MallocMapping::Copy(data, data + size));
+          ud->platform_runner->PostTask(
+              fml::MakeCopyable([ud, mapping = std::move(mapping)]() mutable {
+                ud->jni_facade->FlutterViewHandlePlatformMessageResponse(
+                    ud->response_id, std::move(mapping));
+                delete ud;
+              }));
+        },
+        user_data, &response_handle);
   }
 
-  if (platform_view_) {
-    platform_view_->DispatchPlatformMessage(
-        std::make_unique<flutter::PlatformMessage>(std::move(name),
-                                                   std::move(response)));
+  const FlutterPlatformMessage platform_message = {
+      .struct_size = sizeof(FlutterPlatformMessage),
+      .channel = name.c_str(),
+      .message = nullptr,
+      .message_size = 0,
+      .response_handle = response_handle,
+  };
+
+  FlutterEngineSendPlatformMessage(engine_, &platform_message);
+
+  if (response_handle) {
+    FlutterPlatformMessageReleaseResponseHandle(engine_, response_handle);
   }
 }
 
@@ -265,6 +337,32 @@ void PlatformViewAndroid::HandlePlatformMessage(
     std::unique_ptr<flutter::PlatformMessage> message) {
   // Called from the ui thread.
   platform_message_handler_->HandlePlatformMessage(std::move(message));
+}
+
+void PlatformViewAndroid::HandlePlatformMessage(
+    const FlutterPlatformMessage* message) {
+  JNIEnv* env = fml::jni::AttachCurrentThread();
+  fml::jni::ScopedJavaLocalRef<jstring> channel =
+      fml::jni::StringToJavaString(env, message->channel);
+
+  int response_id = 0;
+  if (message->response_handle) {
+    response_id = g_next_response_id.fetch_add(1);
+    {
+      std::lock_guard<std::mutex> lock(g_responses_mutex);
+      g_pending_responses[response_id] = message->response_handle;
+    }
+  }
+
+  fml::MallocMapping mapping =
+      (message->message && message->message_size > 0)
+          ? fml::MallocMapping::Copy(message->message, message->message_size)
+          : fml::MallocMapping();
+
+  jni_facade_->FlutterViewHandlePlatformMessage(
+      std::make_unique<flutter::PlatformMessage>(message->channel,
+                                                 std::move(mapping), nullptr),
+      response_id);
 }
 
 // |PlatformView|

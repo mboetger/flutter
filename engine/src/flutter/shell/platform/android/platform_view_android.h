@@ -129,6 +129,7 @@ class PlatformViewAndroid final {
 
   // |PlatformDispatchTable|
   void HandlePlatformMessage(std::unique_ptr<flutter::PlatformMessage> message);
+  void HandlePlatformMessage(const FlutterPlatformMessage* message);
 
   // |PlatformDispatchTable|
   void OnVsyncCallback(intptr_t baton);

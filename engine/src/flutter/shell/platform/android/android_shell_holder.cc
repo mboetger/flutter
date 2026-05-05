@@ -512,6 +512,11 @@ void AndroidShellHolder::Launch(
     auto* holder = static_cast<AndroidShellHolder*>(user_data);
     holder->GetPlatformViewAndroid()->OnVsyncCallback(baton);
   };
+  args.platform_message_callback = [](const FlutterPlatformMessage* message,
+                                      void* user_data) {
+    auto* holder = static_cast<AndroidShellHolder*>(user_data);
+    holder->GetPlatformViewAndroid()->HandlePlatformMessage(message);
+  };
   args.assets_path = assets_path.c_str();
   // args.icu_data_path = icu_path.c_str();
 

@@ -33,7 +33,15 @@
 #define ANDROID_SHELL_HOLDER \
   (reinterpret_cast<AndroidShellHolder*>(shell_holder))
 
+#include <atomic>
+#include <map>
+#include <mutex>
+
 namespace flutter {
+
+std::map<int, const FlutterPlatformMessageResponseHandle*> g_pending_responses;
+std::atomic<int> g_next_response_id(1);
+std::mutex g_responses_mutex;
 
 static fml::jni::ScopedJavaGlobalRef<jclass>* g_flutter_callback_info_class =
     nullptr;
@@ -664,18 +672,42 @@ static void InvokePlatformMessageResponseCallback(JNIEnv* env,
   uint8_t* response_data =
       static_cast<uint8_t*>(env->GetDirectBufferAddress(message));
   FML_DCHECK(response_data != nullptr);
-  auto mapping = std::make_unique<fml::MallocMapping>(
-      fml::MallocMapping::Copy(response_data, response_data + position));
-  ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
-      ->InvokePlatformMessageResponseCallback(responseId, std::move(mapping));
+
+  const FlutterPlatformMessageResponseHandle* handle = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(g_responses_mutex);
+    auto it = g_pending_responses.find(responseId);
+    if (it != g_pending_responses.end()) {
+      handle = it->second;
+      g_pending_responses.erase(it);
+    }
+  }
+
+  if (handle != nullptr) {
+    FlutterEngineSendPlatformMessageResponse(
+        ANDROID_SHELL_HOLDER->GetEngineForTesting(), handle, response_data,
+        position);
+  }
 }
 
 static void InvokePlatformMessageEmptyResponseCallback(JNIEnv* env,
                                                        jobject jcaller,
                                                        jlong shell_holder,
                                                        jint responseId) {
-  ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
-      ->InvokePlatformMessageEmptyResponseCallback(responseId);
+  const FlutterPlatformMessageResponseHandle* handle = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(g_responses_mutex);
+    auto it = g_pending_responses.find(responseId);
+    if (it != g_pending_responses.end()) {
+      handle = it->second;
+      g_pending_responses.erase(it);
+    }
+  }
+
+  if (handle != nullptr) {
+    FlutterEngineSendPlatformMessageResponse(
+        ANDROID_SHELL_HOLDER->GetEngineForTesting(), handle, nullptr, 0);
+  }
 }
 
 static void NotifyLowMemoryWarning(JNIEnv* env,
