@@ -316,8 +316,21 @@ class AndroidGradleBuilder implements AndroidBuilder {
     String? detectedGradleErrorLine;
     Status? status;
     final taskPattern = RegExp(r'^> Task :(\S+)');
-    final buildSuccessfulPattern = RegExp(r'^BUILD SUCCESSFUL in \d+');
-    final actionableTasksPattern = RegExp(r'^\d+ actionable tasks?:');
+
+    bool isGradleNoise(String line) {
+      final String trimmed = line.trim();
+      if (trimmed.isEmpty) {
+        return true;
+      }
+      return trimmed.startsWith('Configure project :') ||
+          trimmed.startsWith('Note: ') ||
+          trimmed.contains('Deprecated Gradle features') ||
+          trimmed.contains('warning-mode') ||
+          trimmed.contains('docs.gradle.org') ||
+          trimmed.contains('actionable tasks') ||
+          trimmed.startsWith('BUILD SUCCESSFUL') ||
+          trimmed.startsWith('BUILD FAILED');
+    }
 
     String? consumeLog(String line) {
       if (outputParser != null) {
@@ -328,19 +341,22 @@ class AndroidGradleBuilder implements AndroidBuilder {
         final Match? match = taskPattern.firstMatch(line);
         if (match != null) {
           final String taskName = match.group(1)!;
-          if (taskName.contains('Compile') ||
-              taskName.contains('Bundle') ||
-              taskName.contains('Assemble') ||
-              taskName.contains('Merge') ||
-              taskName.contains('Package') ||
-              taskName.contains('Sign')) {
+          final bool isMilestone =
+              taskName.endsWith('Kotlin') ||
+              taskName.endsWith('JavaWithJavac') ||
+              taskName == 'mergeReleaseResources' ||
+              taskName == 'mergeDebugResources' ||
+              taskName.startsWith('minify') ||
+              taskName == 'packageRelease' ||
+              taskName == 'packageDebug';
+          if (isMilestone) {
             status?.pause();
             _logger.printStatus('  $line');
             status?.resume();
           }
           return null;
         }
-        if (buildSuccessfulPattern.hasMatch(line) || actionableTasksPattern.hasMatch(line)) {
+        if (isGradleNoise(line)) {
           return null;
         }
       }
