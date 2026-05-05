@@ -13,7 +13,6 @@
 #include <android/hardware_buffer_jni.h>
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/lib/ui/window/platform_message.h"
-#include "flutter/shell/common/platform_view.h"
 #include "flutter/shell/common/snapshot_surface_producer.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/embedder_surface_android.h"
@@ -28,6 +27,7 @@
 namespace flutter {
 
 class AndroidCompositorVulkan;
+class PlatformView;
 
 class PlatformViewAndroid final {
  public:
@@ -180,14 +180,12 @@ class PlatformViewAndroid final {
   std::shared_ptr<AndroidContext> android_context_;
   EmbedderSurfaceAndroid* embedder_surface_;
 
-  fml::WeakPtr<PlatformView> platform_view_;
-
   PlatformViewAndroidDelegate platform_view_android_delegate_;
 
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
   fml::RefPtr<AndroidNativeWindow> pending_native_window_;
-  std::optional<ViewportMetrics> pending_viewport_metrics_;
+  std::optional<ViewportMetrics> viewport_metrics_;
 
   void InstallFirstFrameCallback();
 

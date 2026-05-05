@@ -65,6 +65,90 @@ extern std::mutex g_responses_mutex;
 
 namespace {
 
+static FlutterPointerPhase MapChangeToPhase(PointerData::Change change) {
+  switch (change) {
+    case PointerData::Change::kCancel:
+      return kCancel;
+    case PointerData::Change::kAdd:
+      return kAdd;
+    case PointerData::Change::kRemove:
+      return kRemove;
+    case PointerData::Change::kHover:
+      return kHover;
+    case PointerData::Change::kDown:
+      return kDown;
+    case PointerData::Change::kMove:
+      return kMove;
+    case PointerData::Change::kUp:
+      return kUp;
+    case PointerData::Change::kPanZoomStart:
+      return kPanZoomStart;
+    case PointerData::Change::kPanZoomUpdate:
+      return kPanZoomUpdate;
+    case PointerData::Change::kPanZoomEnd:
+      return kPanZoomEnd;
+  }
+  return kCancel;
+}
+
+static FlutterPointerDeviceKind MapKindToDeviceKind(
+    PointerData::DeviceKind kind) {
+  switch (kind) {
+    case PointerData::DeviceKind::kTouch:
+      return kFlutterPointerDeviceKindTouch;
+    case PointerData::DeviceKind::kMouse:
+      return kFlutterPointerDeviceKindMouse;
+    case PointerData::DeviceKind::kStylus:
+      return kFlutterPointerDeviceKindStylus;
+    case PointerData::DeviceKind::kInvertedStylus:
+      return kFlutterPointerDeviceKindStylus;
+    case PointerData::DeviceKind::kTrackpad:
+      return kFlutterPointerDeviceKindTrackpad;
+  }
+  return kFlutterPointerDeviceKindTouch;
+}
+
+static FlutterPointerSignalKind MapSignalKindToFlutterSignalKind(
+    PointerData::SignalKind signal_kind) {
+  switch (signal_kind) {
+    case PointerData::SignalKind::kNone:
+      return kFlutterPointerSignalKindNone;
+    case PointerData::SignalKind::kScroll:
+      return kFlutterPointerSignalKindScroll;
+    case PointerData::SignalKind::kScrollInertiaCancel:
+      return kFlutterPointerSignalKindScrollInertiaCancel;
+    case PointerData::SignalKind::kScale:
+      return kFlutterPointerSignalKindScale;
+  }
+  return kFlutterPointerSignalKindNone;
+}
+
+static FlutterPointerEvent MapPointerDataToFlutterPointerEvent(
+    const PointerData& data) {
+  FlutterPointerEvent event = {
+      .struct_size = sizeof(FlutterPointerEvent),
+      .phase = MapChangeToPhase(data.change),
+      .timestamp = static_cast<size_t>(data.time_stamp),
+      .x = data.physical_x,
+      .y = data.physical_y,
+      .device = static_cast<int32_t>(data.device),
+      .signal_kind = MapSignalKindToFlutterSignalKind(data.signal_kind),
+      .scroll_delta_x = data.scroll_delta_x,
+      .scroll_delta_y = data.scroll_delta_y,
+      .device_kind = MapKindToDeviceKind(data.kind),
+      .buttons = data.buttons,
+      .pan_x = data.pan_x,
+      .pan_y = data.pan_y,
+      .scale = data.scale,
+      .rotation = data.rotation,
+      .view_id = data.view_id,
+      .pressure = data.pressure,
+      .pressure_min = data.pressure_min,
+      .pressure_max = data.pressure_max,
+  };
+  return event;
+}
+
 static constexpr int kMinAPILevelHCPP = 34;
 static constexpr int64_t kImplicitViewId = 0;
 
@@ -169,6 +253,12 @@ void PlatformViewAndroid::NotifyCreated(
         latch.Signal();
       });
   latch.Wait();
+
+  if (engine_ && viewport_metrics_) {
+    FML_LOG(INFO) << "Re-sending viewport metrics after surface created to "
+                     "schedule first frame.";
+    SetViewportMetrics(0, *viewport_metrics_);
+  }
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
@@ -183,10 +273,6 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
           latch.Signal();
         });
     latch.Wait();
-  }
-
-  if (platform_view_) {
-    platform_view_->ScheduleFrame();
   }
 }
 
@@ -364,25 +450,20 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
                                                   jint action,
                                                   jobject args,
                                                   jint args_position) {
-  // TODO(team-android): Remove implicit view assumption.
-  // https://github.com/flutter/flutter/issues/142845
-  if (!platform_view_) {
+  if (!engine_) {
     return;
   }
 
-  if (env->IsSameObject(args, NULL)) {
-    platform_view_->DispatchSemanticsAction(
-        kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
-        fml::MallocMapping());
-    return;
+  uint8_t* args_data = nullptr;
+  int position = 0;
+  if (!env->IsSameObject(args, NULL)) {
+    args_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(args));
+    position = args_position;
   }
 
-  uint8_t* args_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(args));
-  auto args_vector = fml::MallocMapping::Copy(args_data, args_position);
-
-  platform_view_->DispatchSemanticsAction(
-      kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
-      std::move(args_vector));
+  FlutterEngineDispatchSemanticsAction(
+      engine_, node_id, static_cast<FlutterSemanticsAction>(action), args_data,
+      position);
 }
 
 // |PlatformView|
@@ -626,21 +707,12 @@ fml::WeakPtr<PlatformViewAndroid> PlatformViewAndroid::GetWeakPtr() const {
 }
 
 bool PlatformViewAndroid::HasViewportMetrics() const {
-  return pending_viewport_metrics_.has_value();
+  return viewport_metrics_.has_value();
 }
 
 void PlatformViewAndroid::SetPlatformView(
     fml::WeakPtr<PlatformView> platform_view) {
-  FML_LOG(INFO) << "PlatformViewAndroid::SetPlatformView called, valid: "
-                << (platform_view ? "yes" : "no");
-  platform_view_ = platform_view;
-  if (platform_view_ && pending_viewport_metrics_) {
-    FML_LOG(INFO) << "Applying cached pending viewport metrics: "
-                  << pending_viewport_metrics_->physical_width << "x"
-                  << pending_viewport_metrics_->physical_height;
-    platform_view_->SetViewportMetrics(0, *pending_viewport_metrics_);
-    pending_viewport_metrics_ = std::nullopt;
-  }
+  // Decoupled: No-op.
 }
 
 void PlatformViewAndroid::SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
@@ -654,6 +726,10 @@ void PlatformViewAndroid::SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
         settings.enable_impeller;
   }
 
+  if (engine_ && viewport_metrics_) {
+    SetViewportMetrics(0, *viewport_metrics_);
+  }
+
   if (pending_native_window_) {
     NotifyCreated(pending_native_window_);
     pending_native_window_ = nullptr;
@@ -665,28 +741,40 @@ void PlatformViewAndroid::SetCompositor(AndroidCompositorVulkan* compositor) {
 }
 
 void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {
-  if (platform_view_) {
-    platform_view_->SetSemanticsEnabled(enabled);
+  if (engine_) {
+    FlutterEngineUpdateSemanticsEnabled(engine_, enabled);
   }
 }
 
 void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
-  if (platform_view_) {
-    platform_view_->SetAccessibilityFeatures(flags);
+  if (engine_) {
+    FlutterEngineUpdateAccessibilityFeatures(
+        engine_, static_cast<FlutterAccessibilityFeature>(flags));
   }
 }
 
 void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
                                              const ViewportMetrics& metrics) {
   FML_LOG(INFO) << "PlatformViewAndroid::SetViewportMetrics called, "
-                   "platform_view_ valid: "
-                << (platform_view_ ? "yes" : "no");
-  if (platform_view_) {
-    platform_view_->SetViewportMetrics(view_id, metrics);
-  } else {
-    FML_LOG(INFO) << "Caching pending viewport metrics: "
-                  << metrics.physical_width << "x" << metrics.physical_height;
-    pending_viewport_metrics_ = metrics;
+                   "engine_ valid: "
+                << (engine_ ? "yes" : "no");
+  viewport_metrics_ = metrics;
+  if (engine_) {
+    const FlutterWindowMetricsEvent event = {
+        .struct_size = sizeof(FlutterWindowMetricsEvent),
+        .width = static_cast<size_t>(metrics.physical_width),
+        .height = static_cast<size_t>(metrics.physical_height),
+        .pixel_ratio = metrics.device_pixel_ratio,
+        .left = 0,
+        .top = 0,
+        .physical_view_inset_top = metrics.physical_view_inset_top,
+        .physical_view_inset_right = metrics.physical_view_inset_right,
+        .physical_view_inset_bottom = metrics.physical_view_inset_bottom,
+        .physical_view_inset_left = metrics.physical_view_inset_left,
+        .display_id = 0,
+        .view_id = view_id,
+    };
+    FlutterEngineSendWindowMetricsEvent(engine_, &event);
   }
 }
 
@@ -695,11 +783,15 @@ void PlatformViewAndroid::DispatchPointerDataPacket(
   FML_DLOG(INFO)
       << "PlatformViewAndroid::DispatchPointerDataPacket called, length: "
       << packet->GetLength();
-  if (platform_view_) {
-    platform_view_->DispatchPointerDataPacket(std::move(packet));
-  } else {
-    FML_LOG(WARNING) << "PlatformViewAndroid::DispatchPointerDataPacket "
-                        "failed: platform_view_ is NULL!";
+
+  std::vector<FlutterPointerEvent> events;
+  for (size_t i = 0; i < packet->GetLength(); ++i) {
+    events.push_back(
+        MapPointerDataToFlutterPointerEvent(packet->GetPointerData(i)));
+  }
+
+  if (engine_ && !events.empty()) {
+    FlutterEngineSendPointerEvent(engine_, events.data(), events.size());
   }
 }
 
@@ -712,9 +804,7 @@ void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
 }
 
 void PlatformViewAndroid::ScheduleFrame() {
-  if (platform_view_) {
-    platform_view_->ScheduleFrame();
-  }
+  // Decoupled: No-op.
 }
 
 }  // namespace flutter
