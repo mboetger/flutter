@@ -160,24 +160,15 @@ void PlatformViewAndroid::NotifyCreated(
   }
 
   fml::AutoResetWaitableEvent latch;
-  std::unique_ptr<Surface> surface;
   fml::TaskRunner::RunNowOrPostTask(
       task_runners_.GetRasterTaskRunner(),
-      [this, &latch, &surface, native_window = std::move(native_window)]() {
+      [this, &latch, native_window = std::move(native_window)]() {
         if (embedder_surface_) {
           embedder_surface_->NotifyCreated(native_window, jni_facade_);
-          surface = embedder_surface_->CreateGPUSurface();
-        }
-        if (surface && !surface->IsValid()) {
-          surface.reset();
         }
         latch.Signal();
       });
   latch.Wait();
-
-  if (surface) {
-    GetDelegate(engine_).OnPlatformViewCreated(std::move(surface));
-  }
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
@@ -200,8 +191,6 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
-  GetDelegate(engine_).OnPlatformViewDestroyed();
-
   if (compositor_) {
     compositor_->SetNativeWindow(nullptr);
   }
