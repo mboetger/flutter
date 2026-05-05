@@ -314,10 +314,37 @@ class AndroidGradleBuilder implements AndroidBuilder {
 
     GradleHandledError? detectedGradleError;
     String? detectedGradleErrorLine;
+    Status? status;
+    final taskPattern = RegExp(r'^> Task :(\S+)');
+    final buildSuccessfulPattern = RegExp(r'^BUILD SUCCESSFUL in \d+');
+    final actionableTasksPattern = RegExp(r'^\d+ actionable tasks?:');
+
     String? consumeLog(String line) {
       if (outputParser != null) {
         outputParser(line);
       }
+
+      if (!_logger.isVerbose) {
+        final Match? match = taskPattern.firstMatch(line);
+        if (match != null) {
+          final String taskName = match.group(1)!;
+          if (taskName.contains('Compile') ||
+              taskName.contains('Bundle') ||
+              taskName.contains('Assemble') ||
+              taskName.contains('Merge') ||
+              taskName.contains('Package') ||
+              taskName.contains('Sign')) {
+            status?.pause();
+            _logger.printStatus('  $line');
+            status?.resume();
+          }
+          return null;
+        }
+        if (buildSuccessfulPattern.hasMatch(line) || actionableTasksPattern.hasMatch(line)) {
+          return null;
+        }
+      }
+
       // The log lines that trigger incompatibleKotlinVersionHandler don't
       // always indicate an error, and there are times that that handler
       // covers up a more important error handler. Uniquely set it to be
@@ -338,7 +365,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
       return line;
     }
 
-    final Status status = _logger.startProgress("Running Gradle task '$taskName'...");
+    status = _logger.startProgress("Running Gradle task '$taskName'...");
     final command = <String>[
       gradleExecutablePath,
       ...options, // suppresses gradle output.
@@ -492,8 +519,6 @@ class AndroidGradleBuilder implements AndroidBuilder {
       options.add('--full-stacktrace');
       options.add('--info');
       options.add('-Pverbose=true');
-    } else {
-      options.add('-q');
     }
     if (!buildInfo.androidGradleDaemon) {
       options.add('--no-daemon');

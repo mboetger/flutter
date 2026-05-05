@@ -517,7 +517,6 @@ void main() {
           FakeCommand(
             command: <String>[
               gradlew,
-              '-q',
               '-Ptarget-platform=android-arm,android-arm64,android-x64',
               '-Ptarget=${globals.fs.path.join(tempDir.path, 'flutter_project', 'lib', 'main.dart')}',
               '-Pbase-application-name=android.app.Application',
@@ -564,7 +563,6 @@ void main() {
           FakeCommand(
             command: <String>[
               gradlew,
-              '-q',
               '-Ptarget-platform=android-arm,android-arm64,android-x64',
               '-Ptarget=${globals.fs.path.join(tempDir.path, 'flutter_project', 'lib', 'main.dart')}',
               '-Pbase-application-name=android.app.Application',
@@ -615,7 +613,6 @@ void main() {
           FakeCommand(
             command: <String>[
               gradlew,
-              '-q',
               '-Ptarget-platform=android-arm,android-arm64,android-x64',
               '-Ptarget=${globals.fs.path.join(tempDir.path, 'flutter_project', 'lib', 'main.dart')}',
               '-Pbase-application-name=android.app.Application',
@@ -666,7 +663,6 @@ void main() {
           FakeCommand(
             command: <String>[
               gradlew,
-              '-q',
               '-Ptarget-platform=android-arm,android-arm64,android-x64',
               '-Ptarget=${globals.fs.path.join(tempDir.path, 'flutter_project', 'lib', 'main.dart')}',
               '-Pbase-application-name=android.app.Application',
@@ -719,7 +715,6 @@ void main() {
           FakeCommand(
             command: <String>[
               gradlew,
-              '-q',
               '-Ptarget-platform=android-arm,android-arm64,android-x64',
               '-Ptarget=${globals.fs.path.join(tempDir.path, 'flutter_project', 'lib', 'main.dart')}',
               '-Pbase-application-name=android.app.Application',
@@ -786,7 +781,6 @@ void main() {
           FakeCommand(
             command: <String>[
               gradlew,
-              '-q',
               '-Ptarget-platform=android-arm,android-arm64,android-x64',
               '-Ptarget=${globals.fs.path.join(tempDir.path, 'flutter_project', 'lib', 'main.dart')}',
               '-Pbase-application-name=android.app.Application',
