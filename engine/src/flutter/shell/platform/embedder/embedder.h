@@ -3353,6 +3353,48 @@ FLUTTER_EXPORT
 FlutterEngineResult __FlutterEngineFlushPendingTasksNow();
 
 //------------------------------------------------------------------------------
+/// @brief      Natively loads a dynamically compiled Dart deferred library
+///             AOT snapshot asset into the running isolate.
+///
+/// @param[in]  engine                     The running engine instance.
+/// @param[in]  loading_unit_id            The loading unit ID assigned by Dart
+/// compiler.
+/// @param[in]  snapshot_data              The binary snapshot data.
+/// @param[in]  snapshot_data_size         The size of the snapshot data.
+/// @param[in]  snapshot_instructions      The binary snapshot instructions.
+/// @param[in]  snapshot_instructions_size The size of the snapshot
+/// instructions.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const uint8_t* snapshot_data,
+    size_t snapshot_data_size,
+    const uint8_t* snapshot_instructions,
+    size_t snapshot_instructions_size);
+
+//------------------------------------------------------------------------------
+/// @brief      Reports a failure encountered during dynamic downloading of
+///             a Dart deferred library to unblock the waiting Dart future.
+///
+/// @param[in]  engine           The running engine instance.
+/// @param[in]  loading_unit_id  The loading unit ID assigned by Dart compiler.
+/// @param[in]  error_message    Detailed error description.
+/// @param[in]  transient        Whether the error is transient or fatal.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const char* error_message,
+    bool transient);
+
+//------------------------------------------------------------------------------
 /// @brief      Register an external texture with a unique (per engine)
 ///             identifier. Only rendering backends that support external
 ///             textures accept external texture registrations. After the

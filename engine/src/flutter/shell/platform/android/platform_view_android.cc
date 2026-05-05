@@ -556,9 +556,12 @@ void PlatformViewAndroid::LoadDartDeferredLibrary(
     intptr_t loading_unit_id,
     std::unique_ptr<const fml::Mapping> snapshot_data,
     std::unique_ptr<const fml::Mapping> snapshot_instructions) {
-  GetDelegate(engine_).LoadDartDeferredLibrary(
-      loading_unit_id, std::move(snapshot_data),
-      std::move(snapshot_instructions));
+  FlutterEngineLoadDartDeferredLibrary(
+      engine_, loading_unit_id,
+      snapshot_data ? snapshot_data->GetMapping() : nullptr,
+      snapshot_data ? snapshot_data->GetSize() : 0,
+      snapshot_instructions ? snapshot_instructions->GetMapping() : nullptr,
+      snapshot_instructions ? snapshot_instructions->GetSize() : 0);
 }
 
 // |PlatformView|
@@ -566,8 +569,8 @@ void PlatformViewAndroid::LoadDartDeferredLibraryError(
     intptr_t loading_unit_id,
     const std::string error_message,
     bool transient) {
-  GetDelegate(engine_).LoadDartDeferredLibraryError(loading_unit_id,
-                                                    error_message, transient);
+  FlutterEngineLoadDartDeferredLibraryError(engine_, loading_unit_id,
+                                            error_message.c_str(), transient);
 }
 
 // |PlatformView|

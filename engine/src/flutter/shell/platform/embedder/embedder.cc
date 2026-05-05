@@ -56,6 +56,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/trace_event.h"
 #include "flutter/lib/ui/painting/image_generator.h"
 #include "flutter/lib/ui/painting/image_generator_registry.h"
+#include "flutter/shell/common/platform_view.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -3774,6 +3775,47 @@ FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
 
 FlutterEngineResult __FlutterEngineFlushPendingTasksNow() {
   fml::MessageLoop::GetCurrent().RunExpiredTasksNow();
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const uint8_t* snapshot_data,
+    size_t snapshot_data_size,
+    const uint8_t* snapshot_instructions,
+    size_t snapshot_instructions_size) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  auto data_mapping =
+      std::make_unique<fml::NonOwnedMapping>(snapshot_data, snapshot_data_size);
+  auto instructions_mapping = std::make_unique<fml::NonOwnedMapping>(
+      snapshot_instructions, snapshot_instructions_size);
+
+  static_cast<flutter::PlatformView::Delegate&>(
+      reinterpret_cast<flutter::EmbedderEngine*>(engine)->GetShell())
+      .LoadDartDeferredLibrary(loading_unit_id, std::move(data_mapping),
+                               std::move(instructions_mapping));
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const char* error_message,
+    bool transient) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  static_cast<flutter::PlatformView::Delegate&>(
+      reinterpret_cast<flutter::EmbedderEngine*>(engine)->GetShell())
+      .LoadDartDeferredLibraryError(
+          loading_unit_id, error_message ? error_message : "", transient);
+
   return kSuccess;
 }
 
