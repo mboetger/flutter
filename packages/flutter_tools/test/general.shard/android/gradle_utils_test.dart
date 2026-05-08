@@ -11,6 +11,7 @@ import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/version.dart';
 import 'package:flutter_tools/src/base/version_range.dart';
 import 'package:flutter_tools/src/cache.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/project.dart';
 
 import '../../src/common.dart';
@@ -1897,6 +1898,88 @@ allprojects {
         '17',
       );
     });
+  });
+
+  testWithoutContext('Android app and module templates use strings.xml for app name', () {
+    final FileSystem fs = globals.localFileSystem;
+    final String appManifestPath = fs.path.join(
+      getFlutterRoot(),
+      'packages',
+      'flutter_tools',
+      'templates',
+      'app',
+      'android.tmpl',
+      'app',
+      'src',
+      'main',
+      'AndroidManifest.xml.tmpl',
+    );
+    final String appStringsPath = fs.path.join(
+      getFlutterRoot(),
+      'packages',
+      'flutter_tools',
+      'templates',
+      'app',
+      'android.tmpl',
+      'app',
+      'src',
+      'main',
+      'res',
+      'values',
+      'strings.xml.tmpl',
+    );
+    final String moduleManifestPath = fs.path.join(
+      getFlutterRoot(),
+      'packages',
+      'flutter_tools',
+      'templates',
+      'module',
+      'android',
+      'host_app_common',
+      'app.tmpl',
+      'src',
+      'main',
+      'AndroidManifest.xml.tmpl',
+    );
+    final String moduleStringsPath = fs.path.join(
+      getFlutterRoot(),
+      'packages',
+      'flutter_tools',
+      'templates',
+      'module',
+      'android',
+      'host_app_common',
+      'app.tmpl',
+      'src',
+      'main',
+      'res',
+      'values',
+      'strings.xml.tmpl',
+    );
+
+    // Verify App template
+    final File appManifest = fs.file(appManifestPath);
+    expect(appManifest.existsSync(), isTrue);
+    expect(appManifest.readAsStringSync(), contains('android:label="@string/app_name"'));
+
+    final File appStrings = fs.file(appStringsPath);
+    expect(appStrings.existsSync(), isTrue);
+    expect(
+      appStrings.readAsStringSync(),
+      contains('<string name="app_name">{{projectName}}</string>'),
+    );
+
+    // Verify Module host app template
+    final File moduleManifest = fs.file(moduleManifestPath);
+    expect(moduleManifest.existsSync(), isTrue);
+    expect(moduleManifest.readAsStringSync(), contains('android:label="@string/app_name"'));
+
+    final File moduleStrings = fs.file(moduleStringsPath);
+    expect(moduleStrings.existsSync(), isTrue);
+    expect(
+      moduleStrings.readAsStringSync(),
+      contains('<string name="app_name">{{projectName}}</string>'),
+    );
   });
 }
 
