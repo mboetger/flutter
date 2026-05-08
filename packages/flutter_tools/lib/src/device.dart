@@ -500,6 +500,10 @@ abstract class PollingDeviceDiscovery extends DeviceDiscovery {
         deviceNotifier.updateWithNewList(devices);
       } on TimeoutException {
         // Do nothing on a timeout.
+      } on Object catch (error, stackTrace) {
+        context.get<Logger>()?.printTrace(
+          'Error discovering devices in background: $error\n$stackTrace',
+        );
       }
       // Subsequent timeouts after initial population should wait longer.
       _timer = _initTimer(_pollingTimeout);

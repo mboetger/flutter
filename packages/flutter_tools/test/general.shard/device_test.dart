@@ -276,6 +276,37 @@ void main() {
     });
   });
 
+  testUsingContext(
+    'PollingDeviceDiscovery handles exceptions in pollingGetDevices and continues polling',
+    () {
+      FakeAsync().run((FakeAsync time) {
+        final pollingDeviceDiscovery = ThrowingPollingDeviceDiscovery();
+        pollingDeviceDiscovery.startPolling();
+
+        // First check should trigger the exception and handle it safely
+        time.elapse(const Duration(milliseconds: 100));
+        expect(
+          testLogger.traceText,
+          contains('Error discovering devices in background: ProcessException'),
+        );
+
+        // Clear trace text to verify the next tick
+        testLogger.clear();
+
+        // Elapse time to trigger the next scheduled tick
+        time.elapse(const Duration(milliseconds: 4001));
+
+        // Verify that it polled again and logged the second failure
+        expect(
+          testLogger.traceText,
+          contains('Error discovering devices in background: ProcessException'),
+        );
+
+        pollingDeviceDiscovery.stopPolling();
+      });
+    },
+  );
+
   group('Filter devices', () {
     final ephemeralOne = FakeDevice('ephemeralOne', 'ephemeralOne');
     final ephemeralTwo = FakeDevice('ephemeralTwo', 'ephemeralTwo');
@@ -308,48 +339,36 @@ void main() {
       expect(ephemeralDevice, ephemeralOne);
     }, overrides: <Type, Generator>{FlutterProject: () => FakeFlutterProject()});
 
-    testUsingContext(
-      'returns null when multiple non ephemeral devices are found',
-      () async {
-        final devices = <Device>[ephemeralOne, ephemeralTwo, nonEphemeralOne, nonEphemeralTwo];
+    testUsingContext('returns null when multiple non ephemeral devices are found', () async {
+      final devices = <Device>[ephemeralOne, ephemeralTwo, nonEphemeralOne, nonEphemeralTwo];
 
-        final DeviceManager deviceManager = TestDeviceManager(devices, logger: BufferLogger.test());
+      final DeviceManager deviceManager = TestDeviceManager(devices, logger: BufferLogger.test());
 
-        final Device? ephemeralDevice = deviceManager.getSingleEphemeralDevice(devices);
+      final Device? ephemeralDevice = deviceManager.getSingleEphemeralDevice(devices);
 
-        expect(ephemeralDevice, isNull);
-      },
-      overrides: <Type, Generator>{FlutterProject: () => FakeFlutterProject()},
-    );
+      expect(ephemeralDevice, isNull);
+    }, overrides: <Type, Generator>{FlutterProject: () => FakeFlutterProject()});
 
-    testUsingContext(
-      'return null when hasSpecifiedDeviceId is true',
-      () async {
-        final devices = <Device>[ephemeralOne, nonEphemeralOne, nonEphemeralTwo];
+    testUsingContext('return null when hasSpecifiedDeviceId is true', () async {
+      final devices = <Device>[ephemeralOne, nonEphemeralOne, nonEphemeralTwo];
 
-        final DeviceManager deviceManager = TestDeviceManager(devices, logger: BufferLogger.test());
-        deviceManager.specifiedDeviceId = 'device';
+      final DeviceManager deviceManager = TestDeviceManager(devices, logger: BufferLogger.test());
+      deviceManager.specifiedDeviceId = 'device';
 
-        final Device? ephemeralDevice = deviceManager.getSingleEphemeralDevice(devices);
+      final Device? ephemeralDevice = deviceManager.getSingleEphemeralDevice(devices);
 
-        expect(ephemeralDevice, isNull);
-      },
-      overrides: <Type, Generator>{FlutterProject: () => FakeFlutterProject()},
-    );
+      expect(ephemeralDevice, isNull);
+    }, overrides: <Type, Generator>{FlutterProject: () => FakeFlutterProject()});
 
-    testUsingContext(
-      'returns null when no ephemeral devices are found',
-      () async {
-        final devices = <Device>[nonEphemeralOne, nonEphemeralTwo];
+    testUsingContext('returns null when no ephemeral devices are found', () async {
+      final devices = <Device>[nonEphemeralOne, nonEphemeralTwo];
 
-        final DeviceManager deviceManager = TestDeviceManager(devices, logger: BufferLogger.test());
+      final DeviceManager deviceManager = TestDeviceManager(devices, logger: BufferLogger.test());
 
-        final Device? ephemeralDevice = deviceManager.getSingleEphemeralDevice(devices);
+      final Device? ephemeralDevice = deviceManager.getSingleEphemeralDevice(devices);
 
-        expect(ephemeralDevice, isNull);
-      },
-      overrides: <Type, Generator>{FlutterProject: () => FakeFlutterProject()},
-    );
+      expect(ephemeralDevice, isNull);
+    }, overrides: <Type, Generator>{FlutterProject: () => FakeFlutterProject()});
 
     testWithoutContext('Unsupported devices listed in all devices', () async {
       final devices = <Device>[unsupported, unsupportedForProject];
