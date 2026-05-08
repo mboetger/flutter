@@ -855,6 +855,126 @@ Android sdkmanager tool was found, but failed to run
       true,
     );
   });
+
+  testUsingContext('detects emulator hardware acceleration active', () async {
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..emulatorPath = 'path/to/emulator';
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-version'],
+        stdout: 'INFO    | Android emulator version 35.2.10.0 (build_id 12414864) (CL:N/A)',
+      ),
+    );
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-accel-check'],
+        stdout: 'accel: 1\nKVM (version 12) is installed and usable',
+      ),
+    );
+
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) =>
+            message.message.contains('Android emulator acceleration is active'),
+      ),
+      true,
+    );
+    expect(processManager, hasNoRemainingExpectations);
+  });
+
+  testUsingContext('detects emulator hardware acceleration missing (accel: 0)', () async {
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..emulatorPath = 'path/to/emulator';
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-version'],
+        stdout: 'INFO    | Android emulator version 35.2.10.0 (build_id 12414864) (CL:N/A)',
+      ),
+    );
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-accel-check'],
+        stdout: 'accel: 0\nKVM is not installed or configured correctly',
+      ),
+    );
+
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) => message.message.contains(
+          'Android emulator acceleration is not installed or not functional',
+        ),
+      ),
+      true,
+    );
+    expect(processManager, hasNoRemainingExpectations);
+  });
+
+  testUsingContext('handles emulator hardware acceleration check failure gracefully', () async {
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..emulatorPath = 'path/to/emulator';
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-version'],
+        stdout: 'INFO    | Android emulator version 35.2.10.0 (build_id 12414864) (CL:N/A)',
+      ),
+    );
+    processManager.addCommand(
+      FakeCommand(
+        command: <String>[sdk.emulatorPath!, '-accel-check'],
+        exitCode: 1,
+        stderr: 'Crash or missing lib',
+      ),
+    );
+
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) => message.message.contains(
+          'Android emulator acceleration is not installed or not functional',
+        ),
+      ),
+      true,
+    );
+    expect(processManager, hasNoRemainingExpectations);
+  });
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {

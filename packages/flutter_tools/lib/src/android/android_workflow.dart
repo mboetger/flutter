@@ -96,6 +96,31 @@ Future<String?> getEmulatorVersion(AndroidSdk androidSdk, ProcessManager process
   }
 }
 
+Future<bool> checkEmulatorAcceleration(AndroidSdk androidSdk, ProcessManager processManager) async {
+  try {
+    final String? emulatorPath = androidSdk.emulatorPath;
+    if (emulatorPath == null || !processManager.canRun(emulatorPath)) {
+      return false;
+    }
+
+    final ProcessResult result = await processManager
+        .run(<Object>[emulatorPath, '-accel-check'])
+        .timeout(const Duration(seconds: 3));
+
+    if (result.exitCode != 0) {
+      return false;
+    }
+
+    final String output = (result.stdout.toString() + result.stderr.toString()).trim();
+    if (output.contains('accel: 1')) {
+      return true;
+    }
+    return false;
+  } on Exception catch (_) {
+    return false;
+  }
+}
+
 /// A validator that checks if the Android SDK and Java SDK are available and
 /// installed correctly.
 ///
@@ -219,6 +244,21 @@ class AndroidValidator extends DoctorValidator {
         'Emulator version ${await getEmulatorVersion(androidSdk, _processManager) ?? 'unknown'}',
       ),
     );
+
+    if (androidSdk.emulatorPath != null) {
+      final bool hasAcceleration = await checkEmulatorAcceleration(androidSdk, _processManager);
+      if (!hasAcceleration) {
+        messages.add(
+          const ValidationMessage.hint(
+            'Android emulator acceleration is not installed or not functional.\n'
+            'It is highly recommended to enable hardware acceleration for better emulator performance.\n'
+            'See https://developer.android.com/studio/run/emulator-acceleration for details.',
+          ),
+        );
+      } else {
+        messages.add(const ValidationMessage('Android emulator acceleration is active'));
+      }
+    }
 
     _task = 'Validating Android SDK command line tools are available';
     if (!androidSdk.cmdlineToolsAvailable) {
