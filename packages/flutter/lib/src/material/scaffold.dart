@@ -23,6 +23,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show DragStartBehavior, HitTestEntry, HitTestResult;
 import 'package:flutter/rendering.dart' show RenderMetaData;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app_bar.dart';
@@ -3229,38 +3230,55 @@ class ScaffoldState extends State<Scaffold>
           : null,
     );
 
+    final Brightness backgroundColorBrightness = ThemeData.estimateBrightnessForColor(
+      widget.backgroundColor ?? themeData.scaffoldBackgroundColor,
+    );
+    final SystemUiOverlayStyle overlayStyle =
+        backgroundColorBrightness == Brightness.light
+            ? SystemUiOverlayStyle.dark
+            : SystemUiOverlayStyle.light;
+
+    Widget result = Material(
+      color: widget.backgroundColor ?? themeData.scaffoldBackgroundColor,
+      child: Builder(
+        builder: (BuildContext context) {
+          return Actions(
+            actions: <Type, Action<Intent>>{DismissIntent: _DismissDrawerAction(context)},
+            child: CustomMultiChildLayout(
+              delegate: _ScaffoldLayout(
+                extendBody: widget.extendBody,
+                extendBodyBehindAppBar: widget.extendBodyBehindAppBar,
+                minInsets: minInsets,
+                minViewPadding: minViewPadding,
+                currentFloatingActionButtonLocation: _floatingActionButtonLocation!,
+                floatingActionButtonMoveAnimation: _floatingActionButtonMoveController,
+                floatingActionButtonMotionAnimator: _floatingActionButtonAnimator,
+                geometryNotifier: _geometryNotifier,
+                previousFloatingActionButtonLocation: _previousFloatingActionButtonLocation!,
+                textDirection: textDirection,
+                isSnackBarFloating: isSnackBarFloating,
+                extendBodyBehindMaterialBanner: extendBodyBehindMaterialBanner,
+                snackBarWidth: snackBarWidth,
+              ),
+              children: children,
+            ),
+          );
+        },
+      ),
+    );
+
+    if (widget.primary && widget.appBar == null) {
+      result = AnnotatedRegion<SystemUiOverlayStyle>(
+        value: overlayStyle,
+        child: result,
+      );
+    }
+
     return _ScaffoldScope(
       hasDrawer: hasDrawer,
       geometryNotifier: _geometryNotifier,
       child: ScrollNotificationObserver(
-        child: Material(
-          color: widget.backgroundColor ?? themeData.scaffoldBackgroundColor,
-          child: Builder(
-            builder: (BuildContext context) {
-              return Actions(
-                actions: <Type, Action<Intent>>{DismissIntent: _DismissDrawerAction(context)},
-                child: CustomMultiChildLayout(
-                  delegate: _ScaffoldLayout(
-                    extendBody: widget.extendBody,
-                    extendBodyBehindAppBar: widget.extendBodyBehindAppBar,
-                    minInsets: minInsets,
-                    minViewPadding: minViewPadding,
-                    currentFloatingActionButtonLocation: _floatingActionButtonLocation!,
-                    floatingActionButtonMoveAnimation: _floatingActionButtonMoveController,
-                    floatingActionButtonMotionAnimator: _floatingActionButtonAnimator,
-                    geometryNotifier: _geometryNotifier,
-                    previousFloatingActionButtonLocation: _previousFloatingActionButtonLocation!,
-                    textDirection: textDirection,
-                    isSnackBarFloating: isSnackBarFloating,
-                    extendBodyBehindMaterialBanner: extendBodyBehindMaterialBanner,
-                    snackBarWidth: snackBarWidth,
-                  ),
-                  children: children,
-                ),
-              );
-            },
-          ),
-        ),
+        child: result,
       ),
     );
   }
