@@ -293,9 +293,81 @@ void main() {
         'java.lang.RuntimeException: Unable to instantiate application io.flutter.app.FlutterApplication2: java.lang.ClassNotFoundException:',
       ]),
     );
-
-    logReader.dispose();
   });
+
+  testWithoutContext(
+    'AdbLogReader allows all flutter logs when target PID is unknown (startup fallback)',
+    () async {
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        FakeCommand(
+          command: const <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+          completer: Completer<void>.sync(),
+          stdout:
+              '$kDummyLine'
+              '05-11 12:54:46.665 I/flutter(111): Hello from app 1\n'
+              '05-11 12:54:46.666 I/flutter(222): Hello from app 2\n'
+              '05-11 12:54:46.667 I/ActivityManager(333): Some system message\n',
+        ),
+      ]);
+      final AdbLogReader logReader = await AdbLogReader.createLogReader(
+        createFakeDevice(null),
+        processManager,
+        BufferLogger.test(),
+      );
+      // Intentionally do NOT call provideVmService here to keep target PID unknown
+
+      final onDone = Completer<void>.sync();
+      final emittedLines = <String>[];
+      logReader.logLines.listen((String line) {
+        emittedLines.add(line);
+      }, onDone: onDone.complete);
+      await null;
+      logReader.dispose();
+      await onDone.future;
+      expect(emittedLines, const <String>[
+        'I/flutter(111): Hello from app 1',
+        'I/flutter(222): Hello from app 2',
+      ]);
+    },
+  );
+
+  testWithoutContext(
+    'AdbLogReader strictly filters flutter logs by PID once target PID is known',
+    () async {
+      const targetPid = 111;
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        FakeCommand(
+          command: const <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+          completer: Completer<void>.sync(),
+          stdout:
+              '$kDummyLine'
+              '05-11 12:54:46.665 I/flutter($targetPid): Hello from target app\n'
+              '05-11 12:54:46.666 I/flutter(222): Hello from another app (should be ignored)\n'
+              '05-11 12:54:46.667 F/SomeSystemTag(333): Fatal system message (should be allowed)\n',
+        ),
+      ]);
+      final AdbLogReader logReader = await AdbLogReader.createLogReader(
+        createFakeDevice(null),
+        processManager,
+        BufferLogger.test(),
+      );
+      // Provide the target PID to the log reader
+      await logReader.provideVmService(_FakeFlutterVmService(targetPid));
+
+      final onDone = Completer<void>.sync();
+      final emittedLines = <String>[];
+      logReader.logLines.listen((String line) {
+        emittedLines.add(line);
+      }, onDone: onDone.complete);
+      await null;
+      logReader.dispose();
+      await onDone.future;
+      expect(emittedLines, const <String>[
+        'I/flutter($targetPid): Hello from target app',
+        'F/SomeSystemTag(333): Fatal system message (should be allowed)',
+      ]);
+    },
+  );
 }
 
 AndroidDevice createFakeDevice(int? sdkLevel) {

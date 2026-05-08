@@ -1147,9 +1147,13 @@ class AdbLogReader extends DeviceLogReader {
   // 'W/ActivityManager(pid): '
   static final _logFormat = RegExp(r'^[VDIWEF]\/.*?\(\s*(\d+)\):\s');
 
-  static final _allowedTags = <RegExp>[
+  static final _processSpecificTags = <RegExp>[
     RegExp(r'^[VDIWEF]\/flutter[^:]*:\s+', caseSensitive: false),
     RegExp(r'^[IE]\/DartVM[^:]*:\s+'),
+  ];
+
+  static final _allowedTags = <RegExp>[
+    ..._processSpecificTags,
     RegExp(r'^[WEF]\/AndroidRuntime:\s+'),
     RegExp(r'^[WEF]\/AndroidRuntime\([0-9]+\):\s+'),
     RegExp(r'^[WEF]\/ActivityManager:\s+.*(\bflutter\b|\bdomokit\b|\bsky\b)'),
@@ -1238,6 +1242,12 @@ class AdbLogReader extends DeviceLogReader {
       } else {
         // Filter on approved names and levels.
         acceptLine = _allowedTags.any((RegExp re) => re.hasMatch(line));
+        if (acceptLine && _appPid != null) {
+          final bool isProcessSpecific = _processSpecificTags.any((RegExp re) => re.hasMatch(line));
+          if (isProcessSpecific) {
+            acceptLine = false;
+          }
+        }
       }
 
       if (acceptLine) {
