@@ -11,6 +11,7 @@ import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/version.dart';
 import 'package:flutter_tools/src/base/version_range.dart';
 import 'package:flutter_tools/src/cache.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/project.dart';
 
 import '../../src/common.dart';
@@ -1897,6 +1898,38 @@ allprojects {
         '17',
       );
     });
+  });
+
+  testWithoutContext('plugin templates do not use allprojects or rootProject.allprojects', () {
+    final FileSystem fs = globals.localFileSystem;
+    final templateFiles = <String>[
+      'templates/plugin/android-java.tmpl/build.gradle.kts.tmpl',
+      'templates/plugin/android-kotlin.tmpl/build.gradle.kts.tmpl',
+      'templates/plugin_ffi/android.tmpl/build.gradle.tmpl',
+    ];
+
+    for (final relativePath in templateFiles) {
+      final String templatePath = fs.path.join(
+        getFlutterRoot(),
+        'packages',
+        'flutter_tools',
+        relativePath,
+      );
+      final File file = fs.file(templatePath);
+      expect(file.existsSync(), isTrue, reason: 'Template file $templatePath does not exist');
+      final String content = file.readAsStringSync();
+
+      expect(
+        content.contains('allprojects'),
+        isFalse,
+        reason: '$templatePath should not contain allprojects',
+      );
+      expect(
+        content.contains('rootProject.allprojects'),
+        isFalse,
+        reason: '$templatePath should not contain rootProject.allprojects',
+      );
+    }
   });
 }
 
