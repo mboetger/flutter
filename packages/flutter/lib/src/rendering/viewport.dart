@@ -1724,12 +1724,12 @@ class RenderViewport extends RenderViewportBase<SliverPhysicalContainerParentDat
       correction = _attemptLayout(
         mainAxisExtent,
         crossAxisExtent,
-        offset.pixels + centerOffsetAdjustment,
+        (offset.hasPixels ? offset.pixels : 0.0) + centerOffsetAdjustment,
       );
       if (correction != 0.0) {
         offset.correctBy(correction);
       } else {
-        if (offset.applyContentDimensions(
+        if (!offset.hasPixels || offset.applyContentDimensions(
           math.min(0.0, _minScrollExtent + mainAxisExtent * anchor),
           math.max(0.0, _maxScrollExtent - mainAxisExtent * (1.0 - anchor)),
         )) {
@@ -2109,7 +2109,7 @@ class RenderShrinkWrappingViewport extends RenderViewportBase<SliverLogicalConta
     double correction;
     double effectiveExtent;
     while (true) {
-      correction = _attemptLayout(mainAxisExtent, crossAxisExtent, offset.pixels);
+      correction = _attemptLayout(mainAxisExtent, crossAxisExtent, offset.hasPixels ? offset.pixels : 0.0);
       if (correction != 0.0) {
         offset.correctBy(correction);
       } else {
@@ -2118,7 +2118,7 @@ class RenderShrinkWrappingViewport extends RenderViewportBase<SliverLogicalConta
           Axis.horizontal => constraints.constrainWidth(_shrinkWrapExtent),
         };
         final bool didAcceptViewportDimension = offset.applyViewportDimension(effectiveExtent);
-        final bool didAcceptContentDimension = offset.applyContentDimensions(
+        final bool didAcceptContentDimension = !offset.hasPixels || offset.applyContentDimensions(
           0.0,
           math.max(0.0, _maxScrollExtent - effectiveExtent),
         );

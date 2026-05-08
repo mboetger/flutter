@@ -2489,6 +2489,50 @@ void main() {
       tester: tester,
     );
   });
+
+  test('RenderViewport does not crash if offset has no pixels', () {
+    final RenderSliverPadding sliver = RenderSliverPadding(padding: EdgeInsets.zero);
+    final RenderViewport viewport = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: _UninitializedOffset(),
+      children: <RenderSliver>[sliver],
+    );
+    viewport.center = sliver;
+
+    // This should not throw.
+    viewport.layout(BoxConstraints.tight(const Size(100, 100)));
+  });
+}
+
+class _UninitializedOffset extends ViewportOffset {
+  _UninitializedOffset();
+
+  @override
+  double get pixels => throw StateError('Not initialized');
+
+  @override
+  bool get hasPixels => false;
+
+  @override
+  bool applyViewportDimension(double viewportDimension) => true;
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) => true;
+
+  @override
+  void correctBy(double correction) {}
+
+  @override
+  void jumpTo(double pixels) {}
+
+  @override
+  Future<void> animateTo(double to, {required Duration duration, required Curve curve}) async {}
+
+  @override
+  ScrollDirection get userScrollDirection => ScrollDirection.idle;
+
+  @override
+  bool get allowImplicitScrolling => false;
 }
 
 class TestCustomPainter extends CustomPainter {
