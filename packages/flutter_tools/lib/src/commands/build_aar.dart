@@ -38,6 +38,7 @@ class BuildAarCommand extends BuildSubCommand {
         defaultsTo: true,
         help: 'Build a release version of the current project.',
       );
+    usesTargetOption();
     addTreeShakeIconsFlag();
     usesFlavorOption();
     usesBuildNumberOption();
@@ -72,6 +73,30 @@ class BuildAarCommand extends BuildSubCommand {
   late final FlutterProject project = _getProject();
 
   @override
+  String get targetFile {
+    final String path;
+    if (argResults?.wasParsed('target') ?? false) {
+      path = stringArg('target')!;
+    } else {
+      final List<String>? rest = argResults?.rest;
+      if (rest != null && rest.isNotEmpty) {
+        final String potentialTarget = rest.first;
+        if (_fileSystem.isFileSync(potentialTarget)) {
+          path = potentialTarget;
+        } else {
+          path = 'lib/main.dart';
+        }
+      } else {
+        path = 'lib/main.dart';
+      }
+    }
+    if (_fileSystem.path.isAbsolute(path)) {
+      return path;
+    }
+    return project.directory.childFile(path).path;
+  }
+
+  @override
   Future<Event> unifiedAnalyticsUsageValues(String commandPath) async {
     final String projectType;
     if (project.manifest.isModule) {
@@ -96,9 +121,7 @@ class BuildAarCommand extends BuildSubCommand {
       'Build a repository containing an AAR and a POM file.\n\n'
       'By default, AARs are built for `release`, `debug` and `profile`.\n'
       'The POM file is used to include the dependencies that the AAR was compiled against.\n'
-      'To learn more about how to use these artifacts, see: https://flutter.dev/to/integrate-android-archive\n'
-      'This command assumes that the entrypoint is "lib/main.dart". '
-      'This cannot currently be configured.';
+      'To learn more about how to use these artifacts, see: https://flutter.dev/to/integrate-android-archive';
 
   @override
   Future<void> validateCommand() async {
@@ -130,7 +153,7 @@ class BuildAarCommand extends BuildSubCommand {
         ? buildNumberArg
         : '1.0';
 
-    final File targetFile = _fileSystem.file(_fileSystem.path.join('lib', 'main.dart'));
+    final File targetFile = _fileSystem.file(this.targetFile);
     for (final buildMode in const <String>['debug', 'profile', 'release']) {
       if (boolArg(buildMode)) {
         androidBuildInfo.add(

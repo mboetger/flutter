@@ -101,6 +101,7 @@ flutter:
   module:
     foo: bar
 ''');
+      fs.file('lib/main.dart').createSync(recursive: true);
       final Directory dotAndroidDir = fs.directory('.android')..createSync(recursive: true);
       dotAndroidDir.childFile('gradlew').createSync();
 
@@ -157,6 +158,74 @@ flutter:
           ),
         ),
       );
+    },
+    overrides: <Type, Generator>{
+      FileSystem: () => fs,
+      Platform: () => platform,
+      ProcessManager: () => processManager,
+      Analytics: () => fakeAnalytics,
+    },
+  );
+  testUsingContext(
+    'will build an AAR for a module with a custom target',
+    () async {
+      fs.file('pubspec.yaml').writeAsStringSync('''
+name: foo_bar
+
+flutter:
+  module:
+    foo: bar
+''');
+      final Directory dotAndroidDir = fs.directory('.android')..createSync(recursive: true);
+      dotAndroidDir.childFile('gradlew').createSync();
+
+      // Create custom target file
+      final File customTarget = fs.file('lib/custom_main.dart')..createSync(recursive: true);
+
+      processManager.addCommands(<FakeCommand>[
+        const FakeCommand(command: <String>['chmod', '755', 'flutter/bin/cache/artifacts']),
+        const FakeCommand(command: <String>['which', 'java']),
+        ...<String>['Debug', 'Profile', 'Release'].map(
+          (String buildMode) => FakeCommand(
+            command: <Pattern>[
+              '/.android/gradlew',
+              '-I=/flutter/packages/flutter_tools/gradle/aar_init_script.gradle',
+              ...List<RegExp>.filled(4, RegExp(r'-P[a-zA-Z-]+=.*')),
+              '-q',
+              ...List<RegExp>.filled(6, RegExp(r'-P[a-zA-Z-]+=.*')),
+              'assembleAar$buildMode',
+            ],
+            onRun: (_) => fs.directory('/build/host/outputs/repo').createSync(recursive: true),
+          ),
+        ),
+      ]);
+
+      cache.getArtifactDirectory('gradle_wrapper').createSync(recursive: true);
+
+      final command = BuildCommand(
+        androidSdk: FakeAndroidSdk(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        fileSystem: fs,
+        logger: logger,
+        osUtils: FakeOperatingSystemUtils(),
+        config: FakeConfig(),
+        platform: FakePlatform(),
+        fileSystemUtils: FakeFileSystemUtils(),
+        terminal: FakeTerminal(),
+        plistParser: FakePlistParser(),
+        processUtils: FakeProcessUtils(),
+        processManager: FakeProcessManager.any(),
+        templateRenderer: FakeTemplateRenderer(),
+        xcode: FakeXcode(),
+        artifacts: FakeArtifacts(),
+        cache: FakeCache(),
+        flutterVersion: FakeFlutterVersion(),
+      );
+
+      await createTestCommandRunner(
+        command,
+      ).run(<String>['build', 'aar', '--target=${customTarget.path}', '--no-pub']);
+      expect(processManager, hasNoRemainingExpectations);
     },
     overrides: <Type, Generator>{
       FileSystem: () => fs,
