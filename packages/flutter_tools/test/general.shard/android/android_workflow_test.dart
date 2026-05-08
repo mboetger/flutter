@@ -855,6 +855,35 @@ Android sdkmanager tool was found, but failed to run
       true,
     );
   });
+
+  testUsingContext('Warns user if ANDROID_SDK_ROOT is set', () async {
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..sdkManagerPath = '/foo/bar/sdkmanager'
+      ..emulatorPath = 'path/to/emulator';
+
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform(environment: <String, String>{'ANDROID_SDK_ROOT': '/foo/bar'}),
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) =>
+            message.isHint &&
+            message.message.contains('ANDROID_SDK_ROOT = /foo/bar') &&
+            message.message.contains('deprecated, use ANDROID_HOME instead'),
+      ),
+      true,
+    );
+  });
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
