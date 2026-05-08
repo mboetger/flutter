@@ -65,6 +65,15 @@ void main() {
     expect(mockVMService.services, containsPair(kFlutterMemoryInfoServiceName, kFlutterToolAlias));
   });
 
+  testWithoutContext('VM Service registers flutterIsEmulator service', () async {
+    final mockDevice = FakeDevice();
+
+    final mockVMService = FakeVMService();
+    await setUpVmService(device: mockDevice, vmService: mockVMService);
+
+    expect(mockVMService.services, containsPair(kFlutterIsEmulatorServiceName, kFlutterToolAlias));
+  });
+
   testWithoutContext('VM Service registers flutterPrintStructuredErrorLogMethod', () async {
     final mockVMService = FakeVMService();
     await setUpVmService(
@@ -81,36 +90,32 @@ void main() {
     expect(mockVMService.services, containsPair(kFlutterVersionServiceName, kFlutterToolAlias));
   });
 
-  testUsingContext(
-    'VM Service prints messages for connection failures',
-    () {
-      final logger = BufferLogger.test();
-      FakeAsync().run((FakeAsync time) {
-        final Uri uri = Uri.parse('ws://127.0.0.1:12345/QqL7EFEDNG0=/ws');
-        unawaited(connectToVmService(uri, logger: logger));
+  testUsingContext('VM Service prints messages for connection failures', () {
+    final logger = BufferLogger.test();
+    FakeAsync().run((FakeAsync time) {
+      final Uri uri = Uri.parse('ws://127.0.0.1:12345/QqL7EFEDNG0=/ws');
+      unawaited(connectToVmService(uri, logger: logger));
 
-        time.elapse(const Duration(seconds: 5));
-        expect(logger.statusText, isEmpty);
+      time.elapse(const Duration(seconds: 5));
+      expect(logger.statusText, isEmpty);
 
-        time.elapse(const Duration(minutes: 2));
+      time.elapse(const Duration(minutes: 2));
 
-        final String statusText = logger.statusText;
-        expect(
-          statusText,
-          containsIgnoringWhitespace(
-            'Connecting to the VM Service is taking longer than expected...',
-          ),
-        );
-        expect(statusText, containsIgnoringWhitespace('try re-running with --host-vmservice-port'));
-        expect(
-          statusText,
-          containsIgnoringWhitespace('Exception attempting to connect to the VM Service:'),
-        );
-        expect(statusText, containsIgnoringWhitespace('This was attempt #50. Will retry'));
-      });
-    },
-    overrides: <Type, Generator>{WebSocketConnector: () => failingWebSocketConnector},
-  );
+      final String statusText = logger.statusText;
+      expect(
+        statusText,
+        containsIgnoringWhitespace(
+          'Connecting to the VM Service is taking longer than expected...',
+        ),
+      );
+      expect(statusText, containsIgnoringWhitespace('try re-running with --host-vmservice-port'));
+      expect(
+        statusText,
+        containsIgnoringWhitespace('Exception attempting to connect to the VM Service:'),
+      );
+      expect(statusText, containsIgnoringWhitespace('This was attempt #50. Will retry'));
+    });
+  }, overrides: <Type, Generator>{WebSocketConnector: () => failingWebSocketConnector});
 
   testWithoutContext('setAssetDirectory forwards arguments correctly', () async {
     final mockVMService = FakeVMService();

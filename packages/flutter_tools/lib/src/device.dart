@@ -655,6 +655,12 @@ abstract class Device {
   /// generally only a best effort guess.
   Future<bool> get isLocalEmulator;
 
+  /// Whether the device is a real emulator/simulator.
+  ///
+  /// This is more accurate than [isLocalEmulator] because it can use running
+  /// application diagnostics (like graphics memory) to refine the check.
+  Future<bool> get isEmulator => isLocalEmulator;
+
   /// The unique identifier for the emulator that corresponds to this device, or
   /// null if it is not an emulator.
   ///

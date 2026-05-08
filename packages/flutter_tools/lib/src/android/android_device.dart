@@ -140,6 +140,18 @@ class AndroidDevice extends Device {
     return characteristics != null && characteristics.contains('emulator');
   }();
 
+  @override
+  Future<bool> get isEmulator async {
+    final bool isEmu = await isLocalEmulator;
+    if (isEmu) {
+      final MemoryInfo memInfo = await queryMemoryInfo();
+      if (memInfo is AndroidMemoryInfo && memInfo.graphics > 0) {
+        return false;
+      }
+    }
+    return isEmu;
+  }
+
   /// The unique identifier for the emulator that corresponds to this device, or
   /// null if it is not an emulator.
   ///

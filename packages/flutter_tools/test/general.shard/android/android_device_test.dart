@@ -546,6 +546,39 @@ Uptime: 441088659 Realtime: 521464097
     },
     overrides: <Type, Generator>{Logger: () => BufferLogger.test()},
   );
+
+  testWithoutContext(
+    'AndroidDevice.isEmulator queries graphics memory to refine emulator status',
+    () async {
+      // Case 1: ro.hardware says it is emulator, but dumpsys graphics memory is > 0 (actually physical).
+      final _TestAndroidDevice physicalDevice = setUpTestAndroidDevice(
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+            stdout: '[ro.hardware]: [goldfish]',
+          ),
+        ]),
+      );
+      physicalDevice.customMemoryInfo = _FakeAndroidMemoryInfo(2584);
+
+      expect(await physicalDevice.isLocalEmulator, true);
+      expect(await physicalDevice.isEmulator, false); // Refined to false!
+
+      // Case 2: ro.hardware says it is emulator, and dumpsys graphics memory is 0 (real emulator).
+      final _TestAndroidDevice emulatorDevice = setUpTestAndroidDevice(
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+            stdout: '[ro.hardware]: [goldfish]',
+          ),
+        ]),
+      );
+      emulatorDevice.customMemoryInfo = _FakeAndroidMemoryInfo(0);
+
+      expect(await emulatorDevice.isLocalEmulator, true);
+      expect(await emulatorDevice.isEmulator, true); // Remains true!
+    },
+  );
 }
 
 /// A mock VM Service that throws a generic [RPCErrorKind.kServerError] error
@@ -824,4 +857,49 @@ class FakeDisconnectingAndroidConsoleSocket extends Fake implements Socket {
 
   @override
   void destroy() {}
+}
+
+class _TestAndroidDevice extends AndroidDevice {
+  _TestAndroidDevice(
+    super.id, {
+    required super.modelID,
+    required super.logger,
+    required super.processManager,
+    required super.platform,
+    required super.androidSdk,
+    required super.fileSystem,
+  });
+
+  MemoryInfo? customMemoryInfo;
+
+  @override
+  Future<MemoryInfo> queryMemoryInfo() async {
+    return customMemoryInfo ?? const MemoryInfo.empty();
+  }
+}
+
+class _FakeAndroidMemoryInfo extends Fake implements AndroidMemoryInfo {
+  _FakeAndroidMemoryInfo(this.graphics);
+
+  @override
+  final int graphics;
+}
+
+_TestAndroidDevice setUpTestAndroidDevice({
+  String? id,
+  AndroidSdk? androidSdk,
+  FileSystem? fileSystem,
+  ProcessManager? processManager,
+  Platform? platform,
+}) {
+  androidSdk ??= FakeAndroidSdk();
+  return _TestAndroidDevice(
+    id ?? '1234',
+    modelID: 'TestModel',
+    logger: BufferLogger.test(),
+    platform: platform ?? FakePlatform(),
+    androidSdk: androidSdk,
+    fileSystem: fileSystem ?? MemoryFileSystem.test(),
+    processManager: processManager ?? FakeProcessManager.any(),
+  );
 }
