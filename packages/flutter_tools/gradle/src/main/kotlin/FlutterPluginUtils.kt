@@ -331,26 +331,47 @@ object FlutterPluginUtils {
         assembleTask: Task
     ): Boolean {
         val cliTasksNames = project.gradle.startParameter.taskNames
-        if (cliTasksNames.size != 1 || !cliTasksNames.first().contains("assemble")) {
+        if (cliTasksNames.size != 1) {
             return true
         }
-        val taskName = cliTasksNames.first().split(":").last()
-        if (taskName == "assemble") {
+        val cliTaskName = cliTasksNames.first().split(":").last()
+        if (!cliTaskName.contains("assemble") && !cliTaskName.contains("bundle")) {
             return true
         }
-        if (taskName == assembleTask.name) {
+        if (cliTaskName == "assemble" || cliTaskName == "bundle") {
             return true
         }
-        if (taskName.endsWith("Release") && assembleTask.name.endsWith("Release")) {
+        if (cliTaskName == assembleTask.name) {
             return true
         }
-        if (taskName.endsWith("Debug") && assembleTask.name.endsWith("Debug")) {
+
+        // Suffix build modes
+        val modes = listOf("Release", "Debug", "Profile")
+        val mode = modes.firstOrNull { cliTaskName.endsWith(it) } ?: return true
+        val assembleMode = modes.firstOrNull { assembleTask.name.endsWith(it) } ?: return false
+
+        if (mode != assembleMode) {
+            return false
+        }
+
+        // Extract flavor
+        val prefix = if (cliTaskName.startsWith("assemble")) "assemble" else "bundle"
+        val requestedFlavor = cliTaskName.substringAfter(prefix).substringBefore(mode)
+        val currentFlavor = assembleTask.name.substringAfter("assemble").substringBefore(assembleMode)
+
+        if (requestedFlavor.isEmpty()) {
+            // Generic task requested (e.g. assembleRelease), match all flavors with same build mode
             return true
         }
-        if (taskName.endsWith("Profile") && assembleTask.name.endsWith("Profile")) {
-            return true
-        }
-        return false
+
+        // Multi-dimension flavor support
+        val requestedParts = splitCamelCase(requestedFlavor).map { it.lowercase() }
+        val currentParts = splitCamelCase(currentFlavor).map { it.lowercase() }
+        return currentParts.containsAll(requestedParts)
+    }
+
+    private fun splitCamelCase(s: String): List<String> {
+        return s.split("(?=\\p{Upper})".toRegex()).filter { it.isNotEmpty() }
     }
 
     private fun getFlutterExtensionOrNull(project: Project): FlutterExtension? = project.extensions.findByType(FlutterExtension::class.java)

@@ -352,15 +352,121 @@ class FlutterPluginUtilsTest {
     }
 
     @Test
-    fun `shouldConfigureFlutterTask returns true when taskname and assembleTask end with Release`() {
+    fun `shouldConfigureFlutterTask returns true when flavored task requested and matches flavor`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("assembleStagingRelease")
+        every { assembleTask.name } returns "assembleStagingRelease"
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns false when flavored task requested and mismatches flavor`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("assembleStagingRelease")
+        every { assembleTask.name } returns "assembleProductionRelease"
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns true when generic task requested and matches build mode`() {
         val project = mockk<Project>()
         val assembleTask = mockk<Task>()
 
         every { project.gradle.startParameter.taskNames } returns listOf("assembleRelease")
-        every { assembleTask.name } returns "assembleSomethingElseRelease"
+        every { assembleTask.name } returns "assembleStagingRelease"
 
         val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
         assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns false when generic task requested and mismatches build mode`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("assembleRelease")
+        every { assembleTask.name } returns "assembleStagingDebug"
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns true when multiple tasks requested`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("assembleRelease", "clean")
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns true when requested task does not contain assemble or bundle`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("clean")
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns true for bundle task with matching build mode and flavor`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("bundleStagingRelease")
+        every { assembleTask.name } returns "assembleStagingRelease"
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns false for bundle task with mismatching flavor`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("bundleStagingRelease")
+        every { assembleTask.name } returns "assembleProductionRelease"
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns true for multi-dimension flavor match`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("assembleFreeRelease")
+        every { assembleTask.name } returns "assembleFreeStableRelease"
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldConfigureFlutterTask returns false for multi-dimension flavor mismatch`() {
+        val project = mockk<Project>()
+        val assembleTask = mockk<Task>()
+
+        every { project.gradle.startParameter.taskNames } returns listOf("assembleFreeRelease")
+        every { assembleTask.name } returns "assemblePaidStableRelease"
+
+        val result = FlutterPluginUtils.shouldConfigureFlutterTask(project, assembleTask)
+        assertEquals(false, result)
     }
 
     // getFlutterSourceDirectory
