@@ -180,6 +180,36 @@ public class InputConnectionAdaptorTest {
         clipboardManager.getPrimaryClip().getItemAt(0).getText());
   }
 
+  @Test
+  public void testPerformContextMenuAction_cutDoesNotCrashWhenSecurityExceptionThrown() {
+    View mockView = mock(View.class);
+    Context mockContext = mock(Context.class);
+    when(mockView.getContext()).thenReturn(mockContext);
+    ClipboardManager mockClipboardManager = mock(ClipboardManager.class);
+    when(mockContext.getSystemService(Context.CLIPBOARD_SERVICE)).thenReturn(mockClipboardManager);
+    doThrow(new SecurityException()).when(mockClipboardManager).setPrimaryClip(any());
+
+    ListenableEditingState editable = new ListenableEditingState(null, mockView);
+    editable.replace(0, 0, "Text");
+    Selection.setSelection(editable, 0, 4);
+
+    InputConnectionAdaptor adaptor =
+        new InputConnectionAdaptor(
+            mockView,
+            1,
+            mock(TextInputChannel.class),
+            mock(ScribeChannel.class),
+            mock(InputConnectionAdaptor.KeyboardDelegate.class),
+            editable,
+            new EditorInfo());
+
+    try {
+      adaptor.performContextMenuAction(android.R.id.cut);
+    } catch (Exception e) {
+      fail("Exception was thrown: " + e.getMessage());
+    }
+  }
+
   @SuppressWarnings("deprecation")
   // ClipboardManager.setText is deprecated.
   @Test

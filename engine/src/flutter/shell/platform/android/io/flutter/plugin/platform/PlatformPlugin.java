@@ -624,10 +624,12 @@ public class PlatformPlugin {
     ClipboardManager clipboard =
         (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
 
-    if (!clipboard.hasPrimaryClip()) return null;
+    if (clipboard == null) return null;
 
-    CharSequence itemText = null;
     try {
+      if (!clipboard.hasPrimaryClip()) return null;
+
+      CharSequence itemText = null;
       ClipData clip = clipboard.getPrimaryClip();
       if (clip == null) return null;
       if (format == null || format == PlatformChannel.ClipboardContentFormat.PLAIN_TEXT) {
@@ -681,6 +683,9 @@ public class PlatformPlugin {
     } catch (IOException e) {
       Log.w(TAG, "Failed to close AssetFileDescriptor while trying to read text from URI.", e);
       return itemText;
+    } catch (Exception e) {
+      Log.w(TAG, "Attempted to get clipboard data that failed.", e);
+      return null;
     }
 
     return null;
@@ -689,24 +694,37 @@ public class PlatformPlugin {
   private void setClipboardData(String text) {
     ClipboardManager clipboard =
         (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+    if (clipboard == null) return;
     ClipData clip = ClipData.newPlainText("text label?", text);
-    clipboard.setPrimaryClip(clip);
+    try {
+      clipboard.setPrimaryClip(clip);
+    } catch (SecurityException | NullPointerException e) {
+      Log.w(TAG, "Attempted to set clipboard data that failed.", e);
+    }
   }
 
   private boolean clipboardHasStrings() {
     ClipboardManager clipboard =
         (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+
+    if (clipboard == null) return false;
+
     // Android 12 introduces a toast message that appears when an app reads the clipboard. To avoid
     // unintended access, call the appropriate APIs to receive information about the current content
     // that's on the clipboard (rather than the actual content itself).
-    if (!clipboard.hasPrimaryClip()) {
+    try {
+      if (!clipboard.hasPrimaryClip()) {
+        return false;
+      }
+      ClipDescription description = clipboard.getPrimaryClipDescription();
+      if (description == null) {
+        return false;
+      }
+      return description.hasMimeType("text/*");
+    } catch (SecurityException | NullPointerException e) {
+      Log.w(TAG, "Attempted to check clipboard data that failed.", e);
       return false;
     }
-    ClipDescription description = clipboard.getPrimaryClipDescription();
-    if (description == null) {
-      return false;
-    }
-    return description.hasMimeType("text/*");
   }
 
   private void share(@NonNull String text) {

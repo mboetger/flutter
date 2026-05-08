@@ -416,8 +416,14 @@ public class InputConnectionAdaptor extends BaseInputConnection
         ClipboardManager clipboard =
             (ClipboardManager)
                 mFlutterView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        ClipData clip = ClipData.newPlainText("text label?", textToCut);
-        clipboard.setPrimaryClip(clip);
+        if (clipboard != null) {
+          ClipData clip = ClipData.newPlainText("text label?", textToCut);
+          try {
+            clipboard.setPrimaryClip(clip);
+          } catch (SecurityException | NullPointerException e) {
+            Log.w(TAG, "Attempted to set clipboard data that failed.", e);
+          }
+        }
         mEditable.delete(selMin, selMax);
         setSelection(selMin, selMin);
       }
@@ -431,23 +437,35 @@ public class InputConnectionAdaptor extends BaseInputConnection
         ClipboardManager clipboard =
             (ClipboardManager)
                 mFlutterView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        clipboard.setPrimaryClip(ClipData.newPlainText("text label?", textToCopy));
+        if (clipboard != null) {
+          try {
+            clipboard.setPrimaryClip(ClipData.newPlainText("text label?", textToCopy));
+          } catch (SecurityException | NullPointerException e) {
+            Log.w(TAG, "Attempted to set clipboard data that failed.", e);
+          }
+        }
       }
       return true;
     } else if (id == android.R.id.paste) {
       ClipboardManager clipboard =
           (ClipboardManager) mFlutterView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-      ClipData clip = clipboard.getPrimaryClip();
-      if (clip != null) {
-        CharSequence textToPaste = clip.getItemAt(0).coerceToText(mFlutterView.getContext());
-        int selStart = Math.max(0, Selection.getSelectionStart(mEditable));
-        int selEnd = Math.max(0, Selection.getSelectionEnd(mEditable));
-        int selMin = Math.min(selStart, selEnd);
-        int selMax = Math.max(selStart, selEnd);
-        if (selMin != selMax) mEditable.delete(selMin, selMax);
-        mEditable.insert(selMin, textToPaste);
-        int newSelStart = selMin + textToPaste.length();
-        setSelection(newSelStart, newSelStart);
+      if (clipboard != null) {
+        try {
+          ClipData clip = clipboard.getPrimaryClip();
+          if (clip != null) {
+            CharSequence textToPaste = clip.getItemAt(0).coerceToText(mFlutterView.getContext());
+            int selStart = Math.max(0, Selection.getSelectionStart(mEditable));
+            int selEnd = Math.max(0, Selection.getSelectionEnd(mEditable));
+            int selMin = Math.min(selStart, selEnd);
+            int selMax = Math.max(selStart, selEnd);
+            if (selMin != selMax) mEditable.delete(selMin, selMax);
+            mEditable.insert(selMin, textToPaste);
+            int newSelStart = selMin + textToPaste.length();
+            setSelection(newSelStart, newSelStart);
+          }
+        } catch (SecurityException | NullPointerException e) {
+          Log.w(TAG, "Attempted to get clipboard data that failed.", e);
+        }
       }
       return true;
     }

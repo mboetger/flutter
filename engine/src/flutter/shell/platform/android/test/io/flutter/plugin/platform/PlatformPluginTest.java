@@ -265,6 +265,46 @@ public class PlatformPluginTest {
     verify(clipboardManager, never()).getText();
   }
 
+  @Test
+  public void platformPlugin_setClipboardDataDoesNotCrashWhenSecurityExceptionThrown() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    clipboardManager = mock(ClipboardManager.class);
+    when(mockActivity.getSystemService(Context.CLIPBOARD_SERVICE)).thenReturn(clipboardManager);
+    doThrow(new SecurityException()).when(clipboardManager).setPrimaryClip(any(ClipData.class));
+
+    try {
+      platformPlugin.mPlatformMessageHandler.setClipboardData("Text");
+    } catch (Exception e) {
+      fail("Exception was thrown: " + e.getMessage());
+    }
+  }
+
+  @Test
+  public void platformPlugin_setClipboardDataDoesNotCrashWhenNullPointerExceptionThrown() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    clipboardManager = mock(ClipboardManager.class);
+    when(mockActivity.getSystemService(Context.CLIPBOARD_SERVICE)).thenReturn(clipboardManager);
+    doThrow(new NullPointerException()).when(clipboardManager).setPrimaryClip(any(ClipData.class));
+
+    try {
+      platformPlugin.mPlatformMessageHandler.setClipboardData("Text");
+    } catch (Exception e) {
+      fail("Exception was thrown: " + e.getMessage());
+    }
+  }
+
   @Config(sdk = API_LEVELS.API_29)
   @SuppressWarnings("deprecation")
   // setStatusBarColor, setNavigationBarColor, setNavigationBarDividerColor,
