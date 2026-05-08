@@ -337,6 +337,91 @@ void main() {
       expect(processManager, hasNoRemainingExpectations);
     },
   );
+
+  testWithoutContext(
+    'displays descriptive error if target device has insufficient storage (stderr)',
+    () async {
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        kAdbVersionCommand,
+        kAdbStartServerCommand,
+        const FakeCommand(command: <String>['adb', '-s', '1234', 'shell', 'getprop']),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'install',
+            '-t',
+            '-r',
+            '--user',
+            '10',
+            'app-debug.apk',
+          ],
+          exitCode: 1,
+          stderr: 'INSTALL_FAILED_INSUFFICIENT_STORAGE',
+        ),
+      ]);
+      final File apk = fileSystem.file('app-debug.apk')..createSync();
+      final androidApk = AndroidApk(
+        applicationPackage: apk,
+        id: 'app',
+        versionCode: 22,
+        launchActivity: 'Main',
+      );
+      final AndroidDevice androidDevice = setUpAndroidDevice(processManager: processManager);
+
+      expect(await androidDevice.installApp(androidApk, userIdentifier: '10'), false);
+      expect(
+        logger.errorText,
+        contains(
+          'The device has insufficient storage to install the APK. Please free up some space on the device and try again.',
+        ),
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    },
+  );
+
+  testWithoutContext(
+    'displays descriptive error if target device has insufficient storage (stdout)',
+    () async {
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        kAdbVersionCommand,
+        kAdbStartServerCommand,
+        const FakeCommand(command: <String>['adb', '-s', '1234', 'shell', 'getprop']),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'install',
+            '-t',
+            '-r',
+            '--user',
+            '10',
+            'app-debug.apk',
+          ],
+          stdout: 'Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]',
+        ),
+      ]);
+      final File apk = fileSystem.file('app-debug.apk')..createSync();
+      final androidApk = AndroidApk(
+        applicationPackage: apk,
+        id: 'app',
+        versionCode: 22,
+        launchActivity: 'Main',
+      );
+      final AndroidDevice androidDevice = setUpAndroidDevice(processManager: processManager);
+
+      expect(await androidDevice.installApp(androidApk, userIdentifier: '10'), false);
+      expect(
+        logger.errorText,
+        contains(
+          'The device has insufficient storage to install the APK. Please free up some space on the device and try again.',
+        ),
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    },
+  );
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {

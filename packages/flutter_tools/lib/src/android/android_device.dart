@@ -453,13 +453,25 @@ class AndroidDevice extends Device {
     final failureExp = RegExp(r'^Failure.*$', multiLine: true);
     final String? failure = failureExp.stringMatch(installResult.stdout);
     if (failure != null) {
-      _logger.printError('Package install error: $failure');
+      if (failure.contains('INSTALL_FAILED_INSUFFICIENT_STORAGE')) {
+        _logger.printError(
+          'Error: The device has insufficient storage to install the APK. '
+          'Please free up some space on the device and try again.',
+        );
+      } else {
+        _logger.printError('Package install error: $failure');
+      }
       return false;
     }
     if (installResult.exitCode != 0) {
       if (installResult.stderr.contains('Bad user number')) {
         _logger.printError(
           'Error: User "$userIdentifier" not found. Run "adb shell pm list users" to see list of available identifiers.',
+        );
+      } else if (installResult.stderr.contains('INSTALL_FAILED_INSUFFICIENT_STORAGE')) {
+        _logger.printError(
+          'Error: The device has insufficient storage to install the APK. '
+          'Please free up some space on the device and try again.',
         );
       } else {
         _logger.printError('Error: ADB exited with exit code ${installResult.exitCode}');
