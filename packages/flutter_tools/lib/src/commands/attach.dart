@@ -452,7 +452,9 @@ known, it can be explicitly provided to attach via the command-line, e.g.
               "If you don't see your app in the Settings, uninstall the app and rerun to see the prompt again.\n";
         }
 
-        return 'The Dart VM Service was not discovered after 30 seconds. This is taking much longer than expected...\n';
+        return 'The Dart VM Service was not discovered after 30 seconds. This is taking much longer than expected...\n\n'
+            'Please ensure your device is connected and the application is running. '
+            'If you know the VM Service URL, you can connect explicitly using "flutter attach --debug-url=<URL>".\n';
       },
       warningColor: TerminalColor.cyan,
     );

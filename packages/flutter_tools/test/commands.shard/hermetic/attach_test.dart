@@ -1590,6 +1590,41 @@ void main() {
           DeviceManager: () => testDeviceManager,
         },
       );
+
+      testUsingContext(
+        'to find on fallback device',
+        () async {
+          final fakeLogReader = FakeDeviceLogReader();
+          final device = FakeAndroidDevice(id: '1')..onGetLogReader = () => fakeLogReader;
+          testDeviceManager.devices = <Device>[device];
+          FakeAsync().run((FakeAsync fakeAsync) {
+            createTestCommandRunner(
+              AttachCommand(
+                stdio: stdio,
+                logger: logger,
+                terminal: terminal,
+                signals: signals,
+                platform: platform,
+                processInfo: processInfo,
+                fileSystem: testFileSystem,
+              ),
+            ).run(<String>['attach']);
+
+            logger.expectedWarning =
+                'The Dart VM Service was not discovered after 30 seconds. This is taking much longer than expected...\n\n'
+                'Please ensure your device is connected and the application is running. '
+                'If you know the VM Service URL, you can connect explicitly using "flutter attach --debug-url=<URL>".\n';
+            fakeAsync.elapse(const Duration(seconds: 30));
+          });
+          await fakeLogReader.dispose();
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => testFileSystem,
+          ProcessManager: () => FakeProcessManager.any(),
+          Logger: () => logger,
+          DeviceManager: () => testDeviceManager,
+        },
+      );
     });
   });
 }
