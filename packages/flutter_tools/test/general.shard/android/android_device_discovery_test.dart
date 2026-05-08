@@ -274,6 +274,68 @@ Use the 'android' tool to install them:
     expect(diagnostics, hasLength(1));
     expect(diagnostics.first, contains('you do not have'));
   });
+
+  testWithoutContext(
+    'AndroidDevices handles ADB version mismatch / out of date messages in stdout when getting devices',
+    () async {
+      final androidDevices = AndroidDevices(
+        userMessages: UserMessages(),
+        androidWorkflow: androidWorkflow,
+        androidSdk: FakeAndroidSdk(),
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', 'devices', '-l'],
+            stdout: '''
+adb server version (41) doesn't match this client (39); killing...
+* daemon started successfully *
+List of devices attached
+05a02bac               device usb:336592896X product:razor model:Nexus_7 device:flo
+''',
+          ),
+        ]),
+        platform: FakePlatform(),
+        fileSystem: MemoryFileSystem.test(),
+      );
+
+      final List<Device> devices = await androidDevices.pollingGetDevices();
+
+      expect(devices, hasLength(1));
+      expect(devices.first.name, 'Nexus 7');
+    },
+  );
+
+  testWithoutContext(
+    'AndroidDevices handles ADB version mismatch / out of date messages in stdout when getting diagnostics',
+    () async {
+      final androidDevices = AndroidDevices(
+        userMessages: UserMessages(),
+        androidWorkflow: androidWorkflow,
+        androidSdk: FakeAndroidSdk(),
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', 'devices', '-l'],
+            stdout: '''
+adb server version (41) doesn't match this client (39); killing...
+* daemon started successfully *
+List of devices attached
+''',
+          ),
+        ]),
+        platform: FakePlatform(),
+        fileSystem: MemoryFileSystem.test(),
+      );
+
+      final List<String> diagnostics = await androidDevices.getDiagnostics();
+
+      expect(diagnostics, hasLength(1));
+      expect(
+        diagnostics.first,
+        contains("adb server version (41) doesn't match this client (39); killing..."),
+      );
+    },
+  );
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
