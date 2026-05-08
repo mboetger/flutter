@@ -421,6 +421,24 @@ void main() {
           androidPluginRegistrant(project.android.hostAppGradleRoot.childDirectory('Flutter')),
         );
       });
+
+      _testInMemory('regenerates .android when it is unsupported', () async {
+        final FlutterProject project = await aModuleProject();
+        await project.regeneratePlatformSpecificTooling(releaseMode: false);
+
+        expect(project.android.isSupportedVersion, isTrue);
+
+        // Modify the .android/build.gradle to be unsupported.
+        final File appGradle = project.android.appGradleFile;
+        appGradle.writeAsStringSync('unsupported content');
+
+        expect(project.android.isSupportedVersion, isFalse);
+
+        // Run regenerate again. It should automatically detect it is unsupported and regenerate it.
+        await project.regeneratePlatformSpecificTooling(releaseMode: false);
+
+        expect(project.android.isSupportedVersion, isTrue);
+      });
       _testInMemory('creates iOS pod in module', () async {
         final FlutterProject project = await aModuleProject();
         await project.regeneratePlatformSpecificTooling(releaseMode: false);

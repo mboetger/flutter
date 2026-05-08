@@ -589,7 +589,7 @@ class AndroidProject extends FlutterProjectPlatform {
   bool get usesAndroidX => parent.usesAndroidX;
 
   /// Returns true if the current version of the Gradle plugin is supported.
-  late final bool isSupportedVersion = _computeSupportedVersion();
+  bool get isSupportedVersion => _computeSupportedVersion();
 
   /// Gets all build variants of this project.
   Future<List<String>> getBuildVariants() async {
@@ -934,7 +934,8 @@ See the link below for more information:
           entity: ephemeralDirectory,
           referenceFile: parent.pubspecFile,
         ) ||
-        globals.cache.isOlderThanToolsStamp(ephemeralDirectory);
+        globals.cache.isOlderThanToolsStamp(ephemeralDirectory) ||
+        !isSupportedVersion;
   }
 
   File get localPropertiesFile => _flutterLibGradleRoot.childFile('local.properties');
