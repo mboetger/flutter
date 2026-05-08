@@ -86,7 +86,7 @@ final class PredictiveBackEvent {
       // back button is pressed, but in practice it seems to return 0.0, hence
       // the check for Offset.zero here. This was tested directly in the engine
       // on Android emulator running API 34.
-      touchOffset == null || (progress == 0.0 && touchOffset == Offset.zero);
+      progress == 0.0 && (touchOffset == null || touchOffset == Offset.zero);
 
   @override
   bool operator ==(Object other) {

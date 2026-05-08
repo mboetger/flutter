@@ -44,6 +44,30 @@ void main() {
     expect(event.isButtonEvent, isTrue);
   });
 
+  test(
+    'fromMap can be created with valid Map - 3-button predictive back gesture (progress > 0, null position) is not a button event',
+    () async {
+      final event = PredictiveBackEvent.fromMap(const <String?, Object?>{
+        'touchOffset': null,
+        'progress': 0.1,
+        'swipeEdge': 1,
+      });
+      expect(event.isButtonEvent, isFalse);
+    },
+  );
+
+  test(
+    'fromMap can be created with valid Map - 3-button predictive back gesture (progress > 0, zero position) is not a button event',
+    () async {
+      final event = PredictiveBackEvent.fromMap(const <String?, Object?>{
+        'touchOffset': <double>[0.0, 0.0],
+        'progress': 0.1,
+        'swipeEdge': 1,
+      });
+      expect(event.isButtonEvent, isFalse);
+    },
+  );
+
   test('fromMap throws when given invalid progress', () async {
     expect(
       () => PredictiveBackEvent.fromMap(const <String?, Object?>{
