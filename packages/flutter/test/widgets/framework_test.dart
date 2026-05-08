@@ -2138,6 +2138,39 @@ The findRenderObject() method was called for the following element:
       expect(element.debugIsDefunct, true);
     },
   );
+
+  testWidgets('State.mounted is false during dispose', (WidgetTester tester) async {
+    bool? mountedInDispose;
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: _MountedCheckWidget(
+          onDispose: (bool mounted) {
+            mountedInDispose = mounted;
+          },
+        ),
+      ),
+    );
+    await tester.pumpWidget(Container());
+    expect(mountedInDispose, isFalse);
+  });
+}
+
+class _MountedCheckWidget extends StatefulWidget {
+  const _MountedCheckWidget({required this.onDispose});
+  final ValueChanged<bool> onDispose;
+  @override
+  State<_MountedCheckWidget> createState() => _MountedCheckWidgetState();
+}
+
+class _MountedCheckWidgetState extends State<_MountedCheckWidget> {
+  @override
+  void dispose() {
+    widget.onDispose(mounted);
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) => const Text('MountedCheck');
 }
 
 class _TestInheritedElement extends InheritedElement {

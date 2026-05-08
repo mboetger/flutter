@@ -970,7 +970,7 @@ abstract class State<T extends StatefulWidget> with Diagnosticable {
   /// object to [build] again.
   ///
   /// It is an error to call [setState] unless [mounted] is true.
-  bool get mounted => _element != null;
+  bool get mounted => _element != null && _element!.mounted;
 
   /// Called when this object is inserted into the tree.
   ///
