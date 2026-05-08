@@ -1467,6 +1467,31 @@ void main() {
         expect(feedback.hapticCount, 0);
       },
     );
+
+    testWidgets('FloatingActionButton forwards enableFeedback to Tooltip', (
+      WidgetTester tester,
+    ) async {
+      Widget buildFAB({required bool enableFeedback}) {
+        return MaterialApp(
+          home: Scaffold(
+            floatingActionButton: FloatingActionButton(
+              onPressed: () {},
+              enableFeedback: enableFeedback,
+              tooltip: 'test tooltip',
+              child: const Icon(Icons.add),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildFAB(enableFeedback: false));
+      final Tooltip tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+      expect(tooltip.enableFeedback, false);
+
+      await tester.pumpWidget(buildFAB(enableFeedback: true));
+      final Tooltip tooltip2 = tester.widget<Tooltip>(find.byType(Tooltip));
+      expect(tooltip2.enableFeedback, true);
+    });
   });
 
   testWidgets('FloatingActionButton does not crash at zero area', (WidgetTester tester) async {

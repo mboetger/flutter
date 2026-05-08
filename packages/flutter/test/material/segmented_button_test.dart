@@ -1633,6 +1633,34 @@ void main() {
       expect(segmentBox.size.width, screenWidth);
     }
   });
+
+  testWidgets('SegmentedButton forwards enableFeedback to Tooltip', (WidgetTester tester) async {
+    Widget buildSegmentedButton({required bool enableFeedback}) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SegmentedButton<int>(
+              style: ButtonStyle(enableFeedback: enableFeedback),
+              segments: const <ButtonSegment<int>>[
+                ButtonSegment<int>(value: 1, label: Text('1'), tooltip: 'test tooltip 1'),
+                ButtonSegment<int>(value: 2, label: Text('2')),
+              ],
+              selected: const <int>{1},
+              onSelectionChanged: (Set<int> selected) {},
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildSegmentedButton(enableFeedback: false));
+    final Tooltip tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+    expect(tooltip.enableFeedback, false);
+
+    await tester.pumpWidget(buildSegmentedButton(enableFeedback: true));
+    final Tooltip tooltip2 = tester.widget<Tooltip>(find.byType(Tooltip));
+    expect(tooltip2.enableFeedback, true);
+  });
 }
 
 Set<WidgetState> enabled = const <WidgetState>{};

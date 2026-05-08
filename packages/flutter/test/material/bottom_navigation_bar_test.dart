@@ -2438,8 +2438,16 @@ void main() {
             child: BottomNavigationBar(
               enableFeedback: enableFeedback,
               items: const <BottomNavigationBarItem>[
-                BottomNavigationBarItem(icon: Icon(Icons.ac_unit), label: 'AC'),
-                BottomNavigationBarItem(icon: Icon(Icons.access_alarm), label: 'Alarm'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.ac_unit),
+                  label: 'AC',
+                  tooltip: 'test tooltip',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.access_alarm),
+                  label: 'Alarm',
+                  tooltip: 'test tooltip',
+                ),
               ],
             ),
           ),
@@ -2512,6 +2520,18 @@ void main() {
         expect(feedback.hapticCount, 0);
       },
     );
+
+    testWidgets('BottomNavigationBar forwards enableFeedback to Tooltip', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(feedbackBoilerplate(enableFeedback: false));
+      Tooltip tooltip = tester.widget<Tooltip>(find.byType(Tooltip).first);
+      expect(tooltip.enableFeedback, false);
+
+      await tester.pumpWidget(feedbackBoilerplate(enableFeedback: true));
+      tooltip = tester.widget<Tooltip>(find.byType(Tooltip).first);
+      expect(tooltip.enableFeedback, true);
+    });
   });
 
   testWidgets('BottomNavigationBar excludes semantics', (WidgetTester tester) async {

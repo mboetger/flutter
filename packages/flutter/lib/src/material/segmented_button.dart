@@ -625,8 +625,11 @@ class SegmentedButtonState<T> extends State<SegmentedButton<T>> {
         child: content,
       );
 
+      final bool? segmentEnableFeedback = effectiveValue<bool?>(
+        (ButtonStyle? style) => style?.enableFeedback,
+      );
       final Widget buttonWithTooltip = segment.tooltip != null
-          ? Tooltip(message: segment.tooltip, child: button)
+          ? Tooltip(message: segment.tooltip, enableFeedback: segmentEnableFeedback, child: button)
           : button;
 
       return MergeSemantics(

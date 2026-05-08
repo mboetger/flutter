@@ -895,6 +895,34 @@ void main() {
       expect(feedback.clickSoundCount, 1);
       expect(feedback.hapticCount, 0);
     });
+
+    testWidgets('IconButton forwards enableFeedback to Tooltip', (WidgetTester tester) async {
+      Widget buildIconButton({required bool enableFeedback}) {
+        return Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: IconButton(
+              onPressed: () {},
+              enableFeedback: enableFeedback,
+              tooltip: 'test tooltip',
+              icon: const Icon(Icons.link),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(
+        theme.useMaterial3 ? MaterialApp(theme: theme, home: buildIconButton(enableFeedback: false)) : Material(child: buildIconButton(enableFeedback: false)),
+      );
+      final Tooltip tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+      expect(tooltip.enableFeedback, false);
+
+      await tester.pumpWidget(
+        theme.useMaterial3 ? MaterialApp(theme: theme, home: buildIconButton(enableFeedback: true)) : Material(child: buildIconButton(enableFeedback: true)),
+      );
+      final Tooltip tooltip2 = tester.widget<Tooltip>(find.byType(Tooltip));
+      expect(tooltip2.enableFeedback, true);
+    });
   });
 
   testWidgets('IconButton responds to density changes.', (WidgetTester tester) async {

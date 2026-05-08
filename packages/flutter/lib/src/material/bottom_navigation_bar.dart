@@ -600,6 +600,7 @@ class _BottomNavigationTile extends StatelessWidget {
         preferBelow: false,
         verticalOffset: selectedIconSize + selectedFontSize,
         excludeFromSemantics: true,
+        enableFeedback: enableFeedback,
         child: result,
       );
     }

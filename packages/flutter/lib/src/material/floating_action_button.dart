@@ -600,7 +600,7 @@ class FloatingActionButton extends StatelessWidget {
     );
 
     if (tooltip != null) {
-      result = Tooltip(message: tooltip, child: result);
+      result = Tooltip(message: tooltip, enableFeedback: enableFeedback, child: result);
     }
 
     if (heroTag != null) {

@@ -3134,6 +3134,16 @@ void main() {
       expect(feedback.clickSoundCount, 2);
       expect(feedback.hapticCount, 0);
     });
+
+    testWidgets('PopupMenuButton forwards enableFeedback to Tooltip', (WidgetTester tester) async {
+      await tester.pumpWidget(buildFrame(widgetEnableFeedback: false));
+      final Tooltip tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+      expect(tooltip.enableFeedback, false);
+
+      await tester.pumpWidget(buildFrame(widgetEnableFeedback: true));
+      final Tooltip tooltip2 = tester.widget<Tooltip>(find.byType(Tooltip));
+      expect(tooltip2.enableFeedback, true);
+    });
   });
 
   testWidgets('Can customize PopupMenuButton icon', (WidgetTester tester) async {

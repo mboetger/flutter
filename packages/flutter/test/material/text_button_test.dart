@@ -1572,32 +1572,30 @@ void main() {
     }
   });
 
-  testWidgets(
-    'TextButton uses InkSparkle only for Android non-web when useMaterial3 is true',
-    (WidgetTester tester) async {
-      final theme = ThemeData();
+  testWidgets('TextButton uses InkSparkle only for Android non-web when useMaterial3 is true', (
+    WidgetTester tester,
+  ) async {
+    final theme = ThemeData();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: theme,
-          home: Center(
-            child: TextButton(onPressed: () {}, child: const Text('button')),
-          ),
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: Center(
+          child: TextButton(onPressed: () {}, child: const Text('button')),
         ),
-      );
+      ),
+    );
 
-      final InkWell buttonInkWell = tester.widget<InkWell>(
-        find.descendant(of: find.byType(TextButton), matching: find.byType(InkWell)),
-      );
+    final InkWell buttonInkWell = tester.widget<InkWell>(
+      find.descendant(of: find.byType(TextButton), matching: find.byType(InkWell)),
+    );
 
-      if (debugDefaultTargetPlatformOverride! == TargetPlatform.android && !kIsWeb) {
-        expect(buttonInkWell.splashFactory, equals(InkSparkle.splashFactory));
-      } else {
-        expect(buttonInkWell.splashFactory, equals(InkRipple.splashFactory));
-      }
-    },
-    variant: TargetPlatformVariant.all(),
-  );
+    if (debugDefaultTargetPlatformOverride! == TargetPlatform.android && !kIsWeb) {
+      expect(buttonInkWell.splashFactory, equals(InkSparkle.splashFactory));
+    } else {
+      expect(buttonInkWell.splashFactory, equals(InkRipple.splashFactory));
+    }
+  }, variant: TargetPlatformVariant.all());
 
   testWidgets('TextButton uses InkRipple when useMaterial3 is false', (WidgetTester tester) async {
     final theme = ThemeData(useMaterial3: false);
@@ -2684,4 +2682,64 @@ void main() {
     );
     expect(tester.getSize(find.byType(TextButton)), Size.zero);
   });
+
+  testWidgets('ButtonStyleButton forwards enableFeedback to Tooltip', (WidgetTester tester) async {
+    Widget buildButtonStyleButton({required bool enableFeedback}) {
+      return MaterialApp(
+        home: Center(
+          child: _TestButtonStyleButton(
+            onPressed: () {},
+            style: ButtonStyle(enableFeedback: enableFeedback),
+            tooltip: 'test tooltip',
+            child: const Text('X'),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildButtonStyleButton(enableFeedback: false));
+    final Tooltip tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+    expect(tooltip.enableFeedback, false);
+
+    await tester.pumpWidget(buildButtonStyleButton(enableFeedback: true));
+    final Tooltip tooltip2 = tester.widget<Tooltip>(find.byType(Tooltip));
+    expect(tooltip2.enableFeedback, true);
+  });
+}
+
+class _TestButtonStyleButton extends ButtonStyleButton {
+  const _TestButtonStyleButton({
+    required super.onPressed,
+    super.style,
+    super.tooltip,
+    required Widget super.child,
+  }) : super(
+         onLongPress: null,
+         onHover: null,
+         onFocusChange: null,
+         focusNode: null,
+         autofocus: false,
+         clipBehavior: Clip.none,
+       );
+
+  @override
+  ButtonStyle defaultStyleOf(BuildContext context) {
+    return TextButton.styleFrom(
+      minimumSize: const Size(64, 36),
+      maximumSize: Size.infinite,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4))),
+      visualDensity: Theme.of(context).visualDensity,
+      tapTargetSize: Theme.of(context).materialTapTargetSize,
+      animationDuration: kThemeChangeDuration,
+      enableFeedback: true,
+      alignment: Alignment.center,
+      elevation: 0.0,
+      padding: const EdgeInsets.all(8.0),
+      enabledMouseCursor: SystemMouseCursors.click,
+      disabledMouseCursor: SystemMouseCursors.basic,
+    );
+  }
+
+  @override
+  ButtonStyle? themeStyleOf(BuildContext context) => null;
 }
