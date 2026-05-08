@@ -211,8 +211,13 @@ void main() {
       offset: ViewportOffset.zero(),
       textSelectionDelegate: _FakeEditableTextState(),
       selection: const TextSelection(baseOffset: 0, extentOffset: 0),
+      cursorWidth: 0.0,
     );
     layout(editable, constraints: viewport, phase: EnginePhase.composite);
+    print('TEST CURSOR WIDTH: ${editable.cursorWidth}');
+    print(
+      'TEST ENDPOINTS: ${editable.getEndpointsForSelection(const TextSelection(baseOffset: 0, extentOffset: 0))}',
+    );
     editable.paint(context, paintOffset);
 
     final List<LeaderLayer> leaderLayers = context.pushedLayers.whereType<LeaderLayer>().toList();
@@ -876,12 +881,44 @@ void main() {
       textSelectionDelegate: delegate,
       startHandleLayerLink: LayerLink(),
       endHandleLayerLink: LayerLink(),
+      cursorWidth: 0.0,
     );
     editable.layout(BoxConstraints.loose(const Size(100, 100)));
     final List<TextSelectionPoint> endpoints = editable.getEndpointsForSelection(
       const TextSelection(baseOffset: 0, extentOffset: 1),
     );
     expect(endpoints[0].point.dx, 0);
+  });
+
+  test('getEndpointsForSelection centers the handle horizontally for collapsed selection', () {
+    final TextSelectionDelegate delegate = _FakeEditableTextState();
+    final editable = RenderEditable(
+      text: const TextSpan(text: 'a'),
+      textDirection: TextDirection.ltr,
+      offset: ViewportOffset.zero(),
+      textSelectionDelegate: delegate,
+      startHandleLayerLink: LayerLink(),
+      endHandleLayerLink: LayerLink(),
+      cursorWidth: 10.0,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+
+    layout(editable);
+
+    // For collapsed selection, it should use the fallback path because boxes will be empty.
+    final List<TextSelectionPoint> endpoints = editable.getEndpointsForSelection(
+      const TextSelection.collapsed(offset: 0),
+    );
+
+    // The caret offset dx should be 0.0, and shifted by cursorWidth / 2.0 (5.0).
+    expect(endpoints[0].point.dx, 5.0);
+
+    // Set custom cursor width.
+    editable.cursorWidth = 20.0;
+    final List<TextSelectionPoint> endpoints2 = editable.getEndpointsForSelection(
+      const TextSelection.collapsed(offset: 0),
+    );
+    expect(endpoints2[0].point.dx, 10.0);
   });
 
   test('TextSelectionPoint can compare', () {

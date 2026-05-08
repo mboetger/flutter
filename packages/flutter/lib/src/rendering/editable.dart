@@ -1745,7 +1745,8 @@ class RenderEditable extends RenderBox
     if (boxes.isEmpty) {
       // TODO(mpcomplete): This doesn't work well at an RTL/LTR boundary.
       final Offset caretOffset = _textPainter.getOffsetForCaret(selection.extent, _caretPrototype);
-      final Offset start = Offset(0.0, preferredLineHeight) + caretOffset + paintOffset;
+      final Offset start =
+          Offset(cursorWidth / 2.0, preferredLineHeight) + caretOffset + paintOffset;
       return <TextSelectionPoint>[TextSelectionPoint(start, null)];
     } else {
       final Offset start =
