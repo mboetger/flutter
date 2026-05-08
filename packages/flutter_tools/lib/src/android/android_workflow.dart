@@ -144,6 +144,11 @@ class AndroidValidator extends DoctorValidator {
       'variable JAVA_HOME set and the java binary in your PATH. '
       'You can download the JDK from https://www.oracle.com/technetwork/java/javase/downloads/.';
 
+  String get _androidMissingJdkCompiler =>
+      'No Java compiler (javac) found. A Java Development Kit (JDK) is required to compile Android applications.\n'
+      'If you only have the Java Runtime Environment (JRE) installed, please download and install the JDK from '
+      'https://www.oracle.com/technetwork/java/javase/downloads/.';
+
   /// Returns false if we cannot determine the Java version or if the version
   /// is older that the minimum allowed version.
   Future<bool> _checkJavaVersion(List<ValidationMessage> messages) async {
@@ -158,6 +163,10 @@ class AndroidValidator extends DoctorValidator {
       );
       if (!_java.canRun()) {
         messages.add(ValidationMessage.error(androidCantRunJavaBinary(_java.binaryPath)));
+        return false;
+      }
+      if (!_java.canRunCompiler()) {
+        messages.add(ValidationMessage.error(_androidMissingJdkCompiler));
         return false;
       }
       Version? javaVersion;

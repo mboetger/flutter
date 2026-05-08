@@ -36,6 +36,7 @@ class Java {
   Java({
     required this.javaHome,
     required this.binaryPath,
+    required this.compilerPath,
     required this.javaSource,
     required Logger logger,
     required FileSystem fileSystem,
@@ -95,6 +96,11 @@ class Java {
       operatingSystemUtils: os,
       platform: platform,
     );
+    final String? compiler = _findJavacBinary(
+      javaHome: home?.path,
+      fileSystem: fileSystem,
+      operatingSystemUtils: os,
+    );
 
     if (binary == null) {
       return null;
@@ -107,6 +113,7 @@ class Java {
     return Java(
       javaHome: home?.path,
       binaryPath: binary,
+      compilerPath: compiler,
       javaSource: javaSource,
       logger: logger,
       fileSystem: fileSystem,
@@ -131,6 +138,9 @@ class Java {
   /// If you need to invoke the binary directly, consider adding a new method
   /// to this class instead.
   final String binaryPath;
+
+  /// The path of the runtime environments' javac binary.
+  final String? compilerPath;
 
   /// Indicates the source from where the Java runtime was located.
   ///
@@ -221,6 +231,10 @@ class Java {
   bool canRun() {
     return _processManager.canRun(binaryPath);
   }
+
+  bool canRunCompiler() {
+    return compilerPath != null && _processManager.canRun(compilerPath);
+  }
 }
 
 _JavaHomePathWithSource? _findJavaHome({
@@ -259,6 +273,19 @@ String? _findJavaBinary({
 
   // Fallback to PATH based lookup.
   return operatingSystemUtils.which(_javaExecutable)?.path;
+}
+
+String? _findJavacBinary({
+  required String? javaHome,
+  required FileSystem fileSystem,
+  required OperatingSystemUtils operatingSystemUtils,
+}) {
+  if (javaHome != null) {
+    return fileSystem.path.join(javaHome, 'bin', 'javac');
+  }
+
+  // Fallback to PATH based lookup.
+  return operatingSystemUtils.which('javac')?.path;
 }
 
 // Returns a user visible String that says the tool failed to parse

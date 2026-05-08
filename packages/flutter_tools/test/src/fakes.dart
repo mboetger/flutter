@@ -794,15 +794,18 @@ class FakeJava extends Fake implements Java {
     this.javaHome = '/android-studio/jbr',
     this.javaSource = JavaSource.androidStudio,
     String binary = '/android-studio/jbr/bin/java',
+    this.compilerPath = '/android-studio/jbr/bin/javac',
     Version? version,
     bool canRun = true,
+    bool canRunCompiler = true,
   }) : binaryPath = binary,
        version = version ?? const Version.withText(19, 0, 2, 'openjdk 19.0.2 2023-01-17'),
        _environment = <String, String>{
          Java.javaHomeEnvironmentVariable: ?javaHome,
          'PATH': '/android-studio/jbr/bin',
        },
-       _canRun = canRun;
+       _canRun = canRun,
+       _canRunCompiler = canRunCompiler;
 
   @override
   String? javaHome;
@@ -811,10 +814,14 @@ class FakeJava extends Fake implements Java {
   String binaryPath;
 
   @override
+  String? compilerPath;
+
+  @override
   JavaSource javaSource;
 
   final Map<String, String> _environment;
   final bool _canRun;
+  final bool _canRunCompiler;
 
   @override
   Map<String, String> get environment => _environment;
@@ -825,6 +832,11 @@ class FakeJava extends Fake implements Java {
   @override
   bool canRun() {
     return _canRun;
+  }
+
+  @override
+  bool canRunCompiler() {
+    return _canRunCompiler;
   }
 }
 

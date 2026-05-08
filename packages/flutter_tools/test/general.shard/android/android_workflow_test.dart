@@ -855,6 +855,44 @@ Android sdkmanager tool was found, but failed to run
       true,
     );
   });
+
+  testUsingContext('detects a JRE-only Java installation (missing javac)', () async {
+    final Platform platform = FakePlatform()
+      ..environment = <String, String>{
+        'HOME': '/home/me',
+        Java.javaHomeEnvironmentVariable: 'home/java',
+        'PATH': '',
+      };
+    final sdkVersion = FakeAndroidSdkVersion()
+      ..sdkLevel = gradle_utils.compileSdkVersionInt
+      ..buildToolsVersion = gradle_utils.minBuildToolsVersion;
+
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..sdkManagerPath = '/foo/bar/sdkmanager'
+      ..emulatorPath = 'path/to/emulator';
+    sdk.latestVersion = sdkVersion;
+
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(canRunCompiler: false),
+      androidSdk: sdk,
+      logger: logger,
+      platform: platform,
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(validationResult.type, ValidationType.partial);
+    expect(
+      validationResult.messages.last.message,
+      contains(
+        'No Java compiler (javac) found. A Java Development Kit (JDK) is required to compile Android applications.',
+      ),
+    );
+  });
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
