@@ -6,6 +6,7 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_device_discovery.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
+import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/user_messages.dart';
@@ -113,9 +114,37 @@ void main() {
       androidDevices.pollingGetDevices(),
       throwsToolExit(
         message:
-            'Unable to run "adb", check your Android SDK installation and ANDROID_HOME environment variable: adb\n'
-            'Error details: Process exited abnormally with exit code 1:\n'
+            'Adb command failed: adb devices -l\n'
+            'Exit code: 1\n'
+            'Error details:\n'
             '<stderr from adb>',
+      ),
+    );
+  });
+
+  testWithoutContext('AndroidDevices throwsToolExit on adb start failure (permission denied)', () {
+    final ProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
+      const FakeCommand(
+        command: <String>['adb', 'devices', '-l'],
+        exception: ProcessException('adb', <String>['devices', '-l'], 'Permission denied', 13),
+      ),
+    ]);
+    final androidDevices = AndroidDevices(
+      androidSdk: FakeAndroidSdk(),
+      logger: BufferLogger.test(),
+      androidWorkflow: androidWorkflow,
+      processManager: processManager,
+      fileSystem: MemoryFileSystem.test(),
+      platform: FakePlatform(),
+      userMessages: UserMessages(),
+    );
+
+    expect(
+      androidDevices.pollingGetDevices(),
+      throwsToolExit(
+        message:
+            'Unable to run "adb", check your Android SDK installation and ANDROID_HOME environment variable: adb\n'
+            'Error details: Permission denied',
       ),
     );
   });

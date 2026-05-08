@@ -66,13 +66,10 @@ class AndroidDevices extends PollingDeviceDiscovery {
     if (_doesNotHaveAdb()) {
       return <AndroidDevice>[];
     }
-    String text;
+    final String adbPath = _androidSdk!.adbPath!;
+    RunResult result;
     try {
-      text = (await _processUtils.run(<String>[
-        _androidSdk!.adbPath!,
-        'devices',
-        '-l',
-      ], throwOnError: true)).stdout.trim();
+      result = await _processUtils.run(<String>[adbPath, 'devices', '-l']);
     } on ProcessException catch (exception) {
       throwToolExit(
         'Unable to run "adb", check your Android SDK installation and '
@@ -80,8 +77,17 @@ class AndroidDevices extends PollingDeviceDiscovery {
         'Error details: ${exception.message}',
       );
     }
+
+    if (result.exitCode != 0) {
+      throwToolExit(
+        'Adb command failed: $adbPath devices -l\n'
+        'Exit code: ${result.exitCode}\n'
+        'Error details:\n${result.stderr}',
+      );
+    }
+
     final devices = <AndroidDevice>[];
-    _parseADBDeviceOutput(text, devices: devices);
+    _parseADBDeviceOutput(result.stdout.trim(), devices: devices);
     return devices;
   }
 
