@@ -1173,6 +1173,9 @@ class AdbLogReader extends DeviceLogReader {
     // See https://github.com/flutter/flutter/issues/160598
     RegExp(r'ViewPostIme pointer'),
     RegExp(r'mali.instrumentation.graph.work'),
+    RegExp(r'^[VDIWEF]/EGL_emulation\b'),
+    RegExp(r'^[VDIWEF]/goldfish\b'),
+    RegExp(r'^[VDIWEF]/HostConnection\b'),
   ];
 
   // 'F/libc(pid): Fatal signal 11'
