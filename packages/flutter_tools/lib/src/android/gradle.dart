@@ -568,6 +568,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     if (androidBuildInfo.splitPerAbi) {
       options.add('-Psplit-per-abi=true');
     }
+    _checkTaskAffinityVulnerability(project);
     late Stopwatch sw;
     final int exitCode = await _runGradleTask(
       assembleTask,
@@ -994,6 +995,48 @@ class AndroidGradleBuilder implements AndroidBuilder {
       throwToolExit('Gradle task $taskName failed with exit code $exitCode');
     }
     return outputPath;
+  }
+
+  void _checkTaskAffinityVulnerability(FlutterProject project) {
+    final File appGradleFile = project.android.appGradleFile;
+    if (!appGradleFile.existsSync()) {
+      return;
+    }
+    final String appGradleContent = appGradleFile.readAsStringSync();
+    final Match? minSdkMatch = RegExp(
+      r'(?<=^\s*)minSdk(Version)?\s*=?\s*(\d+)',
+      multiLine: true,
+    ).firstMatch(appGradleContent);
+    var minSdkVersion = 24; // Default minSdkVersionInt
+    if (minSdkMatch != null) {
+      minSdkVersion = int.tryParse(minSdkMatch.group(2)!) ?? 24;
+    } else if (appGradleContent.contains('flutter.minSdkVersion')) {
+      minSdkVersion = 24;
+    }
+
+    if (minSdkVersion >= 28) {
+      return;
+    }
+
+    final File manifestFile = project.android.appManifestFile;
+    if (!manifestFile.existsSync()) {
+      return;
+    }
+    final String manifestContent = manifestFile.readAsStringSync();
+    if (!manifestContent.contains('android:taskAffinity')) {
+      _logger.printStatus(
+        "\nWarning: this application's AndroidManifest.xml file leaves it vulnerable to the StrandHogg v1 and\n"
+        'StrandHogg v2 Android vulnerabilities.\n'
+        'To mitigate the StrandHogg v1 vulnerability, set "android:taskAffinity" to the empty string in the\n'
+        '<activity> tag. To mitigate the StrandHogg v2 vulnerability, the minSdkVersion should be set to 28\n'
+        'or higher.\n'
+        'For more details, see: https://developer.android.com/privacy-and-security/risks/strandhogg\n'
+        'This warning can be silenced by including the string "android:taskAffinity" somewhere in the app\'s\n'
+        'AndroidManifest.xml file or by setting the "minSdkVersion" to a sufficiently high value.\n',
+        color: TerminalColor.yellow,
+        emphasis: true,
+      );
+    }
   }
 }
 
