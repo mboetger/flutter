@@ -1832,6 +1832,48 @@ android {
         },
       );
       _testInMemory(
+        'Project.android.hostAppGradleFile throws ToolExit when neither build.gradle nor build.gradle.kts exists',
+        () async {
+          final Directory tempDir = globals.fs.systemTempDirectory.createTempSync(
+            'flutter_project_build_files',
+          );
+          final Directory androidDir = tempDir.childDirectory('android')
+            ..createSync(recursive: true);
+
+          final FlutterProject project = FlutterProject.fromDirectory(tempDir);
+
+          expect(
+            () => project.android.hostAppGradleFile,
+            throwsToolExit(
+              message:
+                  'Gradle build file not found.\n'
+                  'Neither "build.gradle" nor "build.gradle.kts" could be found in directory "${androidDir.path}".',
+            ),
+          );
+        },
+      );
+      _testInMemory(
+        'Project.android.settingsGradleFile throws ToolExit when neither settings.gradle nor settings.gradle.kts exists',
+        () async {
+          final Directory tempDir = globals.fs.systemTempDirectory.createTempSync(
+            'flutter_project_build_files',
+          );
+          final Directory androidDir = tempDir.childDirectory('android')
+            ..createSync(recursive: true);
+
+          final FlutterProject project = FlutterProject.fromDirectory(tempDir);
+
+          expect(
+            () => project.android.settingsGradleFile,
+            throwsToolExit(
+              message:
+                  'Gradle build file not found.\n'
+                  'Neither "settings.gradle" nor "settings.gradle.kts" could be found in directory "${androidDir.path}".',
+            ),
+          );
+        },
+      );
+      _testInMemory(
         'Project.android.appManifestFile resolves to android/app/src/main/AndroidManifest.xml when build.gradle exists',
         () async {
           final Directory tempDir = globals.fs.systemTempDirectory.createTempSync(

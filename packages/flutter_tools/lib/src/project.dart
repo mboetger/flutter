@@ -705,10 +705,10 @@ class AndroidProject extends FlutterProjectPlatform {
       return kotlinFile;
     }
 
-    // TODO(bartekpacia): An exception should be thrown when neither
-    // the Groovy or Kotlin file exists, instead of falling back to the
-    // Groovy file. See #141180.
-    return groovyFile;
+    throwToolExit(
+      'Gradle build file not found.\n'
+      'Neither "$baseFilename" nor "$baseFilename.kts" could be found in directory "${directory.path}".',
+    );
   }
 
   /// Gets the module-level build.gradle file.
