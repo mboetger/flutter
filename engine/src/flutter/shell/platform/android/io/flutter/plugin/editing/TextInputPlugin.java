@@ -726,7 +726,10 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
   }
 
   private void notifyViewEntered() {
-    if (Build.VERSION.SDK_INT < API_LEVELS.API_26 || afm == null || !needsAutofill()) {
+    if (Build.VERSION.SDK_INT < API_LEVELS.API_26
+        || afm == null
+        || !needsAutofill()
+        || lastClientRect == null) {
       return;
     }
 
@@ -749,6 +752,17 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
 
     final String triggerIdentifier = configuration.autofill.uniqueIdentifier;
     afm.notifyViewExited(mView, triggerIdentifier.hashCode());
+  }
+
+  public void onWindowFocusChanged(boolean hasWindowFocus) {
+    if (Build.VERSION.SDK_INT < API_LEVELS.API_26 || afm == null || !needsAutofill()) {
+      return;
+    }
+    if (hasWindowFocus) {
+      notifyViewEntered();
+    } else {
+      notifyViewExited();
+    }
   }
 
   private void notifyValueChanged(String newValue) {
