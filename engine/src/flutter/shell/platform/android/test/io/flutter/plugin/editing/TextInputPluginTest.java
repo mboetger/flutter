@@ -2505,6 +2505,97 @@ public class TextInputPluginTest {
           });
     }
   }
+
+  @Config(minSdk = API_LEVELS.API_26)
+  @SuppressWarnings("deprecation")
+  @Test
+  public void autofill_testWindowFocusChanged() {
+    if (Build.VERSION.SDK_INT < API_LEVELS.API_26) {
+      return;
+    }
+
+    TestAfm testAfm = Shadow.extract(ctx.getSystemService(AutofillManager.class));
+    try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
+      scenario.onActivity(
+          activity -> {
+            FlutterView testView = new FlutterView(activity);
+            ArgumentCaptor<BinaryMessenger.BinaryMessageHandler> binaryMessageHandlerCaptor =
+                ArgumentCaptor.forClass(BinaryMessenger.BinaryMessageHandler.class);
+            DartExecutor mockBinaryMessenger = mock(DartExecutor.class);
+            TextInputChannel textInputChannel = new TextInputChannel(mockBinaryMessenger);
+            ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+            TextInputPlugin textInputPlugin =
+                new TextInputPlugin(
+                    testView,
+                    textInputChannel,
+                    scribeChannel,
+                    mock(PlatformViewsController.class),
+                    mock(PlatformViewsController2.class));
+
+            verify(mockBinaryMessenger, times(1))
+                .setMessageHandler(any(String.class), binaryMessageHandlerCaptor.capture());
+
+            final TextInputChannel.Configuration.Autofill autofill =
+                new TextInputChannel.Configuration.Autofill(
+                    "1",
+                    new String[] {"HINT1"},
+                    "placeholder1",
+                    new TextInputChannel.TextEditState("", 0, 0, -1, -1));
+
+            final TextInputChannel.Configuration config =
+                new TextInputChannel.Configuration(
+                    false,
+                    false,
+                    true,
+                    true,
+                    false,
+                    TextInputChannel.TextCapitalization.NONE,
+                    null,
+                    null,
+                    null,
+                    autofill,
+                    null,
+                    null,
+                    null);
+
+            textInputPlugin.setTextInputClient(0, config);
+
+            // Initially we haven't received client size yet, so lastClientRect is null.
+            // notifyViewEntered shouldn't be called yet.
+            textInputPlugin.onWindowFocusChanged(true);
+            assertEquals(testAfm.empty, testAfm.enterId);
+
+            // Now send the size and transform to initialize lastClientRect.
+            try {
+              JSONObject arguments = new JSONObject();
+              arguments.put("width", 100.0);
+              arguments.put("height", 50.0);
+              JSONArray transform = new JSONArray();
+              for (int i = 0; i < 16; i++) {
+                transform.put(i == 15 ? 1.0 : 0.0); // Identity matrix
+              }
+              arguments.put("transform", transform);
+
+              BinaryMessenger.BinaryMessageHandler binaryMessageHandler =
+                  binaryMessageHandlerCaptor.getValue();
+              sendToBinaryMessageHandler(
+                  binaryMessageHandler, "TextInput.setEditableSizeAndTransform", arguments);
+            } catch (JSONException e) {
+              org.junit.Assert.fail(e.getMessage());
+            }
+
+            // Notify window focus gained. notifyViewEntered should be called.
+            testAfm.resetStates();
+            textInputPlugin.onWindowFocusChanged(true);
+            assertEquals("1".hashCode(), testAfm.enterId);
+
+            // Notify window focus lost. notifyViewExited should be called.
+            testAfm.resetStates();
+            textInputPlugin.onWindowFocusChanged(false);
+            assertEquals("1".hashCode(), testAfm.exitId);
+          });
+    }
+  }
   // -------- End: Autofill Tests -------
 
   @SuppressWarnings("deprecation")
