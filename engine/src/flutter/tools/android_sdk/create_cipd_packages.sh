@@ -8,8 +8,9 @@
 
 print_usage () {
   echo "Usage:"
-  echo "  ./create_cipd_packages.sh <VERSION_TAG> [PATH_TO_SDK_DIR]"
+  echo "  ./create_cipd_packages.sh [-v|--verbose] <VERSION_TAG> [PATH_TO_SDK_DIR]"
   echo "    Downloads, packages, and uploads Android SDK packages where:"
+  echo "      - -v, --verbose optional flag to print more logs."
   echo "      - VERSION_TAG is the tag of the cipd packages, e.g. 28r6 or 31v1. Must contain"
   echo "                    only lowercase letters and numbers."
   echo "      - PATH_TO_SDK_DIR is the path to the sdk folder. If omitted, this defaults to"
@@ -30,6 +31,12 @@ print_usage () {
   echo "This script expects the cmdline-tools to be installed in your specified PATH_TO_SDK_DIR"
   echo "and should only be run on linux or macos hosts."
 }
+
+verbose=false
+if [[ "$1" == "-v" || "$1" == "--verbose" ]]; then
+  verbose=true
+  shift
+fi
 
 first_argument=$1
 # Validate version or argument is provided.
@@ -114,7 +121,11 @@ for platform in "${platforms[@]}"; do
     IFS=',' read -ra ADDR <<< "${split[0]}"
     for i in "${ADDR[@]}"; do
       echo "Installing $i"
-      yes "y" | $sdkmanager_path --sdk_root=$sdk_root "$i"
+      if [ "$verbose" = true ]; then
+        yes "y" | $sdkmanager_path --sdk_root=$sdk_root "$i"
+      else
+        yes "y" | $sdkmanager_path --sdk_root=$sdk_root "$i" > /dev/null 2>&1
+      fi
     done
 
     # We copy only the relevant directories to a temporary dir
@@ -126,7 +137,11 @@ for platform in "${platforms[@]}"; do
   done
 
   # Accept all licenses to ensure they are generated and uploaded.
-  yes "y" | $sdkmanager_path --licenses --sdk_root=$sdk_root
+  if [ "$verbose" = true ]; then
+    yes "y" | $sdkmanager_path --licenses --sdk_root=$sdk_root
+  else
+    yes "y" | $sdkmanager_path --licenses --sdk_root=$sdk_root > /dev/null 2>&1
+  fi
   cp -a "$sdk_root/licenses" "$upload_dir/sdk"
 
   archs=("amd64")
@@ -142,7 +157,11 @@ for platform in "${platforms[@]}"; do
     fi
 
     echo "Uploading $upload_dir as $cipd_name to CIPD"
-    cipd create -in $upload_dir -name "flutter/android/sdk/all/$cipd_name" -install-mode copy -tag version:$first_argument
+    if [ "$verbose" = true ]; then
+      cipd create -in $upload_dir -name "flutter/android/sdk/all/$cipd_name" -install-mode copy -tag version:$first_argument
+    else
+      cipd create -in $upload_dir -name "flutter/android/sdk/all/$cipd_name" -install-mode copy -tag version:$first_argument > /dev/null 2>&1
+    fi
   done
 
   rm -rf $sdk_root
