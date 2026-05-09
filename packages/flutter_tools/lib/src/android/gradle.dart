@@ -314,9 +314,13 @@ class AndroidGradleBuilder implements AndroidBuilder {
 
     GradleHandledError? detectedGradleError;
     String? detectedGradleErrorLine;
+    var encounteredWhatWentWrong = false;
     String? consumeLog(String line) {
       if (outputParser != null) {
         outputParser(line);
+      }
+      if (line.contains('* What went wrong:')) {
+        encounteredWhatWentWrong = true;
       }
       // The log lines that trigger incompatibleKotlinVersionHandler don't
       // always indicate an error, and there are times that that handler
@@ -327,6 +331,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
         return line;
       }
       for (final gradleError in localGradleErrors) {
+        if (gradleError == incompatibleKotlinVersionHandler && !encounteredWhatWentWrong) {
+          continue;
+        }
         if (gradleError.test(line)) {
           detectedGradleErrorLine = line;
           detectedGradleError = gradleError;
