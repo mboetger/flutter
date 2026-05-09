@@ -23,6 +23,9 @@ const kAdbStartServerCommand = FakeCommand(command: <String>['adb', 'start-serve
 const kInstallCommand = FakeCommand(
   command: <String>['adb', '-s', '1234', 'install', '-t', '-r', '--user', '10', 'app-debug.apk'],
 );
+const kMkdirCommand = FakeCommand(
+  command: <String>['adb', '-s', '1234', 'shell', 'mkdir', '-p', '/sdcard/Android/data/app'],
+);
 const kStoreShaCommand = FakeCommand(
   command: <String>[
     'adb',
@@ -33,7 +36,7 @@ const kStoreShaCommand = FakeCommand(
     '-n',
     '',
     '>',
-    '/data/local/tmp/sky.app.sha1',
+    '/sdcard/Android/data/app/sky.sha1',
   ],
 );
 
@@ -105,6 +108,7 @@ void main() {
           stdout: '[ro.build.version.sdk]: [${gradle_utils.minSdkVersion}]',
         ),
         kInstallCommand,
+        kMkdirCommand,
         kStoreShaCommand,
       ]);
       final File apk = fileSystem.file('app-debug.apk')..createSync();
@@ -127,6 +131,7 @@ void main() {
       kAdbStartServerCommand,
       const FakeCommand(command: <String>['adb', '-s', '1234', 'shell', 'getprop']),
       kInstallCommand,
+      kMkdirCommand,
       kStoreShaCommand,
     ]);
     final File apk = fileSystem.file('app-debug.apk')..createSync();
@@ -187,7 +192,7 @@ void main() {
     expect(processManager, hasNoRemainingExpectations);
   });
 
-  testWithoutContext('Will continue install if the correct version is up to date', () async {
+  testWithoutContext('Will skip install if the correct version is up to date', () async {
     final processManager = FakeProcessManager.list(<FakeCommand>[
       kAdbVersionCommand,
       kAdbStartServerCommand,
@@ -195,19 +200,23 @@ void main() {
         command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
         stdout: '[ro.build.version.sdk]: [${gradle_utils.targetSdkVersion}]',
       ),
-      kInstallCommand,
       const FakeCommand(
         command: <String>[
           'adb',
           '-s',
           '1234',
           'shell',
-          'echo',
-          '-n',
-          'example_sha',
-          '>',
-          '/data/local/tmp/sky.app.sha1',
+          'pm',
+          'list',
+          'packages',
+          '--user',
+          '10',
+          'app',
         ],
+        stdout: 'package:app\n',
+      ),
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'shell', 'cat', '/sdcard/Android/data/app/sky.sha1'],
         stdout: 'example_sha',
       ),
     ]);
@@ -240,21 +249,6 @@ void main() {
             'adb',
             '-s',
             '1234',
-            'install',
-            '-t',
-            '-r',
-            '--user',
-            '10',
-            'app-debug.apk',
-          ],
-          exitCode: 1,
-          stderr: '[INSTALL_FAILED_INSUFFICIENT_STORAGE]',
-        ),
-        const FakeCommand(
-          command: <String>[
-            'adb',
-            '-s',
-            '1234',
             'shell',
             'pm',
             'list',
@@ -266,9 +260,46 @@ void main() {
           stdout: 'package:app\n',
         ),
         const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'cat',
+            '/sdcard/Android/data/app/sky.sha1',
+          ],
+          stdout: 'different_example_sha',
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'install',
+            '-t',
+            '-r',
+            '--user',
+            '10',
+            'app-debug.apk',
+          ],
+          exitCode: 1,
+          stderr: '[INSTALL_FAILED_INSUFFICIENT_STORAGE]',
+        ),
+        const FakeCommand(
           command: <String>['adb', '-s', '1234', 'uninstall', '--user', '10', 'app'],
         ),
         kInstallCommand,
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'mkdir',
+            '-p',
+            '/sdcard/Android/data/app',
+          ],
+        ),
         const FakeCommand(
           command: <String>[
             'adb',
@@ -279,7 +310,7 @@ void main() {
             '-n',
             'example_sha',
             '>',
-            '/data/local/tmp/sky.app.sha1',
+            '/sdcard/Android/data/app/sky.sha1',
           ],
         ),
       ]);
