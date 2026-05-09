@@ -39,6 +39,7 @@ import 'migrations/android_studio_java_gradle_conflict_migration.dart';
 import 'migrations/cmake_android_16k_pages_migration.dart';
 import 'migrations/disable_built_in_kotlin_migration.dart';
 import 'migrations/disable_new_dsl_migration.dart';
+import 'migrations/kotlin_version_migrator.dart';
 import 'migrations/min_sdk_version_migration.dart';
 import 'migrations/multidex_removal_migration.dart';
 import 'migrations/top_level_gradle_build_file_migration.dart';
@@ -464,6 +465,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
       CmakeAndroid16kPagesMigration(project.android, _logger),
       DisableBuiltInKotlinMigration(project.android, _logger),
       DisableNewDslMigration(project.android, _logger),
+      KotlinVersionMigrator(project.android, _logger),
     ];
 
     final migration = ProjectMigration(migrators);

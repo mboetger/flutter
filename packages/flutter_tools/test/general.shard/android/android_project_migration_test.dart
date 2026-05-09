@@ -9,6 +9,7 @@ import 'package:flutter_tools/src/android/gradle_utils.dart';
 import 'package:flutter_tools/src/android/migrations/android_studio_java_gradle_conflict_migration.dart';
 import 'package:flutter_tools/src/android/migrations/disable_built_in_kotlin_migration.dart';
 import 'package:flutter_tools/src/android/migrations/disable_new_dsl_migration.dart';
+import 'package:flutter_tools/src/android/migrations/kotlin_version_migrator.dart';
 import 'package:flutter_tools/src/android/migrations/min_sdk_version_migration.dart';
 import 'package:flutter_tools/src/android/migrations/multidex_removal_migration.dart';
 import 'package:flutter_tools/src/android/migrations/top_level_gradle_build_file_migration.dart';
@@ -1067,6 +1068,97 @@ android.newDsl  :  false
         },
       );
     });
+
+    group('KotlinVersionMigrator', () {
+      late MemoryFileSystem memoryFileSystem;
+      late BufferLogger bufferLogger;
+      late FakeAndroidProject project;
+      late KotlinVersionMigrator migration;
+
+      setUp(() {
+        memoryFileSystem = MemoryFileSystem.test();
+        memoryFileSystem.currentDirectory.childDirectory('android').createSync();
+        bufferLogger = BufferLogger.test();
+        project = FakeAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android'),
+        );
+        migration = KotlinVersionMigrator(project, bufferLogger);
+      });
+
+      testWithoutContext('skipped if files are missing', () async {
+        await migration.migrate();
+        expect(project.hostAppGradleFile.existsSync(), isFalse);
+        expect(project.settingsGradleFile.existsSync(), isFalse);
+      });
+
+      testWithoutContext('upgrades ext.kotlin_version in build.gradle', () async {
+        project.hostAppGradleFile.createSync(recursive: true);
+        project.hostAppGradleFile.writeAsStringSync(r'''
+buildscript {
+    ext.kotlin_version = '1.6.10'
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+''');
+
+        await migration.migrate();
+
+        expect(
+          project.hostAppGradleFile.readAsStringSync(),
+          contains("ext.kotlin_version = '1.8.10'"),
+        );
+      });
+
+      testWithoutContext('upgrades classpath in build.gradle', () async {
+        project.hostAppGradleFile.createSync(recursive: true);
+        project.hostAppGradleFile.writeAsStringSync(r'''
+dependencies {
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.7.10"
+}
+''');
+
+        await migration.migrate();
+
+        expect(
+          project.hostAppGradleFile.readAsStringSync(),
+          contains('classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.10"'),
+        );
+      });
+
+      testWithoutContext('upgrades plugin version in settings.gradle', () async {
+        project.settingsGradleFile.createSync(recursive: true);
+        project.settingsGradleFile.writeAsStringSync(r'''
+plugins {
+    id "org.jetbrains.kotlin.android" version "1.7.20" apply false
+}
+''');
+
+        await migration.migrate();
+
+        expect(
+          project.settingsGradleFile.readAsStringSync(),
+          contains('id "org.jetbrains.kotlin.android" version "1.8.10" apply false'),
+        );
+      });
+
+      testWithoutContext('does not downgrade version >= 1.8.10', () async {
+        project.hostAppGradleFile.createSync(recursive: true);
+        project.hostAppGradleFile.writeAsStringSync(r'''
+buildscript {
+    ext.kotlin_version = '1.9.20'
+}
+''');
+
+        await migration.migrate();
+
+        expect(
+          project.hostAppGradleFile.readAsStringSync(),
+          contains("ext.kotlin_version = '1.9.20'"),
+        );
+      });
+    });
   });
 }
 
@@ -1088,6 +1180,12 @@ class FakeAndroidProject extends Fake implements AndroidProject {
 
   @override
   File get appGradleFile => hostAppGradleRoot.childDirectory('app').childFile('build.gradle');
+
+  @override
+  File get hostAppGradleFile => hostAppGradleRoot.childFile('build.gradle');
+
+  @override
+  File get settingsGradleFile => hostAppGradleRoot.childFile('settings.gradle');
 }
 
 class FakeKotlinDslAndroidProject extends FakeAndroidProject {
