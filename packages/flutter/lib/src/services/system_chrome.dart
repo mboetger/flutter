@@ -744,12 +744,13 @@ abstract final class SystemChrome {
   ///  * [AnnotatedRegion], the widget used to place a `SystemUiOverlayStyle` into
   ///    the layer tree.
   static void setSystemUIOverlayStyle(SystemUiOverlayStyle style) {
+    _latestStyle = style;
     if (_pendingStyle != null) {
       // The microtask has already been queued; just update the pending value.
       _pendingStyle = style;
       return;
     }
-    if (style == _latestStyle) {
+    if (style == _lastSentStyle) {
       // Trivial success: no microtask has been queued and the given style is
       // already in effect, so no need to queue a microtask.
       return;
@@ -757,7 +758,7 @@ abstract final class SystemChrome {
     _pendingStyle = style;
     scheduleMicrotask(() {
       assert(_pendingStyle != null);
-      if (_pendingStyle != _latestStyle) {
+      if (_pendingStyle != _lastSentStyle) {
         SystemChannels.platform
             .invokeMethod<void>('SystemChrome.setSystemUIOverlayStyle', _pendingStyle!._toMap())
             .then(
@@ -773,7 +774,7 @@ abstract final class SystemChrome {
                 );
               },
             );
-        _latestStyle = _pendingStyle;
+        _lastSentStyle = _pendingStyle;
       }
       _pendingStyle = null;
     });
@@ -781,13 +782,25 @@ abstract final class SystemChrome {
 
   /// Called by the binding during a transition to a new app lifecycle state.
   static void handleAppLifecycleStateChanged(AppLifecycleState state) {
-    // When the app is detached, clear the record of the style sent to the host
+    // When the app is detached or paused, clear the record of the style sent to the host
     // so that it will be sent again when the app is reattached.
-    if (state == AppLifecycleState.detached) {
+    if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
       scheduleMicrotask(() {
-        _latestStyle = null;
+        _lastSentStyle = null;
       });
+    } else if (state == AppLifecycleState.resumed) {
+      if (_latestStyle != null && _lastSentStyle == null) {
+        setSystemUIOverlayStyle(_latestStyle!);
+      }
     }
+  }
+
+  /// Resets the static state of [SystemChrome] for testing.
+  @visibleForTesting
+  static void resetStaticState() {
+    _latestStyle = null;
+    _lastSentStyle = null;
+    _pendingStyle = null;
   }
 
   static SystemUiOverlayStyle? _pendingStyle;
@@ -796,4 +809,5 @@ abstract final class SystemChrome {
   @visibleForTesting
   static SystemUiOverlayStyle? get latestStyle => _latestStyle;
   static SystemUiOverlayStyle? _latestStyle;
+  static SystemUiOverlayStyle? _lastSentStyle;
 }

@@ -11,6 +11,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() {
+    SystemChrome.resetStaticState();
+  });
+
   testWidgets('SystemChrome overlay style test', (WidgetTester tester) async {
     final log = <MethodCall>[];
 
@@ -385,10 +389,93 @@ void main() {
     SystemChrome.handleAppLifecycleStateChanged(ui.AppLifecycleState.detached);
     await tester.idle();
     SystemChrome.handleAppLifecycleStateChanged(ui.AppLifecycleState.resumed);
-    SystemChrome.setSystemUIOverlayStyle(systemUiOverlayStyle);
+    // Wait for automatic restoration to complete.
     await tester.idle();
     expect(log.length, equals(2));
   });
+
+  testWidgets('SystemChrome restores style on app resume after detachment', (
+    WidgetTester tester,
+  ) async {
+    final log = <MethodCall>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        log.add(methodCall);
+        return null;
+      },
+    );
+
+    const SystemUiOverlayStyle style = SystemUiOverlayStyle.light;
+    SystemChrome.setSystemUIOverlayStyle(style);
+    await tester.idle();
+    expect(log, hasLength(1));
+    log.clear();
+
+    // App transitions through detached state.
+    SystemChrome.handleAppLifecycleStateChanged(ui.AppLifecycleState.detached);
+    await tester.idle();
+    expect(log.isEmpty, isTrue);
+
+    // App returns to resumed state (re-attached).
+    SystemChrome.handleAppLifecycleStateChanged(ui.AppLifecycleState.resumed);
+    await tester.idle();
+
+    // The desired style should have been automatically restored.
+    expect(log, hasLength(1));
+    expect(log.single.method, equals('SystemChrome.setSystemUIOverlayStyle'));
+  });
+
+  testWidgets(
+    'SystemChrome restores latest style on resume when updated multiple times before detachment',
+    (WidgetTester tester) async {
+      final log = <MethodCall>[];
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          return null;
+        },
+      );
+
+      // Apply multiple styles in the same event loop cycle.
+      SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+      SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+      await tester.idle();
+      expect(log, hasLength(1));
+      log.clear();
+
+      // App transitions through detached state.
+      SystemChrome.handleAppLifecycleStateChanged(ui.AppLifecycleState.detached);
+      await tester.idle();
+      expect(log.isEmpty, isTrue);
+
+      // App returns to resumed state.
+      SystemChrome.handleAppLifecycleStateChanged(ui.AppLifecycleState.resumed);
+      await tester.idle();
+
+      // The latest style (light) should be restored.
+      expect(log, hasLength(1));
+      expect(
+        log.single,
+        isMethodCall(
+          'SystemChrome.setSystemUIOverlayStyle',
+          arguments: <String, dynamic>{
+            'systemNavigationBarColor': 4278190080,
+            'systemNavigationBarDividerColor': null,
+            'systemStatusBarContrastEnforced': null,
+            'statusBarColor': null,
+            'statusBarBrightness': 'Brightness.dark',
+            'statusBarIconBrightness': 'Brightness.light',
+            'systemNavigationBarIconBrightness': 'Brightness.light',
+            'systemNavigationBarContrastEnforced': null,
+          },
+        ),
+      );
+    },
+  );
 
   testWidgets('SystemChrome reports error when setSystemUIOverlayStyle fails', (
     WidgetTester tester,
