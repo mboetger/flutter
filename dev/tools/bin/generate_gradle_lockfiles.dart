@@ -95,6 +95,47 @@ void main(List<String> arguments) {
     return repoRoot;
   })();
 
+  final File gradleUtilsFile = repoRoot
+      .childDirectory('packages')
+      .childDirectory('flutter_tools')
+      .childDirectory('lib')
+      .childDirectory('src')
+      .childDirectory('android')
+      .childFile('gradle_utils.dart');
+
+  if (!gradleUtilsFile.existsSync()) {
+    throw StateError(
+      "Expected gradle_utils.dart to exist at ${gradleUtilsFile.path} but it didn't!",
+    );
+  }
+
+  final String gradleUtilsContent = gradleUtilsFile.readAsStringSync();
+
+  String parseVersion(String regexPattern, String variableName) {
+    final regExp = RegExp(regexPattern);
+    final RegExpMatch? match = regExp.firstMatch(gradleUtilsContent);
+    if (match == null || match.groupCount < 1 || match.group(1) == null) {
+      throw StateError(
+        'Could not find $variableName in ${gradleUtilsFile.path}. '
+        'Expected it to match pattern: $regexPattern',
+      );
+    }
+    return match.group(1)!;
+  }
+
+  final String gradleVersion = parseVersion(
+    r'''const\s+templateDefaultGradleVersion\s*=\s*['"]([^'"]+)['"];''',
+    'templateDefaultGradleVersion',
+  );
+  final String agpVersion = parseVersion(
+    r'''const\s+templateAndroidGradlePluginVersion\s*=\s*['"]([^'"]+)['"];''',
+    'templateAndroidGradlePluginVersion',
+  );
+  final String kotlinVersion = parseVersion(
+    r'''const\s+templateKotlinGradlePluginVersion\s*=\s*['"]([^'"]+)['"];''',
+    'templateKotlinGradlePluginVersion',
+  );
+
   final Iterable<Directory> androidDirectories = discoverAndroidDirectories(repoRoot);
 
   final File exclusionFile = repoRoot
@@ -218,12 +259,22 @@ void main(List<String> arguments) {
       }
 
       if (settingsGradle.basename.endsWith('.kts')) {
-        settingsGradle.writeAsStringSync(settingsGradleKtsFileContent);
+        settingsGradle.writeAsStringSync(
+          settingsGradleKtsFileContent
+              .replaceAll('<AGP_VERSION>', agpVersion)
+              .replaceAll('<KOTLIN_VERSION>', kotlinVersion),
+        );
       } else {
-        settingsGradle.writeAsStringSync(settingGradleFileContent);
+        settingsGradle.writeAsStringSync(
+          settingGradleFileContent
+              .replaceAll('<AGP_VERSION>', agpVersion)
+              .replaceAll('<KOTLIN_VERSION>', kotlinVersion),
+        );
       }
 
-      wrapperGradle.writeAsStringSync(wrapperGradleFileContent);
+      wrapperGradle.writeAsStringSync(
+        wrapperGradleFileContent.replaceAll('<GRADLE_VERSION>', gradleVersion),
+      );
     }
 
     final String appDirectory = androidDirectory.parent.absolute.path;
@@ -331,8 +382,8 @@ buildscript {
 
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "9.0.1" apply false
-    id "org.jetbrains.kotlin.android" version "2.3.20" apply false
+    id "com.android.application" version "<AGP_VERSION>" apply false
+    id "org.jetbrains.kotlin.android" version "<KOTLIN_VERSION>" apply false
 }
 
 include ":app"
@@ -428,8 +479,8 @@ buildscript {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.0.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    id("com.android.application") version "<AGP_VERSION>" apply false
+    id("org.jetbrains.kotlin.android") version "<KOTLIN_VERSION>" apply false
 }
 
 include(":app")
@@ -440,7 +491,7 @@ distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
-distributionUrl=https\://services.gradle.org/distributions/gradle-9.1.0-all.zip
+distributionUrl=https\://services.gradle.org/distributions/gradle-<GRADLE_VERSION>-all.zip
 ''';
 
 Iterable<Directory> discoverAndroidDirectories(Directory repoRoot) {
