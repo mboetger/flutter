@@ -927,6 +927,79 @@ See the link below for more information:
       return;
     }
     gradle.updateLocalProperties(project: parent, requireAndroidSdk: false);
+    _validateAndroidManifestApplicationClass();
+  }
+
+  void _validateAndroidManifestApplicationClass() {
+    if (!appManifestFile.existsSync()) {
+      return;
+    }
+    XmlDocument document;
+    try {
+      document = XmlDocument.parse(appManifestFile.readAsStringSync());
+    } on Exception {
+      return; // Ignore XML parse errors here, they are handled elsewhere
+    }
+
+    final Iterable<XmlElement> applications = document.findAllElements('application');
+    if (applications.isEmpty) {
+      return;
+    }
+    final XmlElement application = applications.first;
+    final String? applicationName = application.getAttribute('android:name');
+    if (applicationName == null || applicationName.isEmpty) {
+      return;
+    }
+
+    // Resolve package name / namespace
+    String? packageName = namespace;
+    if (packageName == null) {
+      try {
+        packageName = document.rootElement.getAttribute('package');
+      } on Exception {
+        // Ignore
+      }
+    }
+
+    if (packageName == null || packageName.isEmpty) {
+      return;
+    }
+
+    // Resolve full class name
+    String fullClassName;
+    if (applicationName.startsWith('.')) {
+      fullClassName = '$packageName$applicationName';
+    } else if (!applicationName.contains('.')) {
+      fullClassName = '$packageName.$applicationName';
+    } else {
+      fullClassName = applicationName;
+    }
+
+    // Only validate if the class belongs to the project's package to avoid false positives on library classes
+    if (!fullClassName.startsWith(packageName)) {
+      return;
+    }
+
+    // Convert class name to path (e.g., com.example.App -> com/example/App)
+    final String classPath = fullClassName.replaceAll('.', '/');
+    final Directory mainSrcDir = hostAppGradleRoot
+        .childDirectory('app')
+        .childDirectory('src')
+        .childDirectory('main');
+
+    final File kotlinFile = mainSrcDir.childDirectory('kotlin').childFile('$classPath.kt');
+    final File javaFile = mainSrcDir.childDirectory('java').childFile('$classPath.java');
+
+    if (!kotlinFile.existsSync() && !javaFile.existsSync()) {
+      globals.printWarning(
+        '${globals.logger.terminal.warningMark} Warning: The class "$applicationName" '
+        'defined in the "android:name" attribute of the <application> element in your '
+        'AndroidManifest.xml (${appManifestFile.path}) could not be found in your '
+        "project's Kotlin or Java source directories.\n"
+        'This will cause the application to crash at startup. Please ensure the class name is '
+        'spelled correctly and exists in your source files.',
+      );
+    }
   }
 
   bool _shouldRegenerateFromTemplate() {

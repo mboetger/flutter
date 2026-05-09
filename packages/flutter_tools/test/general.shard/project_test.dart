@@ -202,6 +202,64 @@ void main() {
           ),
         );
       });
+
+      _testInMemory(
+        'AndroidProject warns when application class does not exist in source',
+        () async {
+          const manifest = '''
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.my_project">
+    <application android:name=".MyApplication">
+    </application>
+</manifest>
+''';
+          final FlutterProject project = await someProject(androidManifestOverride: manifest);
+
+          // Ensure the source file does not exist
+          final Directory mainSrcDir = project.android.hostAppGradleRoot
+              .childDirectory('app')
+              .childDirectory('src')
+              .childDirectory('main');
+          expect(mainSrcDir.childDirectory('kotlin').existsSync(), isFalse);
+          expect(mainSrcDir.childDirectory('java').existsSync(), isFalse);
+
+          await project.regeneratePlatformSpecificTooling(releaseMode: false);
+
+          expect(
+            testLogger.warningText,
+            contains('Warning: The class ".MyApplication" defined in the "android:name" attribute'),
+          );
+        },
+      );
+
+      _testInMemory(
+        'AndroidProject does not warn when application class exists in source',
+        () async {
+          const manifest = '''
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.my_project">
+    <application android:name=".MyApplication">
+    </application>
+</manifest>
+''';
+          final FlutterProject project = await someProject(androidManifestOverride: manifest);
+
+          // Create the source file
+          final Directory mainSrcDir = project.android.hostAppGradleRoot
+              .childDirectory('app')
+              .childDirectory('src')
+              .childDirectory('main');
+          final File kotlinFile = mainSrcDir
+              .childDirectory('kotlin')
+              .childDirectory('com')
+              .childDirectory('example')
+              .childDirectory('my_project')
+              .childFile('MyApplication.kt');
+          kotlinFile.createSync(recursive: true);
+
+          await project.regeneratePlatformSpecificTooling(releaseMode: false);
+
+          expect(testLogger.warningText, isEmpty);
+        },
+      );
       _testInMemory(
         'Project not on v2 embedding does not warn if deprecation status is irrelevant',
         () async {
