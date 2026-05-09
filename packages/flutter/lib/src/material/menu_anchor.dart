@@ -2181,6 +2181,9 @@ class _SubmenuButtonState extends State<SubmenuButton> {
           // focus traversal and scroll position. MouseRegion.onHover avoids
           // this issue.
           void handlePointerHover(PointerHoverEvent event) {
+            if (event.synthesized) {
+              return;
+            }
             if (!_isHovered) {
               _isHovered = true;
               widget.onHover?.call(true);

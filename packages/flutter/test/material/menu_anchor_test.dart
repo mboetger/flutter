@@ -7010,6 +7010,71 @@ void main() {
     await tester.pump();
     expect(find.text('X'), findsOne);
   });
+
+  testWidgets('SubmenuButton ignores synthesized hover events', (WidgetTester tester) async {
+    final MenuController controller = MenuController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              children: <Widget>[
+                MenuBar(
+                  children: <Widget>[
+                    SubmenuButton(
+                      menuChildren: const <Widget>[
+                        MenuItemButton(child: Text('Item 0')),
+                      ],
+                      child: const Text('Menu 0'),
+                    ),
+                    SubmenuButton(
+                      controller: controller,
+                      menuChildren: const <Widget>[
+                        MenuItemButton(child: Text('Item 1')),
+                      ],
+                      child: const Text('Menu 1'),
+                    ),
+                  ],
+                ),
+                const Text('Outside'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(controller.isOpen, isFalse);
+
+    // Open the first menu to enable hover opening for siblings.
+    await tester.tap(find.text('Menu 0'));
+    await tester.pumpAndSettle();
+
+    // Simulate a synthesized hover event (e.g. from a stylus)
+    final Offset location = tester.getCenter(find.text('Menu 1'));
+    final PointerHoverEvent event = PointerHoverEvent(
+      position: location,
+      kind: PointerDeviceKind.stylus,
+      synthesized: true,
+    );
+
+    tester.binding.handlePointerEvent(event);
+    await tester.pump();
+
+    // It should NOT be open.
+    expect(controller.isOpen, isFalse);
+
+    // Real hover should open it.
+    final PointerHoverEvent realEvent = PointerHoverEvent(
+      position: location,
+      kind: PointerDeviceKind.stylus,
+      synthesized: false,
+    );
+    tester.binding.handlePointerEvent(realEvent);
+    await tester.pumpAndSettle();
+
+    expect(controller.isOpen, isTrue);
+  });
 }
 
 List<Widget> createTestMenus({
