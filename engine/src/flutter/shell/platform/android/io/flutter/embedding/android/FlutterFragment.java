@@ -27,6 +27,7 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.lifecycle.Lifecycle;
 import io.flutter.Log;
 import io.flutter.embedding.engine.FlutterEngine;
+import io.flutter.embedding.engine.FlutterEngineCache;
 import io.flutter.embedding.engine.FlutterShellArgs;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
 import io.flutter.plugin.platform.PlatformPlugin;
@@ -1367,7 +1368,14 @@ public class FlutterFragment extends Fragment
   @Nullable
   @Override
   public String getCachedEngineId() {
-    return getArguments().getString(ARG_CACHED_ENGINE_ID, null);
+    String cachedEngineId = getArguments().getString(ARG_CACHED_ENGINE_ID, null);
+    if (cachedEngineId != null && !FlutterEngineCache.getInstance().contains(cachedEngineId)) {
+      FragmentActivity activity = getActivity();
+      if (activity instanceof FlutterFragmentActivity) {
+        cachedEngineId = ((FlutterFragmentActivity) activity).getCachedEngineId();
+      }
+    }
+    return cachedEngineId;
   }
 
   /**
