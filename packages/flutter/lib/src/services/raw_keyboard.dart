@@ -982,6 +982,22 @@ class RawKeyboard {
         ..._allModifiersExceptFn,
       };
 
+  static final Set<LogicalKeyboardKey> _allLogicalModifiers = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.altRight,
+    LogicalKeyboardKey.altGraph,
+    LogicalKeyboardKey.shiftLeft,
+    LogicalKeyboardKey.shiftRight,
+    LogicalKeyboardKey.controlLeft,
+    LogicalKeyboardKey.controlRight,
+    LogicalKeyboardKey.metaLeft,
+    LogicalKeyboardKey.metaRight,
+    LogicalKeyboardKey.capsLock,
+    LogicalKeyboardKey.numLock,
+    LogicalKeyboardKey.scrollLock,
+    LogicalKeyboardKey.fn,
+  };
+
   void _synchronizeModifiers(RawKeyEvent event) {
     // Compare modifier states to the ground truth as specified by
     // [RawKeyEvent.data.modifiersPressed] and update unsynchronized ones.
@@ -1055,9 +1071,14 @@ class RawKeyboard {
         (event.data is RawKeyEventDataLinux || event.data is RawKeyEventDataWeb) &&
         _keysPressed[PhysicalKeyboardKey.capsLock] != null &&
         _keysPressed[PhysicalKeyboardKey.capsLock] != LogicalKeyboardKey.capsLock;
+    final bool isEventPhysicalKeyModifier = _allModifiers.containsKey(event.physicalKey);
+    final bool isEventLogicalKeyModifier = _allLogicalModifiers.contains(event.logicalKey);
+    final bool skipReleasingEventPhysicalKey =
+        isEventPhysicalKeyModifier && !isEventLogicalKeyModifier;
     for (final PhysicalKeyboardKey physicalKey in _allModifiersExceptFn.keys) {
       final bool skipReleasingKey =
-          nonModifierCapsLock && physicalKey == PhysicalKeyboardKey.capsLock;
+          (nonModifierCapsLock && physicalKey == PhysicalKeyboardKey.capsLock) ||
+          (skipReleasingEventPhysicalKey && physicalKey == event.physicalKey);
       if (!anySideKeys.contains(physicalKey) && !skipReleasingKey) {
         _keysPressed.remove(physicalKey);
       }
