@@ -494,4 +494,25 @@ public class FlutterFragmentTest {
     verify(spyCtx, times(1)).registerComponentCallbacks(any());
     verify(spyCtx, times(1)).unregisterComponentCallbacks(any());
   }
+
+  @Test
+  public void itQueriesParentActivityForCachedEngineIdWhenMissingFromCache() {
+    FlutterFragment fragment = spy(FlutterFragment.withCachedEngine("stale_engine").build());
+
+    FlutterFragmentActivity mockActivity = mock(FlutterFragmentActivity.class);
+    when(mockActivity.getCachedEngineId()).thenReturn("recreated_engine");
+    when(fragment.getActivity()).thenReturn(mockActivity);
+
+    // Make sure "stale_engine" is NOT in the cache, but "recreated_engine" IS.
+    FlutterEngineCache.getInstance().remove("stale_engine");
+
+    FlutterEngine mockEngine = mock(FlutterEngine.class);
+    FlutterEngineCache.getInstance().put("recreated_engine", mockEngine);
+
+    // Query getCachedEngineId. It should fall back to the activity's ID.
+    assertEquals("recreated_engine", fragment.getCachedEngineId());
+
+    // Clean up cache
+    FlutterEngineCache.getInstance().remove("recreated_engine");
+  }
 }
