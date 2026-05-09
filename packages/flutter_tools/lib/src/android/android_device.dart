@@ -356,7 +356,7 @@ class AndroidDevice extends Device {
   }
 
   String _getDeviceSha1Path(AndroidApk apk) {
-    return '/data/local/tmp/sky.${apk.id}.sha1';
+    return '/sdcard/Android/data/${apk.id}/sky.sha1';
   }
 
   Future<String> _getDeviceApkSha1(AndroidApk apk) async {
@@ -407,12 +407,17 @@ class AndroidDevice extends Device {
     if (!await _adbIsValid) {
       return false;
     }
+    final bool wasInstalled = await isAppInstalled(app, userIdentifier: userIdentifier);
+    if (wasInstalled && await isLatestBuildInstalled(app)) {
+      _logger.printTrace('Latest build already installed.');
+      return true;
+    }
     _logger.printTrace('Installing APK.');
     if (await _installApp(app, userIdentifier: userIdentifier)) {
       return true;
     }
     _logger.printTrace('Warning: Failed to install APK.');
-    if (!await isAppInstalled(app, userIdentifier: userIdentifier)) {
+    if (!wasInstalled) {
       return false;
     }
     _logger.printStatus('Uninstalling old version...');
@@ -468,14 +473,10 @@ class AndroidDevice extends Device {
       return false;
     }
     try {
-      await runAdbCheckedAsync(<String>[
-        'shell',
-        'echo',
-        '-n',
-        _getSourceSha1(app),
-        '>',
-        _getDeviceSha1Path(app),
-      ]);
+      final String sha1Path = _getDeviceSha1Path(app);
+      final String parentDir = sha1Path.substring(0, sha1Path.lastIndexOf('/'));
+      await runAdbCheckedAsync(<String>['shell', 'mkdir', '-p', parentDir]);
+      await runAdbCheckedAsync(<String>['shell', 'echo', '-n', _getSourceSha1(app), '>', sha1Path]);
     } on ProcessException catch (error) {
       _logger.printError('adb shell failed to write the SHA hash: $error.');
       return false;
