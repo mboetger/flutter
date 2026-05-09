@@ -14,8 +14,10 @@ import 'android/java.dart';
 import 'base/context.dart';
 import 'base/file_system.dart';
 import 'base/logger.dart';
+import 'base/os.dart';
 import 'base/process.dart';
 import 'device.dart';
+import 'globals.dart' as globals;
 import 'ios/ios_emulators.dart';
 
 EmulatorManager? get emulatorManager => context.get<EmulatorManager>();
@@ -131,13 +133,20 @@ class EmulatorManager {
 
     final String? sdkId = await _getPreferredSdkId(avdManagerPath);
     if (sdkId == null) {
+      final bool isArmHost =
+          globals.os.hostPlatform == HostPlatform.darwin_arm64 ||
+          globals.os.hostPlatform == HostPlatform.linux_arm64 ||
+          globals.os.hostPlatform == HostPlatform.windows_arm64;
+      final recommendedImage = isArmHost
+          ? 'system-images;android-34;google_apis_playstore;arm64-v8a'
+          : 'system-images;android-27;google_apis_playstore;x86';
       return CreateEmulatorResult(
         emulatorName,
         success: false,
         error:
             'No suitable Android AVD system images are available. You may need to install these'
             ' using sdkmanager, for example:\n'
-            '  sdkmanager "system-images;android-27;google_apis_playstore;x86"',
+            '  sdkmanager "$recommendedImage"',
       );
     }
 

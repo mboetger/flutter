@@ -7,6 +7,7 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
 import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/os.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/emulator.dart';
@@ -174,6 +175,65 @@ iOS Simulator       • iOS Simulator • Apple        • android
       expect(result.success, false);
       expect(result.error, contains('avdmanager is missing from the Android SDK'));
     });
+
+    testUsingContext(
+      'create emulator recommends arm64-v8a system image on ARM hosts',
+      () async {
+        final emulatorManager = EmulatorManager(
+          java: FakeJava(),
+          fileSystem: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            const FakeCommand(command: <String>['emulator', '-list-avds']),
+            const FakeCommand(
+              command: <String>['avdmanager', 'list', 'device', '-c'],
+              stdout: 'pixel\n',
+            ),
+            const FakeCommand(
+              command: <String>['avdmanager', 'create', 'avd', '-n', 'temp'],
+              stderr: 'Error: no images available\n',
+              exitCode: 1,
+            ),
+          ]),
+          androidSdk: sdk,
+          androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        );
+        final CreateEmulatorResult result = await emulatorManager.createEmulator();
+
+        expect(result.success, false);
+        expect(result.error, contains('system-images;android-34;google_apis_playstore;arm64-v8a'));
+      },
+      overrides: <Type, Generator>{
+        OperatingSystemUtils: () =>
+            FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+      },
+    );
+
+    testUsingContext('create emulator recommends x86 system image on x64 hosts', () async {
+      final emulatorManager = EmulatorManager(
+        java: FakeJava(),
+        fileSystem: MemoryFileSystem.test(),
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(command: <String>['emulator', '-list-avds']),
+          const FakeCommand(
+            command: <String>['avdmanager', 'list', 'device', '-c'],
+            stdout: 'pixel\n',
+          ),
+          const FakeCommand(
+            command: <String>['avdmanager', 'create', 'avd', '-n', 'temp'],
+            stderr: 'Error: no images available\n',
+            exitCode: 1,
+          ),
+        ]),
+        androidSdk: sdk,
+        androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+      );
+      final CreateEmulatorResult result = await emulatorManager.createEmulator();
+
+      expect(result.success, false);
+      expect(result.error, contains('system-images;android-27;google_apis_playstore;x86'));
+    }, overrides: <Type, Generator>{OperatingSystemUtils: () => FakeOperatingSystemUtils()});
 
     // iOS discovery uses context.
     testUsingContext('create emulator with an empty name does not fail', () async {
