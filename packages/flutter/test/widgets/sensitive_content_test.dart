@@ -4,6 +4,7 @@
 
 import 'dart:async' show Completer;
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -134,4 +135,52 @@ void main() {
       expect(setContentSensitivityCall, 2);
     },
   );
+
+  testWidgets('SensitiveContent unregisters when hidden by Visibility', (WidgetTester tester) async {
+    final List<String> logs = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.sensitiveContent,
+      (MethodCall methodCall) {
+        if (methodCall.method == 'SensitiveContent.setContentSensitivity') {
+          logs.add(ContentSensitivity.values[methodCall.arguments as int].name);
+        } else if (methodCall.method == 'SensitiveContent.isSupported') {
+          return Future<bool>.value(true);
+        } else if (methodCall.method == 'SensitiveContent.getContentSensitivity') {
+          return Future<int>.value(defaultContentSensitivitySetting.index);
+        }
+        return null;
+      },
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Visibility(
+          visible: true,
+          child: SensitiveContent(
+            sensitivity: ContentSensitivity.sensitive,
+            child: Text('Sensitive'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // One for register 'sensitive'
+    expect(logs, <String>['sensitive']);
+    logs.clear();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Visibility(
+          visible: false,
+          child: SensitiveContent(
+            sensitivity: ContentSensitivity.sensitive,
+            child: Text('Sensitive'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // One for unregister, reverting to default 'autoSensitive'
+    expect(logs, <String>['autoSensitive']);
+  });
 }

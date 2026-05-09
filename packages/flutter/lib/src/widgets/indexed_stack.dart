@@ -706,28 +706,32 @@ class SliverVisibility extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget result;
     if (maintainSize) {
-      Widget result = sliver;
-      result = SliverIgnorePointer(ignoring: !visible && !maintainInteractivity, sliver: result);
-      return _SliverVisibility(
+      Widget resultInner = sliver;
+      resultInner = SliverIgnorePointer(ignoring: !visible && !maintainInteractivity, sliver: resultInner);
+      result = _SliverVisibility(
         visible: visible,
         maintainSemantics: maintainSemantics,
-        sliver: result,
+        sliver: resultInner,
       );
-    }
-    assert(!maintainInteractivity);
-    assert(!maintainSemantics);
-    assert(!maintainSize);
-    if (maintainState) {
-      Widget result = sliver;
-      if (!maintainAnimation) {
-        result = TickerMode(enabled: visible, child: sliver);
+    } else {
+      assert(!maintainInteractivity);
+      assert(!maintainSemantics);
+      assert(!maintainSize);
+      if (maintainState) {
+        Widget resultInner = sliver;
+        if (!maintainAnimation) {
+          resultInner = TickerMode(enabled: visible, child: sliver);
+        }
+        result = SliverOffstage(sliver: resultInner, offstage: !visible);
+      } else {
+        assert(!maintainAnimation);
+        assert(!maintainState);
+        result = visible ? sliver : replacementSliver;
       }
-      return SliverOffstage(sliver: result, offstage: !visible);
     }
-    assert(!maintainAnimation);
-    assert(!maintainState);
-    return visible ? sliver : replacementSliver;
+    return _VisibilityScope(isVisible: visible, child: result);
   }
 
   @override

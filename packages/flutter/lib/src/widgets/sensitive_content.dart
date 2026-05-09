@@ -11,6 +11,8 @@ import 'package:flutter/services.dart'
 import 'async.dart' show AsyncSnapshot, ConnectionState, FutureBuilder;
 import 'basic.dart' show SizedBox;
 import 'framework.dart';
+import 'indexed_stack.dart' show Visibility;
+import 'routes.dart' show ModalRoute;
 
 /// Data structure used to track the [SensitiveContent] widgets in the
 /// widget tree.
@@ -357,28 +359,53 @@ class SensitiveContent extends StatefulWidget {
 
 class _SensitiveContentState extends State<SensitiveContent> {
   Future<void> _sensitiveContentRegistrationFuture = Future<void>.value();
+  bool _isRegistered = false;
+  bool _isVisible = true;
+  bool _isOnCurrentRoute = true;
 
   @override
-  void initState() {
-    super.initState();
-    _sensitiveContentRegistrationFuture = SensitiveContentHost.register(widget.sensitivity);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final bool isVisible = Visibility.of(context);
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    final bool isOnCurrentRoute = route == null || route.isCurrent;
+
+    if (_isVisible != isVisible || _isOnCurrentRoute != isOnCurrentRoute || !_isRegistered) {
+      _isVisible = isVisible;
+      _isOnCurrentRoute = isOnCurrentRoute;
+      _updateRegistration(widget.sensitivity);
+    }
+  }
+
+  void _updateRegistration(ContentSensitivity sensitivity) {
+    final bool shouldBeRegistered = _isVisible && _isOnCurrentRoute;
+    if (_isRegistered != shouldBeRegistered) {
+      if (shouldBeRegistered) {
+        _sensitiveContentRegistrationFuture = SensitiveContentHost.register(sensitivity);
+      } else if (_isRegistered) {
+        _sensitiveContentRegistrationFuture = SensitiveContentHost.unregister(sensitivity);
+      }
+      _isRegistered = shouldBeRegistered;
+    }
   }
 
   @override
   void dispose() {
-    SensitiveContentHost.unregister(widget.sensitivity).catchError((
-      Object exception,
-      StackTrace stack,
-    ) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: exception,
-          stack: stack,
-          library: 'widgets library',
-          context: ErrorDescription('while unregistering sensitive content'),
-        ),
-      );
-    });
+    if (_isRegistered) {
+      SensitiveContentHost.unregister(widget.sensitivity).catchError((
+        Object exception,
+        StackTrace stack,
+      ) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: exception,
+            stack: stack,
+            library: 'widgets library',
+            context: ErrorDescription('while unregistering sensitive content'),
+          ),
+        );
+      });
+    }
     super.dispose();
   }
 
@@ -398,11 +425,13 @@ class _SensitiveContentState extends State<SensitiveContent> {
       return;
     }
 
-    // Re-register SensitiveContent widget if the sensitivity changed.
-    _sensitiveContentRegistrationFuture = _reregisterWidget(
-      oldWidget.sensitivity,
-      widget.sensitivity,
-    );
+    if (_isRegistered) {
+      // Re-register SensitiveContent widget if the sensitivity changed.
+      _sensitiveContentRegistrationFuture = _reregisterWidget(
+        oldWidget.sensitivity,
+        widget.sensitivity,
+      );
+    }
   }
 
   @override
