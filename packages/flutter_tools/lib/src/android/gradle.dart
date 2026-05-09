@@ -568,6 +568,16 @@ class AndroidGradleBuilder implements AndroidBuilder {
     if (androidBuildInfo.splitPerAbi) {
       options.add('-Psplit-per-abi=true');
     }
+    if (!isBuildingBundle && buildInfo.mode == BuildMode.release) {
+      final Directory debugSymbolsDir = project.android.buildDirectory
+          .childDirectory('app')
+          .childDirectory('outputs')
+          .childDirectory('native-debug-symbols')
+          .childDirectory(buildInfo.modeName);
+      if (debugSymbolsDir.existsSync()) {
+        debugSymbolsDir.deleteSync(recursive: true);
+      }
+    }
     late Stopwatch sw;
     final int exitCode = await _runGradleTask(
       assembleTask,
@@ -660,6 +670,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
         await _performCodeSizeAnalysis('apk', apkFile, androidBuildInfo);
       }
     }
+    if ((buildInfo.mode == BuildMode.release) &&
+        !_isApkStrippedOfDebugSymbols(project, buildInfo)) {
+      throwToolExit(failedToStripDebugSymbolsErrorMessage);
+    }
   }
 
   // Checks whether AGP has successfully stripped debug symbols from native libraries
@@ -726,6 +740,16 @@ class AndroidGradleBuilder implements AndroidBuilder {
     }
 
     return true;
+  }
+
+  bool _isApkStrippedOfDebugSymbols(FlutterProject project, BuildInfo buildInfo) {
+    final Directory debugSymbolsDir = project.android.buildDirectory
+        .childDirectory('app')
+        .childDirectory('outputs')
+        .childDirectory('native-debug-symbols')
+        .childDirectory(buildInfo.modeName);
+    final File debugSymbolsZip = debugSymbolsDir.childFile('native-debug-symbols.zip');
+    return debugSymbolsZip.existsSync();
   }
 
   Future<void> _performCodeSizeAnalysis(
