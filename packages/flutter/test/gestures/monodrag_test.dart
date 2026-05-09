@@ -234,6 +234,45 @@ void main() {
       expect(recognized, <String>['onStartSecondary']);
     });
   });
+
+  testGesture(
+    'DragGestureRecognizer should trigger onCancel instead of onEnd when pointer is cancelled',
+    (GestureTester tester) {
+      final verticalDrag = VerticalDragGestureRecognizer();
+      final dragCallbacks = <String>[];
+      verticalDrag
+        ..onStart = (DragStartDetails details) {
+          dragCallbacks.add('onStart');
+        }
+        ..onUpdate = (DragUpdateDetails details) {
+          dragCallbacks.add('onUpdate');
+        }
+        ..onEnd = (DragEndDetails details) {
+          dragCallbacks.add('onEnd');
+        }
+        ..onCancel = () {
+          dragCallbacks.add('onCancel');
+        };
+
+      const down1 = PointerDownEvent(pointer: 6, position: Offset(10.0, 10.0));
+      const move1 = PointerMoveEvent(
+        pointer: 6,
+        delta: Offset(0.0, 30.0),
+        position: Offset(10.0, 40.0),
+      );
+      const cancel1 = PointerCancelEvent(pointer: 6, position: Offset(10.0, 40.0));
+
+      verticalDrag.addPointer(down1);
+      tester.closeArena(down1.pointer);
+      tester.route(down1);
+      tester.route(move1);
+      tester.route(cancel1);
+
+      expect(dragCallbacks, <String>['onStart', 'onUpdate', 'onCancel']);
+      expect(dragCallbacks.contains('onEnd'), isFalse);
+      verticalDrag.dispose();
+    },
+  );
 }
 
 class MockHitTestTarget implements HitTestTarget {

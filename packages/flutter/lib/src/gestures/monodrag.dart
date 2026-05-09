@@ -322,6 +322,7 @@ sealed class DragGestureRecognizer extends OneSequenceGestureRecognizer {
   // different set of buttons, the gesture is canceled.
   int? _initialButtons;
   Matrix4? _lastTransform;
+  bool _wasCancelled = false;
 
   /// Distance moved in the global coordinate space of the screen in drag direction.
   ///
@@ -722,6 +723,9 @@ sealed class DragGestureRecognizer extends OneSequenceGestureRecognizer {
       _recordMoveDeltaForMultitouch(event.pointer, localDelta);
     }
     if (event case PointerUpEvent() || PointerCancelEvent() || PointerPanZoomEndEvent()) {
+      if (event is PointerCancelEvent) {
+        _wasCancelled = true;
+      }
       _giveUpPointer(event.pointer);
     }
   }
@@ -761,8 +765,13 @@ sealed class DragGestureRecognizer extends OneSequenceGestureRecognizer {
         _checkCancel();
 
       case _DragState.accepted:
-        _checkEnd(pointer);
+        if (_wasCancelled) {
+          _checkCancel();
+        } else {
+          _checkEnd(pointer);
+        }
     }
+    _wasCancelled = false;
     _hasDragThresholdBeenMet = false;
     _velocityTrackers.clear();
     _initialButtons = null;
