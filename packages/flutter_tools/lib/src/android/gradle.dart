@@ -4,6 +4,7 @@
 
 import 'dart:math';
 
+import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
@@ -618,6 +619,8 @@ class AndroidGradleBuilder implements AndroidBuilder {
         await _performCodeSizeAnalysis('aab', bundleFile, androidBuildInfo);
       }
 
+      _checkX86AbiMismatch(bundleFile, buildInfo);
+
       _logger.printStatus(
         '${_logger.terminal.successMark} '
         'Built ${_fileSystem.path.relative(bundleFile.path)}$appSize',
@@ -650,6 +653,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
       final appSize = (buildInfo.mode == BuildMode.debug)
           ? '' // Don't display the size when building a debug variant.
           : ' (${getSizeAsPlatformMB(apkFile.lengthSync())})';
+      _checkX86AbiMismatch(apkFile, buildInfo);
       _logger.printStatus(
         '${_logger.terminal.successMark} '
         'Built ${_fileSystem.path.relative(apkFile.path)}$appSize',
@@ -766,6 +770,67 @@ class AndroidGradleBuilder implements AndroidBuilder {
       '\nTo analyze your app size in Dart DevTools, run the following command:\n'
       'dart devtools --appSizeBase=${outputFile.path}',
     );
+  }
+
+  void _checkX86AbiMismatch(File file, BuildInfo buildInfo) {
+    if (!buildInfo.isRelease) {
+      return;
+    }
+    if (!file.existsSync()) {
+      return;
+    }
+
+    try {
+      final List<int> bytes = file.readAsBytesSync();
+      final Archive archive = ZipDecoder().decodeBytes(bytes);
+
+      final abisWithNativeLibs = <String>{};
+      final abisWithFlutter = <String>{};
+
+      for (final archiveFile in archive) {
+        final String path = archiveFile.name;
+        final List<String> parts = path.split('/');
+        if (parts.contains('lib')) {
+          final int libIdx = parts.indexOf('lib');
+          if (libIdx + 1 < parts.length) {
+            final String abi = parts[libIdx + 1];
+            final String fileName = parts.last;
+            if (fileName.endsWith('.so')) {
+              abisWithNativeLibs.add(abi);
+              if (fileName == 'libflutter.so') {
+                abisWithFlutter.add(abi);
+              }
+            }
+          }
+        }
+      }
+
+      final Set<String> mismatchedAbis = abisWithNativeLibs.difference(abisWithFlutter);
+      final intelAbis = <String>['x86', 'x86_64'];
+      final List<String> affectedIntelAbis = mismatchedAbis
+          .where((String abi) => intelAbis.contains(abi))
+          .toList();
+
+      if (affectedIntelAbis.isNotEmpty) {
+        _logger.printWarning(
+          '${_logger.terminal.warningMark} Warning: Your ${file.basename.endsWith('.aab') ? 'App Bundle' : 'APK'} '
+          'contains native libraries for the following Intel architectures: ${affectedIntelAbis.join(', ')}. '
+          'However, Flutter does not support Intel architectures in release mode, so "libflutter.so" is missing for them. '
+          'This will cause the application to crash on Intel-based Android devices (such as some Chromebooks or Intel tablets).\n'
+          'To resolve this, consider adding the following "abiFilters" to the "ndk" block in your "android/app/build.gradle" '
+          'to restrict packaging to ARM architectures only:\n'
+          'android {\n'
+          '    defaultConfig {\n'
+          '        ndk {\n'
+          '            abiFilters "armeabi-v7a", "arm64-v8a"\n'
+          '        }\n'
+          '    }\n'
+          '}',
+        );
+      }
+    } on Object catch (error) {
+      _logger.printTrace('Error checking AAB/APK for x86 ABI mismatch: $error');
+    }
   }
 
   /// Builds AAR and POM files.
