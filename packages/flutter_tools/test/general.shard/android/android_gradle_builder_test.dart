@@ -21,6 +21,7 @@ import 'package:flutter_tools/src/base/user_messages.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/project.dart';
+import 'package:path/path.dart' as path;
 import 'package:test/fake.dart';
 import 'package:unified_analytics/unified_analytics.dart';
 
@@ -2602,6 +2603,89 @@ Gradle Crashed
       },
       overrides: <Type, Generator>{AndroidStudio: () => FakeAndroidStudio()},
     );
+
+    testUsingContext('AndroidGradleBuilder filters noisy deprecation notes', () async {
+      final builder = AndroidGradleBuilder(
+        java: FakeJava(),
+        logger: logger,
+        processManager: processManager,
+        fileSystem: fileSystem,
+        artifacts: Artifacts.test(),
+        analytics: fakeAnalytics,
+        gradleUtils: FakeGradleUtils(),
+        platform: FakePlatform(),
+        androidStudio: FakeAndroidStudio(),
+      );
+
+      const String noisyOutput = '''
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+Important message.
+''';
+
+      processManager.addCommand(
+        FakeCommand(
+          command: <String>[
+            'gradlew',
+            '-q',
+            '-Ptarget-platform=android-arm',
+            '-Ptarget=lib/main.dart',
+            '-Pbase-application-name=android.app.Application',
+            '-Pdart-obfuscation=false',
+            '-Ptrack-widget-creation=false',
+            '-Ptree-shake-icons=false',
+            'assembleRelease',
+          ],
+          stdout: noisyOutput,
+          onRun: (_) {
+            fileSystem
+                .directory('build/app/outputs/flutter-apk')
+                .childFile('app-release.apk')
+                .createSync(recursive: true);
+          },
+        ),
+      );
+
+      fileSystem.directory('android').childFile('build.gradle').createSync(recursive: true);
+      fileSystem.directory('android').childFile('gradle.properties').createSync(recursive: true);
+      fileSystem.directory('android').childDirectory('app').childFile('build.gradle')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('apply from: irrelevant/flutter.gradle');
+      fileSystem.directory('android/app/src/main').childFile('AndroidManifest.xml')
+        ..createSync(recursive: true)
+        ..writeAsStringSync(minimalV2EmbeddingManifest);
+      fileSystem.file('lib/main.dart').createSync(recursive: true);
+
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+
+      await builder.buildApk(
+        project: project,
+        target: 'lib/main.dart',
+        androidBuildInfo: const AndroidBuildInfo(
+          BuildInfo(
+            BuildMode.release,
+            null,
+            treeShakeIcons: false,
+            packageConfigPath: '.dart_tool/package_config.json',
+          ),
+          targetArchs: <AndroidArch>[AndroidArch.armeabi_v7a],
+        ),
+      );
+
+      expect(logger.statusText, contains('Important message.'));
+      expect(logger.statusText,
+          isNot(contains('Note: Some input files use or override a deprecated API.')));
+      expect(logger.statusText, isNot(contains('Note: Recompile with -Xlint:deprecation for details.')));
+    }, overrides: <Type, Generator>{
+      AndroidSdk: () {
+        final FakeAndroidSdk sdk = FakeAndroidSdk();
+        sdk.directory = fileSystem.directory('/sdk')..createSync(recursive: true);
+        return sdk;
+      },
+      AndroidStudio: () => FakeAndroidStudio(),
+    });
   });
 }
 
@@ -2610,6 +2694,14 @@ class FakeGradleUtils extends Fake implements GradleUtils {
   String getExecutable(FlutterProject project) {
     return 'gradlew';
   }
+}
+
+class FakeAndroidSdk extends Fake implements AndroidSdk {
+  @override
+  late Directory directory;
+
+  @override
+  String get sdkManagerPath => path.join(directory.path, 'bin', 'sdkmanager');
 }
 
 class FakeAndroidStudio extends Fake implements AndroidStudio {

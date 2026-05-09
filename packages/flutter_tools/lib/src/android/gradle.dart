@@ -312,9 +312,17 @@ class AndroidGradleBuilder implements AndroidBuilder {
       );
     }
 
+    bool filteredDeprecationNote = false;
     GradleHandledError? detectedGradleError;
     String? detectedGradleErrorLine;
     String? consumeLog(String line) {
+      if (line.contains('Note: Some input files use or override a deprecated API.') ||
+          line.contains('Note: Recompile with -Xlint:deprecation for details.') ||
+          line.contains('Note: Some input files use unchecked or unsafe operations.') ||
+          line.contains('Note: Recompile with -Xlint:unchecked for details.')) {
+        filteredDeprecationNote = true;
+        return null;
+      }
       if (outputParser != null) {
         outputParser(line);
       }
@@ -364,6 +372,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
       }
     } finally {
       status.stop();
+    }
+    if (filteredDeprecationNote) {
+      _logger.printTrace('Some Android Gradle notes were filtered from the output.');
     }
     postRunTask?.call();
     if (exitCode != 0) {
