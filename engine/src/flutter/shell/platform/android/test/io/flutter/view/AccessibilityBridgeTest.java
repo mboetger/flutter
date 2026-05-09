@@ -1423,7 +1423,7 @@ public class AccessibilityBridgeTest {
     // Now verify that clearing the BOLD_TEXT flag doesn't touch any of the other
     // flags.
     // Ensure the DISABLE_ANIMATION flag will be set
-    Settings.Global.putFloat(null, "transition_animation_scale", 0.0f);
+    Settings.Global.putFloat(null, "animator_duration_scale", 0.0f);
     // Ensure the BOLD_TEXT flag will be cleared
     config.fontWeightAdjustment = 0;
 
@@ -1446,7 +1446,7 @@ public class AccessibilityBridgeTest {
         captor.getValue().intValue());
 
     // Set back to default
-    Settings.Global.putFloat(null, "transition_animation_scale", 1.0f);
+    Settings.Global.putFloat(null, "animator_duration_scale", 1.0f);
   }
 
   @Test
@@ -2346,7 +2346,7 @@ public class AccessibilityBridgeTest {
   }
 
   @Test
-  public void testItSetsDisableAnimationsFlagBasedOnTransitionAnimationScale() {
+  public void testItSetsDisableAnimationsFlagBasedOnAnimatorDurationScale() {
     AccessibilityChannel mockChannel = mock(AccessibilityChannel.class);
     ContentResolver mockContentResolver = mock(ContentResolver.class);
 
@@ -2360,11 +2360,11 @@ public class AccessibilityBridgeTest {
             /* platformViewsAccessibilityDelegate= */ null);
 
     // Capture the observer registered for
-    // Settings.Global.TRANSITION_ANIMATION_SCALE
+    // Settings.Global.ANIMATOR_DURATION_SCALE
     ArgumentCaptor<ContentObserver> observerCaptor = ArgumentCaptor.forClass(ContentObserver.class);
     verify(mockContentResolver)
         .registerContentObserver(
-            eq(Settings.Global.getUriFor(Settings.Global.TRANSITION_ANIMATION_SCALE)),
+            eq(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE)),
             eq(false),
             observerCaptor.capture());
     ContentObserver observer = observerCaptor.getValue();
@@ -2374,7 +2374,7 @@ public class AccessibilityBridgeTest {
     reset(mockChannel);
 
     // Animations are disabled
-    Settings.Global.putFloat(mockContentResolver, "transition_animation_scale", 0.0f);
+    Settings.Global.putFloat(mockContentResolver, "animator_duration_scale", 0.0f);
     observer.onChange(false);
     verify(mockChannel, atLeastOnce())
         .setAccessibilityFeatures(
@@ -2382,7 +2382,7 @@ public class AccessibilityBridgeTest {
     reset(mockChannel);
 
     // Animations are enabled
-    Settings.Global.putFloat(mockContentResolver, "transition_animation_scale", 1.0f);
+    Settings.Global.putFloat(mockContentResolver, "animator_duration_scale", 1.0f);
     observer.onChange(false);
     verify(mockChannel, atLeastOnce()).setAccessibilityFeatures(ACCESSIBILITY_FEATURE_NO_ANNOUNCE);
   }

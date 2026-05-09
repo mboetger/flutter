@@ -125,11 +125,11 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
   // Font weight adjustment for bold text. FontWeight.Bold - FontWeight.Normal = w700 - w400 = 300.
   private static final int BOLD_TEXT_WEIGHT_ADJUSTMENT = 300;
 
-  // Default transition animation scale (animations enabled)
-  private static final float DEFAULT_TRANSITION_ANIMATION_SCALE = 1.0f;
+  // Default animator duration scale (animations enabled)
+  private static final float DEFAULT_ANIMATOR_DURATION_SCALE = 1.0f;
 
-  // Transition animation scale when animations are disabled
-  private static final float DISABLED_TRANSITION_ANIMATION_SCALE = 0.0f;
+  // Animator duration scale when animations are disabled
+  private static final float DISABLED_ANIMATOR_DURATION_SCALE = 0.0f;
 
   /// Value is derived from ACTION_TYPE_MASK in AccessibilityNodeInfo.java
   private static int FIRST_RESOURCE_ID = 267386881;
@@ -431,7 +431,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
   // Listener that is notified when the invert colors flag is turned on/off.
   private final AccessibilityFeatureObserver invertColorsObserver;
 
-  // Listener that is notified when the global TRANSITION_ANIMATION_SCALE. When this scale goes
+  // Listener that is notified when the global ANIMATOR_DURATION_SCALE. When this scale goes
   // to zero, we instruct Flutter to disable animations.
   private final AccessibilityFeatureObserver animationScaleObserver;
 
@@ -580,12 +580,12 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     animationScaleObserver =
         new GlobalSettingObserver(
             AccessibilityFeature.DISABLE_ANIMATIONS,
-            Settings.Global.TRANSITION_ANIMATION_SCALE,
-            DISABLED_TRANSITION_ANIMATION_SCALE,
-            DEFAULT_TRANSITION_ANIMATION_SCALE);
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            DISABLED_ANIMATOR_DURATION_SCALE,
+            DEFAULT_ANIMATOR_DURATION_SCALE);
     animationScaleObserver.initialize();
     contentResolver.registerContentObserver(
-        Settings.Global.getUriFor(Settings.Global.TRANSITION_ANIMATION_SCALE),
+        Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
         false,
         animationScaleObserver);
 
