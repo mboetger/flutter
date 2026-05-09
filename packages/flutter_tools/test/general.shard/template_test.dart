@@ -215,6 +215,35 @@ void main() {
     expect(escapeYamlString('""'), r'"\"\""');
     expect(escapeYamlString('"\x01\u{0263A}\u{1F642}'), r'"\"\x01☺🙂"');
   });
+
+  testWithoutContext('Plugin templates do not contain 1.0-SNAPSHOT version', () {
+    final FileSystem fileSystem = globals.localFileSystem;
+    final String templatesDirPath = fileSystem.path.join(
+      getFlutterRoot(),
+      'packages',
+      'flutter_tools',
+      'templates',
+    );
+    final Directory templatesDir = fileSystem.directory(templatesDirPath);
+    expect(templatesDir, exists);
+
+    final List<File> gradleFiles = templatesDir
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((File file) => file.basename.contains('build.gradle'))
+        .toList();
+
+    expect(gradleFiles, isNotEmpty);
+
+    for (final file in gradleFiles) {
+      final String content = file.readAsStringSync();
+      expect(
+        content,
+        isNot(contains('1.0-SNAPSHOT')),
+        reason: 'File ${file.path} contains 1.0-SNAPSHOT which triggers false-positive warnings',
+      );
+    }
+  });
 }
 
 class FakeTemplateRenderer extends TemplateRenderer {
