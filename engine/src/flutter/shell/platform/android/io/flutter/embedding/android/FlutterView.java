@@ -1612,6 +1612,14 @@ public class FlutterView extends FrameLayout
     }
   }
 
+  @Override
+  public void onWindowFocusChanged(boolean hasWindowFocus) {
+    super.onWindowFocusChanged(hasWindowFocus);
+    if (textInputPlugin != null) {
+      textInputPlugin.onWindowFocusChanged(hasWindowFocus);
+    }
+  }
+
   /**
    * Allow access to the viewport metrics so that tests can set them to be valid with nonzero
    * dimensions.
