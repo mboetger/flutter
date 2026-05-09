@@ -628,10 +628,13 @@ public class FlutterActivity extends Activity
     return delegate;
   }
 
+  private boolean isRestoredFromInstanceState;
+
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
     switchLaunchThemeForNormalTheme();
 
+    isRestoredFromInstanceState = savedInstanceState != null;
     super.onCreate(savedInstanceState);
 
     if (savedInstanceState != null) {
@@ -1042,8 +1045,13 @@ public class FlutterActivity extends Activity
    */
   @NonNull
   @Override
+  @NonNull
   public FlutterShellArgs getFlutterShellArgs() {
-    return FlutterShellArgs.fromIntent(getIntent());
+    FlutterShellArgs args = FlutterShellArgs.fromIntent(getIntent());
+    if (isRestoredFromInstanceState) {
+      args.remove(FlutterShellArgs.ARG_START_PAUSED);
+    }
+    return args;
   }
 
   /**

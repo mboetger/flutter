@@ -96,6 +96,29 @@ public class FlutterActivityTest {
   }
 
   @Test
+  public void itStripsStartPausedFromRestoredActivity() {
+    Intent intent =
+        FlutterActivity.withNewEngine()
+            .dartEntrypoint("main")
+            .build(ctx)
+            .putExtra("start-paused", true);
+
+    // Simulate restoration
+    Bundle savedInstanceState = new Bundle();
+
+    ActivityController<FlutterActivity> activityController =
+        Robolectric.buildActivity(FlutterActivity.class, intent);
+    FlutterActivity activity = activityController.get();
+
+    activity.onCreate(savedInstanceState);
+
+    // Check shell args
+    String[] shellArgs = activity.getFlutterShellArgs().toArray();
+    List<String> argsList = Arrays.asList(shellArgs);
+    assertFalse(argsList.contains("--start-paused"));
+  }
+
+  @Test
   @Config(minSdk = API_LEVELS.API_34)
   @TargetApi(API_LEVELS.API_34)
   public void whenUsingCachedEngine_predictiveBackStateIsSaved() {

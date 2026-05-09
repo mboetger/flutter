@@ -371,9 +371,12 @@ public class FlutterFragmentActivity extends FragmentActivity
 
   @Nullable private FlutterFragment flutterFragment;
 
+  private boolean isRestoredFromInstanceState;
+
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
     switchLaunchThemeForNormalTheme();
+    isRestoredFromInstanceState = savedInstanceState != null;
     // Get an existing fragment reference first before onCreate since onCreate would re-attach
     // existing fragments. This would cause FlutterFragment to reference the host activity which
     // should be aware of its child fragment.
@@ -585,13 +588,18 @@ public class FlutterFragmentActivity extends FragmentActivity
             .build();
       }
 
+      FlutterShellArgs shellArgs = FlutterShellArgs.fromIntent(getIntent());
+      if (isRestoredFromInstanceState) {
+        shellArgs.remove(FlutterShellArgs.ARG_START_PAUSED);
+      }
+
       return FlutterFragment.withNewEngine()
           .dartEntrypoint(getDartEntrypointFunctionName())
           .dartLibraryUri(getDartEntrypointLibraryUri())
           .dartEntrypointArgs(getDartEntrypointArgs())
           .initialRoute(getInitialRoute())
           .appBundlePath(getAppBundlePath())
-          .flutterShellArgs(FlutterShellArgs.fromIntent(getIntent()))
+          .flutterShellArgs(shellArgs)
           .handleDeeplinking(shouldHandleDeeplinking())
           .renderMode(renderMode)
           .transparencyMode(transparencyMode)

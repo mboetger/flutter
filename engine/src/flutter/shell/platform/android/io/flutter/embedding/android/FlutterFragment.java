@@ -1083,6 +1083,8 @@ public class FlutterFragment extends Fragment
     return delegate;
   }
 
+  private boolean isRestoredFromInstanceState;
+
   @Override
   public void onAttach(@NonNull Context context) {
     super.onAttach(context);
@@ -1105,6 +1107,7 @@ public class FlutterFragment extends Fragment
   @Override
   public void onCreate(@Nullable Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    isRestoredFromInstanceState = savedInstanceState != null;
     if (savedInstanceState != null) {
       boolean frameworkHandlesBack =
           savedInstanceState.getBoolean(
@@ -1355,8 +1358,13 @@ public class FlutterFragment extends Fragment
   @NonNull
   public FlutterShellArgs getFlutterShellArgs() {
     String[] flutterShellArgsArray = getArguments().getStringArray(ARG_FLUTTER_INITIALIZATION_ARGS);
-    return new FlutterShellArgs(
-        flutterShellArgsArray != null ? flutterShellArgsArray : new String[] {});
+    FlutterShellArgs args =
+        new FlutterShellArgs(
+            flutterShellArgsArray != null ? flutterShellArgsArray : new String[] {});
+    if (isRestoredFromInstanceState) {
+      args.remove(FlutterShellArgs.ARG_START_PAUSED);
+    }
+    return args;
   }
 
   /**
