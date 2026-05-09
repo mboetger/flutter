@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  duplicateClassErrorHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,35 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+@visibleForTesting
+final duplicateClassErrorHandler = GradleHandledError(
+  test: _lineMatcher(const <String>[
+    'Duplicate class ',
+    'com.android.build.gradle.internal.tasks.CheckDuplicatesRunnable',
+  ]),
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    final File appGradleFile = project.android.appGradleFile;
+    final gradleCommand = globals.platform.isWindows ? r'.\gradlew.bat' : './gradlew';
+    final excludeSyntax = appGradleFile.basename.endsWith('.kts')
+        ? '     configurations.all {\n'
+              '         exclude(group = "com.google.protobuf", module = "protobuf-lite")\n'
+              '     }'
+        : '     configurations.all {\n'
+              '         exclude group: "com.google.protobuf", module: "protobuf-lite"\n'
+              '     }';
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Your project has a dependency conflict where duplicate classes are found in different modules.\n\n'
+      'To resolve this issue, follow these steps:\n'
+      '  1. Run `$gradleCommand app:dependencies` inside the `android` folder to identify which paths pull in the conflicting dependencies.\n'
+      '  2. Exclude one of the conflicting dependencies in ${appGradleFile.path}.\n'
+      '     E.g. if you wish to exclude `protobuf-lite`:\n\n'
+      '$excludeSyntax\n\n'
+      'For more information, see: https://d.android.com/r/tools/classpath-sync-errors',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'duplicate-classes',
 );

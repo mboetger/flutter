@@ -57,6 +57,7 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          duplicateClassErrorHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -1706,6 +1707,71 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
         testLogger.statusText,
         contains('If you are not upgrading to AGP 9+, run `flutter analyze --suggestions`'),
       );
+    },
+    overrides: <Type, Generator>{
+      GradleUtils: () => FakeGradleUtils(),
+      Platform: () => fakePlatform('android'),
+      FileSystem: () => fileSystem,
+      ProcessManager: () => processManager,
+    },
+  );
+
+  testUsingContext(
+    'duplicate class error suggestion - Groovy build.gradle',
+    () async {
+      final Directory androidDir = fileSystem.directory('/android')..createSync();
+      androidDir.childDirectory('app').childFile('build.gradle').createSync(recursive: true);
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.directory('/'));
+
+      const errorMessage = r'''
+Execution failed for task ':app:checkDebugDuplicateClasses'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.CheckDuplicatesRunnable
+   > Duplicate class com.google.protobuf.AbstractMessageLite found in modules jetified-protobuf-javalite-3.21.7 (com.google.protobuf:protobuf-javalite:3.21.7) and jetified-protobuf-lite-3.0.1 (com.google.protobuf:protobuf-lite:3.0.1)''';
+
+      expect(formatTestErrorMessage(errorMessage, duplicateClassErrorHandler), isTrue);
+
+      expect(
+        await duplicateClassErrorHandler.handler(
+          usesAndroidX: true,
+          line:
+              'Duplicate class com.google.protobuf.AbstractMessageLite found in modules jetified-protobuf-javalite-3.21.7',
+          project: project,
+        ),
+        equals(GradleBuildStatus.exit),
+      );
+
+      expect(testLogger.statusText, contains('Your project has a dependency conflict'));
+      expect(testLogger.statusText, contains('duplicate classes'));
+      expect(testLogger.statusText, contains('./gradlew app:dependencies'));
+      expect(testLogger.statusText, contains('configurations.all {'));
+      expect(testLogger.statusText, contains('exclude group: "com.google.protobuf", module: "protobuf-lite"'));
+      expect(
+        testLogger.statusText,
+        contains('https://d.android.com/r/tools/classpath-sync-errors'),
+      );
+    },
+    overrides: <Type, Generator>{
+      GradleUtils: () => FakeGradleUtils(),
+      Platform: () => fakePlatform('android'),
+      FileSystem: () => fileSystem,
+      ProcessManager: () => processManager,
+    },
+  );
+
+  testUsingContext(
+    'duplicate class error suggestion - Kotlin build.gradle.kts',
+    () async {
+      final Directory androidDir = fileSystem.directory('/android')..createSync();
+      androidDir.childDirectory('app').childFile('build.gradle.kts').createSync(recursive: true);
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.directory('/'));
+
+      expect(
+        await duplicateClassErrorHandler.handler(usesAndroidX: true, line: '', project: project),
+        equals(GradleBuildStatus.exit),
+      );
+
+      expect(testLogger.statusText, contains('configurations.all {'));
+      expect(testLogger.statusText, contains('exclude(group = "com.google.protobuf", module = "protobuf-lite")'));
     },
     overrides: <Type, Generator>{
       GradleUtils: () => FakeGradleUtils(),
