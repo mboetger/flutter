@@ -83,13 +83,32 @@ class AndroidSdk {
   static AndroidSdk? locateAndroidSdk() {
     String? findAndroidHomeDir() {
       String? androidHomeDir;
+      var isExplicitlyConfigured = false;
+
       if (globals.config.containsKey('android-sdk')) {
         androidHomeDir = globals.config.getValue('android-sdk') as String?;
+        isExplicitlyConfigured = true;
       } else if (globals.platform.environment.containsKey(kAndroidHome)) {
         androidHomeDir = globals.platform.environment[kAndroidHome];
+        isExplicitlyConfigured = true;
       } else if (globals.platform.environment.containsKey(kAndroidSdkRoot)) {
         androidHomeDir = globals.platform.environment[kAndroidSdkRoot];
-      } else if (globals.platform.isLinux) {
+        isExplicitlyConfigured = true;
+      }
+
+      if (isExplicitlyConfigured) {
+        if (androidHomeDir != null) {
+          if (validSdkDirectory(androidHomeDir)) {
+            return androidHomeDir;
+          }
+          if (validSdkDirectory(globals.fs.path.join(androidHomeDir, 'sdk'))) {
+            return globals.fs.path.join(androidHomeDir, 'sdk');
+          }
+        }
+        return null;
+      }
+
+      if (globals.platform.isLinux) {
         if (globals.fsUtils.homeDirPath != null) {
           androidHomeDir = globals.fs.path.join(globals.fsUtils.homeDirPath!, 'Android', 'Sdk');
         }

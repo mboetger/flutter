@@ -9,6 +9,7 @@ import 'package:flutter_tools/src/android/android_sdk.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
 import 'package:flutter_tools/src/android/gradle_utils.dart' as gradle_utils;
 import 'package:flutter_tools/src/android/java.dart';
+import 'package:flutter_tools/src/base/config.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
@@ -29,6 +30,7 @@ void main() {
   late MemoryFileSystem fileSystem;
   late FakeProcessManager processManager;
   late FakeStdio stdio;
+  late Config config;
 
   setUp(() {
     sdk = FakeAndroidSdk();
@@ -37,6 +39,7 @@ void main() {
     logger = BufferLogger.test();
     processManager = FakeProcessManager.empty();
     stdio = FakeStdio();
+    config = Config.test();
   });
 
   testWithoutContext('AndroidWorkflow handles a null AndroidSDK', () {
@@ -855,6 +858,59 @@ Android sdkmanager tool was found, but failed to run
       true,
     );
   });
+
+  testWithoutContext(
+    'AndroidValidator reports bad SDK error when ANDROID_SDK_ROOT is invalid',
+    () async {
+      final ValidationResult validationResult = await AndroidValidator(
+        java: FakeJava(),
+        androidSdk: null,
+        logger: logger,
+        platform: FakePlatform()
+          ..environment = <String, String>{'HOME': '/home/me', kAndroidSdkRoot: '/invalid/path'},
+        userMessages: UserMessages(),
+        processManager: processManager,
+      ).validate();
+
+      expect(
+        validationResult.messages.any(
+          (ValidationMessage message) =>
+              message.type == ValidationMessageType.error &&
+              message.message.contains('ANDROID_SDK_ROOT') &&
+              message.message.contains('/invalid/path'),
+        ),
+        true,
+      );
+    },
+  );
+
+  testUsingContext(
+    'AndroidValidator reports bad SDK error when android-sdk config is invalid',
+    () async {
+      config.setValue('android-sdk', '/invalid/path');
+
+      final ValidationResult validationResult = await AndroidValidator(
+        java: FakeJava(),
+        androidSdk: null,
+        logger: logger,
+        platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+        userMessages: UserMessages(),
+        processManager: processManager,
+        config: config,
+      ).validate();
+
+      expect(
+        validationResult.messages.any(
+          (ValidationMessage message) =>
+              message.type == ValidationMessageType.error &&
+              message.message.contains('android-sdk config') &&
+              message.message.contains('/invalid/path'),
+        ),
+        true,
+      );
+    },
+    overrides: <Type, Generator>{Config: () => config},
+  );
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {

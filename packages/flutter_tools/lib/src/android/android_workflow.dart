@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:process/process.dart';
 
 import '../base/common.dart';
+import '../base/config.dart';
 import '../base/context.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
@@ -111,12 +112,14 @@ class AndroidValidator extends DoctorValidator {
     required Platform platform,
     required UserMessages userMessages,
     required ProcessManager processManager,
+    Config? config,
   }) : _java = java,
        _androidSdk = androidSdk,
        _logger = logger,
        _platform = platform,
        _userMessages = userMessages,
        _processManager = processManager,
+       _config = config,
        super('Android toolchain - develop for Android devices');
 
   final Java? _java;
@@ -125,6 +128,7 @@ class AndroidValidator extends DoctorValidator {
   final Platform _platform;
   final UserMessages _userMessages;
   final ProcessManager _processManager;
+  final Config? _config;
 
   @override
   String get slowWarning => '${_task ?? 'This'} is taking a long time...';
@@ -202,6 +206,18 @@ class AndroidValidator extends DoctorValidator {
         final String androidHomeDir = _platform.environment[kAndroidHome]!;
         messages.add(
           ValidationMessage.error(_userMessages.androidBadSdkDir(kAndroidHome, androidHomeDir)),
+        );
+      } else if (_platform.environment.containsKey(kAndroidSdkRoot)) {
+        final String androidSdkRoot = _platform.environment[kAndroidSdkRoot]!;
+        messages.add(
+          ValidationMessage.error(_userMessages.androidBadSdkDir(kAndroidSdkRoot, androidSdkRoot)),
+        );
+      } else if (_config != null && _config.containsKey('android-sdk')) {
+        final String androidSdkConfig = (_config.getValue('android-sdk') as String?)!;
+        messages.add(
+          ValidationMessage.error(
+            _userMessages.androidBadSdkDir('android-sdk config', androidSdkConfig),
+          ),
         );
       } else {
         // Instruct user to set [kAndroidSdkRoot] and not deprecated [kAndroidHome]

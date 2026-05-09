@@ -6,11 +6,13 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
 import 'package:flutter_tools/src/base/config.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
+import 'package:flutter_tools/src/base/os.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
 
 import '../../src/common.dart';
 import '../../src/context.dart';
+import '../../src/fakes.dart';
 
 void main() {
   late MemoryFileSystem fileSystem;
@@ -510,6 +512,79 @@ void main() {
         Config: () => config,
       },
     );
+
+    testUsingContext(
+      'locateAndroidSdk returns null when ANDROID_HOME is set to an invalid directory and does not fall back',
+      () {
+        final AndroidSdk? sdk = AndroidSdk.locateAndroidSdk();
+        expect(sdk, isNull);
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => FakeProcessManager.any(),
+        Platform: () {
+          final Directory invalidSdkDir = fileSystem.directory('/invalid/path');
+          return FakePlatform(environment: <String, String>{kAndroidHome: invalidSdkDir.path});
+        },
+        Config: () => config,
+        OperatingSystemUtils: () {
+          final Directory validSdkDir = createSdkDirectory(fileSystem: fileSystem);
+          final File aaptBin = fileSystem.file(
+            fileSystem.path.join(validSdkDir.path, 'build-tools', '23.0.2', 'aapt'),
+          )..createSync(recursive: true);
+          return FallbackFakeOperatingSystemUtils(<File>[aaptBin]);
+        },
+      },
+    );
+
+    testUsingContext(
+      'locateAndroidSdk returns null when ANDROID_SDK_ROOT is set to an invalid directory and does not fall back',
+      () {
+        final AndroidSdk? sdk = AndroidSdk.locateAndroidSdk();
+        expect(sdk, isNull);
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => FakeProcessManager.any(),
+        Platform: () {
+          final Directory invalidSdkDir = fileSystem.directory('/invalid/path');
+          return FakePlatform(environment: <String, String>{kAndroidSdkRoot: invalidSdkDir.path});
+        },
+        Config: () => config,
+        OperatingSystemUtils: () {
+          final Directory validSdkDir = createSdkDirectory(fileSystem: fileSystem);
+          final File aaptBin = fileSystem.file(
+            fileSystem.path.join(validSdkDir.path, 'build-tools', '23.0.2', 'aapt'),
+          )..createSync(recursive: true);
+          return FallbackFakeOperatingSystemUtils(<File>[aaptBin]);
+        },
+      },
+    );
+
+    testUsingContext(
+      'locateAndroidSdk returns null when android-sdk config is set to an invalid directory and does not fall back',
+      () {
+        final AndroidSdk? sdk = AndroidSdk.locateAndroidSdk();
+        expect(sdk, isNull);
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => FakeProcessManager.any(),
+        Platform: () => FakePlatform(),
+        Config: () {
+          final Directory invalidSdkDir = fileSystem.directory('/invalid/path');
+          config.setValue('android-sdk', invalidSdkDir.path);
+          return config;
+        },
+        OperatingSystemUtils: () {
+          final Directory validSdkDir = createSdkDirectory(fileSystem: fileSystem);
+          final File aaptBin = fileSystem.file(
+            fileSystem.path.join(validSdkDir.path, 'build-tools', '23.0.2', 'aapt'),
+          )..createSync(recursive: true);
+          return FallbackFakeOperatingSystemUtils(<File>[aaptBin]);
+        },
+      },
+    );
   });
 
   const llvmHostDirectoryName = <String, String>{
@@ -701,3 +776,11 @@ ro.build.version.incremental=1624448
 ro.build.version.sdk=24
 ro.build.version.codename=REL
 ''';
+
+class FallbackFakeOperatingSystemUtils extends FakeOperatingSystemUtils {
+  FallbackFakeOperatingSystemUtils(this.aaptPaths);
+  final List<File> aaptPaths;
+
+  @override
+  List<File> whichAll(String execName) => execName == 'aapt' ? aaptPaths : <File>[];
+}
