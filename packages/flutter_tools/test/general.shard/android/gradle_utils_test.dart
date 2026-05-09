@@ -672,6 +672,36 @@ dependencies {
       expect(getAgpVersion(androidDirectory, BufferLogger.test()), null);
     });
 
+    testWithoutContext('getAgpVersion returns version from libs.versions.toml', () {
+      final Directory androidDirectory = fileSystem.directory('/android')..createSync();
+      androidDirectory.childDirectory('gradle').childFile('libs.versions.toml')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('''
+[versions]
+agp = "8.1.1"
+kotlin = "1.9.0"
+''');
+      // Must also have a build.gradle or settings.gradle to even check.
+      androidDirectory.childFile('build.gradle').createSync();
+
+      expect(getAgpVersion(androidDirectory, BufferLogger.test()), '8.1.1');
+    });
+
+    testWithoutContext('getKgpVersion returns version from libs.versions.toml', () async {
+      final Directory androidDirectory = fileSystem.directory('/android')..createSync();
+      androidDirectory.childDirectory('gradle').childFile('libs.versions.toml')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('''
+[versions]
+agp = "8.1.1"
+kotlin = "1.9.0"
+''');
+      // Must also have a settings.gradle to even check.
+      androidDirectory.childFile('settings.gradle').createSync();
+
+      expect(await getKgpVersion(androidDirectory, BufferLogger.test(), FakeProcessManager.any()), '1.9.0');
+    });
+
     group('validates gradle/agp versions', () {
       final testData = <GradleAgpTestData>[
         // Values too new *these need to be updated* when

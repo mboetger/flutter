@@ -403,6 +403,24 @@ OS:           Mac OS X 13.2.1 aarch64
   }
 }
 
+String? _getVersionFromCatalog(Directory androidDirectory, String key, Logger logger) {
+  final File catalogFile = androidDirectory.childDirectory('gradle').childFile('libs.versions.toml');
+  if (!catalogFile.existsSync()) {
+    return null;
+  }
+  final String content = catalogFile.readAsStringSync();
+  // Simple regex for [versions] block.
+  // We look for key = "version"
+  final RegExp regExp = RegExp('^\\s*' + RegExp.escape(key) + r'\s*=\s*"(?<version>[^"]+)"', multiLine: true);
+  final RegExpMatch? match = regExp.firstMatch(content);
+  if (match != null) {
+    final String? version = match.namedGroup('version');
+    logger.printTrace('Found $key version $version in version catalog');
+    return version;
+  }
+  return null;
+}
+
 /// Returns the Kotlin Gradle Plugin (KGP) version that the current project
 /// depends on if found, `null` otherwise.
 /// [androidDirectory] should be an android directory with a `build.gradle` file.
@@ -474,7 +492,7 @@ Future<String?> getKgpVersion(
     logger.printTrace('No settings.gradle.kts');
   }
 
-  return null;
+  return _getVersionFromCatalog(androidDirectory, 'kotlin', logger);
 }
 
 /// Returns the Android Gradle Plugin (AGP) version that the current project
@@ -513,23 +531,25 @@ String? getAgpVersion(Directory androidDirectory, Logger logger) {
   if (!settingsFile.existsSync()) {
     settingsFile = androidDirectory.childFile('settings.gradle.kts');
   }
-  if (!settingsFile.existsSync()) {
-    logger.printTrace('Cannot find settings.gradle/settings.gradle.kts in $androidDirectory');
-    return null;
-  }
-  final String settingsFileContent = settingsFile.readAsStringSync();
-  final RegExpMatch? settingsMatch = _androidGradlePluginRegExpFromId.firstMatch(
-    settingsFileContent,
-  );
+  if (settingsFile.existsSync()) {
+    final String settingsFileContent = settingsFile.readAsStringSync();
+    final RegExpMatch? settingsMatch = _androidGradlePluginRegExpFromId.firstMatch(
+      settingsFileContent,
+    );
 
-  if (settingsMatch != null) {
-    final String? androidPluginVersion = settingsMatch.namedGroup(_versionGroupName);
-    logger.printTrace('$settingsFile provides AGP version: $androidPluginVersion');
-    return androidPluginVersion;
+    if (settingsMatch != null) {
+      final String? androidPluginVersion = settingsMatch.namedGroup(_versionGroupName);
+      logger.printTrace('$settingsFile provides AGP version: $androidPluginVersion');
+      return androidPluginVersion;
+    }
+    logger.printTrace("$settingsFile doesn't provide an AGP version.");
+  } else {
+    logger.printTrace('Cannot find settings.gradle/settings.gradle.kts in $androidDirectory');
   }
-  logger.printTrace("$settingsFile doesn't provide an AGP version.");
-  return null;
+
+  return _getVersionFromCatalog(androidDirectory, 'agp', logger);
 }
+
 
 String _formatParseWarning(String content, {required String type}) {
   return 'Could not parse $type version from: \n'
