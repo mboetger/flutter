@@ -118,6 +118,27 @@ void main() {
     expect(androidWorkflow.canListEmulators, true);
   });
 
+  testWithoutContext('runLicenseManager throws error if SDK directory is not writable', () async {
+    final sdkDir = _FakeDirectory('/sdk', isWritable: false);
+    sdk.directory = sdkDir;
+    sdk.sdkManagerPath = '/sdk/bin/sdkmanager';
+
+    final licenseValidator = AndroidLicenseValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      processManager: processManager,
+      platform: FakePlatform(environment: <String, String>{'HOME': '/home/me'}),
+      stdio: stdio,
+      logger: logger,
+      userMessages: UserMessages(),
+    );
+
+    await expectLater(
+      () => licenseValidator.runLicenseManager(),
+      throwsToolExit(message: 'Android SDK directory "/sdk/licenses" is not writable.'),
+    );
+  });
+
   testWithoutContext(
     'licensesAccepted returns LicensesAccepted.unknown if cannot find sdkmanager',
     () async {
@@ -938,4 +959,42 @@ class IgnoringStdin extends Fake implements IOSink {
 
   @override
   Future<void> get done async {}
+}
+
+class _FakeDirectory extends Fake implements Directory {
+  _FakeDirectory(this.path, {this.isWritable = true});
+
+  @override
+  final String path;
+  final bool isWritable;
+
+  @override
+  bool existsSync() => true;
+
+  @override
+  Directory childDirectory(String name) => _FakeDirectory('$path/$name', isWritable: isWritable);
+
+  @override
+  File childFile(String name) => _FakeFile('$path/$name', isWritable: isWritable);
+}
+
+class _FakeFile extends Fake implements File {
+  _FakeFile(this.path, {this.isWritable = true});
+
+  @override
+  final String path;
+  final bool isWritable;
+
+  @override
+  bool existsSync() => false;
+
+  @override
+  void createSync({bool recursive = false, bool exclusive = false}) {
+    if (!isWritable && path.contains('.flutter_test_write')) {
+      throw const FileSystemException('Permission denied');
+    }
+  }
+
+  @override
+  void deleteSync({bool recursive = false}) {}
 }

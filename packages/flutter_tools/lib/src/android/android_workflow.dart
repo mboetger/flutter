@@ -8,6 +8,7 @@ import 'package:process/process.dart';
 
 import '../base/common.dart';
 import '../base/context.dart';
+import '../base/file_system.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
 import '../base/platform.dart';
@@ -470,6 +471,22 @@ class AndroidLicenseValidator extends DoctorValidator {
         'Android sdkmanager not found. Update to the latest Android SDK and ensure that '
         'the cmdline-tools are installed to resolve this.',
       );
+    }
+
+    final Directory licensesDirectory = _androidSdk.directory.childDirectory('licenses');
+    final Directory directoryToCheck =
+        licensesDirectory.existsSync() ? licensesDirectory : _androidSdk.directory;
+    if (directoryToCheck.existsSync()) {
+      try {
+        final File tempFile = directoryToCheck.childFile('.flutter_test_write');
+        tempFile.createSync();
+        tempFile.deleteSync();
+      } on FileSystemException {
+        throwToolExit(
+          'Android SDK directory "${directoryToCheck.path}" is not writable. '
+          'Please ensure that you have write permissions to this directory.',
+        );
+      }
     }
 
     try {
