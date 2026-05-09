@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  gradleOutOfMemoryErrorHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,27 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+/// Handler when Gradle runs out of memory (OOM) during the build.
+@visibleForTesting
+final gradleOutOfMemoryErrorHandler = GradleHandledError(
+  test: _lineMatcher(const <String>[
+    'Java heap space',
+    'OutOfMemoryError',
+    'GC overhead limit exceeded',
+  ]),
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Gradle ran out of memory while building your project.\n\n'
+      'To resolve this, try increasing the maximum heap size for Gradle by updating the '
+      'org.gradle.jvmargs property in your android/gradle.properties file.\n'
+      'E.g. add or update the following line to give Gradle 3 gigabytes of memory:\n\n'
+      '  org.gradle.jvmargs=-Xmx3072m\n\n'
+      'For more details, see: https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_configuration_properties',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'gradle-out-of-memory-error',
 );

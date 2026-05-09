@@ -1714,6 +1714,40 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
       ProcessManager: () => processManager,
     },
   );
+
+  group('OutOfMemoryError', () {
+    testWithoutContext('pattern', () {
+      expect(gradleOutOfMemoryErrorHandler.test('  > Java heap space'), isTrue);
+      expect(
+        gradleOutOfMemoryErrorHandler.test('  > java.lang.OutOfMemoryError: Java heap space'),
+        isTrue,
+      );
+      expect(gradleOutOfMemoryErrorHandler.test('  > GC overhead limit exceeded'), isTrue);
+    });
+
+    testUsingContext(
+      'suggestion',
+      () async {
+        await gradleOutOfMemoryErrorHandler.handler(
+          project: FlutterProject.fromDirectoryTest(fileSystem.currentDirectory),
+          usesAndroidX: true,
+          line: '',
+        );
+
+        expect(
+          testLogger.statusText,
+          contains('Gradle ran out of memory while building your project.'),
+        );
+        expect(testLogger.statusText, contains('org.gradle.jvmargs=-Xmx3072m'));
+      },
+      overrides: <Type, Generator>{
+        GradleUtils: () => FakeGradleUtils(),
+        Platform: () => fakePlatform('android'),
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+      },
+    );
+  });
 }
 
 bool formatTestErrorMessage(String errorMessage, GradleHandledError error) {
