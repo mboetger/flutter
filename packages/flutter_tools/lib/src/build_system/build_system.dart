@@ -350,6 +350,12 @@ class Environment {
     Map<String, String> defines = const <String, String>{},
     Map<String, String> inputs = const <String, String>{},
   }) {
+    if (defines.containsKey(kTargetFile)) {
+      defines = <String, String>{
+        ...defines,
+        kTargetFile: fileSystem.path.normalize(defines[kTargetFile]!),
+      };
+    }
     // Compute a unique hash of this build's particular environment.
     // Sort the keys by key so that the result is stable. We always
     // include the engine and dart versions.

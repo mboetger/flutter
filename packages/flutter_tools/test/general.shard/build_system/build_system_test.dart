@@ -11,9 +11,11 @@ import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/utils.dart';
+import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/build_system/exceptions.dart';
 import 'package:flutter_tools/src/convert.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
 import '../../src/fake_process_manager.dart';
@@ -884,6 +886,8 @@ void main() {
     expect(result.success, false);
     expect(result.exceptions.keys, containsAll(<String>['B', 'C']));
   });
+
+  _testEnvironment();
 }
 
 BuildSystem setUpBuildSystem(FileSystem fileSystem, {FakePlatform? platform, Logger? logger}) {
@@ -930,4 +934,52 @@ class TestTarget extends Target {
 
   @override
   String? buildKey;
+}
+
+void _testEnvironment() {
+  testWithoutContext('Environment.kTargetFile is normalized', () {
+    final FileSystem fileSystem = MemoryFileSystem.test(style: FileSystemStyle.windows);
+    final Environment environment = Environment(
+      projectDir: fileSystem.currentDirectory,
+      outputDir: fileSystem.currentDirectory,
+      cacheDir: fileSystem.currentDirectory,
+      flutterRootDir: fileSystem.currentDirectory,
+      fileSystem: fileSystem,
+      logger: BufferLogger.test(),
+      artifacts: Artifacts.test(),
+      processManager: FakeProcessManager.any(),
+      platform: FakePlatform(operatingSystem: 'windows'),
+      analytics: const NoOpAnalytics(),
+      packageConfigPath: '.dart_tool/package_config.json',
+      generateDartPluginRegistry: false,
+      defines: <String, String>{
+        kTargetFile: r'lib\..\lib\main.dart',
+      },
+    );
+
+    expect(environment.defines[kTargetFile], r'lib\main.dart');
+  });
+
+  testWithoutContext('Environment.kTargetFile is normalized with mixed slashes on Windows', () {
+    final FileSystem fileSystem = MemoryFileSystem.test(style: FileSystemStyle.windows);
+    final Environment environment = Environment(
+      projectDir: fileSystem.currentDirectory,
+      outputDir: fileSystem.currentDirectory,
+      cacheDir: fileSystem.currentDirectory,
+      flutterRootDir: fileSystem.currentDirectory,
+      fileSystem: fileSystem,
+      logger: BufferLogger.test(),
+      artifacts: Artifacts.test(),
+      processManager: FakeProcessManager.any(),
+      platform: FakePlatform(operatingSystem: 'windows'),
+      analytics: const NoOpAnalytics(),
+      packageConfigPath: '.dart_tool/package_config.json',
+      generateDartPluginRegistry: false,
+      defines: <String, String>{
+        kTargetFile: 'lib/main.dart',
+      },
+    );
+
+    expect(environment.defines[kTargetFile], r'lib\main.dart');
+  });
 }
