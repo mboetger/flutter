@@ -152,6 +152,7 @@ class Java {
   /// This map should be used as the environment when invoking any Java-dependent
   /// processes, such as Gradle or Android SDK tools (avdmanager, sdkmanager, etc.)
   Map<String, String> get environment => <String, String>{
+    ..._platform.environment,
     javaHomeEnvironmentVariable: ?javaHome,
     'PATH':
         _fileSystem.path.dirname(binaryPath) +

@@ -333,6 +333,30 @@ OpenJDK 64-Bit Server VM (build 21+35, mixed mode, sharing)
         expect(version, equals(Version(21, 0, 0)));
       });
     });
+
+    group('environment', () {
+      testWithoutContext('correctly preserves parent environment variables', () {
+        final Platform platform = FakePlatform(
+          environment: <String, String>{'PATH': '/usr/bin', 'CUSTOM_VAR': 'custom_val'},
+        );
+        final java = Java(
+          fileSystem: fs,
+          logger: logger,
+          os: FakeOperatingSystemUtils(),
+          platform: platform,
+          processManager: processManager,
+          binaryPath: '/fake/bin/java',
+          javaHome: '/fake/javaHome',
+          javaSource: JavaSource.javaHome,
+        );
+
+        final Map<String, String> env = java.environment;
+        expect(env['CUSTOM_VAR'], 'custom_val');
+        expect(env['JAVA_HOME'], '/fake/javaHome');
+        expect(env['PATH'], contains('/usr/bin'));
+        expect(env['PATH'], contains('/fake/bin'));
+      });
+    });
   });
 }
 
