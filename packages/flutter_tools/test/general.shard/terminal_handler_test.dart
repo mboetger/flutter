@@ -1284,6 +1284,65 @@ void main() {
     },
   );
 
+  testWithoutContext(
+    's, can take screenshot on debug device even if getFlutterViews throws',
+    () async {
+      final logger = BufferLogger.test();
+      final FileSystem fileSystem = MemoryFileSystem.test();
+      final TerminalHandler terminalHandler = setUpTerminalHandler(
+        <FakeVmServiceRequest>[
+          FakeVmServiceRequest(
+            method: kListViewsMethod,
+            error: FakeRPCError(code: vm_service.RPCErrorKind.kInternalError.code),
+          ),
+        ],
+        logger: logger,
+        supportsScreenshot: true,
+        fileSystem: fileSystem,
+      );
+
+      await terminalHandler.processTerminalInput('s');
+
+      expect(logger.statusText, contains('Screenshot written to flutter_01.png (0kB)'));
+      expect(fileSystem.currentDirectory.childFile('flutter_01.png').readAsBytesSync(), <int>[
+        1,
+        2,
+        3,
+        4,
+      ]);
+    },
+  );
+
+  testWithoutContext('s, can take screenshot on debug device even if uiIsolate is null', () async {
+    final logger = BufferLogger.test();
+    final FileSystem fileSystem = MemoryFileSystem.test();
+    final TerminalHandler terminalHandler = setUpTerminalHandler(
+      <FakeVmServiceRequest>[
+        const FakeVmServiceRequest(
+          method: kListViewsMethod,
+          jsonResponse: <String, Object>{
+            'views': <Object>[
+              <String, Object?>{'id': 'a', 'type': 'FlutterView', 'isolate': null},
+            ],
+          },
+        ),
+      ],
+      logger: logger,
+      supportsScreenshot: true,
+      fileSystem: fileSystem,
+    );
+
+    await terminalHandler.processTerminalInput('s');
+
+    expect(logger.statusText, contains('Screenshot written to flutter_01.png (0kB)'));
+    expect(fileSystem.currentDirectory.childFile('flutter_01.png').readAsBytesSync(), <int>[
+      1,
+      2,
+      3,
+      4,
+    ]);
+  });
+
   testWithoutContext('pidfile creation', () {
     final testLogger = BufferLogger.test();
     final Signals signals = _TestSignals(Signals.defaultExitSignals);

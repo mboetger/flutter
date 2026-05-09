@@ -905,19 +905,28 @@ abstract class ResidentHandlers {
 
   Future<bool> _toggleDebugBanner(FlutterDevice device, Future<void> Function() cb) async {
     var views = <FlutterView>[];
-    if (supportsServiceProtocol) {
-      views = await device.vmService!.getFlutterViews();
+    if (supportsServiceProtocol && device.vmService != null) {
+      try {
+        views = await device.vmService!.getFlutterViews();
+      } on Exception catch (error) {
+        logger.printTrace('Error getting Flutter views: $error');
+      }
     }
 
     Future<bool> setDebugBanner(bool value) async {
       try {
         for (final view in views) {
-          await device.vmService!.flutterDebugAllowBanner(value, isolateId: view.uiIsolate!.id!);
+          if (view.uiIsolate?.id != null) {
+            await device.vmService!.flutterDebugAllowBanner(value, isolateId: view.uiIsolate!.id!);
+          }
         }
         return true;
       } on vm_service.RPCError catch (error) {
         logger.printError('Error communicating with Flutter on the device: $error');
-        return false;
+        return true; // Best effort: proceed even if toggling the banner fails
+      } on Object catch (error) {
+        logger.printTrace('Error setting debug banner: $error');
+        return true; // Best effort: proceed even if toggling the banner fails
       }
     }
 
