@@ -386,7 +386,6 @@ class Tooltip extends StatefulWidget {
 /// This class can be used to programmatically show the Tooltip, see the
 /// [ensureTooltipVisible] method.
 class TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
-  static const double _defaultVerticalOffset = 24.0;
   static const bool _defaultPreferBelow = true;
   static const EdgeInsetsGeometry _defaultMargin = EdgeInsets.zero;
   static const Duration _defaultShowDuration = Duration(milliseconds: 1500);
@@ -447,24 +446,33 @@ class TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
     };
   }
 
-  Offset _getDefaultPositionDelegate(TooltipPositionContext context) {
+  static double _getDefaultVerticalOffset(TargetPlatform platform) {
+    return switch (platform) {
+      TargetPlatform.macOS || TargetPlatform.linux || TargetPlatform.windows => 24.0,
+      TargetPlatform.android || TargetPlatform.fuchsia || TargetPlatform.iOS => 32.0,
+    };
+  }
+
+  Offset _getDefaultPositionDelegate(TooltipPositionContext positionContext) {
     final double effectiveVerticalOffset =
-        widget.verticalOffset ?? _tooltipTheme.verticalOffset ?? _defaultVerticalOffset;
+        widget.verticalOffset ??
+        _tooltipTheme.verticalOffset ??
+        _getDefaultVerticalOffset(Theme.of(context).platform);
     final bool effectivePreferBelow =
         widget.preferBelow ?? _tooltipTheme.preferBelow ?? _defaultPreferBelow;
     final resolvedContext = TooltipPositionContext(
-      target: context.target,
-      targetSize: context.targetSize,
-      tooltipSize: context.tooltipSize,
-      overlaySize: context.overlaySize,
+      target: positionContext.target,
+      targetSize: positionContext.targetSize,
+      tooltipSize: positionContext.tooltipSize,
+      overlaySize: positionContext.overlaySize,
       verticalOffset: effectiveVerticalOffset,
       preferBelow: effectivePreferBelow,
     );
     return widget.positionDelegate?.call(resolvedContext) ??
         positionDependentBox(
-          size: context.overlaySize,
-          childSize: context.tooltipSize,
-          target: context.target,
+          size: positionContext.overlaySize,
+          childSize: positionContext.tooltipSize,
+          target: positionContext.target,
           verticalOffset: effectiveVerticalOffset,
           preferBelow: effectivePreferBelow,
         );

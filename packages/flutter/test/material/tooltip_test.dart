@@ -257,6 +257,98 @@ void main() {
     expect(tip.localToGlobal(tip.size.topLeft(Offset.zero)), equals(const Offset(10.0, 20.0)));
   });
 
+  testWidgets('Does tooltip end up in the right place - default verticalOffset on desktop', (
+    WidgetTester tester,
+  ) async {
+    final tooltipKey = GlobalKey<TooltipState>();
+    late final OverlayEntry entry;
+    addTearDown(
+      () => entry
+        ..remove()
+        ..dispose(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.macOS),
+        home: Overlay(
+          initialEntries: <OverlayEntry>[
+            entry = OverlayEntry(
+              builder: (BuildContext context) {
+                return Stack(
+                  children: <Widget>[
+                    Positioned(
+                      left: 0.0,
+                      top: 0.0,
+                      child: Tooltip(
+                        key: tooltipKey,
+                        message: tooltipText,
+                        preferBelow: true,
+                        child: const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    tooltipKey.currentState?.ensureTooltipVisible();
+    await tester.pump(const Duration(seconds: 2)); // faded in
+
+    final RenderBox tip = tester.renderObject(_findTooltipContainer(tooltipText));
+    final Offset tipInGlobal = tip.localToGlobal(tip.size.topLeft(Offset.zero));
+    expect(tipInGlobal.dy, equals(24.0));
+  });
+
+  testWidgets('Does tooltip end up in the right place - default verticalOffset on mobile', (
+    WidgetTester tester,
+  ) async {
+    final tooltipKey = GlobalKey<TooltipState>();
+    late final OverlayEntry entry;
+    addTearDown(
+      () => entry
+        ..remove()
+        ..dispose(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: Overlay(
+          initialEntries: <OverlayEntry>[
+            entry = OverlayEntry(
+              builder: (BuildContext context) {
+                return Stack(
+                  children: <Widget>[
+                    Positioned(
+                      left: 0.0,
+                      top: 0.0,
+                      child: Tooltip(
+                        key: tooltipKey,
+                        message: tooltipText,
+                        preferBelow: true,
+                        child: const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    tooltipKey.currentState?.ensureTooltipVisible();
+    await tester.pump(const Duration(seconds: 2)); // faded in
+
+    final RenderBox tip = tester.renderObject(_findTooltipContainer(tooltipText));
+    final Offset tipInGlobal = tip.localToGlobal(tip.size.topLeft(Offset.zero));
+    expect(tipInGlobal.dy, equals(32.0));
+  });
+
   testWidgets('Does tooltip end up in the right place - center prefer above fits', (
     WidgetTester tester,
   ) async {
