@@ -9,6 +9,7 @@ import 'package:flutter_tools/src/android/android_sdk.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
 import 'package:flutter_tools/src/android/gradle_utils.dart' as gradle_utils;
 import 'package:flutter_tools/src/android/java.dart';
+import 'package:flutter_tools/src/base/config.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
@@ -855,6 +856,63 @@ Android sdkmanager tool was found, but failed to run
       true,
     );
   });
+
+  testUsingContext('AndroidValidator detects missing NDK and warns user', () async {
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..sdkManagerPath = '/foo/bar/sdkmanager'
+      ..emulatorPath = 'path/to/emulator';
+
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform(),
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) => message.message.contains(
+          'Android NDK is not installed. This is required if you use packages with native assets',
+        ),
+      ),
+      true,
+    );
+  });
+
+  testUsingContext('AndroidValidator does not warn if NDK is present', () async {
+    final sdkWithNdk = FakeAndroidSdkWithNdk();
+    sdkWithNdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = true
+      ..directory = fileSystem.directory('/foo/bar')
+      ..sdkManagerPath = '/foo/bar/sdkmanager'
+      ..emulatorPath = 'path/to/emulator';
+
+    final ValidationResult validationResult = await AndroidValidator(
+      java: FakeJava(),
+      androidSdk: sdkWithNdk,
+      logger: logger,
+      platform: FakePlatform(),
+      userMessages: UserMessages(),
+      processManager: processManager,
+    ).validate();
+
+    expect(
+      validationResult.messages.any(
+        (ValidationMessage message) => message.message.contains(
+          'Android NDK is not installed. This is required if you use packages with native assets',
+        ),
+      ),
+      false,
+    );
+  });
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
@@ -887,6 +945,9 @@ class FakeAndroidSdk extends Fake implements AndroidSdk {
 
   @override
   List<String> validateSdkWellFormed() => <String>[];
+
+  @override
+  String? getNdkClangPath({Platform? platform, Config? config}) => null;
 }
 
 class FakeAndroidSdkVersion extends Fake implements AndroidSdkVersion {
@@ -938,4 +999,10 @@ class IgnoringStdin extends Fake implements IOSink {
 
   @override
   Future<void> get done async {}
+}
+
+class FakeAndroidSdkWithNdk extends FakeAndroidSdk {
+  @override
+  String? getNdkClangPath({Platform? platform, Config? config}) =>
+      '/foo/bar/ndk/21.1.6352462/toolchains/llvm/prebuilt/linux-x86_64/bin/clang';
 }

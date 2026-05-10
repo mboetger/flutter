@@ -187,6 +187,19 @@ class AndroidValidator extends DoctorValidator {
     }
   }
 
+  void _checkNdkStatus(AndroidSdk androidSdk, List<ValidationMessage> messages) {
+    final String? ndkClangPath = androidSdk.getNdkClangPath();
+    if (ndkClangPath == null) {
+      messages.add(
+        const ValidationMessage.hint(
+          'Android NDK is not installed. This is required if you use packages with native assets (FFI).\n'
+          'To install the NDK, see the instructions at https://developer.android.com/studio/projects/install-ndk\n'
+          'or run "sdkmanager --install \'ndk;bundle\'".',
+        ),
+      );
+    }
+  }
+
   String _androidSdkLocation(String directory) => 'Android SDK at $directory';
 
   String _androidSdkPlatformToolsVersion(String platform, String tools) =>
@@ -301,6 +314,9 @@ class AndroidValidator extends DoctorValidator {
     if (!await _checkJavaVersion(messages)) {
       return ValidationResult(ValidationType.partial, messages, statusInfo: sdkVersionText);
     }
+
+    // Check NDK status.
+    _checkNdkStatus(androidSdk, messages);
 
     // Success.
     return ValidationResult(ValidationType.success, messages, statusInfo: sdkVersionText);
