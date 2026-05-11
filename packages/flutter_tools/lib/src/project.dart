@@ -763,6 +763,109 @@ class AndroidProject extends FlutterProjectPlatform {
     return parent.isModule || _editableHostAppDirectory.existsSync();
   }
 
+  /// Returns all build.gradle and build.gradle.kts files under hostAppGradleRoot,
+  /// ignoring generated or cache directories like .gradle, .cxx, build.
+  List<File> get buildGradleFiles {
+    if (!hostAppGradleRoot.existsSync()) {
+      return const <File>[];
+    }
+    final files = <File>[];
+    for (final FileSystemEntity entity in hostAppGradleRoot.listSync(recursive: true)) {
+      if (entity is! File) {
+        continue;
+      }
+      final String filename = hostAppGradleRoot.fileSystem.path.basename(entity.path);
+      if (filename != 'build.gradle' && filename != 'build.gradle.kts') {
+        continue;
+      }
+      final List<String> pathParts = hostAppGradleRoot.fileSystem.path.split(entity.path);
+      if (pathParts.contains('.gradle') || pathParts.contains('build')) {
+        continue;
+      }
+      files.add(entity);
+    }
+    return files;
+  }
+
+  bool _containsPlugin(File file, String pluginId) {
+    if (!file.existsSync()) {
+      return false;
+    }
+    try {
+      final List<String> lines = file.readAsLinesSync();
+      for (final line in lines) {
+        final String trimmed = line.trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) {
+          continue;
+        }
+        if (trimmed.contains(pluginId)) {
+          return true;
+        }
+      }
+    } on FileSystemException {
+      // Ignore
+    }
+    return false;
+  }
+
+  /// Validates if Gradle plugins are correctly applied.
+  ///
+  /// - settings.gradle or settings.gradle.kts should apply dev.flutter.flutter-plugin-loader,
+  ///   but not dev.flutter.flutter-gradle-plugin.
+  /// - build.gradle or build.gradle.kts files should apply dev.flutter.flutter-gradle-plugin,
+  ///   but not dev.flutter.flutter-plugin-loader.
+  Future<List<ProjectValidatorResult>> validateGradlePlugins() async {
+    if (!existsSync()) {
+      return const <ProjectValidatorResult>[];
+    }
+    final errors = <String>[];
+
+    // Check settings.gradle / settings.gradle.kts
+    final File settingsFile = settingsGradleFile;
+    if (settingsFile.existsSync()) {
+      if (_containsPlugin(settingsFile, 'dev.flutter.flutter-gradle-plugin')) {
+        final String path = settingsFile.fileSystem.path.relative(
+          settingsFile.path,
+          from: parent.directory.path,
+        );
+        errors.add(
+          'The Flutter Gradle plugin (dev.flutter.flutter-gradle-plugin) is applied in "$path", but it should be applied in app-level "build.gradle" or "build.gradle.kts" instead.',
+        );
+      }
+    }
+
+    // Check all build.gradle / build.gradle.kts files
+    for (final File buildFile in buildGradleFiles) {
+      if (_containsPlugin(buildFile, 'dev.flutter.flutter-plugin-loader')) {
+        final String path = buildFile.fileSystem.path.relative(
+          buildFile.path,
+          from: parent.directory.path,
+        );
+        errors.add(
+          'The Flutter plugin loader (dev.flutter.flutter-plugin-loader) is applied in "$path", but it should be applied in "settings.gradle" or "settings.gradle.kts" instead.',
+        );
+      }
+    }
+
+    if (errors.isEmpty) {
+      return <ProjectValidatorResult>[
+        const ProjectValidatorResult(
+          name: 'Gradle Plugins',
+          value: 'correctly applied',
+          status: StatusProjectValidator.success,
+        ),
+      ];
+    }
+
+    return <ProjectValidatorResult>[
+      ProjectValidatorResult(
+        name: 'Gradle Plugins',
+        value: errors.join('\n'),
+        status: StatusProjectValidator.error,
+      ),
+    ];
+  }
+
   /// Check if the versions of Java, Gradle and AGP are compatible.
   ///
   /// This is expected to be called from

@@ -140,6 +140,7 @@ class GeneralInfoProjectValidator extends ProjectValidator {
       result.add(_pluginValidatorResult(flutterManifest));
     }
     result.add(await project.android.validateJavaAndGradleAgpVersions());
+    result.addAll(await project.android.validateGradlePlugins());
     return result;
   }
 

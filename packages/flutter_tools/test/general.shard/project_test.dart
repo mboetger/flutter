@@ -24,6 +24,7 @@ import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/ios/plist_parser.dart';
 import 'package:flutter_tools/src/ios/xcodeproj.dart';
 import 'package:flutter_tools/src/project.dart';
+import 'package:flutter_tools/src/project_validator_result.dart';
 import 'package:meta/meta.dart';
 import 'package:test/fake.dart';
 
@@ -864,6 +865,141 @@ dependencies {
           androidSdk: androidSdk,
         );
       });
+    });
+
+    group('gradle plugin validation', () {
+      late MemoryFileSystem fs;
+      late FlutterProjectFactory flutterProjectFactory;
+
+      setUp(() {
+        fs = MemoryFileSystem.test();
+        flutterProjectFactory = FlutterProjectFactory(logger: logger, fileSystem: fs);
+      });
+
+      testUsingContext(
+        'passes when gradle plugins are applied correctly',
+        () async {
+          final FlutterProject project = await someProject();
+          final File settingsFile = project.android.hostAppGradleRoot.childFile('settings.gradle');
+          settingsFile.createSync(recursive: true);
+          settingsFile.writeAsStringSync('''
+pluginManagement {
+    plugins {
+        id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+    }
+}
+plugins {
+    id "dev.flutter.flutter-plugin-loader"
+}
+''');
+
+          final File buildFile = project.android.hostAppGradleRoot
+              .childDirectory('app')
+              .childFile('build.gradle');
+          buildFile.createSync(recursive: true);
+          buildFile.writeAsStringSync('''
+plugins {
+    id "dev.flutter.flutter-gradle-plugin"
+}
+''');
+
+          final List<ProjectValidatorResult> results = await project.android
+              .validateGradlePlugins();
+          expect(results.length, 1);
+          expect(results.first.status, StatusProjectValidator.success);
+          expect(results.first.value, 'correctly applied');
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+          FlutterProjectFactory: () => flutterProjectFactory,
+        },
+      );
+
+      testUsingContext(
+        'fails when project plugin is in settings.gradle',
+        () async {
+          final FlutterProject project = await someProject();
+          final File settingsFile = project.android.hostAppGradleRoot.childFile('settings.gradle');
+          settingsFile.createSync(recursive: true);
+          settingsFile.writeAsStringSync('''
+plugins {
+    id "dev.flutter.flutter-gradle-plugin"
+}
+''');
+
+          final List<ProjectValidatorResult> results = await project.android
+              .validateGradlePlugins();
+          expect(results.length, 1);
+          expect(results.first.status, StatusProjectValidator.error);
+          expect(
+            results.first.value,
+            contains(
+              'The Flutter Gradle plugin (dev.flutter.flutter-gradle-plugin) is applied in "android/settings.gradle", but it should be applied in app-level "build.gradle" or "build.gradle.kts" instead.',
+            ),
+          );
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+          FlutterProjectFactory: () => flutterProjectFactory,
+        },
+      );
+
+      testUsingContext(
+        'fails when loader plugin is in build.gradle',
+        () async {
+          final FlutterProject project = await someProject();
+          final File buildFile = project.android.hostAppGradleRoot
+              .childDirectory('app')
+              .childFile('build.gradle');
+          buildFile.createSync(recursive: true);
+          buildFile.writeAsStringSync('''
+plugins {
+    id "dev.flutter.flutter-plugin-loader"
+}
+''');
+
+          final List<ProjectValidatorResult> results = await project.android
+              .validateGradlePlugins();
+          expect(results.length, 1);
+          expect(results.first.status, StatusProjectValidator.error);
+          expect(
+            results.first.value,
+            contains(
+              'The Flutter plugin loader (dev.flutter.flutter-plugin-loader) is applied in "android/app/build.gradle", but it should be applied in "settings.gradle" or "settings.gradle.kts" instead.',
+            ),
+          );
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+          FlutterProjectFactory: () => flutterProjectFactory,
+        },
+      );
+
+      testUsingContext(
+        'ignores comments containing plugin names',
+        () async {
+          final FlutterProject project = await someProject();
+          final File settingsFile = project.android.hostAppGradleRoot.childFile('settings.gradle');
+          settingsFile.createSync(recursive: true);
+          settingsFile.writeAsStringSync('''
+// id "dev.flutter.flutter-gradle-plugin"
+/* id "dev.flutter.flutter-gradle-plugin" */
+''');
+
+          final List<ProjectValidatorResult> results = await project.android
+              .validateGradlePlugins();
+          expect(results.length, 1);
+          expect(results.first.status, StatusProjectValidator.success);
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+          FlutterProjectFactory: () => flutterProjectFactory,
+        },
+      );
     });
 
     group('language', () {
