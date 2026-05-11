@@ -193,6 +193,38 @@ List of devices attached
     expect(devices.first.connectionInterface, DeviceConnectionInterface.wireless);
   });
 
+  testWithoutContext(
+    'AndroidDevices can parse output for wireless devices with suffix (2)',
+    () async {
+      final androidDevices = AndroidDevices(
+        userMessages: UserMessages(),
+        androidWorkflow: androidWorkflow,
+        androidSdk: FakeAndroidSdk(),
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', 'devices', '-l'],
+            stdout: '''
+List of devices attached
+adb-1234567._adb-tls-connect._tcp. (2)         device product:razor model:Nexus_7 device:flo
+
+  ''',
+          ),
+        ]),
+        platform: FakePlatform(),
+        fileSystem: MemoryFileSystem.test(),
+      );
+
+      final List<Device> devices = await androidDevices.pollingGetDevices();
+
+      expect(devices, hasLength(1));
+      expect(devices.first.id, 'adb-1234567._adb-tls-connect._tcp. (2)');
+      expect(devices.first.name, 'Nexus 7');
+      expect(devices.first.category, Category.mobile);
+      expect(devices.first.connectionInterface, DeviceConnectionInterface.wireless);
+    },
+  );
+
   testWithoutContext('AndroidDevices can parse output for emulators and short listings', () async {
     final androidDevices = AndroidDevices(
       userMessages: UserMessages(),
