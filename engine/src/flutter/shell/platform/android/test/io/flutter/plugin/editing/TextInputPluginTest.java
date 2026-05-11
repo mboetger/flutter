@@ -1027,6 +1027,52 @@ public class TextInputPluginTest {
   }
 
   @Test
+  public void setTextInputEditingState_restartsWhenTextIsDifferent() {
+    // Initialize a general TextInputPlugin.
+    InputMethodSubtype inputMethodSubtype = mock(InputMethodSubtype.class);
+    TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
+    testImm.setCurrentInputMethodSubtype(inputMethodSubtype);
+    View testView = new View(ctx);
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+    textInputPlugin.setTextInputClient(
+        0,
+        new TextInputChannel.Configuration(
+            false,
+            false,
+            true,
+            true,
+            false,
+            TextInputChannel.TextCapitalization.NONE,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+
+    // Initial state.
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("Initial", 7, 7, -1, -1));
+    assertEquals(1, testImm.getRestartCount(testView));
+
+    // Framework sends a different text (e.g. truncated).
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("Initia", 6, 6, -1, -1));
+
+    // It SHOULD restart the input to ensure IME stays in sync.
+    assertEquals(2, testImm.getRestartCount(testView));
+  }
+
+  @Test
   public void setTextInputEditingState_alwaysSetEditableWhenDifferent() {
     // Initialize a general TextInputPlugin.
     InputMethodSubtype inputMethodSubtype = mock(InputMethodSubtype.class);

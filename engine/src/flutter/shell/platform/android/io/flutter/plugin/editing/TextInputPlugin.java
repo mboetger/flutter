@@ -517,6 +517,10 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
       }
     }
 
+    if (!mRestartInputPending && !mEditable.toString().equals(state.text)) {
+      mRestartInputPending = true;
+    }
+
     mLastKnownFrameworkTextEditingState = state;
     mEditable.setEditingState(state);
 
