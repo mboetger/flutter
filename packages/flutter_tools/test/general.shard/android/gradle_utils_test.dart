@@ -85,6 +85,28 @@ void main() {
       );
     });
 
+    testWithoutContext('injects the wrapper with custom gradleVersion', () {
+      final Directory sampleAppAndroid = fileSystem.directory('/sample-app/android');
+      sampleAppAndroid.createSync(recursive: true);
+
+      gradleUtils.injectGradleWrapperIfNeeded(sampleAppAndroid, gradleVersion: '8.2.1');
+
+      expect(sampleAppAndroid.childFile('gradlew').existsSync(), isTrue);
+
+      expect(
+        sampleAppAndroid
+            .childDirectory('gradle')
+            .childDirectory('wrapper')
+            .childFile('gradle-wrapper.properties')
+            .readAsStringSync(),
+        'distributionBase=GRADLE_USER_HOME\n'
+        'distributionPath=wrapper/dists\n'
+        'zipStoreBase=GRADLE_USER_HOME\n'
+        'zipStorePath=wrapper/dists\n'
+        'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.2.1-all.zip\n',
+      );
+    });
+
     testWithoutContext('injects the wrapper when some files are missing', () {
       final Directory sampleAppAndroid = fileSystem.directory('/sample-app/android');
       sampleAppAndroid.createSync(recursive: true);

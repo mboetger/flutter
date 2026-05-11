@@ -952,7 +952,10 @@ See the link below for more information:
       globals.fs.path.join('module', 'android', 'gradle'),
       ephemeralDirectory,
     );
-    globals.gradleUtils?.injectGradleWrapperIfNeeded(ephemeralDirectory);
+    globals.gradleUtils?.injectGradleWrapperIfNeeded(
+      ephemeralDirectory,
+      gradleVersion: parent.manifest.gradleVersion,
+    );
   }
 
   Future<void> _overwriteFromTemplate(String path, Directory target) async {
@@ -970,10 +973,11 @@ See the link below for more information:
       'projectName': parent.manifest.appName,
       'androidIdentifier': androidIdentifier,
       'androidX': usesAndroidX,
-      'agpVersion': gradle.templateAndroidGradlePluginVersion,
-      'agpVersionForModule': gradle.templateAndroidGradlePluginVersionForModule,
-      'kotlinVersion': gradle.templateKotlinGradlePluginVersion,
-      'gradleVersion': gradle.templateDefaultGradleVersion,
+      'agpVersion': parent.manifest.agpVersion ?? gradle.templateAndroidGradlePluginVersion,
+      'agpVersionForModule':
+          parent.manifest.agpVersion ?? gradle.templateAndroidGradlePluginVersionForModule,
+      'kotlinVersion': parent.manifest.kotlinVersion ?? gradle.templateKotlinGradlePluginVersion,
+      'gradleVersion': parent.manifest.gradleVersion ?? gradle.templateDefaultGradleVersion,
       'compileSdkVersion': gradle.compileSdkVersion,
       'minSdkVersion': gradle.minSdkVersion,
       'ndkVersion': gradle.ndkVersion,

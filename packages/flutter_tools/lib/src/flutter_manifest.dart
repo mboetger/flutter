@@ -222,6 +222,30 @@ class FlutterManifest {
     return false;
   }
 
+  /// The custom Kotlin Gradle Plugin version specified in the `module` section if set.
+  String? get kotlinVersion {
+    if (_flutterDescriptor case {'module': final YamlMap map}) {
+      return map['kotlinVersion'] as String?;
+    }
+    return null;
+  }
+
+  /// The custom Android Gradle Plugin version specified in the `module` section if set.
+  String? get agpVersion {
+    if (_flutterDescriptor case {'module': final YamlMap map}) {
+      return map['agpVersion'] as String?;
+    }
+    return null;
+  }
+
+  /// The custom Gradle version specified in the `module` section if set.
+  String? get gradleVersion {
+    if (_flutterDescriptor case {'module': final YamlMap map}) {
+      return map['gradleVersion'] as String?;
+    }
+    return null;
+  }
+
   /// Any additional license files listed under the `flutter` key.
   ///
   /// This is expected to be a list of file paths that should be treated as
@@ -583,6 +607,15 @@ void _validateFlutter(YamlMap? yaml, List<String> errors) {
         if (yamlValue['iosBundleIdentifier'] != null &&
             yamlValue['iosBundleIdentifier'] is! String) {
           errors.add('The "iosBundleIdentifier" section must be a string if set.');
+        }
+        if (yamlValue['kotlinVersion'] != null && yamlValue['kotlinVersion'] is! String) {
+          errors.add('The "kotlinVersion" value must be a string if set.');
+        }
+        if (yamlValue['agpVersion'] != null && yamlValue['agpVersion'] is! String) {
+          errors.add('The "agpVersion" value must be a string if set.');
+        }
+        if (yamlValue['gradleVersion'] != null && yamlValue['gradleVersion'] is! String) {
+          errors.add('The "gradleVersion" value must be a string if set.');
         }
       case 'plugin':
         if (yamlValue is! YamlMap) {

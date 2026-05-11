@@ -253,7 +253,7 @@ class GradleUtils {
   }
 
   /// Injects the Gradle wrapper files if any of these files don't exist in [directory].
-  void injectGradleWrapperIfNeeded(Directory directory) {
+  void injectGradleWrapperIfNeeded(Directory directory, {String? gradleVersion}) {
     copyDirectory(
       _cache.getArtifactDirectory('gradle_wrapper'),
       directory,
@@ -275,14 +275,14 @@ class GradleUtils {
       return;
     }
     propertiesDirectory.createSync(recursive: true);
-    final String gradleVersion = getGradleVersionForAndroidPlugin(directory, _logger);
+    final String version = gradleVersion ?? getGradleVersionForAndroidPlugin(directory, _logger);
     final propertyContents =
         '''
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
-distributionUrl=https\\://services.gradle.org/distributions/gradle-$gradleVersion-all.zip
+distributionUrl=https\\://services.gradle.org/distributions/gradle-$version-all.zip
 ''';
     propertiesFile.writeAsStringSync(propertyContents);
   }

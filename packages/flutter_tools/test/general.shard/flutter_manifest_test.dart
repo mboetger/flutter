@@ -527,6 +527,58 @@ flutter:
     expect(flutterManifest.usesAndroidX, true);
   });
 
+  testWithoutContext(
+    'FlutterManifest allows module declarations with custom gradle, agp and kotlin versions',
+    () {
+      const manifest = '''
+name: test
+flutter:
+  module:
+    androidPackage: com.example
+    androidX: true
+    kotlinVersion: '1.9.20'
+    agpVersion: '8.2.2'
+    gradleVersion: '8.2'
+''';
+
+      final FlutterManifest flutterManifest = FlutterManifest.createFromString(
+        manifest,
+        logger: logger,
+      )!;
+
+      expect(flutterManifest.isModule, true);
+      expect(flutterManifest.androidPackage, 'com.example');
+      expect(flutterManifest.usesAndroidX, true);
+      expect(flutterManifest.kotlinVersion, '1.9.20');
+      expect(flutterManifest.agpVersion, '8.2.2');
+      expect(flutterManifest.gradleVersion, '8.2');
+    },
+  );
+
+  testWithoutContext(
+    'FlutterManifest module declaration validation fails on invalid version types',
+    () {
+      const manifest = '''
+name: test
+flutter:
+  module:
+    kotlinVersion: 1.9
+    agpVersion: 123
+    gradleVersion: true
+''';
+
+      final FlutterManifest? flutterManifest = FlutterManifest.createFromString(
+        manifest,
+        logger: logger,
+      );
+
+      expect(flutterManifest, null);
+      expect(logger.errorText, contains('The "kotlinVersion" value must be a string if set.'));
+      expect(logger.errorText, contains('The "agpVersion" value must be a string if set.'));
+      expect(logger.errorText, contains('The "gradleVersion" value must be a string if set.'));
+    },
+  );
+
   testWithoutContext('FlutterManifest allows a legacy plugin declaration', () {
     const manifest = '''
 name: test
