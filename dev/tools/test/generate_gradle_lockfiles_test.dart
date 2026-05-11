@@ -58,4 +58,36 @@ void main() {
       reason: 'A directory named "engine" that is not a root directory should be traversed',
     );
   });
+
+  group('findMainDartFile', () {
+    late Directory appDir;
+
+    setUp(() {
+      appDir = tmpFlutterRoot.childDirectory('my_app')..createSync();
+    });
+
+    test('returns lib/main.dart if it exists', () {
+      final File mainFile = appDir.childDirectory('lib').childFile('main.dart')
+        ..createSync(recursive: true);
+      expect(bin.findMainDartFile(appDir)?.path, mainFile.path);
+    });
+
+    test('returns custom main file if it has a main function', () {
+      final File customMainFile = appDir.childDirectory('lib').childFile('custom_main.dart')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('void main() {}');
+      expect(bin.findMainDartFile(appDir)?.path, customMainFile.path);
+    });
+
+    test('returns null if custom main file does not have a main function', () {
+      appDir.childDirectory('lib').childFile('custom_main.dart')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('void notMain() {}');
+      expect(bin.findMainDartFile(appDir), isNull);
+    });
+
+    test('returns null if lib directory does not exist', () {
+      expect(bin.findMainDartFile(appDir), isNull);
+    });
+  });
 }

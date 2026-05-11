@@ -185,8 +185,9 @@ void main(List<String> arguments) {
       continue;
     }
 
-    if (!androidDirectory.parent.childDirectory('lib').childFile('main.dart').existsSync()) {
-      print('${rootBuildGradle.path} no main.dart under lib - skipping');
+    final File? mainDartFile = findMainDartFile(androidDirectory.parent);
+    if (mainDartFile == null) {
+      print('${rootBuildGradle.path} no main dart file under lib - skipping');
       continue;
     }
 
@@ -236,7 +237,17 @@ void main(List<String> arguments) {
     final File gradleWrapper = androidDirectory.childFile('gradlew');
     // Generate Gradle wrapper if it doesn't exist.
     if (!gradleWrapper.existsSync()) {
-      exec(flutterPath, <String>['build', 'apk', '--config-only'], workingDirectory: appDirectory);
+      final String relativeMainPath = fileSystem.path.relative(
+        mainDartFile.path,
+        from: appDirectory,
+      );
+      exec(flutterPath, <String>[
+        'build',
+        'apk',
+        '--config-only',
+        '-t',
+        relativeMainPath,
+      ], workingDirectory: appDirectory);
     }
 
     // Generate lock files.
@@ -459,4 +470,37 @@ Iterable<Directory> discoverAndroidDirectories(Directory repoRoot) {
       )
       // ... where the directory ultimately is named "android".
       .where((FileSystemEntity entity) => entity.basename == 'android');
+}
+
+File? findMainDartFile(Directory appDirectory) {
+  final Directory libDir = appDirectory.childDirectory('lib');
+  if (!libDir.existsSync()) {
+    return null;
+  }
+  final File defaultMain = libDir.childFile('main.dart');
+  if (defaultMain.existsSync()) {
+    return defaultMain;
+  }
+
+  final List<FileSystemEntity> entities;
+  try {
+    entities = libDir.listSync(recursive: true);
+  } on FileSystemException {
+    return null;
+  }
+
+  final mainRegExp = RegExp(r'\bmain\s*\(');
+  for (final entity in entities) {
+    if (entity is File && entity.path.endsWith('.dart')) {
+      try {
+        final String content = entity.readAsStringSync();
+        if (mainRegExp.hasMatch(content)) {
+          return entity;
+        }
+      } on FileSystemException {
+        // Ignore file system exceptions and continue searching.
+      }
+    }
+  }
+  return null;
 }
