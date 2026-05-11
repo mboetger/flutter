@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  javaHeapSpaceErrorHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,23 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+@visibleForTesting
+final javaHeapSpaceErrorHandler = GradleHandledError(
+  test: _lineMatcher(const <String>['Java heap space', 'OutOfMemoryError: Java heap space']),
+  handler:
+      ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+        final File gradlePropertiesFile = project.android.hostAppGradleRoot.childFile(
+          'gradle.properties',
+        );
+        globals.printBox(
+          '${globals.logger.terminal.warningMark} Gradle ran out of JVM memory while building.\n\n'
+          'Try increasing the Java heap size by adding or modifying `org.gradle.jvmargs` in '
+          '${gradlePropertiesFile.path} (e.g. `org.gradle.jvmargs=-Xmx4g`).',
+          title: _boxTitle,
+        );
+        return GradleBuildStatus.exit;
+      },
+  eventLabel: 'java-heap-space',
 );

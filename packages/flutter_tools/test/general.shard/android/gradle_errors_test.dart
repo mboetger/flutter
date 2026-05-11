@@ -57,6 +57,7 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          javaHeapSpaceErrorHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -1706,6 +1707,47 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
         testLogger.statusText,
         contains('If you are not upgrading to AGP 9+, run `flutter analyze --suggestions`'),
       );
+    },
+    overrides: <Type, Generator>{
+      GradleUtils: () => FakeGradleUtils(),
+      Platform: () => fakePlatform('android'),
+      FileSystem: () => fileSystem,
+      ProcessManager: () => processManager,
+    },
+  );
+
+  testUsingContext(
+    'Java heap space error',
+    () async {
+      const errorMessage = r'''
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:mergeDexRelease'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.DexArchiveMergerRunnable
+   > java.lang.OutOfMemoryError: Java heap space
+''';
+
+      expect(formatTestErrorMessage(errorMessage, javaHeapSpaceErrorHandler), isTrue);
+
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+      expect(
+        await javaHeapSpaceErrorHandler.handler(
+          line: errorMessage,
+          project: project,
+          usesAndroidX: true,
+        ),
+        equals(GradleBuildStatus.exit),
+      );
+
+      expect(testLogger.statusText, contains('Gradle ran out of JVM memory while building.'));
+      expect(
+        testLogger.statusText,
+        contains(
+          'Try increasing the Java heap size by adding or modifying `org.gradle.jvmargs` in',
+        ),
+      );
+      expect(testLogger.statusText, contains('gradle.properties'));
     },
     overrides: <Type, Generator>{
       GradleUtils: () => FakeGradleUtils(),
