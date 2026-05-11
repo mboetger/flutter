@@ -57,6 +57,7 @@ const kKnownHardware = <String, HardwareType>{
 /// identify as emulators. These device identifiers may be added to the [kKnownHardware]
 /// map to specify that they are actually physical devices.
 class AndroidDevice extends Device {
+  // ignore: prefer_initializing_formals
   AndroidDevice(
     super.id, {
     this.productID,
@@ -1170,6 +1171,8 @@ class AdbLogReader extends DeviceLogReader {
     // See https://github.com/flutter/flutter/issues/160598
     RegExp(r'ViewPostIme pointer'),
     RegExp(r'mali.instrumentation.graph.work'),
+    // See https://github.com/flutter/flutter/issues/174783
+    RegExp(r'^W/MotionEvent-JNI\(\s*\d+\): android_view_MotionEvent_nativeGetPointerCount: -1'),
   ];
 
   // 'F/libc(pid): Fatal signal 11'
@@ -1269,6 +1272,7 @@ class AdbLogReader extends DeviceLogReader {
 
 /// A [DevicePortForwarder] implemented for Android devices that uses adb.
 class AndroidDevicePortForwarder extends DevicePortForwarder {
+  // ignore: prefer_initializing_formals
   AndroidDevicePortForwarder({
     required ProcessManager processManager,
     required Logger logger,
