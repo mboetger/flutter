@@ -36,6 +36,7 @@ import 'gradle_utils.dart';
 import 'gradle_utils.dart' as gradle;
 import 'java.dart';
 import 'migrations/android_studio_java_gradle_conflict_migration.dart';
+import 'migrations/centralized_repositories_migration.dart';
 import 'migrations/cmake_android_16k_pages_migration.dart';
 import 'migrations/disable_built_in_kotlin_migration.dart';
 import 'migrations/disable_new_dsl_migration.dart';
@@ -453,6 +454,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
 
     final migrators = <ProjectMigrator>[
       TopLevelGradleBuildFileMigration(project.android, _logger),
+      CentralizedRepositoriesMigration(project.android, _logger),
       AndroidStudioJavaGradleConflictMigration(
         _logger,
         project: project.android,

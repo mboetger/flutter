@@ -7,6 +7,7 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_studio.dart';
 import 'package:flutter_tools/src/android/gradle_utils.dart';
 import 'package:flutter_tools/src/android/migrations/android_studio_java_gradle_conflict_migration.dart';
+import 'package:flutter_tools/src/android/migrations/centralized_repositories_migration.dart';
 import 'package:flutter_tools/src/android/migrations/disable_built_in_kotlin_migration.dart';
 import 'package:flutter_tools/src/android/migrations/disable_new_dsl_migration.dart';
 import 'package:flutter_tools/src/android/migrations/min_sdk_version_migration.dart';
@@ -1066,6 +1067,109 @@ android.newDsl  :  false
           expect(flutterMultiDexApplication.existsSync(), false);
         },
       );
+    });
+
+    group('CentralizedRepositoriesMigration', () {
+      late MemoryFileSystem memoryFileSystem;
+      late BufferLogger bufferLogger;
+      late FakeAndroidProject project;
+      late File buildGradleFile;
+      late File buildGradleKtsFile;
+      late File settingsGradleFile;
+      late File settingsGradleKtsFile;
+      late CentralizedRepositoriesMigration migration;
+
+      setUp(() {
+        memoryFileSystem = MemoryFileSystem.test();
+        bufferLogger = BufferLogger.test();
+        project = FakeAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android')..createSync(),
+        );
+        buildGradleFile = project.hostAppGradleRoot.childFile('build.gradle');
+        buildGradleKtsFile = project.hostAppGradleRoot.childFile('build.gradle.kts');
+        settingsGradleFile = project.hostAppGradleRoot.childFile('settings.gradle');
+        settingsGradleKtsFile = project.hostAppGradleRoot.childFile('settings.gradle.kts');
+        migration = CentralizedRepositoriesMigration(project, bufferLogger);
+      });
+
+      testUsingContext(
+        'removes legacy allprojects block from Groovy build.gradle and adds dependencyResolutionManagement to settings.gradle',
+        () async {
+          buildGradleFile.writeAsStringSync('''
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+val newBuildDir: Directory =
+    rootProject.layout.buildDirectory
+        .dir("../../build")
+        .get()
+''');
+          settingsGradleFile.writeAsStringSync('''
+include ':app'
+''');
+
+          await migration.migrate();
+
+          expect(buildGradleFile.readAsStringSync(), contains('val newBuildDir'));
+          expect(buildGradleFile.readAsStringSync(), isNot(contains('allprojects')));
+          expect(settingsGradleFile.readAsStringSync(), contains('dependencyResolutionManagement'));
+          expect(settingsGradleFile.readAsStringSync(), contains('google()'));
+          expect(settingsGradleFile.readAsStringSync(), contains('mavenCentral()'));
+        },
+      );
+
+      testUsingContext(
+        'removes legacy allprojects block from Kotlin build.gradle.kts and adds dependencyResolutionManagement to settings.gradle.kts',
+        () async {
+          buildGradleKtsFile.writeAsStringSync('''
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+val newBuildDir: Directory =
+    rootProject.layout.buildDirectory
+        .dir("../../build")
+        .get()
+''');
+          settingsGradleKtsFile.writeAsStringSync('''
+include(":app")
+''');
+
+          await migration.migrate();
+
+          expect(buildGradleKtsFile.readAsStringSync(), contains('val newBuildDir'));
+          expect(buildGradleKtsFile.readAsStringSync(), isNot(contains('allprojects')));
+          expect(
+            settingsGradleKtsFile.readAsStringSync(),
+            contains('dependencyResolutionManagement'),
+          );
+          expect(settingsGradleKtsFile.readAsStringSync(), contains('google()'));
+          expect(settingsGradleKtsFile.readAsStringSync(), contains('mavenCentral()'));
+        },
+      );
+
+      testUsingContext('does not add dependencyResolutionManagement if already present', () async {
+        buildGradleKtsFile.writeAsStringSync('');
+        settingsGradleKtsFile.writeAsStringSync('''
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+    }
+}
+''');
+
+        await migration.migrate();
+
+        expect(settingsGradleKtsFile.readAsStringSync(), isNot(contains('mavenCentral()')));
+      });
     });
   });
 }
