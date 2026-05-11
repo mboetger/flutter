@@ -333,6 +333,31 @@ OpenJDK 64-Bit Server VM (build 21+35, mixed mode, sharing)
         expect(version, equals(Version(21, 0, 0)));
       });
     });
+
+    group('environment', () {
+      testWithoutContext('inherits environment variables from the injected Platform', () {
+        final Platform platformWithCustomEnv = FakePlatform(
+          environment: <String, String>{
+            'PATH': '',
+            'GRADLE_USER_HOME': '/custom/gradle/home',
+            'CUSTOM_VAR': 'custom_value',
+          },
+        );
+        final java = Java(
+          fileSystem: fs,
+          logger: logger,
+          os: FakeOperatingSystemUtils(),
+          platform: platformWithCustomEnv,
+          processManager: processManager,
+          binaryPath: '/javaHome/bin/java',
+          javaHome: '/javaHome',
+          javaSource: JavaSource.javaHome,
+        );
+
+        expect(java.environment, containsPair('GRADLE_USER_HOME', '/custom/gradle/home'));
+        expect(java.environment, containsPair('CUSTOM_VAR', 'custom_value'));
+      });
+    });
   });
 }
 
