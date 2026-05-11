@@ -33,4 +33,8 @@ size_t PointerDataPacket::GetLength() const {
   return data_.size() / sizeof(PointerData);
 }
 
+void PointerDataPacket::Append(const PointerDataPacket& other) {
+  data_.insert(data_.end(), other.data_.begin(), other.data_.end());
+}
+
 }  // namespace flutter

@@ -1209,20 +1209,39 @@ void Shell::OnPlatformViewDispatchPlatformMessage(
 // |PlatformView::Delegate|
 void Shell::OnPlatformViewDispatchPointerDataPacket(
     std::unique_ptr<PointerDataPacket> packet) {
+  FML_DCHECK(is_set_up_);
+  FML_DCHECK(task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
+
   TRACE_EVENT0_WITH_FLOW_IDS(
       "flutter", "Shell::OnPlatformViewDispatchPointerDataPacket",
       /*flow_id_count=*/1, /*flow_ids=*/&next_pointer_flow_id_);
   TRACE_FLOW_BEGIN("flutter", "PointerEvent", next_pointer_flow_id_);
-  FML_DCHECK(is_set_up_);
-  FML_DCHECK(task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
 
-  task_runners_.GetUITaskRunner()->PostTask(
-      fml::MakeCopyable([engine = weak_engine_, packet = std::move(packet),
-                         flow_id = next_pointer_flow_id_]() mutable {
-        if (engine) {
-          engine->DispatchPointerDataPacket(std::move(packet), flow_id);
-        }
-      }));
+  std::lock_guard<std::mutex> lock(pointer_data_mutex_);
+  bool task_pending = pending_pointer_data_packet_ != nullptr;
+  if (!task_pending) {
+    pending_pointer_data_packet_ = std::move(packet);
+  } else {
+    pending_pointer_data_packet_->Append(*packet);
+  }
+
+  if (!task_pending) {
+    task_runners_.GetUITaskRunner()->PostTask(
+        fml::MakeCopyable([engine = weak_engine_, shell = weak_factory_.GetWeakPtr(),
+                           flow_id = next_pointer_flow_id_]() mutable {
+          if (!engine || !shell) {
+            return;
+          }
+          std::unique_ptr<PointerDataPacket> packet;
+          {
+            std::lock_guard<std::mutex> lock(shell->pointer_data_mutex_);
+            packet = std::move(shell->pending_pointer_data_packet_);
+          }
+          if (packet) {
+            engine->DispatchPointerDataPacket(std::move(packet), flow_id);
+          }
+        }));
+  }
   next_pointer_flow_id_++;
 }
 

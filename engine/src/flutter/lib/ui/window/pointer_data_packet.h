@@ -24,6 +24,8 @@ class PointerDataPacket {
   size_t GetLength() const;
   const std::vector<uint8_t>& data() const { return data_; }
 
+  void Append(const PointerDataPacket& other);
+
  private:
   std::vector<uint8_t> data_;
 

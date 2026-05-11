@@ -434,6 +434,52 @@ TEST_F(ShellTest, CanCorrectlySynthesizePointerPacket) {
   ASSERT_EQ(PointerData::Change(result_sequence[5]),
             PointerData::Change::kRemove);
 
+  DestroyShell(std::move(shell));
+  ASSERT_FALSE(DartVMRef::IsInstanceRunning());
+}
+
+TEST_F(ShellTest, CoalescesRapidPointerPackets) {
+  // Sets up shell with test fixture.
+  auto settings = CreateSettingsForFixture();
+  std::unique_ptr<Shell> shell = CreateShell({
+      .settings = settings,
+      .platform_view_create_callback = ShellTestPlatformViewBuilder({
+          .simulate_vsync = true,
+      }),
+  });
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("onPointerDataPacketMain");
+
+  std::atomic<int> packets_received(0);
+  fml::AutoResetWaitableEvent reportLatch;
+  auto nativeOnPointerDataPacket = [&packets_received,
+                                    &reportLatch](Dart_NativeArguments args) {
+    packets_received++;
+    reportLatch.Signal();
+  };
+  // Starts engine.
+  AddNativeCallback("NativeOnPointerDataPacket",
+                    CREATE_NATIVE_ENTRY(nativeOnPointerDataPacket));
+  ASSERT_TRUE(configuration.IsValid());
+  RunEngine(shell.get(), std::move(configuration));
+
+  // Dispatch multiple packets rapidly on the platform thread.
+  for (int i = 0; i < 5; i++) {
+    auto packet = std::make_unique<PointerDataPacket>(1);
+    PointerData data;
+    CreateSimulatedPointerData(data, PointerData::Change::kHover, i, 0.0);
+    packet->SetPointerData(0, data);
+    shell->OnPlatformViewDispatchPointerDataPacket(std::move(packet));
+  }
+
+  // Flush UI tasks.
+  ShellTest::VSyncFlush(shell.get());
+  reportLatch.Wait();
+
+  // If coalescing is working, we should receive only 1 packet.
+  ASSERT_EQ(packets_received.load(), 1);
+
   // Cleans up shell.
   ASSERT_TRUE(DartVMRef::IsInstanceRunning());
   DestroyShell(std::move(shell));

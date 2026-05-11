@@ -823,6 +823,10 @@ class Shell final : public PlatformView::Delegate,
   // rasterizer callbacks.
   std::unique_ptr<fml::TaskRunnerAffineWeakPtrFactory<Shell>> weak_factory_gpu_;
 
+  mutable std::mutex pointer_data_mutex_;
+  std::unique_ptr<PointerDataPacket> pending_pointer_data_packet_
+      FML_GUARDED_BY(pointer_data_mutex_);
+
   fml::WeakPtrFactory<Shell> weak_factory_;
   friend class testing::ShellTest;
 
