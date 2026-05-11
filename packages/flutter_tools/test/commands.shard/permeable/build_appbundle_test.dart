@@ -415,7 +415,7 @@ void main() {
     });
 
     testUsingContext(
-      "reports when the app isn't using AndroidX",
+      "does not report when the app isn't using AndroidX",
       () async {
         final String projectPath = await createProject(
           tempDir,
@@ -433,12 +433,16 @@ void main() {
           await runBuildAppBundleCommand(projectPath);
         }, throwsToolExit());
 
-        expect(testLogger.statusText, containsIgnoringWhitespace("Your app isn't using AndroidX"));
         expect(
           testLogger.statusText,
-          containsIgnoringWhitespace(
-            'To avoid potential build failures, you can quickly migrate your app by '
-            'following the steps on https://docs.flutter.dev/release/breaking-changes/androidx-migration',
+          allOf(
+            isNot(containsIgnoringWhitespace("Your app isn't using AndroidX")),
+            isNot(
+              containsIgnoringWhitespace(
+                'To avoid potential build failures, you can quickly migrate your app by '
+                'following the steps on https://docs.flutter.dev/release/breaking-changes/androidx-migration',
+              ),
+            ),
           ),
         );
 
