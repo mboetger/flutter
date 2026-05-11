@@ -445,6 +445,8 @@ object FlutterPluginUtils {
     internal fun buildModeFor(buildType: BuildType): String {
         if (buildType.name == "profile") {
             return "profile"
+        } else if (buildType.name == "debug") {
+            return "debug"
         } else if (buildType.isDebuggable) {
             return "debug"
         }
