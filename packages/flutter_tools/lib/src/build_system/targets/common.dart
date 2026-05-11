@@ -360,6 +360,8 @@ class KernelSnapshot extends Target {
 abstract class AotElfBase extends Target {
   const AotElfBase();
 
+  TargetPlatform get targetPlatform;
+
   @override
   String get analyticsName => 'android_aot';
 
@@ -415,6 +417,24 @@ abstract class AotElfBase extends Target {
       throw Exception('AOT snapshotter exited with code $snapshotExitCode');
     }
   }
+
+  @override
+  ResolvedFiles resolveOutputs(Environment environment) {
+    final ResolvedFiles resolved = super.resolveOutputs(environment);
+    final String? splitDebugInfo = environment.defines[kSplitDebugInfo];
+    if (splitDebugInfo == null || splitDebugInfo.isEmpty) {
+      return resolved;
+    }
+    final String archName = getNameForTargetPlatform(targetPlatform);
+    final debugFilename = 'app.$archName.symbols';
+    final File symbolFile = environment.fileSystem
+        .directory(splitDebugInfo)
+        .childFile(debugFilename);
+    return ResolvedFilesList(<File>[
+      ...resolved.sources,
+      symbolFile,
+    ], containsNewDepfile: resolved.containsNewDepfile);
+  }
 }
 
 /// Generate an ELF binary from a dart kernel file in profile mode.
@@ -441,6 +461,7 @@ class AotElfProfile extends AotElfBase {
   @override
   List<Target> get dependencies => const <Target>[KernelSnapshot()];
 
+  @override
   final TargetPlatform targetPlatform;
 }
 
@@ -468,6 +489,7 @@ class AotElfRelease extends AotElfBase {
   @override
   List<Target> get dependencies => const <Target>[KernelSnapshot()];
 
+  @override
   final TargetPlatform targetPlatform;
 }
 

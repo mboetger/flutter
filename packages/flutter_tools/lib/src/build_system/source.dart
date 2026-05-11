@@ -312,6 +312,18 @@ class _ArtifactSource implements Source {
   bool get implicit => false;
 }
 
+/// A simple concrete implementation of [ResolvedFiles].
+class ResolvedFilesList implements ResolvedFiles {
+  /// Create a new [ResolvedFilesList] with the given [sources].
+  ResolvedFilesList(this.sources, {this.containsNewDepfile = false});
+
+  @override
+  final bool containsNewDepfile;
+
+  @override
+  final List<File> sources;
+}
+
 class _HostArtifactSource implements Source {
   const _HostArtifactSource(this.artifact);
 

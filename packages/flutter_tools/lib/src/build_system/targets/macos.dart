@@ -370,6 +370,29 @@ class CompileMacOSFramework extends Target {
     Source.pattern('{BUILD_DIR}/App.framework/App'),
     Source.pattern('{BUILD_DIR}/App.framework.dSYM/Contents/Resources/DWARF/App'),
   ];
+
+  @override
+  ResolvedFiles resolveOutputs(Environment environment) {
+    final ResolvedFiles resolved = super.resolveOutputs(environment);
+    final String? splitDebugInfo = environment.defines[kSplitDebugInfo];
+    if (splitDebugInfo == null || splitDebugInfo.isEmpty) {
+      return resolved;
+    }
+    final List<DarwinArch> darwinArchs = getDarwinArchsFromEnv(environment.defines);
+    final symbolFiles = <File>[];
+    for (final darwinArch in darwinArchs) {
+      final String archName = getNameForTargetPlatform(
+        TargetPlatform.darwin,
+        darwinArch: darwinArch,
+      );
+      final debugFilename = 'app.$archName.symbols';
+      symbolFiles.add(environment.fileSystem.directory(splitDebugInfo).childFile(debugFilename));
+    }
+    return ResolvedFilesList(<File>[
+      ...resolved.sources,
+      ...symbolFiles,
+    ], containsNewDepfile: resolved.containsNewDepfile);
+  }
 }
 
 /// Bundle the flutter assets into the App.framework.

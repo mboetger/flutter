@@ -144,6 +144,28 @@ abstract class AotAssemblyBase extends Target {
       skipMissingInputs: true,
     );
   }
+
+  @override
+  ResolvedFiles resolveOutputs(Environment environment) {
+    final ResolvedFiles resolved = super.resolveOutputs(environment);
+    final String? splitDebugInfo = environment.defines[kSplitDebugInfo];
+    if (splitDebugInfo == null || splitDebugInfo.isEmpty) {
+      return resolved;
+    }
+    final List<DarwinArch> darwinArchs =
+        environment.defines[kIosArchs]?.split(' ').map(getIOSArchForName).toList() ??
+        const <DarwinArch>[DarwinArch.arm64];
+    final symbolFiles = <File>[];
+    for (final darwinArch in darwinArchs) {
+      final String archName = getNameForTargetPlatform(TargetPlatform.ios, darwinArch: darwinArch);
+      final debugFilename = 'app.$archName.symbols';
+      symbolFiles.add(environment.fileSystem.directory(splitDebugInfo).childFile(debugFilename));
+    }
+    return ResolvedFilesList(<File>[
+      ...resolved.sources,
+      ...symbolFiles,
+    ], containsNewDepfile: resolved.containsNewDepfile);
+  }
 }
 
 /// Generate an assembly target from a dart kernel file in release mode.

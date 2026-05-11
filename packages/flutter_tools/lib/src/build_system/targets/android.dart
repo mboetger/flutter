@@ -186,6 +186,7 @@ class AndroidAot extends AotElfBase {
       '${getNameForTargetPlatform(targetPlatform)}';
 
   /// The specific Android ABI we are building for.
+  @override
   final TargetPlatform targetPlatform;
 
   /// The selected build mode.

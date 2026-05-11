@@ -887,6 +887,30 @@ void main() {
 
     expect(processManager, hasNoRemainingExpectations);
   });
+
+  testUsingContext('AotElfRelease.resolveOutputs includes split-debug-info symbols file', () async {
+    androidEnvironment.defines[kSplitDebugInfo] = 'my_symbols';
+    final List<File> outputs = const AotElfRelease(
+      TargetPlatform.android_arm,
+    ).resolveOutputs(androidEnvironment).sources;
+    expect(outputs.map((File f) => f.path), contains('my_symbols/app.android-arm.symbols'));
+  });
+
+  testUsingContext(
+    'AotAssemblyRelease.resolveOutputs includes split-debug-info symbols files',
+    () async {
+      iosEnvironment.defines[kSplitDebugInfo] = 'my_symbols';
+      iosEnvironment.defines[kIosArchs] = 'arm64 armv7';
+      final List<File> outputs = const AotAssemblyRelease().resolveOutputs(iosEnvironment).sources;
+      expect(
+        outputs.map((File f) => f.path),
+        containsAll(<String>[
+          'my_symbols/app.ios-arm64.symbols',
+          'my_symbols/app.ios-armv7.symbols',
+        ]),
+      );
+    },
+  );
 }
 
 class FakeXcodeProjectInterpreter extends Fake implements XcodeProjectInterpreter {

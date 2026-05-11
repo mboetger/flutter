@@ -936,6 +936,23 @@ void main() {
       },
     );
   });
+
+  testUsingContext(
+    'CompileMacOSFramework.resolveOutputs includes split-debug-info symbols files',
+    () async {
+      environment.buildDir.createSync(recursive: true);
+      environment.defines[kSplitDebugInfo] = 'my_symbols';
+      environment.defines[kDarwinArchs] = 'x86_64 arm64';
+      final List<File> outputs = const CompileMacOSFramework().resolveOutputs(environment).sources;
+      expect(
+        outputs.map((File f) => f.path),
+        containsAll(<String>[
+          'my_symbols/app.darwin-x86_64.symbols',
+          'my_symbols/app.darwin-arm64.symbols',
+        ]),
+      );
+    },
+  );
 }
 
 class FakeXcodeProjectInterpreter extends Fake implements XcodeProjectInterpreter {
