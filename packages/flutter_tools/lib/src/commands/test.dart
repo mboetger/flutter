@@ -7,7 +7,9 @@ import 'package:package_config/package_config_types.dart';
 
 import '../asset.dart';
 import '../base/common.dart';
+import '../base/context.dart';
 import '../base/file_system.dart';
+import '../base/logger.dart';
 import '../build_info.dart';
 import '../bundle_builder.dart';
 import '../devfs.dart';
@@ -408,6 +410,31 @@ class TestCommand extends FlutterCommand with DeviceBasedDevelopmentArtifacts {
 
   @override
   Future<FlutterCommandResult> runCommand() async {
+    final bool machine = boolArg('machine') || stringArg('reporter') == 'json';
+    if (machine) {
+      return context.run<FlutterCommandResult>(
+        body: _runTestCommand,
+        overrides: <Type, Generator>{
+          Logger: () => globals.platform.isWindows
+              ? WindowsStdoutLogger(
+                  terminal: globals.terminal,
+                  stdio: globals.stdio,
+                  outputPreferences: globals.outputPreferences,
+                  useStderr: true,
+                )
+              : StdoutLogger(
+                  terminal: globals.terminal,
+                  stdio: globals.stdio,
+                  outputPreferences: globals.outputPreferences,
+                  useStderr: true,
+                ),
+        },
+      );
+    }
+    return _runTestCommand();
+  }
+
+  Future<FlutterCommandResult> _runTestCommand() async {
     if (!globals.fs.isFileSync('pubspec.yaml')) {
       throwToolExit(
         'Error: No pubspec.yaml file found in the current working directory.\n'

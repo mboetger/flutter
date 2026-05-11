@@ -9,6 +9,8 @@ import 'package:file/memory.dart';
 import 'package:file_testing/file_testing.dart';
 import 'package:flutter_tools/src/base/async_guard.dart';
 import 'package:flutter_tools/src/base/common.dart';
+import 'package:flutter_tools/src/base/context.dart';
+import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
@@ -1670,6 +1672,42 @@ resolution: workspace
       ProcessManager: () => FakeProcessManager.any(),
     },
   );
+
+  testUsingContext(
+    'TestCommand redirects status logging to stderr when machine/JSON reporter is active',
+    () async {
+      final testRunner = FakeFlutterTestRunner(0);
+      final testCommand = TestCommand(testRunner: testRunner);
+      final CommandRunner<void> commandRunner = createTestCommandRunner(testCommand);
+
+      final FakeStdio fakeStdio = FakeStdio();
+
+      await context.run<void>(
+        body: () async {
+          await commandRunner.run(const <String>[
+            'test',
+            '--no-pub',
+            '--machine',
+            '--experimental-faster-testing',
+            '--',
+            'test/some_test.dart',
+          ]);
+
+          // Verify the warning message about experimental-faster-testing is written to stderr, NOT stdout
+          final String expectedPart = '--experimental-faster-testing was parsed';
+
+          expect(fakeStdio.stdoutWrites.any((String s) => s.contains(expectedPart)), isFalse);
+          expect(fakeStdio.stderrWrites.any((String s) => s.contains(expectedPart)), isTrue);
+        },
+        overrides: <Type, Generator>{Stdio: () => fakeStdio},
+      );
+    },
+    overrides: <Type, Generator>{
+      FileSystem: () => fs,
+      ProcessManager: () => FakeProcessManager.any(),
+      Cache: () => Cache.test(processManager: FakeProcessManager.any()),
+    },
+  );
 }
 
 class FakeFlutterTestRunner implements FlutterTestRunner {
@@ -1830,5 +1868,84 @@ class _FakeDeviceManager extends DeviceManager {
       return <Device>[];
     }
     return _connectedDevices;
+  }
+}
+
+class FakeStdout extends Fake implements Stdout {
+  final List<String> writes = <String>[];
+
+  @override
+  void write(Object? obj) {
+    writes.add(obj.toString());
+  }
+
+  @override
+  void writeln([Object? obj = '']) {
+    writes.add('${obj.toString()}\n');
+  }
+
+  @override
+  Future<void> get done => Future<void>.value();
+
+  @override
+  Future<void> close() => Future<void>.value();
+}
+
+class FakeIOSink extends Fake implements IOSink {
+  final List<String> writes = <String>[];
+
+  @override
+  void write(Object? obj) {
+    writes.add(obj.toString());
+  }
+
+  @override
+  void writeln([Object? obj = '']) {
+    writes.add('${obj.toString()}\n');
+  }
+
+  @override
+  Future<void> get done => Future<void>.value();
+
+  @override
+  Future<void> close() => Future<void>.value();
+}
+
+class FakeStdio extends Fake implements Stdio {
+  final FakeStdout mockStdout = FakeStdout();
+  final FakeIOSink mockStderr = FakeIOSink();
+
+  @override
+  Stdout get stdout => mockStdout;
+
+  @override
+  IOSink get stderr => mockStderr;
+
+  List<String> get stdoutWrites => mockStdout.writes;
+  List<String> get stderrWrites => mockStderr.writes;
+
+  @override
+  bool get stdinHasTerminal => false;
+
+  @override
+  bool get hasTerminal => false;
+
+  @override
+  int? get terminalColumns => 80;
+
+  @override
+  int? get terminalLines => 24;
+
+  @override
+  bool get supportsAnsiEscapes => false;
+
+  @override
+  void stdoutWrite(String message, {void Function(String, dynamic, StackTrace)? fallback}) {
+    mockStdout.write(message);
+  }
+
+  @override
+  void stderrWrite(String message, {void Function(String, dynamic, StackTrace)? fallback}) {
+    mockStderr.write(message);
   }
 }

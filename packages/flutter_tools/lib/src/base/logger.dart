@@ -430,9 +430,11 @@ class StdoutLogger extends Logger {
     required Stdio stdio,
     required OutputPreferences outputPreferences,
     StopwatchFactory stopwatchFactory = const StopwatchFactory(),
+    bool useStderr = false,
   }) : _stdio = stdio,
        _outputPreferences = outputPreferences,
-       _stopwatchFactory = stopwatchFactory;
+       _stopwatchFactory = stopwatchFactory,
+       _useStderr = useStderr;
 
   @override
   final Terminal terminal;
@@ -440,6 +442,7 @@ class StdoutLogger extends Logger {
   final OutputPreferences _outputPreferences;
   final Stdio _stdio;
   final StopwatchFactory _stopwatchFactory;
+  final bool _useStderr;
 
   Status? _status;
 
@@ -554,7 +557,13 @@ class StdoutLogger extends Logger {
   }
 
   @protected
-  void writeToStdOut(String message) => _stdio.stdoutWrite(message);
+  void writeToStdOut(String message) {
+    if (_useStderr) {
+      _stdio.stderrWrite(message);
+    } else {
+      _stdio.stdoutWrite(message);
+    }
+  }
 
   @protected
   void writeToStdErr(String message) => _stdio.stderrWrite(message);
@@ -725,6 +734,7 @@ class WindowsStdoutLogger extends StdoutLogger {
     required super.stdio,
     required super.outputPreferences,
     super.stopwatchFactory,
+    super.useStderr,
   });
 
   @override
@@ -740,7 +750,11 @@ class WindowsStdoutLogger extends StdoutLogger {
               .replaceAll('💪', '')
               .replaceAll('⚠️', '!')
               .replaceAll('✏️', '');
-    _stdio.stdoutWrite(windowsMessage);
+    if (_useStderr) {
+      _stdio.stderrWrite(windowsMessage);
+    } else {
+      _stdio.stdoutWrite(windowsMessage);
+    }
   }
 }
 
