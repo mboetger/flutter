@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:file/file.dart';
+import 'package:file/local.dart';
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_studio.dart';
 import 'package:flutter_tools/src/android/gradle_utils.dart';
@@ -124,7 +125,7 @@ String sampleKotlinDslModuleGradleBuildFile(String minSdkVersionString) {
   return r'''
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -1064,6 +1065,33 @@ android.newDsl  :  false
           await migration.migrate();
           expect(bufferLogger.traceText, contains(MultidexRemovalMigration.deletionMessage));
           expect(flutterMultiDexApplication.existsSync(), false);
+        },
+      );
+    });
+
+    group('modern Kotlin plugin ID in templates', () {
+      testWithoutContext(
+        'app templates use org.jetbrains.kotlin.android in settings.gradle.kts',
+        () {
+          const localFileSystem = LocalFileSystem();
+          final Directory templatesDir = localFileSystem
+              .directory(getFlutterRoot())
+              .childDirectory('packages')
+              .childDirectory('flutter_tools')
+              .childDirectory('templates');
+
+          final File appSettingsGradle = templatesDir
+              .childDirectory('app')
+              .childDirectory('android.tmpl')
+              .childFile('settings.gradle.kts.tmpl');
+
+          expect(appSettingsGradle.existsSync(), isTrue);
+
+          expect(
+            appSettingsGradle.readAsStringSync(),
+            contains('id("org.jetbrains.kotlin.android")'),
+          );
+          expect(appSettingsGradle.readAsStringSync(), isNot(contains('kotlin-android')));
         },
       );
     });

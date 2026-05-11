@@ -918,9 +918,37 @@ apply plugin: 'kotlin-android'
             gradleFileContent: () {
               return '''
 plugins {
-    id "com.android.application"
-    id "kotlin-android"
-    id "dev.flutter.flutter-gradle-plugin"
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("dev.flutter.flutter-gradle-plugin")
+}
+''';
+            },
+          );
+          expect(project.android.isKotlin, isTrue);
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+          XcodeProjectInterpreter: () => xcodeProjectInterpreter,
+          FlutterProjectFactory: () => flutterProjectFactory,
+        },
+      );
+
+      testUsingContext(
+        'kotlin host app language with Gradle Kotlin DSL (legacy ID)',
+        () async {
+          final FlutterProject project = await someProject();
+
+          addAndroidGradleFile(
+            project.directory,
+            kotlinDsl: true,
+            gradleFileContent: () {
+              return '''
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
 }
 ''';
             },
@@ -946,8 +974,8 @@ plugins {
             gradleFileContent: () {
               return '''
 plugins {
-    id "com.android.application"
-    id "kotlin-android"
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     dev.flutter.`flutter-gradle-plugin`
 }
 ''';
