@@ -48,6 +48,7 @@ class BuildInfo {
     this.codeSizeDirectory,
     this.androidGradleDaemon = true,
     this.androidSkipBuildDependencyValidation = false,
+    this.androidValidateStrippedDebugSymbols = true,
     this.packageConfig = PackageConfig.empty,
     this.initializeFromDill,
     this.assumeInitializeFromDillUpToDate = false,
@@ -70,6 +71,7 @@ class BuildInfo {
     String? initializeFromDill,
     List<String>? dartDefines,
     bool? includeUnsupportedPlatformLibraryStubs,
+    bool? androidValidateStrippedDebugSymbols,
   }) {
     return BuildInfo(
       mode,
@@ -93,6 +95,8 @@ class BuildInfo {
       codeSizeDirectory: codeSizeDirectory,
       androidGradleDaemon: androidGradleDaemon,
       androidSkipBuildDependencyValidation: androidSkipBuildDependencyValidation,
+      androidValidateStrippedDebugSymbols:
+          androidValidateStrippedDebugSymbols ?? this.androidValidateStrippedDebugSymbols,
       packageConfig: packageConfig ?? this.packageConfig,
       initializeFromDill: initializeFromDill ?? this.initializeFromDill,
       assumeInitializeFromDillUpToDate: assumeInitializeFromDillUpToDate,
@@ -200,6 +204,9 @@ class BuildInfo {
   /// Whether to skip checking of individual versions of our Android build time
   /// dependencies.
   final bool androidSkipBuildDependencyValidation;
+
+  /// Whether to validate that native debug symbols are stripped in release builds.
+  final bool androidValidateStrippedDebugSymbols;
 
   /// Additional key value pairs that are passed directly to the gradle project via the `-P`
   /// flag.

@@ -141,6 +141,7 @@ abstract final class FlutterOptions {
   static const kAndroidProjectArgs = 'android-project-arg';
   static const kAndroidGradleProjectCacheDir = 'android-project-cache-dir';
   static const kAndroidSkipBuildDependencyValidation = 'android-skip-build-dependency-validation';
+  static const kAndroidValidateStrippedDebugSymbols = 'android-validate-stripped-debug-symbols';
   static const kInitializeFromDill = 'initialize-from-dill';
   static const kAssumeInitializeFromDillUpToDate = 'assume-initialize-from-dill-up-to-date';
   static const kNativeAssetsYamlFile = 'native-assets-yaml-file';
@@ -1083,6 +1084,12 @@ abstract class FlutterCommand extends Command<void> {
           'the Android Gradle Plugin (AGP), and the Kotlin Gradle Plugin (KGP)'
           ' during Android builds.',
     );
+    argParser.addFlag(
+      FlutterOptions.kAndroidValidateStrippedDebugSymbols,
+      help: 'Whether to validate that native debug symbols are stripped in release builds.',
+      defaultsTo: true,
+      hide: hide,
+    );
     argParser.addMultiOption(
       FlutterOptions.kAndroidProjectArgs,
       help:
@@ -1438,6 +1445,10 @@ abstract class FlutterCommand extends Command<void> {
         !argParser.options.containsKey(FlutterOptions.kAndroidSkipBuildDependencyValidation) ||
         boolArg(FlutterOptions.kAndroidSkipBuildDependencyValidation);
 
+    final bool androidValidateStrippedDebugSymbols =
+        !argParser.options.containsKey(FlutterOptions.kAndroidValidateStrippedDebugSymbols) ||
+        boolArg(FlutterOptions.kAndroidValidateStrippedDebugSymbols);
+
     final List<String> androidProjectArgs =
         argParser.options.containsKey(FlutterOptions.kAndroidProjectArgs)
         ? stringsArg(FlutterOptions.kAndroidProjectArgs)
@@ -1529,6 +1540,7 @@ abstract class FlutterCommand extends Command<void> {
       codeSizeDirectory: codeSizeDirectory,
       androidGradleDaemon: androidGradleDaemon,
       androidSkipBuildDependencyValidation: androidSkipBuildDependencyValidation,
+      androidValidateStrippedDebugSymbols: androidValidateStrippedDebugSymbols,
       packageConfig: packageConfig,
       androidProjectArgs: androidProjectArgs,
       androidGradleProjectCacheDir: androidGradleProjectCacheDir,

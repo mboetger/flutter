@@ -601,7 +601,8 @@ class AndroidGradleBuilder implements AndroidBuilder {
     if (isBuildingBundle) {
       final File bundleFile = findBundleFile(project, buildInfo, _logger, _analytics);
 
-      if ((buildInfo.mode == BuildMode.release) &&
+      if (buildInfo.androidValidateStrippedDebugSymbols &&
+          (buildInfo.mode == BuildMode.release) &&
           !(await _isAabStrippedOfDebugSymbols(
             project,
             bundleFile.path,
