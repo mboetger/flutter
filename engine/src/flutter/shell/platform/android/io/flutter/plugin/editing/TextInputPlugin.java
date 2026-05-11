@@ -634,7 +634,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
 
   // -------- Start: KeyboardManager Synchronous Responder -------
   public boolean handleKeyEvent(@NonNull KeyEvent keyEvent) {
-    if (!getInputMethodManager().isAcceptingText() || lastInputConnection == null) {
+    if (lastInputConnection == null) {
       return false;
     }
 

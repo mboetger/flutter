@@ -155,6 +155,32 @@ public class TextInputPluginTest {
   }
 
   @Test
+  public void handleKeyEvent_doesNotSwallowEnterKeyWhenNotAcceptingText() {
+    View testView = new View(ctx);
+    TextInputChannel textInputChannel = mock(TextInputChannel.class);
+    ScribeChannel scribeChannel = mock(ScribeChannel.class);
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+
+    // Mock InputConnection
+    InputConnection mockInputConnection = mock(InputConnection.class);
+    when(mockInputConnection.sendKeyEvent(any())).thenReturn(true);
+    textInputPlugin.lastInputConnection = mockInputConnection;
+
+    // Simulate Enter key event
+    KeyEvent enterEvent = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER);
+
+    // Even if IMM.isAcceptingText() would be false, it should still return true.
+    assertTrue(textInputPlugin.handleKeyEvent(enterEvent));
+    verify(mockInputConnection).sendKeyEvent(enterEvent);
+  }
+
+  @Test
   public void setTextInputEditingState_doesNotInvokeUpdateEditingState() {
     // Initialize a general TextInputPlugin.
     InputMethodSubtype inputMethodSubtype = mock(InputMethodSubtype.class);
