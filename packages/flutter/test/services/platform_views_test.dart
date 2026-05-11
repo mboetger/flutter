@@ -496,6 +496,62 @@ void main() {
       final moveArgs = moveCalls.single.arguments as List<dynamic>;
       expect(moveArgs[kAndroidMotionEventListIndexPointerCount], equals(pointerCount));
     });
+
+    testWidgets('motion event converter handles cancel events correctly', (
+      WidgetTester tester,
+    ) async {
+      final log = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          return null;
+        },
+      );
+
+      final AndroidViewController viewController = PlatformViewsService.initSurfaceAndroidView(
+        id: 7,
+        viewType: 'web',
+        layoutDirection: TextDirection.ltr,
+      );
+      viewController.pointTransformer = (Offset offset) => offset;
+
+      const pointerCount = 2;
+      for (var i = 0; i < pointerCount; i++) {
+        final PointerEvent event = PointerDownEvent(
+          timeStamp: const Duration(milliseconds: 1),
+          pointer: i,
+        );
+        await viewController.dispatchPointerEvent(event);
+      }
+
+      // Pointer event platform data constant from _AndroidMotionEventConverter
+      const kPointerDataFlagMultiple = 2;
+
+      for (var i = 0; i < pointerCount; i++) {
+        final PointerEvent event = PointerCancelEvent(
+          timeStamp: const Duration(milliseconds: 2),
+          pointer: i,
+          platformData: kPointerDataFlagMultiple | (pointerCount << 8),
+        );
+        await viewController.dispatchPointerEvent(event);
+      }
+
+      // Indexes in the list returned by AndroidMotionEvent._asList
+      const kAndroidMotionEventListIndexAction = 3;
+      const kAndroidMotionEventListIndexPointerCount = 4;
+
+      final List<MethodCall> cancelCalls = log.where((MethodCall call) {
+        final args = call.arguments as List<dynamic>;
+        return call.method == 'touch' &&
+            args[kAndroidMotionEventListIndexAction] == AndroidViewController.kActionCancel;
+      }).toList();
+
+      // The _AndroidMotionEventConverter should yield one touch event containing all of the cancelled pointers.
+      expect(cancelCalls.length, equals(1));
+      final cancelArgs = cancelCalls.single.arguments as List<dynamic>;
+      expect(cancelArgs[kAndroidMotionEventListIndexPointerCount], equals(pointerCount));
+    });
   });
 
   group('iOS', () {

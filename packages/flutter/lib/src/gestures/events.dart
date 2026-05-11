@@ -2536,6 +2536,7 @@ class PointerCancelEvent extends PointerEvent
     super.orientation,
     super.tilt,
     super.embedderId,
+    super.platformData,
   }) : assert(!identical(kind, PointerDeviceKind.trackpad)),
        super(down: false, pressure: 0.0);
 

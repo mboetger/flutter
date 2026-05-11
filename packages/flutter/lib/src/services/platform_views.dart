@@ -574,6 +574,7 @@ class _AndroidMotionEventConverter {
   final Map<int, AndroidPointerCoords> pointerPositions = <int, AndroidPointerCoords>{};
   final Map<int, AndroidPointerProperties> pointerProperties = <int, AndroidPointerProperties>{};
   final Set<int> usedAndroidPointerIds = <int>{};
+  final List<int> _pointerRemovals = <int>[];
 
   late PointTransformer pointTransformer;
 
@@ -616,14 +617,16 @@ class _AndroidMotionEventConverter {
   }
 
   void handlePointerUpEvent(PointerUpEvent event) {
-    _remove(event.pointer);
+    _pointerRemovals.add(event.pointer);
   }
 
   void handlePointerCancelEvent(PointerCancelEvent event) {
-    // The pointer cancel event is handled like pointer up. Normally,
-    // the difference is that pointer cancel doesn't perform any action,
-    // but in this case neither up or cancel perform any action.
-    _remove(event.pointer);
+    _pointerRemovals.add(event.pointer);
+  }
+
+  void postDispatchEvents() {
+    _pointerRemovals.forEach(_remove);
+    _pointerRemovals.clear();
   }
 
   AndroidMotionEvent? toAndroidMotionEvent(PointerEvent event) {
@@ -1018,6 +1021,7 @@ abstract class AndroidViewController extends PlatformViewController {
 
     if (androidEvent != null) {
       await sendMotionEvent(androidEvent);
+      _motionEventConverter.postDispatchEvents();
     }
   }
 

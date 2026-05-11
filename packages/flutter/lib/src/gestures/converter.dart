@@ -220,6 +220,7 @@ abstract final class PointerEventConverter {
                     orientation: datum.orientation,
                     tilt: datum.tilt,
                     embedderId: datum.embedderId,
+                    platformData: datum.platformData,
                   );
                 case ui.PointerChange.remove:
                   return PointerRemovedEvent(
