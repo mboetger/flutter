@@ -469,7 +469,27 @@ class FlutterPluginUtilsTest {
     }
 
     @Test
-    fun `buildModeFor returns debug if the BuildType is debuggable`() {
+    fun `buildModeFor returns profile if the BuildType name contains profile even if debuggable`() {
+        val buildType = mockk<BuildType>()
+        every { buildType.name } returns "customProfile"
+        every { buildType.isDebuggable } returns true
+
+        val result = FlutterPluginUtils.buildModeFor(buildType)
+        assertEquals("profile", result)
+    }
+
+    @Test
+    fun `buildModeFor returns release if the BuildType name contains release even if debuggable`() {
+        val buildType = mockk<BuildType>()
+        every { buildType.name } returns "devRelease"
+        every { buildType.isDebuggable } returns true
+
+        val result = FlutterPluginUtils.buildModeFor(buildType)
+        assertEquals("release", result)
+    }
+
+    @Test
+    fun `buildModeFor returns debug if the BuildType is debuggable and name does not contain profile or release`() {
         val buildType = mockk<BuildType>()
         every { buildType.name } returns "something random"
         every { buildType.isDebuggable } returns true
@@ -479,7 +499,7 @@ class FlutterPluginUtilsTest {
     }
 
     @Test
-    fun `buildModeFor returns release if the BuildType is not debuggable and not named profile`() {
+    fun `buildModeFor returns release if the BuildType is not debuggable and not named profile or release`() {
         val buildType = mockk<BuildType>()
         every { buildType.isDebuggable } returns false
         every { buildType.name } returns "something random"

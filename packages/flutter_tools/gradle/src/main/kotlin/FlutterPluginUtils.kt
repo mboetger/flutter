@@ -443,8 +443,11 @@ object FlutterPluginUtils {
     @JvmStatic
     @JvmName("buildModeFor")
     internal fun buildModeFor(buildType: BuildType): String {
-        if (buildType.name == "profile") {
+        val typeName = buildType.name.lowercase()
+        if (typeName.contains("profile")) {
             return "profile"
+        } else if (typeName.contains("release")) {
+            return "release"
         } else if (buildType.isDebuggable) {
             return "debug"
         }
