@@ -30,17 +30,17 @@ public class PlatformChannel {
   @NonNull public final MethodChannel channel;
   @Nullable private PlatformMessageHandler platformMessageHandler;
 
+  @Nullable private Integer pendingAndroidOrientation;
+  @Nullable private List<SystemUiOverlay> pendingOverlays;
+  @Nullable private SystemUiMode pendingSystemUiMode;
+  @Nullable private SystemChromeStyle pendingStyle;
+  @Nullable private AppSwitcherDescription pendingAppSwitcherDescription;
+
   @NonNull @VisibleForTesting
   final MethodChannel.MethodCallHandler parsingMethodCallHandler =
       new MethodChannel.MethodCallHandler() {
         @Override
         public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
-          if (platformMessageHandler == null) {
-            // If no explicit PlatformMessageHandler has been registered then we don't
-            // need to forward this call to an API. Return.
-            return;
-          }
-
           String method = call.method;
           Object arguments = call.arguments;
           Log.v(TAG, "Received '" + method + "' message.");
@@ -49,7 +49,9 @@ public class PlatformChannel {
               case "SystemSound.play":
                 try {
                   SoundType soundType = SoundType.fromValue((String) arguments);
-                  platformMessageHandler.playSystemSound(soundType);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.playSystemSound(soundType);
+                  }
                   result.success(null);
                 } catch (NoSuchFieldException exception) {
                   // The desired sound type does not exist.
@@ -60,7 +62,9 @@ public class PlatformChannel {
                 try {
                   HapticFeedbackType feedbackType =
                       HapticFeedbackType.fromValue((String) arguments);
-                  platformMessageHandler.vibrateHapticFeedback(feedbackType);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.vibrateHapticFeedback(feedbackType);
+                  }
                   result.success(null);
                 } catch (NoSuchFieldException exception) {
                   // The desired feedback type does not exist.
@@ -70,7 +74,11 @@ public class PlatformChannel {
               case "SystemChrome.setPreferredOrientations":
                 try {
                   int androidOrientation = decodeOrientations((JSONArray) arguments);
-                  platformMessageHandler.setPreferredOrientations(androidOrientation);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.setPreferredOrientations(androidOrientation);
+                  } else {
+                    pendingAndroidOrientation = androidOrientation;
+                  }
                   result.success(null);
                 } catch (JSONException | NoSuchFieldException exception) {
                   // JSONException: One or more expected fields were either omitted or referenced an
@@ -84,7 +92,11 @@ public class PlatformChannel {
                 try {
                   AppSwitcherDescription description =
                       decodeAppSwitcherDescription((JSONObject) arguments);
-                  platformMessageHandler.setApplicationSwitcherDescription(description);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.setApplicationSwitcherDescription(description);
+                  } else {
+                    pendingAppSwitcherDescription = description;
+                  }
                   result.success(null);
                 } catch (JSONException exception) {
                   // One or more expected fields were either omitted or referenced an invalid type.
@@ -94,7 +106,12 @@ public class PlatformChannel {
               case "SystemChrome.setEnabledSystemUIOverlays":
                 try {
                   List<SystemUiOverlay> overlays = decodeSystemUiOverlays((JSONArray) arguments);
-                  platformMessageHandler.showSystemOverlays(overlays);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.showSystemOverlays(overlays);
+                  } else {
+                    pendingOverlays = overlays;
+                    pendingSystemUiMode = null;
+                  }
                   result.success(null);
                 } catch (JSONException | NoSuchFieldException exception) {
                   // JSONException: One or more expected fields were either omitted or referenced an
@@ -106,7 +123,12 @@ public class PlatformChannel {
               case "SystemChrome.setEnabledSystemUIMode":
                 try {
                   SystemUiMode mode = decodeSystemUiMode((String) arguments);
-                  platformMessageHandler.showSystemUiMode(mode);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.showSystemUiMode(mode);
+                  } else {
+                    pendingSystemUiMode = mode;
+                    pendingOverlays = null;
+                  }
                   result.success(null);
                 } catch (JSONException | NoSuchFieldException exception) {
                   // JSONException: One or more expected fields were either omitted or referenced an
@@ -116,18 +138,26 @@ public class PlatformChannel {
                 }
                 break;
               case "SystemChrome.setSystemUIChangeListener":
-                platformMessageHandler.setSystemUiChangeListener();
+                if (platformMessageHandler != null) {
+                  platformMessageHandler.setSystemUiChangeListener();
+                }
                 result.success(null);
                 break;
               case "SystemChrome.restoreSystemUIOverlays":
-                platformMessageHandler.restoreSystemUiOverlays();
+                if (platformMessageHandler != null) {
+                  platformMessageHandler.restoreSystemUiOverlays();
+                }
                 result.success(null);
                 break;
               case "SystemChrome.setSystemUIOverlayStyle":
                 try {
                   SystemChromeStyle systemChromeStyle =
                       decodeSystemChromeStyle((JSONObject) arguments);
-                  platformMessageHandler.setSystemUiOverlayStyle(systemChromeStyle);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.setSystemUiOverlayStyle(systemChromeStyle);
+                  } else {
+                    pendingStyle = systemChromeStyle;
+                  }
                   result.success(null);
                 } catch (JSONException | NoSuchFieldException exception) {
                   // JSONException: One or more expected fields were either omitted or referenced an
@@ -139,12 +169,16 @@ public class PlatformChannel {
               case "SystemNavigator.setFrameworkHandlesBack":
                 {
                   boolean frameworkHandlesBack = (boolean) arguments;
-                  platformMessageHandler.setFrameworkHandlesBack(frameworkHandlesBack);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.setFrameworkHandlesBack(frameworkHandlesBack);
+                  }
                   result.success(null);
                   break;
                 }
               case "SystemNavigator.pop":
-                platformMessageHandler.popSystemNavigator();
+                if (platformMessageHandler != null) {
+                  platformMessageHandler.popSystemNavigator();
+                }
                 result.success(null);
                 break;
               case "Clipboard.getData":
@@ -158,11 +192,14 @@ public class PlatformChannel {
                       // An unsupported content format was requested. Return failure.
                       result.error(
                           "error", "No such clipboard content format: " + contentFormatName, null);
+                      break;
                     }
                   }
 
-                  CharSequence clipboardContent =
-                      platformMessageHandler.getClipboardData(clipboardFormat);
+                  CharSequence clipboardContent = null;
+                  if (platformMessageHandler != null) {
+                    clipboardContent = platformMessageHandler.getClipboardData(clipboardFormat);
+                  }
                   if (clipboardContent != null) {
                     JSONObject response = new JSONObject();
                     response.put("text", clipboardContent);
@@ -175,13 +212,18 @@ public class PlatformChannel {
               case "Clipboard.setData":
                 {
                   String clipboardContent = ((JSONObject) arguments).getString("text");
-                  platformMessageHandler.setClipboardData(clipboardContent);
+                  if (platformMessageHandler != null) {
+                    platformMessageHandler.setClipboardData(clipboardContent);
+                  }
                   result.success(null);
                   break;
                 }
               case "Clipboard.hasStrings":
                 {
-                  boolean hasStrings = platformMessageHandler.clipboardHasStrings();
+                  boolean hasStrings = false;
+                  if (platformMessageHandler != null) {
+                    hasStrings = platformMessageHandler.clipboardHasStrings();
+                  }
                   JSONObject response = new JSONObject();
                   response.put("value", hasStrings);
                   result.success(response);
@@ -189,7 +231,9 @@ public class PlatformChannel {
                 }
               case "Share.invoke":
                 String text = (String) arguments;
-                platformMessageHandler.share(text);
+                if (platformMessageHandler != null) {
+                  platformMessageHandler.share(text);
+                }
                 result.success(null);
                 break;
               default:
@@ -221,6 +265,23 @@ public class PlatformChannel {
    */
   public void setPlatformMessageHandler(@Nullable PlatformMessageHandler platformMessageHandler) {
     this.platformMessageHandler = platformMessageHandler;
+    if (platformMessageHandler != null) {
+      if (pendingAndroidOrientation != null) {
+        platformMessageHandler.setPreferredOrientations(pendingAndroidOrientation);
+      }
+      if (pendingOverlays != null) {
+        platformMessageHandler.showSystemOverlays(pendingOverlays);
+      }
+      if (pendingSystemUiMode != null) {
+        platformMessageHandler.showSystemUiMode(pendingSystemUiMode);
+      }
+      if (pendingStyle != null) {
+        platformMessageHandler.setSystemUiOverlayStyle(pendingStyle);
+      }
+      if (pendingAppSwitcherDescription != null) {
+        platformMessageHandler.setApplicationSwitcherDescription(pendingAppSwitcherDescription);
+      }
+    }
   }
 
   /** Informs Flutter of a change in the SystemUI overlays. */

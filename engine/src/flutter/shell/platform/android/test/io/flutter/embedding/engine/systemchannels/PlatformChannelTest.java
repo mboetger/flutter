@@ -69,4 +69,40 @@ public class PlatformChannelTest {
     assertEquals(valueCapture.getValue(), expectedContent);
     verify(mockResult).success(null);
   }
+
+  @Test
+  public void platformChannel_noHandlerDoesNotHang() throws org.json.JSONException {
+    io.flutter.embedding.engine.FlutterJNI mockFlutterJNI = mock(io.flutter.embedding.engine.FlutterJNI.class);
+    io.flutter.embedding.engine.dart.DartExecutor dartExecutor = new io.flutter.embedding.engine.dart.DartExecutor(mockFlutterJNI, mock(android.content.res.AssetManager.class));
+    PlatformChannel platformChannel = new PlatformChannel(dartExecutor);
+
+    org.json.JSONArray orientations = new org.json.JSONArray();
+    orientations.put("DeviceOrientation.portraitUp");
+    MethodCall methodCall = new MethodCall("SystemChrome.setPreferredOrientations", orientations);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    platformChannel.parsingMethodCallHandler.onMethodCall(methodCall, mockResult);
+
+    verify(mockResult).success(null);
+  }
+
+  @Test
+  public void platformChannel_noHandlerCachesOrientationAndAppliesLater() throws org.json.JSONException {
+    io.flutter.embedding.engine.FlutterJNI mockFlutterJNI = mock(io.flutter.embedding.engine.FlutterJNI.class);
+    io.flutter.embedding.engine.dart.DartExecutor dartExecutor = new io.flutter.embedding.engine.dart.DartExecutor(mockFlutterJNI, mock(android.content.res.AssetManager.class));
+    PlatformChannel platformChannel = new PlatformChannel(dartExecutor);
+
+    org.json.JSONArray orientations = new org.json.JSONArray();
+    orientations.put("DeviceOrientation.portraitUp");
+    MethodCall methodCall = new MethodCall("SystemChrome.setPreferredOrientations", orientations);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    platformChannel.parsingMethodCallHandler.onMethodCall(methodCall, mockResult);
+
+    PlatformChannel.PlatformMessageHandler mockMessageHandler =
+        mock(PlatformChannel.PlatformMessageHandler.class);
+    platformChannel.setPlatformMessageHandler(mockMessageHandler);
+
+    verify(mockMessageHandler).setPreferredOrientations(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+  }
 }
