@@ -206,6 +206,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
   //
   // This is null when a node embedded by the AccessibilityViewEmbedder has the focus.
   @Nullable private SemanticsNode accessibilityFocusedSemanticsNode;
+  private boolean accessibilityFocusClearedRecently = false;
 
   // The virtual ID of the currently embedded node with accessibility focus.
   //
@@ -1475,11 +1476,19 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
               virtualViewId, Action.DID_LOSE_ACCESSIBILITY_FOCUS);
           sendAccessibilityEvent(
               virtualViewId, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED);
+          accessibilityFocusClearedRecently = true;
+          rootAccessibilityView.post(
+              new Runnable() {
+                @Override
+                public void run() {
+                  accessibilityFocusClearedRecently = false;
+                }
+              });
           return true;
         }
       case AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS:
         {
-          if (accessibilityFocusedSemanticsNode == null) {
+          if (accessibilityFocusedSemanticsNode == null && !accessibilityFocusClearedRecently) {
             // When Android focuses a node, it doesn't invalidate the view.
             // (It does when it sends ACTION_CLEAR_ACCESSIBILITY_FOCUS, so
             // we only have to worry about this when the focused node is null.)

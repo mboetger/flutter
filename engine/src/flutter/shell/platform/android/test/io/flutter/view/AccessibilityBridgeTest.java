@@ -1344,6 +1344,56 @@ public class AccessibilityBridgeTest {
   }
 
   @Test
+  public void itDoesNotRedundantlyInvalidateRootView() {
+    BasicMessageChannel<Object> mockChannel = mock(BasicMessageChannel.class);
+    AccessibilityChannel accessibilityChannel =
+        new AccessibilityChannel(mockChannel, mock(FlutterJNI.class));
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ mockRootView,
+            /* accessibilityChannel= */ accessibilityChannel,
+            /* accessibilityManager= */ mockManager,
+            /* contentResolver= */ null,
+            /* accessibilityViewEmbedder= */ mockViewEmbedder,
+            /* platformViewsAccessibilityDelegate= */ null);
+
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+    when(mockManager.isEnabled()).thenReturn(true);
+
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+    root.label = "root";
+    TestSemanticsNode node1 = new TestSemanticsNode();
+    node1.id = 1;
+    node1.label = "node1";
+    root.children.add(node1);
+
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // 1. Focus first node (root). Since no node had focus, this should invalidate the view.
+    accessibilityBridge.performAction(0, AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
+    verify(mockRootView, times(1)).invalidate();
+
+    // 2. Clear focus from root.
+    accessibilityBridge.performAction(0, AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS, null);
+
+    // 3. Focus second node (node1). Since a focus clear just occurred, the view is already invalidated,
+    // so we should NOT call invalidate() again.
+    accessibilityBridge.performAction(1, AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
+    
+    // The total number of invalidate calls should still be exactly 1.
+    verify(mockRootView, times(1)).invalidate();
+  }
+
+  @Test
   public void itSetsFocusabilityBasedOnFlagsCorrectly() {
     AccessibilityChannel mockChannel = mock(AccessibilityChannel.class);
     AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
