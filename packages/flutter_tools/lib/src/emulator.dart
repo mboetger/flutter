@@ -14,6 +14,7 @@ import 'android/java.dart';
 import 'base/context.dart';
 import 'base/file_system.dart';
 import 'base/logger.dart';
+import 'base/os.dart';
 import 'base/process.dart';
 import 'device.dart';
 import 'ios/ios_emulators.dart';
@@ -198,7 +199,31 @@ class EmulatorManager {
     return null;
   }
 
-  static final _androidApiVersion = RegExp(r';android-(\d+);');
+  static final RegExp _androidApiVersion = RegExp(r';android-([^;]+);');
+
+  static final RegExp _systemImagePackagePath = RegExp(r'system-images;[^;\s]+(?:;[^;\s]+)+');
+
+  static int? _parseAndroidApiVersion(String version) {
+    final int? parsed = int.tryParse(version);
+    if (parsed != null) {
+      return parsed;
+    }
+    final String upperVersion = version.toUpperCase();
+    const codenames = <String, int>{
+      'P': 28,
+      'PIE': 28,
+      'Q': 29,
+      'R': 30,
+      'S': 31,
+      'T': 33,
+      'TIRAMISU': 33,
+      'U': 34,
+      'UPSIDEDOWNCAKE': 34,
+      'V': 35,
+      'VANILLAICECREAM': 35,
+    };
+    return codenames[upperVersion];
+  }
 
   Future<String?> _getPreferredSdkId(String avdManagerPath) async {
     // It seems that to get the available list of images, we need to send a
@@ -207,31 +232,67 @@ class EmulatorManager {
     final RunResult runResult = await _processUtils.run(args, environment: _java?.environment);
 
     // Get the list of IDs that match our criteria
-    final List<String> availableIDs = runResult.stderr
-        .split('\n')
-        .where((String l) => _androidApiVersion.hasMatch(l))
-        .where((String l) => l.contains('system-images'))
-        .where((String l) => l.contains('google_apis_playstore'))
-        .toList();
+    final availableIDs = <String>[];
+    for (final String line in runResult.stderr.split('\n')) {
+      final Match? match = _systemImagePackagePath.firstMatch(line);
+      if (match != null) {
+        final String id = match.group(0)!;
+        if (id.contains('google_apis_playstore') && _androidApiVersion.hasMatch(id)) {
+          availableIDs.add(id);
+        }
+      }
+    }
 
-    final List<int> availableApiVersions = availableIDs
-        .map<String>((String id) => _androidApiVersion.firstMatch(id)!.group(1)!)
-        .map<int>((String apiVersion) => int.parse(apiVersion))
-        .toList();
+    final availableApiVersions = <int>[];
+    for (final id in availableIDs) {
+      final String apiVersionStr = _androidApiVersion.firstMatch(id)!.group(1)!;
+      final int? apiVersion = _parseAndroidApiVersion(apiVersionStr);
+      if (apiVersion != null) {
+        availableApiVersions.add(apiVersion);
+      }
+    }
 
     // Get the highest Android API version or whats left
     final int apiVersion = availableApiVersions.isNotEmpty
         ? availableApiVersions.reduce(math.max)
         : -1; // Don't match below
 
-    // We're out of preferences, we just have to return the first one with the high
-    // API version.
-    for (final id in availableIDs) {
-      if (id.contains(';android-$apiVersion;')) {
-        return id;
+    final List<String> candidates = availableIDs.where((String id) {
+      final String apiVersionStr = _androidApiVersion.firstMatch(id)!.group(1)!;
+      final int? idApiVersion = _parseAndroidApiVersion(apiVersionStr);
+      return idApiVersion == apiVersion;
+    }).toList();
+
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    HostPlatform? hostPlatform;
+    try {
+      hostPlatform = context.get<OperatingSystemUtils>()?.hostPlatform;
+    } on UnsupportedError {
+      // In some test environments context is unsupported.
+    }
+    final preferredArchitectures = <String>[];
+    if (hostPlatform == HostPlatform.darwin_arm64 ||
+        hostPlatform == HostPlatform.linux_arm64 ||
+        hostPlatform == HostPlatform.windows_arm64) {
+      preferredArchitectures.addAll(<String>['arm64-v8a', 'arm64']);
+    } else if (hostPlatform == HostPlatform.darwin_x64 ||
+        hostPlatform == HostPlatform.linux_x64 ||
+        hostPlatform == HostPlatform.windows_x64) {
+      preferredArchitectures.addAll(<String>['x86_64', 'x86']);
+    }
+
+    for (final arch in preferredArchitectures) {
+      for (final id in candidates) {
+        if (id.split(';').last == arch) {
+          return id;
+        }
       }
     }
-    return null;
+
+    return candidates.first;
   }
 
   /// Whether we're capable of listing any emulators given the current environment configuration.

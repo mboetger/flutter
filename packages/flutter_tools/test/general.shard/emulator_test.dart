@@ -7,6 +7,7 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
 import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/os.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/emulator.dart';
@@ -323,6 +324,141 @@ iOS Simulator       • iOS Simulator • Apple        • android
 
         expect(result.success, true);
         expect(result.emulatorName, 'flutter_emulator_2');
+      },
+    );
+
+    testWithoutContext(
+      'create emulator parses non-numeric Android API codenames/letters safely',
+      () async {
+        final emulatorManager = EmulatorManager(
+          java: FakeJava(),
+          fileSystem: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            const FakeCommand(
+              command: <String>['avdmanager', 'list', 'device', '-c'],
+              stdout: 'pixel\n',
+            ),
+            const FakeCommand(
+              command: <String>['avdmanager', 'create', 'avd', '-n', 'temp'],
+              stderr:
+                  'Error: Package path (-k) not specified. Valid system image paths are:\n'
+                  'system-images;android-Tiramisu;google_apis_playstore;x86\n'
+                  'null\n',
+              exitCode: 1,
+            ),
+            const FakeCommand(
+              command: <String>[
+                'avdmanager',
+                'create',
+                'avd',
+                '-n',
+                'test',
+                '-k',
+                'system-images;android-Tiramisu;google_apis_playstore;x86',
+                '-d',
+                'pixel',
+              ],
+            ),
+          ]),
+          androidSdk: sdk,
+          androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        );
+        final CreateEmulatorResult result = await emulatorManager.createEmulator(name: 'test');
+
+        expect(result.success, true);
+      },
+    );
+
+    testUsingContext(
+      'create emulator prefers system images matching host CPU architecture',
+      () async {
+        final emulatorManager = EmulatorManager(
+          java: FakeJava(),
+          fileSystem: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            const FakeCommand(
+              command: <String>['avdmanager', 'list', 'device', '-c'],
+              stdout: 'pixel\n',
+            ),
+            const FakeCommand(
+              command: <String>['avdmanager', 'create', 'avd', '-n', 'temp'],
+              stderr:
+                  'Error: Package path (-k) not specified. Valid system image paths are:\n'
+                  'system-images;android-33;google_apis_playstore;x86_64\n'
+                  'system-images;android-33;google_apis_playstore;arm64-v8a\n'
+                  'null\n',
+              exitCode: 1,
+            ),
+            const FakeCommand(
+              command: <String>[
+                'avdmanager',
+                'create',
+                'avd',
+                '-n',
+                'test',
+                '-k',
+                'system-images;android-33;google_apis_playstore;arm64-v8a',
+                '-d',
+                'pixel',
+              ],
+            ),
+          ]),
+          androidSdk: sdk,
+          androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        );
+        final CreateEmulatorResult result = await emulatorManager.createEmulator(name: 'test');
+
+        expect(result.success, true);
+      },
+      overrides: <Type, Generator>{
+        OperatingSystemUtils: () =>
+            FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+      },
+    );
+
+    testWithoutContext(
+      'create emulator safely parses avdmanager stderr warnings/errors without crashing',
+      () async {
+        final emulatorManager = EmulatorManager(
+          java: FakeJava(),
+          fileSystem: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            const FakeCommand(
+              command: <String>['avdmanager', 'list', 'device', '-c'],
+              stdout: 'pixel\n',
+            ),
+            const FakeCommand(
+              command: <String>['avdmanager', 'create', 'avd', '-n', 'temp'],
+              stderr:
+                  'Warning: An error occurred during parsing. (some warning)\n'
+                  'Error: Package path (-k) not specified. Valid system image paths are:\n'
+                  'system-images;android-27;google_apis_playstore;x86\n'
+                  'null\n',
+              exitCode: 1,
+            ),
+            const FakeCommand(
+              command: <String>[
+                'avdmanager',
+                'create',
+                'avd',
+                '-n',
+                'test',
+                '-k',
+                'system-images;android-27;google_apis_playstore;x86',
+                '-d',
+                'pixel',
+              ],
+            ),
+          ]),
+          androidSdk: sdk,
+          androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        );
+        final CreateEmulatorResult result = await emulatorManager.createEmulator(name: 'test');
+
+        expect(result.success, true);
       },
     );
   });
