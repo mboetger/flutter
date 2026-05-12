@@ -10,6 +10,7 @@ import 'package:flutter_tools/src/android/gradle_utils.dart' as gradle_utils;
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
+import 'package:flutter_tools/src/base/terminal.dart';
 import 'package:test/fake.dart';
 
 import '../../src/common.dart';
@@ -46,7 +47,11 @@ void main() {
     logger = BufferLogger.test();
   });
 
-  AndroidDevice setUpAndroidDevice({AndroidSdk? androidSdk, ProcessManager? processManager}) {
+  AndroidDevice setUpAndroidDevice({
+    AndroidSdk? androidSdk,
+    ProcessManager? processManager,
+    Terminal? terminal,
+  }) {
     androidSdk ??= FakeAndroidSdk();
     return AndroidDevice(
       '1234',
@@ -56,6 +61,7 @@ void main() {
       androidSdk: androidSdk,
       fileSystem: fileSystem,
       processManager: processManager ?? FakeProcessManager.any(),
+      terminal: terminal,
     );
   }
 
@@ -226,7 +232,7 @@ void main() {
   });
 
   testWithoutContext(
-    'Will uninstall if the correct version is not up to date and install fails',
+    'Will uninstall and install again if the correct version is not up to date, install fails, and user confirms via terminal',
     () async {
       final processManager = FakeProcessManager.list(<FakeCommand>[
         kAdbVersionCommand,
@@ -291,7 +297,10 @@ void main() {
         versionCode: 22,
         launchActivity: 'Main',
       );
-      final AndroidDevice androidDevice = setUpAndroidDevice(processManager: processManager);
+      final AndroidDevice androidDevice = setUpAndroidDevice(
+        processManager: processManager,
+        terminal: MockTerminal(stdinHasTerminal: true, promptResponse: 'y'),
+      );
 
       expect(await androidDevice.installApp(androidApk, userIdentifier: '10'), true);
       expect(processManager, hasNoRemainingExpectations);
@@ -337,9 +346,228 @@ void main() {
       expect(processManager, hasNoRemainingExpectations);
     },
   );
+
+  testWithoutContext(
+    'Will NOT uninstall automatically if installation fails and terminal is not interactive',
+    () async {
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        kAdbVersionCommand,
+        kAdbStartServerCommand,
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [${gradle_utils.targetSdkVersion}]',
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'install',
+            '-t',
+            '-r',
+            '--user',
+            '10',
+            'app-debug.apk',
+          ],
+          exitCode: 1,
+          stderr: '[INSTALL_FAILED_INSUFFICIENT_STORAGE]',
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'pm',
+            'list',
+            'packages',
+            '--user',
+            '10',
+            'app',
+          ],
+          stdout: 'package:app\n',
+        ),
+      ]);
+      final File apk = fileSystem.file('app-debug.apk')..createSync();
+      final androidApk = AndroidApk(
+        applicationPackage: apk,
+        id: 'app',
+        versionCode: 22,
+        launchActivity: 'Main',
+      );
+      final AndroidDevice androidDevice = setUpAndroidDevice(
+        processManager: processManager,
+        terminal: MockTerminal(),
+      );
+
+      expect(await androidDevice.installApp(androidApk, userIdentifier: '10'), false);
+      expect(
+        logger.errorText,
+        contains('Uninstalling the old version would clear all app data and settings.'),
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    },
+  );
+
+  testWithoutContext(
+    'Will uninstall and install again if installation fails, terminal is interactive and user says yes',
+    () async {
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        kAdbVersionCommand,
+        kAdbStartServerCommand,
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [${gradle_utils.targetSdkVersion}]',
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'install',
+            '-t',
+            '-r',
+            '--user',
+            '10',
+            'app-debug.apk',
+          ],
+          exitCode: 1,
+          stderr: '[INSTALL_FAILED_INSUFFICIENT_STORAGE]',
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'pm',
+            'list',
+            'packages',
+            '--user',
+            '10',
+            'app',
+          ],
+          stdout: 'package:app\n',
+        ),
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'uninstall', '--user', '10', 'app'],
+        ),
+        kInstallCommand,
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'echo',
+            '-n',
+            'example_sha',
+            '>',
+            '/data/local/tmp/sky.app.sha1',
+          ],
+        ),
+      ]);
+      final File apk = fileSystem.file('app-debug.apk')..createSync();
+      fileSystem.file('app-debug.apk.sha1').writeAsStringSync('example_sha');
+      final androidApk = AndroidApk(
+        applicationPackage: apk,
+        id: 'app',
+        versionCode: 22,
+        launchActivity: 'Main',
+      );
+      final AndroidDevice androidDevice = setUpAndroidDevice(
+        processManager: processManager,
+        terminal: MockTerminal(stdinHasTerminal: true, promptResponse: 'y'),
+      );
+
+      expect(await androidDevice.installApp(androidApk, userIdentifier: '10'), true);
+      expect(processManager, hasNoRemainingExpectations);
+    },
+  );
+
+  testWithoutContext(
+    'Will NOT uninstall or install again if installation fails, terminal is interactive and user says no',
+    () async {
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        kAdbVersionCommand,
+        kAdbStartServerCommand,
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [${gradle_utils.targetSdkVersion}]',
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'install',
+            '-t',
+            '-r',
+            '--user',
+            '10',
+            'app-debug.apk',
+          ],
+          exitCode: 1,
+          stderr: '[INSTALL_FAILED_INSUFFICIENT_STORAGE]',
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'pm',
+            'list',
+            'packages',
+            '--user',
+            '10',
+            'app',
+          ],
+          stdout: 'package:app\n',
+        ),
+      ]);
+      final File apk = fileSystem.file('app-debug.apk')..createSync();
+      final androidApk = AndroidApk(
+        applicationPackage: apk,
+        id: 'app',
+        versionCode: 22,
+        launchActivity: 'Main',
+      );
+      final AndroidDevice androidDevice = setUpAndroidDevice(
+        processManager: processManager,
+        terminal: MockTerminal(stdinHasTerminal: true),
+      );
+
+      expect(await androidDevice.installApp(androidApk, userIdentifier: '10'), false);
+      expect(processManager, hasNoRemainingExpectations);
+    },
+  );
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
   @override
   String get adbPath => 'adb';
+}
+
+class MockTerminal extends Fake implements Terminal {
+  MockTerminal({this.stdinHasTerminal = false, this.promptResponse = 'n'});
+
+  @override
+  final bool stdinHasTerminal;
+
+  final String promptResponse;
+
+  @override
+  bool usesTerminalUi = false;
+
+  @override
+  Future<String> promptForCharInput(
+    List<String> acceptedCharacters, {
+    required Logger logger,
+    String? prompt,
+    int? defaultChoiceIndex,
+    bool displayAcceptedCharacters = true,
+  }) async {
+    return promptResponse;
+  }
 }

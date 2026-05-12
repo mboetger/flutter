@@ -15,12 +15,14 @@ import '../base/io.dart';
 import '../base/logger.dart';
 import '../base/platform.dart';
 import '../base/process.dart';
+import '../base/terminal.dart';
 import '../base/utils.dart';
 import '../build_info.dart';
 import '../convert.dart';
 import '../device.dart';
 import '../device_port_forwarder.dart';
 import '../device_vm_service_discovery_for_attach.dart';
+import '../globals.dart' as globals;
 import '../project.dart';
 import '../protocol_discovery.dart';
 import '../vmservice.dart';
@@ -68,6 +70,7 @@ class AndroidDevice extends Device {
     required AndroidSdk androidSdk,
     required FileSystem fileSystem,
     AndroidConsoleSocketFactory androidConsoleSocketFactory = kAndroidConsoleSocketFactory,
+    Terminal? terminal,
   }) : _logger = logger,
        _processManager = processManager,
        _androidSdk = androidSdk,
@@ -75,6 +78,7 @@ class AndroidDevice extends Device {
        _fileSystem = fileSystem,
        _androidConsoleSocketFactory = androidConsoleSocketFactory,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager),
+       _injectedTerminal = terminal,
        super(category: Category.mobile, platformType: PlatformType.android, ephemeral: true);
 
   final Logger _logger;
@@ -84,6 +88,8 @@ class AndroidDevice extends Device {
   final FileSystem _fileSystem;
   final ProcessUtils _processUtils;
   final AndroidConsoleSocketFactory _androidConsoleSocketFactory;
+  final Terminal? _injectedTerminal;
+  Terminal get _terminal => _injectedTerminal ?? globals.terminal;
 
   final String? productID;
   final String modelID;
@@ -415,6 +421,27 @@ class AndroidDevice extends Device {
     if (!await isAppInstalled(app, userIdentifier: userIdentifier)) {
       return false;
     }
+    if (_terminal.stdinHasTerminal) {
+      _logger.printWarning('Uninstalling the old version will clear all app data and settings.');
+      _terminal.usesTerminalUi = true;
+      final String promptResult = await _terminal.promptForCharInput(
+        const <String>['y', 'n'],
+        prompt: 'Uninstall the old version?',
+        defaultChoiceIndex: 1, // 'n'
+        logger: _logger,
+      );
+      if (promptResult != 'y') {
+        _logger.printStatus('Installation cancelled.');
+        return false;
+      }
+    } else {
+      _logger.printError(
+        'Application package install failed. The old version is already installed.\n'
+        'Uninstalling the old version would clear all app data and settings.\n'
+        'To uninstall the old version automatically and try again, please run with the `--uninstall-first` option, or uninstall manually and try again.',
+      );
+      return false;
+    }
     _logger.printStatus('Uninstalling old version...');
     if (!await uninstallApp(app, userIdentifier: userIdentifier)) {
       _logger.printError('Error: Uninstalling old version failed.');
@@ -591,6 +618,11 @@ class AndroidDevice extends Device {
 
     _logger.printTrace("Stopping app '${builtPackage.name}' on $name.");
     await stopApp(builtPackage, userIdentifier: userIdentifier);
+
+    if (debuggingOptions.uninstallFirst) {
+      _logger.printStatus('Uninstalling old version first...');
+      await uninstallApp(builtPackage, userIdentifier: userIdentifier);
+    }
 
     if (!await installApp(builtPackage, userIdentifier: userIdentifier)) {
       return LaunchResult.failed();
