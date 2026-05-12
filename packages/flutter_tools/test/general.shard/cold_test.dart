@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/base/dds.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
@@ -48,6 +50,22 @@ void main() {
       target: 'main.dart',
     ).attach();
     expect(exitCode, 2);
+  });
+
+  testUsingContext('attach starts echoing device log', () async {
+    final device = FakeDevice();
+    final flutterDevice = FakeFlutterDevice(device);
+    final devices = <FlutterDevice>[flutterDevice];
+
+    final int exitCode = await ColdRunner(
+      devices,
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      target: 'main.dart',
+      stayResident: false,
+    ).attach();
+
+    expect(exitCode, 0);
+    expect(flutterDevice.startedEchoingDeviceLog, true);
   });
 
   group('cleanupAtFinish()', () {
@@ -172,11 +190,27 @@ class FakeFlutterDevice extends Fake implements FlutterDevice {
   final Device device;
 
   int stopEchoingDeviceLogCount = 0;
+  bool startedEchoingDeviceLog = false;
 
   @override
   Future<void> stopEchoingDeviceLog() async {
     stopEchoingDeviceLogCount += 1;
   }
+
+  @override
+  Future<void> startEchoingDeviceLog(DebuggingOptions debuggingOptions) async {
+    startedEchoingDeviceLog = true;
+  }
+
+  @override
+  Future<void> connect({
+    ReloadSources? reloadSources,
+    Restart? restart,
+    CompileExpression? compileExpression,
+    PrintStructuredErrorLogMethod? printStructuredErrorLogMethod,
+    required DebuggingOptions debuggingOptions,
+    int? hostVmServicePort,
+  }) async {}
 
   @override
   FlutterVmService get vmService => FakeFlutterVmService();
@@ -316,6 +350,9 @@ class FakeFlutterVmService extends Fake implements FlutterVmService {
 }
 
 class FakeVmService extends Fake implements VmService {
+  @override
+  Future<void> get onDone => Completer<void>().future;
+
   @override
   Future<Success> streamListen(String streamId) async => Success();
 

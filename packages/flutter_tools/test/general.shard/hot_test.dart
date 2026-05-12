@@ -665,6 +665,37 @@ name: my_app
         ProcessManager: () => FakeProcessManager.any(),
       },
     );
+
+    testUsingContext(
+      'attach starts echoing device log',
+      () async {
+        writePackageConfigFiles(directory: fileSystem.currentDirectory, mainLibName: 'my_app');
+
+        final device = FakeDevice();
+        final fakeFlutterDevice = FakeFlutterDevice(device);
+        final devices = <FlutterDevice>[fakeFlutterDevice];
+
+        fakeFlutterDevice.updateDevFSReportCallback = () async => UpdateFSReport(success: true);
+        (fakeFlutterDevice.devFS! as FakeDevFs).baseUri = Uri.parse('file:///base_uri');
+
+        final int exitCode = await HotRunner(
+          devices,
+          debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+          target: 'main.dart',
+          analytics: fakeAnalytics,
+          stayResident: false,
+        ).attach(needsFullRestart: false);
+        expect(exitCode, 0);
+        expect(fakeFlutterDevice.startedEchoingDeviceLog, true);
+      },
+      overrides: <Type, Generator>{
+        HotRunnerConfig: () => TestHotRunnerConfig(),
+        Artifacts: () => Artifacts.test(),
+        FileSystem: () => fileSystem,
+        Platform: () => FakePlatform(),
+        ProcessManager: () => FakeProcessManager.any(),
+      },
+    );
   });
 
   group('hot cleanupAtFinish()', () {

@@ -152,6 +152,8 @@ class ColdRunner extends ResidentRunner {
       }
     }
 
+    await startEchoingDeviceLog();
+
     appStartedCompleter?.complete();
     if (stayResident) {
       return waitForAppToFinish();

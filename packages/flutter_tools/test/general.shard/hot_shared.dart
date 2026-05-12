@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+
+import 'package:file/file.dart';
 import 'package:flutter_tools/src/application_package.dart';
 import 'package:flutter_tools/src/asset.dart';
 import 'package:flutter_tools/src/base/dds.dart';
@@ -100,15 +103,34 @@ class FakeFlutterDevice extends Fake implements FlutterDevice {
   FakeFlutterDevice(this.device);
 
   bool stoppedEchoingDeviceLog = false;
+  bool startedEchoingDeviceLog = false;
   late Future<UpdateFSReport> Function() updateDevFSReportCallback;
 
   @override
   final FakeDevice device;
 
   @override
+  final DevelopmentShaderCompiler developmentShaderCompiler = const FakeShaderCompiler();
+
+  @override
   Future<void> stopEchoingDeviceLog() async {
     stoppedEchoingDeviceLog = true;
   }
+
+  @override
+  Future<void> startEchoingDeviceLog(DebuggingOptions debuggingOptions) async {
+    startedEchoingDeviceLog = true;
+  }
+
+  @override
+  Future<void> connect({
+    ReloadSources? reloadSources,
+    Restart? restart,
+    CompileExpression? compileExpression,
+    PrintStructuredErrorLogMethod? printStructuredErrorLogMethod,
+    required DebuggingOptions debuggingOptions,
+    int? hostVmServicePort,
+  }) async {}
 
   @override
   DevFS? devFS = FakeDevFs();
@@ -136,6 +158,11 @@ class FakeFlutterDevice extends Fake implements FlutterDevice {
 
   @override
   Future<void> handleHotRestart() async {}
+
+  @override
+  Future<Uri> setupDevFS(String fsName, Directory rootDirectory) async {
+    return Uri.parse('file:///base_uri');
+  }
 
   @override
   TargetPlatform get targetPlatform => device._targetPlatform;
@@ -228,6 +255,9 @@ class FakeFlutterVmService extends Fake implements FlutterVmService {
 }
 
 class FakeVmService extends Fake implements vm_service.VmService {
+  @override
+  Future<void> get onDone => Completer<void>().future;
+
   @override
   Future<vm_service.VM> getVM() async => FakeVm();
 }

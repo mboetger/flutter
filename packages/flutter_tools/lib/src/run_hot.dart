@@ -334,6 +334,8 @@ class HotRunner extends ResidentRunner {
       }
     }
 
+    await startEchoingDeviceLog();
+
     appStartedCompleter?.complete();
 
     if (benchmarkMode) {
