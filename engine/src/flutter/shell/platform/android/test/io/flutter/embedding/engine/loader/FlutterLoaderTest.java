@@ -59,6 +59,33 @@ public class FlutterLoaderTest {
   }
 
   @Test
+  public void itDefaultsAppBundlePathWhenUninitialized() {
+    FlutterLoader flutterLoader = new FlutterLoader();
+    assertFalse(flutterLoader.initialized());
+    // Should not crash with NullPointerException.
+    String appBundlePath = flutterLoader.findAppBundlePath();
+    assertTrue("flutter_assets".equals(appBundlePath));
+  }
+
+  @Test
+  public void itDefaultsAutomaticallyRegisterPluginsWhenUninitialized() {
+    FlutterLoader flutterLoader = new FlutterLoader();
+    assertFalse(flutterLoader.initialized());
+    // Should not crash with NullPointerException.
+    boolean autoRegister = flutterLoader.automaticallyRegisterPlugins();
+    assertTrue(autoRegister);
+  }
+
+  @Test
+  public void itDefaultsLookupKeyForAssetWhenUninitialized() {
+    FlutterLoader flutterLoader = new FlutterLoader();
+    assertFalse(flutterLoader.initialized());
+    // Should not crash with NullPointerException.
+    String lookupKey = flutterLoader.getLookupKeyForAsset("main.dart");
+    assertTrue("flutter_assets/main.dart".equals(lookupKey));
+  }
+
+  @Test
   public void itReportsInitializedAfterInitializing() {
     FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
     FlutterLoader flutterLoader = new FlutterLoader(mockFlutterJNI);

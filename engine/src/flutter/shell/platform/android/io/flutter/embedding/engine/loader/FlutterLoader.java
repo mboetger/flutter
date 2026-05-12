@@ -702,6 +702,10 @@ public class FlutterLoader {
 
   @NonNull
   public String findAppBundlePath() {
+    if (flutterApplicationInfo == null) {
+      Log.w(TAG, "findAppBundlePath called before startInitialization. Defaulting to \"flutter_assets\".");
+      return "flutter_assets";
+    }
     return flutterApplicationInfo.flutterAssetsDir;
   }
 
@@ -734,12 +738,17 @@ public class FlutterLoader {
   /** Returns the configuration on whether flutter engine should automatically register plugins. */
   @NonNull
   public boolean automaticallyRegisterPlugins() {
+    if (flutterApplicationInfo == null) {
+      Log.w(TAG, "automaticallyRegisterPlugins called before startInitialization. Defaulting to true.");
+      return true;
+    }
     return flutterApplicationInfo.automaticallyRegisterPlugins;
   }
 
   @NonNull
   private String fullAssetPathFrom(@NonNull String filePath) {
-    return flutterApplicationInfo.flutterAssetsDir + File.separator + filePath;
+    String assetsDir = flutterApplicationInfo != null ? flutterApplicationInfo.flutterAssetsDir : "flutter_assets";
+    return assetsDir + File.separator + filePath;
   }
 
   public static class Settings {
