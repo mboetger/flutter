@@ -39,6 +39,7 @@ import io.flutter.plugin.platform.PlatformViewsController;
 import io.flutter.plugin.platform.PlatformViewsController2;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 /** Android implementation of the text input plugin. */
 public class TextInputPlugin implements ListenableEditingState.EditingStateWatcher {
@@ -68,6 +69,16 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
   // target is a platform view. See the comments on lockPlatformViewInputConnection for more
   // details.
   private boolean isInputConnectionLocked;
+
+  @NonNull private final List<TextEditState> mPendingStates = new ArrayList<>();
+
+  private boolean statesEqual(TextEditState a, TextEditState b) {
+    return a.text.equals(b.text)
+        && a.selectionStart == b.selectionStart
+        && a.selectionEnd == b.selectionEnd
+        && a.composingStart == b.composingStart
+        && a.composingEnd == b.composingEnd;
+  }
 
   @SuppressLint("NewApi")
   public TextInputPlugin(
@@ -460,6 +471,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
             configuration.autofill != null ? configuration.autofill.editState : null, mView);
     updateAutofillConfigurationIfNeeded(configuration);
 
+    mPendingStates.clear();
     // setTextInputClient will be followed by a call to setTextInputEditingState.
     // Do a restartInput at that time.
     mRestartInputPending = true;
@@ -504,6 +516,26 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
   // latest TextEditState from the framework.
   @VisibleForTesting
   void setTextInputEditingState(View view, TextInputChannel.TextEditState state) {
+    int pendingIndex = -1;
+    for (int i = 0; i < mPendingStates.size(); i++) {
+      if (statesEqual(mPendingStates.get(i), state)) {
+        pendingIndex = i;
+        break;
+      }
+    }
+    if (pendingIndex != -1) {
+      if (pendingIndex < mPendingStates.size() - 1) {
+        // Stale echo of an older pending state. Ignore completely to avoid reverting the content
+        // of the text field and triggering a redundant IME restart.
+        Log.v(TAG, "Ignoring stale framework echo: " + state);
+        return;
+      } else {
+        // Latest pending state. The framework has caught up. Clear older pending states.
+        mPendingStates.subList(0, pendingIndex).clear();
+        return;
+      }
+    }
+
     if (!mRestartInputPending
         && mLastKnownFrameworkTextEditingState != null
         && mLastKnownFrameworkTextEditingState.hasComposing()) {
@@ -590,6 +622,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
       // notified before focus nodes that gained focus as part of the same focus event.
       return;
     }
+    mPendingStates.clear();
     mEditable.removeEditingStateListener(this);
     notifyViewExited();
     configuration = null;
@@ -692,6 +725,10 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
       mLastKnownFrameworkTextEditingState =
           new TextEditState(
               mEditable.toString(), selectionStart, selectionEnd, composingStart, composingEnd);
+      mPendingStates.add(mLastKnownFrameworkTextEditingState);
+      if (mPendingStates.size() > 10) {
+        mPendingStates.remove(0);
+      }
     } else {
       // Don't accumulate deltas if they are not sent to the framework.
       mEditable.clearBatchDeltas();

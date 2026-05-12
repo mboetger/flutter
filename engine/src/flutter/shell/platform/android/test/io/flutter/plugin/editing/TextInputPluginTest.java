@@ -92,12 +92,13 @@ import org.robolectric.shadows.ShadowInputMethodManager;
 @RunWith(AndroidJUnit4.class)
 public class TextInputPluginTest {
   private final Context ctx = ApplicationProvider.getApplicationContext();
-  @Mock FlutterJNI mockFlutterJni;
-  @Mock FlutterLoader mockFlutterLoader;
+  FlutterJNI mockFlutterJni;
+  FlutterLoader mockFlutterLoader;
 
   @Before
   public void setUp() {
-    MockitoAnnotations.openMocks(this);
+    mockFlutterJni = mock(FlutterJNI.class);
+    mockFlutterLoader = mock(FlutterLoader.class);
     when(mockFlutterJni.isAttached()).thenReturn(true);
   }
 
@@ -1144,6 +1145,134 @@ public class TextInputPluginTest {
   }
 
   @Test
+  public void setTextInputEditingState_ignoresStaleFrameworkEchoes() {
+    InputMethodSubtype inputMethodSubtype =
+        new InputMethodSubtype(0, 0, /*locale=*/ "en", "", "", false, false);
+    TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
+    testImm.setCurrentInputMethodSubtype(inputMethodSubtype);
+    View testView = new View(ctx);
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+    textInputPlugin.setTextInputClient(
+        0,
+        new TextInputChannel.Configuration(
+            false,
+            false,
+            true,
+            true,
+            false,
+            TextInputChannel.TextCapitalization.NONE,
+            new TextInputChannel.InputType(TextInputChannel.TextInputType.TEXT, false, false),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+
+    // There's a pending restart since we initialized the text input client. Flush that now.
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("", 0, 0, -1, -1));
+    assertEquals(1, testImm.getRestartCount(testView));
+
+    InputConnection connection =
+        textInputPlugin.createInputConnection(
+            testView, mock(KeyboardManager.class), new EditorInfo());
+
+    // Simulating user typing "h"
+    connection.setComposingText("h", 1);
+    // didChangeEditingState gets called, which adds ("h", 1, 1, 0, 1) to mPendingStates.
+
+    // Simulating user typing "he" immediately after
+    connection.setComposingText("he", 1);
+    // didChangeEditingState gets called, which adds ("he", 2, 2, 0, 2) to mPendingStates.
+
+    // The IMM should not restart during IME-initiated typing.
+    assertEquals(1, testImm.getRestartCount(testView));
+
+    // Now, framework echo for "h" arrives. This is a stale echo!
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("h", 1, 1, 0, 1));
+
+    // Verify that the stale echo is ignored and we did not restart the IMM.
+    assertEquals(1, testImm.getRestartCount(testView));
+
+    // Verify that the editable content was not reverted back to "h".
+    assertEquals("he", textInputPlugin.getEditable().toString());
+
+    // Now, framework echo for "he" (latest sent state) arrives.
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("he", 2, 2, 0, 2));
+
+    // Verify that no restart happens since the latest state is identical and also cleared from queue.
+    assertEquals(1, testImm.getRestartCount(testView));
+    assertEquals("he", textInputPlugin.getEditable().toString());
+  }
+
+  @Test
+  public void setTextInputEditingState_appliesLegitimateFrameworkUpdates() {
+    InputMethodSubtype inputMethodSubtype =
+        new InputMethodSubtype(0, 0, /*locale=*/ "en", "", "", false, false);
+    TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
+    testImm.setCurrentInputMethodSubtype(inputMethodSubtype);
+    View testView = new View(ctx);
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+    textInputPlugin.setTextInputClient(
+        0,
+        new TextInputChannel.Configuration(
+            false,
+            false,
+            true,
+            true,
+            false,
+            TextInputChannel.TextCapitalization.NONE,
+            new TextInputChannel.InputType(TextInputChannel.TextInputType.TEXT, false, false),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+
+    // Flush initial pending restart.
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("", 0, 0, -1, -1));
+    assertEquals(1, testImm.getRestartCount(testView));
+
+    InputConnection connection =
+        textInputPlugin.createInputConnection(
+            testView, mock(KeyboardManager.class), new EditorInfo());
+
+    connection.setComposingText("hello", 1);
+    assertEquals("hello", textInputPlugin.getEditable().toString());
+
+    // Simulating an input formatter capitalizing the first letter ("hello" -> "Hello").
+    // This state was never sent by the platform, so it should be treated as a legitimate framework update.
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("Hello", 5, 5, 0, 5));
+
+    // Verify that the update is applied successfully.
+    assertEquals("Hello", textInputPlugin.getEditable().toString());
+    // Since composing region is modified by the framework, verify we restarted the IMM.
+    assertEquals(2, testImm.getRestartCount(testView));
+  }
+
+  @Test
   public void TextEditState_throwsOnInvalidStatesReceived() {
     // Index OOB:
     assertThrows(IndexOutOfBoundsException.class, () -> new TextEditState("", 0, -9, -1, -1));
@@ -1228,6 +1357,7 @@ public class TextInputPluginTest {
   }
 
   @Test
+  @Config(sdk = API_LEVELS.API_30)
   public void imeVisibilityListener_restartsImmWhenIMEHidden() {
     // Initialize a general TextInputPlugin.
     InputMethodSubtype inputMethodSubtype = mock(InputMethodSubtype.class);
@@ -1271,6 +1401,7 @@ public class TextInputPluginTest {
   }
 
   @Test
+  @Config(sdk = API_LEVELS.API_30)
   public void clearTextInputClient_restartsImmWhenIMEHidden() {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
