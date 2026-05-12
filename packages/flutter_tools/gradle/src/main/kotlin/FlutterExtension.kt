@@ -50,6 +50,9 @@ open class FlutterExtension {
     /** Allows to override the target file. Otherwise, the target is lib/main.dart. */
     var target: String? = null
 
+    /** Allows to override the target file based on the product flavor. */
+    var flavorTargets: Map<String, String>? = null
+
     /** The versionCode that was read from app's local.properties. */
     var flutterVersionCode: String? = null
 

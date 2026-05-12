@@ -423,6 +423,41 @@ class FlutterPluginUtilsTest {
         assertEquals("lib/main.dart", result)
     }
 
+    @Test
+    fun `getFlutterTarget returns flavor specific project property target when flavor is set`() {
+        val project = mockk<Project>()
+        every { project.hasProperty("target.dev") } returns true
+        every { project.property("target.dev") } returns "lib/main_dev.dart"
+
+        val result = FlutterPluginUtils.getFlutterTarget(project, "dev")
+        assertEquals("lib/main_dev.dart", result)
+    }
+
+    @Test
+    fun `getFlutterTarget returns flavor specific target from FlutterExtension when flavor is set`() {
+        val flutterExtension = FlutterExtension()
+        val project = mockk<Project>()
+        flutterExtension.flavorTargets = mapOf("dev" to "lib/main_dev.dart")
+        every { project.hasProperty("target.dev") } returns false
+        every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
+
+        val result = FlutterPluginUtils.getFlutterTarget(project, "dev")
+        assertEquals("lib/main_dev.dart", result)
+    }
+
+    @Test
+    fun `getFlutterTarget returns general target from project property when flavor is set but no flavor specific target exists`() {
+        val flutterExtension = FlutterExtension()
+        val project = mockk<Project>()
+        every { project.hasProperty("target.dev") } returns false
+        every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
+        every { project.hasProperty(FlutterPluginUtils.PROP_TARGET) } returns true
+        every { project.property(FlutterPluginUtils.PROP_TARGET) } returns "my/general_target"
+
+        val result = FlutterPluginUtils.getFlutterTarget(project, "dev")
+        assertEquals("my/general_target", result)
+    }
+
     // isBuiltAsApp skipped as it is a wrapper for a single getter
 
     // addApiDependencies

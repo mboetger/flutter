@@ -381,6 +381,33 @@ object FlutterPluginUtils {
     @JvmStatic
     @JvmName("getFlutterTarget")
     internal fun getFlutterTarget(project: Project): String {
+        return getFlutterTarget(project, null)
+    }
+
+    @JvmStatic
+    @JvmName("getFlutterTarget")
+    internal fun getFlutterTarget(project: Project, flavor: String?): String {
+        val hasFlavor = !flavor.isNullOrEmpty()
+        if (hasFlavor) {
+            if (project.hasProperty("${PROP_TARGET}.$flavor")) {
+                return project.property("${PROP_TARGET}.$flavor").toString()
+            }
+            val extension = getFlutterExtensionOrNull(project)
+            if (extension != null) {
+                val flavorTarget = extension.flavorTargets?.get(flavor)
+                if (flavorTarget != null) {
+                    return flavorTarget
+                }
+            }
+            val localPropertiesFile = File(project.projectDir.parentFile, "local.properties")
+            if (localPropertiesFile.exists()) {
+                val localProperties = readPropertiesIfExist(localPropertiesFile)
+                val localFlavorTarget = localProperties.getProperty("flutter.target.$flavor")
+                if (localFlavorTarget != null) {
+                    return localFlavorTarget
+                }
+            }
+        }
         if (project.hasProperty(PROP_TARGET)) {
             return project.property(PROP_TARGET).toString()
         }

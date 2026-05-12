@@ -686,7 +686,7 @@ class FlutterPlugin : Plugin<Project> {
                     localEngine = flutterPlugin.localEngine
                     localEngineHost = flutterPlugin.localEngineHost
                     localEngineSrcPath = flutterPlugin.localEngineSrcPath
-                    targetPath = FlutterPluginUtils.getFlutterTarget(project)
+                    targetPath = FlutterPluginUtils.getFlutterTarget(project, flavorValue)
                     verbose = FlutterPluginUtils.isProjectVerbose(project)
                     fileSystemRoots = fileSystemRootsValue
                     fileSystemScheme = fileSystemSchemeValue
