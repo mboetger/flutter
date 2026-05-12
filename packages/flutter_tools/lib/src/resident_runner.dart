@@ -300,7 +300,10 @@ class FlutterDevice {
           );
         }
 
-        await (await device!.getLogReader(app: package)).provideVmService(vmService!);
+        await (await device!.getLogReader(
+          app: package,
+          filterLogs: debuggingOptions.filterLogs,
+        )).provideVmService(vmService!);
         completer.complete();
         await subscription.cancel();
       },
@@ -350,10 +353,17 @@ class FlutterDevice {
     final Stream<String> logStream;
     if (device is IOSDevice) {
       logStream = (device! as IOSDevice)
-          .getLogReader(app: package as IOSApp?, usingCISystem: debuggingOptions.usingCISystem)
+          .getLogReader(
+            app: package as IOSApp?,
+            usingCISystem: debuggingOptions.usingCISystem,
+            filterLogs: debuggingOptions.filterLogs,
+          )
           .logLines;
     } else {
-      logStream = (await device!.getLogReader(app: package)).logLines;
+      logStream = (await device!.getLogReader(
+        app: package,
+        filterLogs: debuggingOptions.filterLogs,
+      )).logLines;
     }
     _loggingSubscription = logStream.listen((String line) {
       if (!line.contains(globals.kVMServiceMessageRegExp)) {

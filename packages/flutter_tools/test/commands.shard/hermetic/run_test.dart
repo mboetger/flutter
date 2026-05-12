@@ -396,6 +396,84 @@ void main() {
       );
 
       testUsingContext(
+        'forwards --filter-logs to DebuggingOptions',
+        () async {
+          final command = RunCommand();
+          final mockDevice = FakeDevice(sdkNameAndVersion: 'iOS 13')..startAppSuccess = false;
+          testDeviceManager.devices = <Device>[mockDevice];
+
+          await expectToolExitLater(
+            createTestCommandRunner(
+              command,
+            ).run(<String>['run', '--no-pub', '--no-hot', '--filter-logs']),
+            isNull,
+          );
+
+          final DebuggingOptions options = await command.createDebuggingOptions();
+          expect(options.filterLogs, isTrue);
+        },
+        overrides: <Type, Generator>{
+          Artifacts: () => artifacts,
+          Cache: () => Cache.test(processManager: FakeProcessManager.any()),
+          DeviceManager: () => testDeviceManager,
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+        },
+      );
+
+      testUsingContext(
+        'forwards --no-filter-logs to DebuggingOptions',
+        () async {
+          final command = RunCommand();
+          final mockDevice = FakeDevice(sdkNameAndVersion: 'iOS 13')..startAppSuccess = false;
+          testDeviceManager.devices = <Device>[mockDevice];
+
+          await expectToolExitLater(
+            createTestCommandRunner(
+              command,
+            ).run(<String>['run', '--no-pub', '--no-hot', '--no-filter-logs']),
+            isNull,
+          );
+
+          final DebuggingOptions options = await command.createDebuggingOptions();
+          expect(options.filterLogs, isFalse);
+        },
+        overrides: <Type, Generator>{
+          Artifacts: () => artifacts,
+          Cache: () => Cache.test(processManager: FakeProcessManager.any()),
+          DeviceManager: () => testDeviceManager,
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+        },
+      );
+
+      testUsingContext(
+        'disables filter-logs when --benchmark is specified',
+        () async {
+          final command = RunCommand();
+          final mockDevice = FakeDevice(sdkNameAndVersion: 'iOS 13')..startAppSuccess = false;
+          testDeviceManager.devices = <Device>[mockDevice];
+
+          await expectToolExitLater(
+            createTestCommandRunner(
+              command,
+            ).run(<String>['run', '--no-pub', '--no-hot', '--benchmark']),
+            isNull,
+          );
+
+          final DebuggingOptions options = await command.createDebuggingOptions();
+          expect(options.filterLogs, isFalse);
+        },
+        overrides: <Type, Generator>{
+          Artifacts: () => artifacts,
+          Cache: () => Cache.test(processManager: FakeProcessManager.any()),
+          DeviceManager: () => testDeviceManager,
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+        },
+      );
+
+      testUsingContext(
         'passes device target platform to analytics',
         () async {
           final command = RunCommand();
@@ -1995,7 +2073,11 @@ class FakeDevice extends Fake implements Device {
       getNameForTargetPlatform(await targetPlatform);
 
   @override
-  DeviceLogReader getLogReader({ApplicationPackage? app, bool includePastLogs = false}) {
+  DeviceLogReader getLogReader({
+    ApplicationPackage? app,
+    bool includePastLogs = false,
+    bool filterLogs = true,
+  }) {
     return FakeDeviceLogReader();
   }
 

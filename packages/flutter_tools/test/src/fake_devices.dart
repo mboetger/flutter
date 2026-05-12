@@ -132,6 +132,7 @@ class FakeDevice extends Device {
   final bool _supportsFlavors;
   final LaunchResult _launchResult;
   DeviceLogReader? deviceLogReader;
+  bool? lastFilterLogs;
 
   @override
   final String name;
@@ -188,8 +189,14 @@ class FakeDevice extends Device {
   Future<String> sdkNameAndVersion = Future<String>.value('Test SDK (1.2.3)');
 
   @override
-  FutureOr<DeviceLogReader> getLogReader({ApplicationPackage? app, bool includePastLogs = false}) =>
-      deviceLogReader ?? FakeDeviceLogReader();
+  FutureOr<DeviceLogReader> getLogReader({
+    ApplicationPackage? app,
+    bool includePastLogs = false,
+    bool filterLogs = true,
+  }) {
+    lastFilterLogs = filterLogs;
+    return deviceLogReader ?? FakeDeviceLogReader();
+  }
 }
 
 /// Combines fake device with its canonical JSON representation.

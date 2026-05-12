@@ -19,6 +19,11 @@ class LogsCommand extends FlutterCommand {
       abbr: 'c',
       help: 'Clear log history before reading from logs.',
     );
+    argParser.addFlag(
+      'filter-logs',
+      defaultsTo: true,
+      help: 'Filter log output to only include messages from the Flutter app.',
+    );
     usesDeviceTimeoutOption();
     usesDeviceConnectionOption();
   }
@@ -62,7 +67,10 @@ class LogsCommand extends FlutterCommand {
       await cachedDevice.targetPlatform,
     );
 
-    final DeviceLogReader logReader = await cachedDevice.getLogReader(app: app);
+    final DeviceLogReader logReader = await cachedDevice.getLogReader(
+      app: app,
+      filterLogs: boolArg('filter-logs'),
+    );
 
     globals.printStatus('Showing $logReader logs:');
 

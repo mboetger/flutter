@@ -414,6 +414,80 @@ flutter:
     },
   );
 
+  testWithoutContext('AndroidDevice AdbLogReader respects filterLogs parameter', () async {
+    // 1. includePastLogs: true, filterLogs: true => adb expects -s flutter
+    final AndroidDevice device1 = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [23]',
+          exitCode: 1,
+        ),
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            '-x',
+            'logcat',
+            '-v',
+            'time',
+            '-s',
+            'flutter',
+          ],
+        ),
+      ]),
+    );
+
+    // 2. includePastLogs: true, filterLogs: false => adb does NOT expect -s flutter
+    final AndroidDevice device2 = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [23]',
+          exitCode: 1,
+        ),
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+        ),
+      ]),
+    );
+
+    // 3. includePastLogs: false, filterLogs: true => adb does NOT expect -s flutter
+    final AndroidDevice device3 = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [23]',
+          exitCode: 1,
+        ),
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+        ),
+      ]),
+    );
+
+    // 4. includePastLogs: false, filterLogs: false => adb does NOT expect -s flutter
+    final AndroidDevice device4 = setUpAndroidDevice(
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [23]',
+          exitCode: 1,
+        ),
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+        ),
+      ]),
+    );
+
+    await device1.getLogReader(includePastLogs: true, filterLogs: true);
+    await device2.getLogReader(includePastLogs: true, filterLogs: false);
+    await device3.getLogReader(includePastLogs: false, filterLogs: true);
+    await device4.getLogReader(includePastLogs: false, filterLogs: false);
+  });
+
   testWithoutContext('Can parse adb shell dumpsys info', () {
     const exampleOutput = r'''
 Applications Memory Usage (in Kilobytes):

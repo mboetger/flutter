@@ -793,17 +793,34 @@ class AndroidDevice extends Device {
   FutureOr<DeviceLogReader> getLogReader({
     ApplicationPackage? app,
     bool includePastLogs = false,
+    bool filterLogs = true,
   }) async {
     // The Android log reader isn't app-specific. The `app` parameter isn't used.
     if (includePastLogs) {
-      return _pastLogReader ??= await AdbLogReader.createLogReader(
+      final AdbLogReader? pastLogReader = _pastLogReader;
+      if (pastLogReader != null && pastLogReader.filterLogs == filterLogs) {
+        return pastLogReader;
+      }
+      _pastLogReader?.dispose();
+      return _pastLogReader = await AdbLogReader.createLogReader(
         this,
         _processManager,
         _logger,
         includePastLogs: true,
+        filterLogs: filterLogs,
       );
     } else {
-      return _logReader ??= await AdbLogReader.createLogReader(this, _processManager, _logger);
+      final AdbLogReader? logReader = _logReader;
+      if (logReader != null && logReader.filterLogs == filterLogs) {
+        return logReader;
+      }
+      _logReader?.dispose();
+      return _logReader = await AdbLogReader.createLogReader(
+        this,
+        _processManager,
+        _logger,
+        filterLogs: filterLogs,
+      );
     }
   }
 
@@ -1052,10 +1069,19 @@ class AndroidMemoryInfo extends MemoryInfo {
 
 /// A log reader that logs from `adb logcat`.
 class AdbLogReader extends DeviceLogReader {
-  AdbLogReader._(this._adbProcess, this.name, this._logger);
+  AdbLogReader._(this._adbProcess, this.name, this._logger, {required this.filterLogs});
 
   @visibleForTesting
-  factory AdbLogReader.test(Process adbProcess, String name, Logger logger) = AdbLogReader._;
+  factory AdbLogReader.test(
+    Process adbProcess,
+    String name,
+    Logger logger, {
+    bool filterLogs = true,
+  }) {
+    return AdbLogReader._(adbProcess, name, logger, filterLogs: filterLogs);
+  }
+
+  final bool filterLogs;
 
   /// Create a new [AdbLogReader] from an [AndroidDevice] instance.
   static Future<AdbLogReader> createLogReader(
@@ -1063,6 +1089,7 @@ class AdbLogReader extends DeviceLogReader {
     ProcessManager processManager,
     Logger logger, {
     bool includePastLogs = false,
+    bool filterLogs = true,
   }) async {
     // logcat -T is not supported on Android releases before Lollipop.
     const kLollipopVersionCode = 21;
@@ -1079,7 +1106,9 @@ class AdbLogReader extends DeviceLogReader {
 
     // If past logs are included then filter for 'flutter' logs only.
     if (includePastLogs) {
-      args.addAll(<String>['-s', 'flutter']);
+      if (filterLogs) {
+        args.addAll(<String>['-s', 'flutter']);
+      }
     } else if (apiVersion != null && apiVersion >= kLollipopVersionCode) {
       // Otherwise, filter for logs appearing past the present.
       // '-T 0` means the timestamp of the logcat command invocation.
@@ -1090,7 +1119,7 @@ class AdbLogReader extends DeviceLogReader {
       ]);
     }
     final Process process = await processManager.start(device.adbCommandForDevice(args));
-    return AdbLogReader._(process, device.displayName, logger);
+    return AdbLogReader._(process, device.displayName, logger, filterLogs: filterLogs);
   }
 
   int? _appPid;
@@ -1199,6 +1228,10 @@ class AdbLogReader extends DeviceLogReader {
     // This line might be processed after the subscription is closed but before
     // adb stops streaming logs.
     if (_linesController.isClosed) {
+      return;
+    }
+    if (!filterLogs) {
+      _linesController.add(line);
       return;
     }
     final Match? timeMatch = AndroidDevice._timeRegExp.firstMatch(line);

@@ -42,24 +42,50 @@ void main() {
       );
     });
 
-    testUsingContext(
-      'does not try to complete exitCompleter multiple times',
-      () async {
-        final fakeDevice = FakeDevice('phone', deviceId);
-        deviceManager.attachedDevices.add(fakeDevice);
-        final termSignal = FakeProcessSignal();
-        final intSignal = FakeProcessSignal();
-        final command = LogsCommand(sigterm: termSignal, sigint: intSignal);
-        final Future<void> commandFuture = createTestCommandRunner(
-          command,
-        ).run(<String>['-d', deviceId, 'logs']);
-        intSignal.send(1);
-        termSignal.send(1);
-        await pumpEventQueue(times: 5);
-        await commandFuture;
-      },
-      overrides: <Type, Generator>{Platform: () => platform, DeviceManager: () => deviceManager},
-    );
+    testUsingContext('does not try to complete exitCompleter multiple times', () async {
+      final fakeDevice = FakeDevice('phone', deviceId);
+      deviceManager.attachedDevices.add(fakeDevice);
+      final termSignal = FakeProcessSignal();
+      final intSignal = FakeProcessSignal();
+      final command = LogsCommand(sigterm: termSignal, sigint: intSignal);
+      final Future<void> commandFuture = createTestCommandRunner(
+        command,
+      ).run(<String>['-d', deviceId, 'logs']);
+      intSignal.send(1);
+      termSignal.send(1);
+      await pumpEventQueue(times: 5);
+      await commandFuture;
+    }, overrides: <Type, Generator>{Platform: () => platform, DeviceManager: () => deviceManager});
+
+    testUsingContext('respects --filter-logs flag', () async {
+      final fakeDevice = FakeDevice('phone', deviceId);
+      deviceManager.attachedDevices.add(fakeDevice);
+      final termSignal = FakeProcessSignal();
+      final intSignal = FakeProcessSignal();
+      final command = LogsCommand(sigterm: termSignal, sigint: intSignal);
+      final Future<void> commandFuture = createTestCommandRunner(
+        command,
+      ).run(<String>['-d', deviceId, 'logs', '--filter-logs']);
+      intSignal.send(1);
+      await pumpEventQueue(times: 5);
+      await commandFuture;
+      expect(fakeDevice.lastFilterLogs, isTrue);
+    }, overrides: <Type, Generator>{Platform: () => platform, DeviceManager: () => deviceManager});
+
+    testUsingContext('respects --no-filter-logs flag', () async {
+      final fakeDevice = FakeDevice('phone', deviceId);
+      deviceManager.attachedDevices.add(fakeDevice);
+      final termSignal = FakeProcessSignal();
+      final intSignal = FakeProcessSignal();
+      final command = LogsCommand(sigterm: termSignal, sigint: intSignal);
+      final Future<void> commandFuture = createTestCommandRunner(
+        command,
+      ).run(<String>['-d', deviceId, 'logs', '--no-filter-logs']);
+      intSignal.send(1);
+      await pumpEventQueue(times: 5);
+      await commandFuture;
+      expect(fakeDevice.lastFilterLogs, isFalse);
+    }, overrides: <Type, Generator>{Platform: () => platform, DeviceManager: () => deviceManager});
   });
 }
 

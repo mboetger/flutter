@@ -63,6 +63,11 @@ abstract class RunCommandBase extends FlutterCommand with DeviceBasedDevelopment
         help: 'Include verbose logging from the Flutter engine.',
       )
       ..addFlag(
+        'filter-logs',
+        defaultsTo: true,
+        help: 'Filter log output to only include messages from the Flutter app.',
+      )
+      ..addFlag(
         'purge-persistent-cache',
         negatable: false,
         help:
@@ -328,6 +333,9 @@ abstract class RunCommandBase extends FlutterCommand with DeviceBasedDevelopment
         webDevServerConfig: webDevServerConfig,
         enableHcpp: enableHcpp,
         testFlag: testFlag,
+        filterLogs:
+            !(argParser.options.containsKey('benchmark') && boolArg('benchmark')) &&
+            boolArg('filter-logs'),
       );
     } else {
       return DebuggingOptions.enabled(
@@ -393,6 +401,9 @@ abstract class RunCommandBase extends FlutterCommand with DeviceBasedDevelopment
         enableHcpp: enableHcpp,
         webDevServerConfig: webDevServerConfig,
         testFlag: testFlag,
+        filterLogs:
+            !(argParser.options.containsKey('benchmark') && boolArg('benchmark')) &&
+            boolArg('filter-logs'),
       );
     }
   }
