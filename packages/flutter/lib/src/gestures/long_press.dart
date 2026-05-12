@@ -647,6 +647,17 @@ class LongPressGestureRecognizer extends PrimaryPointerGestureRecognizer {
   }
 
   @override
+  void didChangePrimaryPointer(int oldPrimaryPointer) {
+    final PointerDownEvent newDown = getDownEventForPointer(primaryPointer!)!;
+    _longPressOrigin = OffsetPair.fromEventPosition(newDown);
+    _initialButtons = newDown.buttons;
+    if (_velocityTracker != null) {
+      _velocityTracker = VelocityTracker.withKind(newDown.kind);
+      _velocityTracker!.addPosition(newDown.timeStamp, newDown.localPosition);
+    }
+  }
+
+  @override
   void handlePrimaryPointer(PointerEvent event) {
     if (!event.synthesized) {
       if (event is PointerDownEvent) {
@@ -714,6 +725,9 @@ class LongPressGestureRecognizer extends PrimaryPointerGestureRecognizer {
   }
 
   void _checkLongPressCancel() {
+    if (_initialButtons == null) {
+      return;
+    }
     if (state == GestureRecognizerState.possible) {
       switch (_initialButtons) {
         case kPrimaryButton:

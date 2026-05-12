@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -791,4 +792,100 @@ void main() {
       longPress.dispose();
     },
   );
+
+  testGesture('Multi-pointer long press on Android waits for the last pointer release', (
+    GestureTester tester,
+  ) {
+    final logs = <String>[];
+    final longPress = LongPressGestureRecognizer()
+      ..onLongPressDown = (LongPressDownDetails details) {
+        logs.add('down-${details.globalPosition.dx.toInt()}');
+      }
+      ..onLongPressStart = (LongPressStartDetails details) {
+        logs.add('start-${details.globalPosition.dx.toInt()}');
+      }
+      ..onLongPressEnd = (LongPressEndDetails details) {
+        logs.add('end-${details.globalPosition.dx.toInt()}');
+      }
+      ..onLongPressCancel = () {
+        logs.add('cancel');
+      };
+    addTearDown(longPress.dispose);
+
+    final TargetPlatform? targetPlatformBefore = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    try {
+      final pointer1 = TestPointer();
+      final pointer2 = TestPointer(2);
+
+      final PointerDownEvent down1 = pointer1.down(const Offset(10.0, 0.0));
+      longPress.addPointer(down1);
+      tester.closeArena(1);
+      tester.route(down1);
+      expect(logs, <String>['down-10']);
+
+      final PointerDownEvent down2 = pointer2.down(const Offset(20.0, 0.0));
+      longPress.addPointer(down2);
+      tester.closeArena(2);
+      tester.route(down2);
+      expect(logs, <String>['down-10']);
+
+      tester.route(pointer1.up());
+      expect(logs, <String>['down-10']);
+
+      tester.async.elapse(const Duration(milliseconds: 700));
+      expect(logs, <String>['down-10', 'start-20']);
+
+      tester.route(pointer2.up());
+      expect(logs, <String>['down-10', 'start-20', 'end-20']);
+    } finally {
+      debugDefaultTargetPlatformOverride = targetPlatformBefore;
+    }
+  });
+
+  testGesture('Multi-pointer long press on iOS does not wait for the last pointer release', (
+    GestureTester tester,
+  ) {
+    final logs = <String>[];
+    final longPress = LongPressGestureRecognizer()
+      ..onLongPressDown = (LongPressDownDetails details) {
+        logs.add('down-${details.globalPosition.dx.toInt()}');
+      }
+      ..onLongPressStart = (LongPressStartDetails details) {
+        logs.add('start-${details.globalPosition.dx.toInt()}');
+      }
+      ..onLongPressEnd = (LongPressEndDetails details) {
+        logs.add('end-${details.globalPosition.dx.toInt()}');
+      }
+      ..onLongPressCancel = () {
+        logs.add('cancel');
+      };
+    addTearDown(longPress.dispose);
+
+    final TargetPlatform? targetPlatformBefore = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      final pointer1 = TestPointer();
+      final pointer2 = TestPointer(2);
+
+      final PointerDownEvent down1 = pointer1.down(const Offset(10.0, 0.0));
+      longPress.addPointer(down1);
+      tester.closeArena(1);
+      tester.route(down1);
+      expect(logs, <String>['down-10']);
+
+      final PointerDownEvent down2 = pointer2.down(const Offset(20.0, 0.0));
+      longPress.addPointer(down2);
+      tester.closeArena(2);
+      tester.route(down2);
+      expect(logs, <String>['down-10']);
+
+      tester.route(pointer1.up());
+      expect(logs, <String>['down-10', 'cancel']);
+    } finally {
+      debugDefaultTargetPlatformOverride = targetPlatformBefore;
+    }
+  });
 }

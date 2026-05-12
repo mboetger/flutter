@@ -308,6 +308,13 @@ abstract class BaseTapGestureRecognizer extends PrimaryPointerGestureRecognizer 
   }
 
   @override
+  void didChangePrimaryPointer(int oldPrimaryPointer) {
+    final PointerDownEvent newDown = getDownEventForPointer(primaryPointer!)!;
+    _down = newDown;
+    _up = null;
+  }
+
+  @override
   void handlePrimaryPointer(PointerEvent event) {
     if (event is PointerUpEvent) {
       _up = event;

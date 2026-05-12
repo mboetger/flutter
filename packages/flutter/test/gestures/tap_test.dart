@@ -224,27 +224,34 @@ void main() {
       tapsRecognized++;
     };
 
-    tap.addPointer(down1);
-    tester.closeArena(1);
-    expect(tapsRecognized, 0);
-    tester.route(down1);
-    expect(tapsRecognized, 0);
+    final TargetPlatform? targetPlatformBefore = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
-    tap.addPointer(down2);
-    tester.closeArena(2);
-    expect(tapsRecognized, 0);
-    tester.route(down1);
-    expect(tapsRecognized, 0);
+    try {
+      tap.addPointer(down1);
+      tester.closeArena(1);
+      expect(tapsRecognized, 0);
+      tester.route(down1);
+      expect(tapsRecognized, 0);
 
-    tester.route(up1);
-    expect(tapsRecognized, 1);
-    GestureBinding.instance.gestureArena.sweep(1);
-    expect(tapsRecognized, 1);
+      tap.addPointer(down2);
+      tester.closeArena(2);
+      expect(tapsRecognized, 0);
+      tester.route(down1);
+      expect(tapsRecognized, 0);
 
-    tester.route(up2);
-    expect(tapsRecognized, 1);
-    GestureBinding.instance.gestureArena.sweep(2);
-    expect(tapsRecognized, 1);
+      tester.route(up1);
+      expect(tapsRecognized, 1);
+      GestureBinding.instance.gestureArena.sweep(1);
+      expect(tapsRecognized, 1);
+
+      tester.route(up2);
+      expect(tapsRecognized, 1);
+      GestureBinding.instance.gestureArena.sweep(2);
+      expect(tapsRecognized, 1);
+    } finally {
+      debugDefaultTargetPlatformOverride = targetPlatformBefore;
+    }
 
     tap.dispose();
   });
@@ -684,26 +691,33 @@ void main() {
       recognized.add('cancel');
     };
 
-    tap.addPointer(down1);
-    tester.closeArena(down1.pointer);
+    final TargetPlatform? targetPlatformBefore = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
-    tap.addPointer(down2);
-    tester.closeArena(down2.pointer);
+    try {
+      tap.addPointer(down1);
+      tester.closeArena(down1.pointer);
 
-    expect(recognized, isEmpty);
+      tap.addPointer(down2);
+      tester.closeArena(down2.pointer);
 
-    tester.route(up1);
-    GestureBinding.instance.gestureArena.sweep(down1.pointer);
-    expect(recognized, <String>['down', 'up', 'tap']);
-    recognized.clear();
+      expect(recognized, isEmpty);
 
-    // If regression happens, the following step will throw error
-    tester.async.elapse(const Duration(milliseconds: 200));
-    expect(recognized, isEmpty);
+      tester.route(up1);
+      GestureBinding.instance.gestureArena.sweep(down1.pointer);
+      expect(recognized, <String>['down', 'up', 'tap']);
+      recognized.clear();
 
-    tester.route(up2);
-    GestureBinding.instance.gestureArena.sweep(down2.pointer);
-    expect(recognized, isEmpty);
+      // If regression happens, the following step will throw error
+      tester.async.elapse(const Duration(milliseconds: 200));
+      expect(recognized, isEmpty);
+
+      tester.route(up2);
+      GestureBinding.instance.gestureArena.sweep(down2.pointer);
+      expect(recognized, isEmpty);
+    } finally {
+      debugDefaultTargetPlatformOverride = targetPlatformBefore;
+    }
 
     tap.dispose();
   });
@@ -1125,5 +1139,98 @@ void main() {
     expect(tapMoveDetails, isNotNull);
     expect(tapMoveDetails!.globalPosition, const Offset(60.0, 10));
     expect(tapMoveDetails!.delta, const Offset(10.0, 10));
+  });
+
+  testGesture('Multi-pointer tap on Android waits for the last pointer release', (
+    GestureTester tester,
+  ) {
+    final logs = <String>[];
+    final tap = TapGestureRecognizer()
+      ..onTapDown = (TapDownDetails details) {
+        logs.add('down-${details.globalPosition.dx.toInt()}');
+      }
+      ..onTapUp = (TapUpDetails details) {
+        logs.add('up-${details.globalPosition.dx.toInt()}');
+      }
+      ..onTap = () {
+        logs.add('tap');
+      }
+      ..onTapCancel = () {
+        logs.add('cancel');
+      };
+    addTearDown(tap.dispose);
+
+    final TargetPlatform? targetPlatformBefore = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    try {
+      final pointer1 = TestPointer();
+      final pointer2 = TestPointer(2);
+
+      final PointerDownEvent down1 = pointer1.down(const Offset(10.0, 0.0));
+      tap.addPointer(down1);
+      tester.closeArena(1);
+      tester.route(down1);
+      expect(logs, <String>['down-10']);
+
+      final PointerDownEvent down2 = pointer2.down(const Offset(20.0, 0.0));
+      tap.addPointer(down2);
+      tester.closeArena(2);
+      tester.route(down2);
+      expect(logs, <String>['down-10']);
+
+      tester.route(pointer1.up());
+      expect(logs, <String>['down-10']);
+
+      tester.route(pointer2.up());
+      expect(logs, <String>['down-10', 'up-20', 'tap']);
+    } finally {
+      debugDefaultTargetPlatformOverride = targetPlatformBefore;
+    }
+  });
+
+  testGesture('Multi-pointer tap on iOS does not wait for the last pointer release', (
+    GestureTester tester,
+  ) {
+    final logs = <String>[];
+    final tap = TapGestureRecognizer()
+      ..onTapDown = (TapDownDetails details) {
+        logs.add('down-${details.globalPosition.dx.toInt()}');
+      }
+      ..onTapUp = (TapUpDetails details) {
+        logs.add('up-${details.globalPosition.dx.toInt()}');
+      }
+      ..onTap = () {
+        logs.add('tap');
+      }
+      ..onTapCancel = () {
+        logs.add('cancel');
+      };
+    addTearDown(tap.dispose);
+
+    final TargetPlatform? targetPlatformBefore = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      final pointer1 = TestPointer();
+      final pointer2 = TestPointer(2);
+
+      final PointerDownEvent down1 = pointer1.down(const Offset(10.0, 0.0));
+      tap.addPointer(down1);
+      tester.closeArena(1);
+      tester.route(down1);
+      expect(logs, <String>['down-10']);
+
+      final PointerDownEvent down2 = pointer2.down(const Offset(20.0, 0.0));
+      tap.addPointer(down2);
+      tester.closeArena(2);
+      tester.route(down2);
+      expect(logs, <String>['down-10']);
+
+      tester.route(pointer1.up());
+      expect(logs, <String>['down-10', 'up-10', 'tap']);
+    } finally {
+      debugDefaultTargetPlatformOverride = targetPlatformBefore;
+    }
   });
 }

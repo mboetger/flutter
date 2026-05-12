@@ -697,9 +697,25 @@ abstract class PrimaryPointerGestureRecognizer extends OneSequenceGestureRecogni
   bool _gestureAccepted = false;
   Timer? _timer;
 
+  final Map<int, PointerDownEvent> _downEvents = <int, PointerDownEvent>{};
+
+  /// The down event of the specified pointer, if it is currently being tracked.
+  @protected
+  PointerDownEvent? getDownEventForPointer(int pointerId) => _downEvents[pointerId];
+
+  bool get _shouldRespondToLastRelease => defaultTargetPlatform == TargetPlatform.android;
+
+  /// Called when the primary pointer changes.
+  ///
+  /// This is called when a pointer is lifted or canceled and there are other
+  /// active pointers that can take over as the primary pointer.
+  @protected
+  void didChangePrimaryPointer(int oldPrimaryPointer) {}
+
   @override
   void addAllowedPointer(PointerDownEvent event) {
     super.addAllowedPointer(event);
+    _downEvents[event.pointer] = event;
     if (state == GestureRecognizerState.ready) {
       _state = GestureRecognizerState.possible;
       _primaryPointer = event.pointer;
@@ -708,6 +724,12 @@ abstract class PrimaryPointerGestureRecognizer extends OneSequenceGestureRecogni
         _timer = Timer(deadline!, () => didExceedDeadlineWithEvent(event));
       }
     }
+  }
+
+  @override
+  void stopTrackingPointer(int pointer) {
+    _downEvents.remove(pointer);
+    super.stopTrackingPointer(pointer);
   }
 
   @override
@@ -720,6 +742,20 @@ abstract class PrimaryPointerGestureRecognizer extends OneSequenceGestureRecogni
   @override
   void handleEvent(PointerEvent event) {
     assert(state != GestureRecognizerState.ready);
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      if (event.pointer == primaryPointer &&
+          _shouldRespondToLastRelease &&
+          _downEvents.length > 1) {
+        final int oldPrimary = primaryPointer!;
+        final int newPrimary = _downEvents.keys.firstWhere((int p) => p != oldPrimary);
+        _primaryPointer = newPrimary;
+        _initialPosition = OffsetPair(
+          local: _downEvents[newPrimary]!.localPosition,
+          global: _downEvents[newPrimary]!.position,
+        );
+        didChangePrimaryPointer(oldPrimary);
+      }
+    }
     if (state == GestureRecognizerState.possible && event.pointer == primaryPointer) {
       final bool isPreAcceptSlopPastTolerance =
           !_gestureAccepted &&
@@ -763,7 +799,10 @@ abstract class PrimaryPointerGestureRecognizer extends OneSequenceGestureRecogni
   /// `super.didExceedDeadlineWithEvent(event)`.
   @protected
   void didExceedDeadlineWithEvent(PointerDownEvent event) {
-    didExceedDeadline();
+    if (event.pointer == primaryPointer ||
+        (_shouldRespondToLastRelease && _downEvents.containsKey(primaryPointer))) {
+      didExceedDeadline();
+    }
   }
 
   @override
