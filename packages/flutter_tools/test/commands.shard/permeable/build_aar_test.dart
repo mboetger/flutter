@@ -207,7 +207,7 @@ void main() {
         reason: 'A single call to buildAar was expected.',
       );
       final Invocation buildAarCall = fakeAndroidBuilder.capturedBuildAarCalls.single;
-      expect(buildAarCall.namedArguments[#buildNumber], '1.0');
+      expect(buildAarCall.namedArguments[#buildNumber], '1.0.0+1');
 
       final buildModes = <BuildMode>[];
       for (final androidBuildInfo
@@ -268,7 +268,7 @@ void main() {
         reason: 'A single call to buildAar was expected.',
       );
       final Invocation buildAarCall = fakeAndroidBuilder.capturedBuildAarCalls.single;
-      expect(buildAarCall.namedArguments[#buildNumber], '200');
+      expect(buildAarCall.namedArguments[#buildNumber], '1.0.0+200');
 
       final AndroidBuildInfo androidBuildInfo =
           (buildAarCall.namedArguments[#androidBuildInfo] as Set<AndroidBuildInfo>).single;
@@ -281,6 +281,42 @@ void main() {
       expect(buildInfo.splitDebugInfoPath, '/project-name/v1.2.3/');
       expect(buildInfo.dartObfuscation, isTrue);
       expect(buildInfo.dartDefines.contains('foo=bar'), isTrue);
+    }, overrides: <Type, Generator>{AndroidBuilder: () => fakeAndroidBuilder});
+
+    testUsingContext('combines build-name and build-number from flags and pubspec', () async {
+      final String projectPath = await createProject(
+        tempDir,
+        arguments: <String>['--no-pub', '--template=module'],
+      );
+      final File pubspec = globals.fs.file(globals.fs.path.join(projectPath, 'pubspec.yaml'));
+      String pubspecContent = pubspec.readAsStringSync();
+      pubspecContent = pubspecContent.replaceFirst(RegExp(r'version: .*'), 'version: 2.3.4+5');
+      pubspec.writeAsStringSync(pubspecContent);
+
+      // 1. No flags: defaults to pubspec version
+      await runBuildAar(projectPath, arguments: <String>['--no-pub']);
+      expect(fakeAndroidBuilder.capturedBuildAarCalls.last.namedArguments[#buildNumber], '2.3.4+5');
+
+      // 2. Only --build-name override
+      await runBuildAar(projectPath, arguments: <String>['--no-pub', '--build-name=3.0.0']);
+      expect(fakeAndroidBuilder.capturedBuildAarCalls.last.namedArguments[#buildNumber], '3.0.0+5');
+
+      // 3. Only --build-number override
+      await runBuildAar(projectPath, arguments: <String>['--no-pub', '--build-number=10']);
+      expect(
+        fakeAndroidBuilder.capturedBuildAarCalls.last.namedArguments[#buildNumber],
+        '2.3.4+10',
+      );
+
+      // 4. Both overridden
+      await runBuildAar(
+        projectPath,
+        arguments: <String>['--no-pub', '--build-name=3.0.0', '--build-number=10'],
+      );
+      expect(
+        fakeAndroidBuilder.capturedBuildAarCalls.last.namedArguments[#buildNumber],
+        '3.0.0+10',
+      );
     }, overrides: <Type, Generator>{AndroidBuilder: () => fakeAndroidBuilder});
   });
 
@@ -372,7 +408,7 @@ void main() {
               '-Pflutter-root=$flutterRoot',
               '-Poutput-dir=${globals.fs.path.join(tempDir.path, 'flutter_project', 'build', 'host')}',
               '-Pis-plugin=false',
-              '-PbuildNumber=1.0',
+              '-PbuildNumber=1.0.0+1',
               '-q',
               '-Ptarget=${globals.fs.path.join('lib', 'main.dart')}',
               '-Pdart-defines=${encodeDartDefinesMap(<String, String>{

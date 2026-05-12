@@ -41,6 +41,7 @@ class BuildAarCommand extends BuildSubCommand {
     addTreeShakeIconsFlag();
     usesFlavorOption();
     usesBuildNumberOption();
+    usesBuildNameOption();
     usesOutputDir();
     usesPubOption();
     addSplitDebugInfoOption();
@@ -122,13 +123,30 @@ class BuildAarCommand extends BuildSubCommand {
       'target-platform',
     ).map<AndroidArch>(getAndroidArchForName);
 
-    final String? buildNumberArg = stringArg('build-number');
-    final String buildNumber =
-        argParser.options.containsKey('build-number') &&
-            buildNumberArg != null &&
-            buildNumberArg.isNotEmpty
-        ? buildNumberArg
-        : '1.0';
+    final String? buildName = validatedBuildNameForPlatform(
+      TargetPlatform.android_arm,
+      (argParser.options.containsKey('build-name') ? stringArg('build-name') : null) ??
+          project.manifest.buildName,
+      globals.logger,
+    );
+
+    final String? buildNumberArg = validatedBuildNumberForPlatform(
+      TargetPlatform.android_arm,
+      (argParser.options.containsKey('build-number') ? stringArg('build-number') : null) ??
+          project.manifest.buildNumber,
+      globals.logger,
+    );
+
+    final String buildNumber;
+    if (buildName != null && buildNumberArg != null) {
+      buildNumber = '$buildName+$buildNumberArg';
+    } else if (buildName != null) {
+      buildNumber = buildName;
+    } else if (buildNumberArg != null) {
+      buildNumber = buildNumberArg;
+    } else {
+      buildNumber = '1.0';
+    }
 
     final File targetFile = _fileSystem.file(_fileSystem.path.join('lib', 'main.dart'));
     for (final buildMode in const <String>['debug', 'profile', 'release']) {
