@@ -375,7 +375,28 @@ class AndroidLicenseValidator extends DoctorValidator {
         messages.add(ValidationMessage.error(_androidLicensesNone));
         return ValidationResult(ValidationType.partial, messages, statusInfo: sdkVersionText);
       case LicensesAccepted.unknown:
-        messages.add(ValidationMessage.error(_userMessages.androidLicensesUnknown(_platform)));
+        if (!_canRunSdkManager()) {
+          if (_androidSdk.sdkManagerPath == null) {
+            messages.add(
+              const ValidationMessage.error(
+                'Android sdkmanager tool not found.\n'
+                'Update to the latest Android SDK and ensure that the cmdline-tools are installed to resolve this.',
+              ),
+            );
+          } else {
+            messages.add(
+              ValidationMessage.error(
+                _userMessages.androidCannotRunSdkManager(
+                  _androidSdk.sdkManagerPath!,
+                  'not executable',
+                  _platform,
+                ),
+              ),
+            );
+          }
+        } else {
+          messages.add(ValidationMessage.error(_userMessages.androidLicensesUnknown(_platform)));
+        }
         return ValidationResult(ValidationType.partial, messages, statusInfo: sdkVersionText);
     }
     return ValidationResult(ValidationType.success, messages, statusInfo: sdkVersionText);

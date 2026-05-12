@@ -139,6 +139,44 @@ void main() {
   );
 
   testWithoutContext(
+    'AndroidLicenseValidator.validate shows clear error if sdkmanager is missing',
+    () async {
+      sdk.sdkManagerPath = null;
+      sdk.latestVersion = FakeAndroidSdkVersion()
+        ..sdkLevel = 28
+        ..buildToolsVersion = Version(28, 0, 3);
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>['/android-studio/jbr/bin/java', '-version'],
+          stderr:
+              'openjdk version "19.0.2" 2023-01-17\nOpenJDK Runtime Environment (build 19.0.2+7-44)',
+        ),
+      );
+
+      final licenseValidator = AndroidLicenseValidator(
+        java: FakeJava(),
+        androidSdk: sdk,
+        processManager: processManager,
+        platform: FakePlatform(environment: <String, String>{'HOME': '/home/me'}),
+        stdio: stdio,
+        logger: BufferLogger.test(),
+        userMessages: UserMessages(),
+      );
+
+      final ValidationResult result = await licenseValidator.validate();
+      expect(result.type, ValidationType.partial);
+      expect(result.messages.single.type, ValidationMessageType.error);
+      expect(
+        result.messages.single.message,
+        contains(
+          'Android sdkmanager tool not found.\n'
+          'Update to the latest Android SDK and ensure that the cmdline-tools are installed to resolve this.',
+        ),
+      );
+    },
+  );
+
+  testWithoutContext(
     'licensesAccepted returns LicensesAccepted.unknown if cannot run sdkmanager',
     () async {
       sdk.sdkManagerPath = '/foo/bar/sdkmanager';
