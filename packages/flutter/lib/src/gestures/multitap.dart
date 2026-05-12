@@ -69,11 +69,12 @@ class _TapTracker {
   _TapTracker({
     required PointerDownEvent event,
     required this.entry,
-    required Duration doubleTapMinTime,
+    required this.doubleTapMinTime,
     required this.gestureSettings,
   }) : pointer = event.pointer,
        _initialGlobalPosition = event.position,
        initialButtons = event.buttons,
+       initialTimestamp = event.timeStamp,
        _doubleTapMinTimeCountdown = _CountdownZoned(duration: doubleTapMinTime);
 
   final DeviceGestureSettings? gestureSettings;
@@ -81,6 +82,8 @@ class _TapTracker {
   final GestureArenaEntry entry;
   final Offset _initialGlobalPosition;
   final int initialButtons;
+  final Duration initialTimestamp;
+  final Duration doubleTapMinTime;
   final _CountdownZoned _doubleTapMinTimeCountdown;
 
   bool _isTrackingPointer = false;
@@ -104,8 +107,8 @@ class _TapTracker {
     return offset.distance <= tolerance;
   }
 
-  bool hasElapsedMinTime() {
-    return _doubleTapMinTimeCountdown.timeout;
+  bool hasElapsedMinTime(Duration timestamp) {
+    return _doubleTapMinTimeCountdown.timeout || (timestamp - initialTimestamp >= doubleTapMinTime);
   }
 
   bool hasSameButton(PointerDownEvent event) {
@@ -225,7 +228,8 @@ class DoubleTapGestureRecognizer extends GestureRecognizer {
       if (!_firstTap!.isWithinGlobalTolerance(event, kDoubleTapSlop)) {
         // Ignore out-of-bounds second taps.
         return;
-      } else if (!_firstTap!.hasElapsedMinTime() || !_firstTap!.hasSameButton(event)) {
+      } else if (!_firstTap!.hasElapsedMinTime(event.timeStamp) ||
+          !_firstTap!.hasSameButton(event)) {
         // Restart when the second tap is too close to the first (touch screens
         // often detect touches intermittently), or when buttons mismatch.
         _reset();
@@ -904,9 +908,10 @@ class SerialTapGestureRecognizer extends GestureRecognizer {
   }
 
   bool _representsSameSeries(_TapTracker tap, PointerDownEvent event) {
-    return tap
-            .hasElapsedMinTime() // touch screens often detect touches intermittently
-            &&
+    return tap.hasElapsedMinTime(
+          event.timeStamp,
+        ) // touch screens often detect touches intermittently
+        &&
         tap.hasSameButton(event) &&
         tap.isWithinGlobalTolerance(event, kDoubleTapSlop);
   }

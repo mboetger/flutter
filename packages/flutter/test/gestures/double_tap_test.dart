@@ -766,4 +766,62 @@ void main() {
     tap.dispose();
     doubleTap.dispose();
   });
+
+  testGesture(
+    'Should recognize double tap when events are delayed by magnification (batch dispatched)',
+    (GestureTester tester) {
+      // Simulate Android Magnification triple-tap gesture interception where events
+      // are buffered and then dumped in a batch (0ms wall-clock time difference in
+      // the event loop, but having correct physical event timestamps).
+
+      const firstTapDownTime = Duration(milliseconds: 1000);
+      const firstTapUpTime = Duration(milliseconds: 1100);
+      const secondTapDownTime = Duration(milliseconds: 1250); // 150ms gap (>= 40ms and <= 300ms)
+      const secondTapUpTime = Duration(milliseconds: 1350);
+
+      const bufferedDown1 = PointerDownEvent(
+        pointer: 10,
+        position: Offset(10.0, 10.0),
+        timeStamp: firstTapDownTime,
+      );
+      const bufferedUp1 = PointerUpEvent(
+        pointer: 10,
+        position: Offset(11.0, 9.0),
+        timeStamp: firstTapUpTime,
+      );
+      const bufferedDown2 = PointerDownEvent(
+        pointer: 11,
+        position: Offset(12.0, 12.0),
+        timeStamp: secondTapDownTime,
+      );
+      const bufferedUp2 = PointerUpEvent(
+        pointer: 11,
+        position: Offset(13.0, 11.0),
+        timeStamp: secondTapUpTime,
+      );
+
+      tap.addPointer(bufferedDown1);
+      tester.closeArena(10);
+      tester.route(bufferedDown1);
+      tester.route(bufferedUp1);
+      GestureBinding.instance.gestureArena.sweep(10);
+      expect(doubleTapDownDetails, isNull);
+
+      // We do NOT elapse time in the fake_async tester (0ms wall-clock time difference).
+      // This simulates the events being dispatched in the same microtask/frame/tick.
+      tap.addPointer(bufferedDown2);
+      tester.closeArena(11);
+      expect(doubleTapDownDetails, isNotNull);
+      expect(doubleTapDownDetails!.globalPosition, bufferedDown2.position);
+      expect(doubleTapDownDetails!.localPosition, bufferedDown2.localPosition);
+
+      tester.route(bufferedDown2);
+      expect(doubleTapRecognized, isFalse);
+
+      tester.route(bufferedUp2);
+      expect(doubleTapRecognized, isTrue);
+      GestureBinding.instance.gestureArena.sweep(11);
+      expect(doubleTapCanceled, isFalse);
+    },
+  );
 }
