@@ -634,6 +634,49 @@ class AndroidGradleBuilder implements AndroidBuilder {
     // Generate sha1 for every generated APKs.
     for (final File apkFile in apkFilesPaths.map(apkDirectory.childFile)) {
       if (!apkFile.existsSync()) {
+        final String apkFileName = apkFile.basename;
+        final String unsignedApkFileName = apkFileName.replaceAll(
+          RegExp(r'\.apk$'),
+          '-unsigned.apk',
+        );
+        final String modeName = camelCase(androidBuildInfo.buildInfo.modeName);
+        final String? flavor = androidBuildInfo.buildInfo.flavor;
+
+        final candidateDirectories = <Directory>[
+          apkFile.parent,
+          project.android.buildDirectory
+              .childDirectory(project.isModule ? 'host' : 'app')
+              .childDirectory('outputs')
+              .childDirectory('apk')
+              .childDirectory(modeName),
+          if (flavor != null && flavor.isNotEmpty)
+            project.android.buildDirectory
+                .childDirectory(project.isModule ? 'host' : 'app')
+                .childDirectory('outputs')
+                .childDirectory('apk')
+                .childDirectory(flavor)
+                .childDirectory(modeName),
+        ];
+
+        for (final directory in candidateDirectories) {
+          File? candidateFile;
+          final File signedFile = directory.childFile(apkFileName);
+          final File unsignedFile = directory.childFile(unsignedApkFileName);
+          if (signedFile.existsSync()) {
+            candidateFile = signedFile;
+          } else if (unsignedFile.existsSync()) {
+            candidateFile = unsignedFile;
+          }
+
+          if (candidateFile != null) {
+            apkFile.parent.createSync(recursive: true);
+            candidateFile.copySync(apkFile.path);
+            break;
+          }
+        }
+      }
+
+      if (!apkFile.existsSync()) {
         _exitWithExpectedFileNotFound(
           project: project,
           fileExtension: '.apk',
