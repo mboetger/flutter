@@ -18,11 +18,11 @@ import org.junit.Test;
 public class {{pluginClass}}Test {
   @Test
   public void onMethodCall_getPlatformVersion_returnsExpectedValue() {
-    {{pluginClass}} plugin = new {{pluginClass}}();
+    {{pluginClass}}Handler handler = new {{pluginClass}}Handler();
 
     final MethodCall call = new MethodCall("getPlatformVersion", null);
     MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
-    plugin.onMethodCall(call, mockResult);
+    handler.onMethodCall(call, mockResult);
 
     verify(mockResult).success("Android " + android.os.Build.VERSION.RELEASE);
   }

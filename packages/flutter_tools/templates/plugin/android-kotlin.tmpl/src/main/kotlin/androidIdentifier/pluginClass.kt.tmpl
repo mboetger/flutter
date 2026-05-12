@@ -7,9 +7,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 
 /** {{pluginClass}} */
-class {{pluginClass}} :
-    FlutterPlugin,
-    MethodCallHandler {
+class {{pluginClass}} : FlutterPlugin {
     // The MethodChannel that will the communication between Flutter and native Android
     //
     // This local reference serves to register the plugin with the Flutter Engine and unregister it
@@ -18,9 +16,15 @@ class {{pluginClass}} :
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "{{projectName}}")
-        channel.setMethodCallHandler(this)
+        channel.setMethodCallHandler({{pluginClass}}Handler())
     }
 
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        channel.setMethodCallHandler(null)
+    }
+}
+
+class {{pluginClass}}Handler : MethodCallHandler {
     override fun onMethodCall(
         call: MethodCall,
         result: Result
@@ -30,9 +34,5 @@ class {{pluginClass}} :
         } else {
             result.notImplemented()
         }
-    }
-
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
     }
 }

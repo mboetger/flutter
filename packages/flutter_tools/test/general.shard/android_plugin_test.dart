@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:file/file.dart';
+import 'package:file/local.dart';
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/platform_plugins.dart';
 
@@ -156,6 +157,54 @@ void main() {
       'class': 'PluginA',
       'supportsEmbeddingV1': true,
       'supportsEmbeddingV2': false,
+    });
+  });
+
+  group('Android templates separation of MethodCallHandler', () {
+    testWithoutContext('Java template separates FlutterPlugin and MethodCallHandler', () {
+      const localFileSystem = LocalFileSystem();
+      final Directory templatesDir = localFileSystem.directory('templates');
+      final File javaPluginTemplate = templatesDir
+          .childDirectory('plugin')
+          .childDirectory('android-java.tmpl')
+          .childDirectory('src')
+          .childDirectory('main')
+          .childDirectory('java')
+          .childDirectory('androidIdentifier')
+          .childFile('pluginClass.java.tmpl');
+
+      expect(javaPluginTemplate.existsSync(), isTrue);
+
+      final String content = javaPluginTemplate.readAsStringSync();
+      expect(content, contains('public class {{pluginClass}} implements FlutterPlugin {'));
+      expect(content, contains('class {{pluginClass}}Handler implements MethodCallHandler {'));
+      expect(
+        content,
+        isNot(contains('public class {{pluginClass}} implements FlutterPlugin, MethodCallHandler')),
+      );
+    });
+
+    testWithoutContext('Kotlin template separates FlutterPlugin and MethodCallHandler', () {
+      const localFileSystem = LocalFileSystem();
+      final Directory templatesDir = localFileSystem.directory('templates');
+      final File kotlinPluginTemplate = templatesDir
+          .childDirectory('plugin')
+          .childDirectory('android-kotlin.tmpl')
+          .childDirectory('src')
+          .childDirectory('main')
+          .childDirectory('kotlin')
+          .childDirectory('androidIdentifier')
+          .childFile('pluginClass.kt.tmpl');
+
+      expect(kotlinPluginTemplate.existsSync(), isTrue);
+
+      final String content = kotlinPluginTemplate.readAsStringSync();
+      expect(content, contains('class {{pluginClass}} : FlutterPlugin {'));
+      expect(content, contains('class {{pluginClass}}Handler : MethodCallHandler {'));
+      expect(
+        content,
+        isNot(contains('class {{pluginClass}} :\n    FlutterPlugin,\n    MethodCallHandler')),
+      );
     });
   });
 }
