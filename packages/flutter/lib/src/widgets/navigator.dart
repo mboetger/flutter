@@ -3005,23 +3005,46 @@ class Navigator extends StatefulWidget {
         debugRouteNames = <String>[Navigator.defaultRouteName];
         return true;
       }());
-      result.add(
-        navigator._routeNamed<dynamic>(
-          Navigator.defaultRouteName,
-          arguments: null,
-          allowNull: true,
-        ),
-      );
-      final List<String> routeParts = initialRouteName.split('/');
-      if (initialRouteName.isNotEmpty) {
+
+      final int queryIndex = initialRouteName.indexOf('?');
+      final String path = queryIndex == -1
+          ? initialRouteName
+          : initialRouteName.substring(0, queryIndex);
+      final String query = queryIndex == -1 ? '' : initialRouteName.substring(queryIndex);
+
+      if (path.isEmpty) {
+        assert(() {
+          debugRouteNames!.add(Navigator.defaultRouteName + query);
+          return true;
+        }());
+        result.add(
+          navigator._routeNamed<dynamic>(
+            Navigator.defaultRouteName + query,
+            arguments: null,
+            allowNull: true,
+          ),
+        );
+      } else {
+        result.add(
+          navigator._routeNamed<dynamic>(
+            Navigator.defaultRouteName,
+            arguments: null,
+            allowNull: true,
+          ),
+        );
+        final List<String> routeParts = path.split('/');
         var routeName = '';
-        for (final part in routeParts) {
+        for (var i = 0; i < routeParts.length; i++) {
+          final String part = routeParts[i];
           routeName += '/$part';
+          final fullRouteName = i == routeParts.length - 1 ? '$routeName$query' : routeName;
           assert(() {
-            debugRouteNames!.add(routeName);
+            debugRouteNames!.add(fullRouteName);
             return true;
           }());
-          result.add(navigator._routeNamed<dynamic>(routeName, arguments: null, allowNull: true));
+          result.add(
+            navigator._routeNamed<dynamic>(fullRouteName, arguments: null, allowNull: true),
+          );
         }
       }
       if (result.last == null) {
