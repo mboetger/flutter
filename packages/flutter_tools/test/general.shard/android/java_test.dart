@@ -101,6 +101,65 @@ OpenJDK 64-Bit Server VM Zulu19.32+15-CA (build 19.0.2+7, mixed mode, sharing)
         },
       );
 
+      testWithoutContext(
+        'ignores JAVA_HOME if the binary is not runnable and falls back to PATH',
+        () {
+          final AndroidStudio androidStudio = _FakeAndroidStudioWithoutJdk();
+          const javaHome = '/invalid/java/home';
+          final String invalidJavaBinaryPath = fs.path.join(javaHome, 'bin', 'java');
+          processManager.excludedExecutables.add(invalidJavaBinaryPath);
+
+          const pathJava = '/path/bin/java';
+          processManager.addCommand(
+            const FakeCommand(command: <String>['which', 'java'], stdout: pathJava),
+          );
+
+          final Java java = Java.find(
+            config: config,
+            androidStudio: androidStudio,
+            logger: logger,
+            fileSystem: fs,
+            platform: FakePlatform(
+              environment: <String, String>{Java.javaHomeEnvironmentVariable: javaHome},
+            ),
+            processManager: processManager,
+          )!;
+
+          expect(java.javaHome, isNull);
+          expect(java.binaryPath, pathJava);
+          expect(java.javaSource, JavaSource.path);
+        },
+      );
+
+      testWithoutContext(
+        'ignores jdk-dir if the binary is not runnable and falls back to JAVA_HOME',
+        () {
+          const configuredJdkPath = '/invalid/jdk';
+          config.setValue('jdk-dir', configuredJdkPath);
+          final String invalidJavaBinaryPath = fs.path.join(configuredJdkPath, 'bin', 'java');
+          processManager.excludedExecutables.add(invalidJavaBinaryPath);
+
+          final AndroidStudio androidStudio = _FakeAndroidStudioWithoutJdk();
+          const javaHome = '/java/home';
+          final String expectedJavaBinaryPath = fs.path.join(javaHome, 'bin', 'java');
+
+          final Java java = Java.find(
+            config: config,
+            androidStudio: androidStudio,
+            logger: logger,
+            fileSystem: fs,
+            platform: FakePlatform(
+              environment: <String, String>{Java.javaHomeEnvironmentVariable: javaHome},
+            ),
+            processManager: processManager,
+          )!;
+
+          expect(java.javaHome, javaHome);
+          expect(java.binaryPath, expectedJavaBinaryPath);
+          expect(java.javaSource, JavaSource.javaHome);
+        },
+      );
+
       testWithoutContext('returns the java binary found on PATH if no other can be found', () {
         final AndroidStudio androidStudio = _FakeAndroidStudioWithoutJdk();
         final OperatingSystemUtils os = _FakeOperatingSystemUtilsWithJava(fileSystem);

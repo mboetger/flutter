@@ -29,8 +29,6 @@ enum JavaSource {
   flutterConfig,
 }
 
-typedef _JavaHomePathWithSource = ({String path, JavaSource source});
-
 /// Represents an installation of Java.
 class Java {
   Java({
@@ -82,38 +80,77 @@ class Java {
       platform: platform,
       processManager: processManager,
     );
-    final _JavaHomePathWithSource? home = _findJavaHome(
-      config: config,
-      logger: logger,
-      androidStudio: androidStudio,
-      platform: platform,
-    );
-    final String? binary = _findJavaBinary(
-      logger: logger,
-      javaHome: home?.path,
-      fileSystem: fileSystem,
-      operatingSystemUtils: os,
-      platform: platform,
-    );
 
-    if (binary == null) {
-      return null;
+    // 1. Configured "jdk-dir"
+    final Object? configured = config.getValue('jdk-dir');
+    if (configured is String) {
+      final String binary = fileSystem.path.join(configured, 'bin', 'java');
+      if (processManager.canRun(binary)) {
+        return Java(
+          javaHome: configured,
+          binaryPath: binary,
+          javaSource: JavaSource.flutterConfig,
+          logger: logger,
+          fileSystem: fileSystem,
+          os: os,
+          platform: platform,
+          processManager: processManager,
+        );
+      }
     }
 
-    // If javaHome == null and binary is not null, it means that
-    // binary obtained from PATH as fallback.
-    final JavaSource javaSource = home?.source ?? JavaSource.path;
+    // 2. Bundled with Android Studio
+    final String? androidStudioJavaPath = androidStudio?.javaPath;
+    if (androidStudioJavaPath != null) {
+      final String binary = fileSystem.path.join(androidStudioJavaPath, 'bin', 'java');
+      if (processManager.canRun(binary)) {
+        return Java(
+          javaHome: androidStudioJavaPath,
+          binaryPath: binary,
+          javaSource: JavaSource.androidStudio,
+          logger: logger,
+          fileSystem: fileSystem,
+          os: os,
+          platform: platform,
+          processManager: processManager,
+        );
+      }
+    }
 
-    return Java(
-      javaHome: home?.path,
-      binaryPath: binary,
-      javaSource: javaSource,
-      logger: logger,
-      fileSystem: fileSystem,
-      os: os,
-      platform: platform,
-      processManager: processManager,
-    );
+    // 3. JAVA_HOME environment variable
+    final String? javaHomeEnv = platform.environment[javaHomeEnvironmentVariable];
+    if (javaHomeEnv != null) {
+      final String binary = fileSystem.path.join(javaHomeEnv, 'bin', 'java');
+      if (processManager.canRun(binary)) {
+        return Java(
+          javaHome: javaHomeEnv,
+          binaryPath: binary,
+          javaSource: JavaSource.javaHome,
+          logger: logger,
+          fileSystem: fileSystem,
+          os: os,
+          platform: platform,
+          processManager: processManager,
+        );
+      }
+    }
+
+    // 4. Fallback to PATH
+    final String? pathJava = os.which(_javaExecutable)?.path;
+    if (pathJava != null && processManager.canRun(pathJava)) {
+      return Java(
+        javaHome: null,
+        binaryPath: pathJava,
+        javaSource: JavaSource.path,
+        logger: logger,
+        fileSystem: fileSystem,
+        os: os,
+        platform: platform,
+        processManager: processManager,
+      );
+    }
+
+    return null;
   }
 
   /// The path of the runtime environments' home directory.
@@ -223,43 +260,7 @@ class Java {
   }
 }
 
-_JavaHomePathWithSource? _findJavaHome({
-  required Config config,
-  required Logger logger,
-  required AndroidStudio? androidStudio,
-  required Platform platform,
-}) {
-  final Object? configured = config.getValue('jdk-dir');
-  if (configured != null) {
-    return (path: configured as String, source: JavaSource.flutterConfig);
-  }
-
-  final String? androidStudioJavaPath = androidStudio?.javaPath;
-  if (androidStudioJavaPath != null) {
-    return (path: androidStudioJavaPath, source: JavaSource.androidStudio);
-  }
-
-  final String? javaHomeEnv = platform.environment[Java.javaHomeEnvironmentVariable];
-  if (javaHomeEnv != null) {
-    return (path: javaHomeEnv, source: JavaSource.javaHome);
-  }
-  return null;
-}
-
-String? _findJavaBinary({
-  required Logger logger,
-  required String? javaHome,
-  required FileSystem fileSystem,
-  required OperatingSystemUtils operatingSystemUtils,
-  required Platform platform,
-}) {
-  if (javaHome != null) {
-    return fileSystem.path.join(javaHome, 'bin', 'java');
-  }
-
-  // Fallback to PATH based lookup.
-  return operatingSystemUtils.which(_javaExecutable)?.path;
-}
+// Removed unused helper functions
 
 // Returns a user visible String that says the tool failed to parse
 // the version of java along with the output.
