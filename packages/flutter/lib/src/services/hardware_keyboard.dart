@@ -707,6 +707,14 @@ class HardwareKeyboard {
     _handlers.clear();
     assert(_modifiedHandlers == null);
   }
+
+  /// Clear all physical keys that are pressed.
+  ///
+  /// This is typically called when the application/view loses focus, to prevent
+  /// keys from being stuck down when focus is regained.
+  void clearPressedKeys() {
+    _pressedKeys.clear();
+  }
 }
 
 /// The mode in which information of key messages is delivered.

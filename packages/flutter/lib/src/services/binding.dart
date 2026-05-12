@@ -405,7 +405,12 @@ mixin ServicesBinding on BindingBase, SchedulerBinding {
   /// * [PlatformDispatcher.onViewFocusChange], which calls this method.
   @protected
   @mustCallSuper
-  void handleViewFocusChanged(ui.ViewFocusEvent event) {}
+  void handleViewFocusChanged(ui.ViewFocusEvent event) {
+    if (event.state == ui.ViewFocusState.unfocused) {
+      _keyboard.clearPressedKeys();
+      RawKeyboard.instance.clearKeysPressed();
+    }
+  }
 
   Future<dynamic> _handlePlatformMessage(MethodCall methodCall) async {
     final String method = methodCall.method;

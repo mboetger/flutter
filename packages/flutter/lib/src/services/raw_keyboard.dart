@@ -1110,8 +1110,8 @@ class RawKeyboard {
 
   /// Clears the list of keys returned from [keysPressed].
   ///
-  /// This is used by the testing framework to make sure tests are hermetic.
-  @visibleForTesting
+  /// This is typically called when the application/view loses focus, to prevent
+  /// keys from being stuck down when focus is regained.
   void clearKeysPressed() => _keysPressed.clear();
 }
 
