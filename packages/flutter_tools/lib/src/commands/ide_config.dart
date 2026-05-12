@@ -8,6 +8,7 @@ import '../cache.dart';
 import '../globals.dart' as globals;
 import '../runner/flutter_command.dart';
 import '../template.dart';
+import '../android/gradle_utils.dart' as gradle;
 
 class IdeConfigCommand extends FlutterCommand {
   IdeConfigCommand() {
@@ -246,6 +247,7 @@ class IdeConfigCommand extends FlutterCommand {
     generatedCount += _renderTemplate(_ideName, dirPath, <String, Object>{
       'withRootModule': boolArg('with-root-module'),
       'android': true,
+      'androidSdkVersion': gradle.minSdkVersion,
     });
 
     globals.printStatus('Wrote $generatedCount files.');

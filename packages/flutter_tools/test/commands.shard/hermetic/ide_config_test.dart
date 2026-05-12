@@ -283,5 +283,22 @@ void main() {
         );
       },
     );
+
+    testUsingContext('expands androidSdkVersion template variable', () async {
+      final String mockTemplatePath = globals.fs.path.join(
+        'packages',
+        'flutter_tools',
+        'ide_templates',
+        'intellij',
+        'android.iml.tmpl',
+      );
+      final Map<String, String> templateManifest = <String, String>{
+        mockTemplatePath: 'sdk is {{androidSdkVersion}}',
+      };
+      populateDir(templateManifest);
+
+      final Map<String, String> expectedContents = <String, String>{'android.iml': 'sdk is 24'};
+      return updateIdeConfig(expectedContents: expectedContents);
+    });
   });
 }
