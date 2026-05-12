@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'message_codec.dart';
 import 'system_channels.dart';
 
 // Examples can assume:
@@ -101,4 +102,64 @@ abstract final class DeferredComponent {
       <String, dynamic>{'loadingUnitId': -1, 'componentName': componentName},
     );
   }
+
+  /// Queries the current installation state of a deferred component identified by the [componentName].
+  ///
+  /// Returns a string representing the installation state. On non-Android platforms
+  /// where deferred components are not supported, this method always returns "installed".
+  ///
+  /// Common installation states returned on Android include "installed", "installing",
+  /// "pending", "downloading", "downloaded", "failed", "canceled", "canceling", and "unknown".
+  static Future<String> getDeferredComponentInstallState({required String componentName}) async {
+    final String? state = await SystemChannels.deferredComponent.invokeMethod<String>(
+      'getDeferredComponentInstallState',
+      <String, dynamic>{'loadingUnitId': -1, 'componentName': componentName},
+    );
+    return state ?? 'installed';
+  }
+
+  static final StreamController<DeferredComponentEvent> _eventController =
+      StreamController<DeferredComponentEvent>.broadcast();
+
+  /// A stream of [DeferredComponentEvent]s representing the installation status changes
+  /// of deferred components.
+  ///
+  /// This stream will receive events whenever the installation status of a deferred
+  /// component changes on the native/platform side, provided the native platform embedding
+  /// implementation supports sending these events.
+  static Stream<DeferredComponentEvent> get installStateEventStream {
+    _ensureInitialized();
+    return _eventController.stream;
+  }
+
+  static bool _initialized = false;
+
+  static void _ensureInitialized() {
+    if (_initialized) {
+      return;
+    }
+    SystemChannels.deferredComponent.setMethodCallHandler(_handlePlatformMessage);
+    _initialized = true;
+  }
+
+  static Future<dynamic> _handlePlatformMessage(MethodCall call) async {
+    if (call.method == 'installStateChanged') {
+      final arguments = call.arguments as Map<dynamic, dynamic>;
+      final componentName = arguments['componentName'] as String;
+      final state = arguments['state'] as String;
+      _eventController.add(DeferredComponentEvent(componentName, state));
+    }
+  }
+}
+
+/// An event representing a change in the installation state of a deferred component.
+class DeferredComponentEvent {
+  /// Creates a deferred component event.
+  const DeferredComponentEvent(this.componentName, this.state);
+
+  /// The name of the deferred component.
+  final String componentName;
+
+  /// The installation state of the deferred component.
+  final String state;
 }
