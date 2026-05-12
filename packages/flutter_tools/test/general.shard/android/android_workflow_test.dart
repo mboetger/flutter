@@ -573,7 +573,7 @@ Review licenses that have not been accepted (y/N)?
       ..emulatorPath = 'path/to/emulator';
 
     final androidValidator = AndroidValidator(
-      java: FakeJava(),
+      java: FakeJava(javaHome: '/path/to/jdk'),
       androidSdk: sdk,
       logger: logger,
       platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
@@ -588,14 +588,62 @@ Review licenses that have not been accepted (y/N)?
     expect(sdkMessage.type, ValidationMessageType.information);
     expect(sdkMessage.message, 'Android SDK at /foo/bar');
 
-    final ValidationMessage cmdlineMessage = validationResult.messages.last;
-    expect(cmdlineMessage.type, ValidationMessageType.error);
+    final ValidationMessage cmdlineMessage = validationResult.messages.firstWhere(
+      (ValidationMessage m) => m.type == ValidationMessageType.error,
+    );
     expect(
       cmdlineMessage.message,
-      'cmdline-tools component is missing.\n'
-      'Try installing or updating Android Studio.\n'
-      'Alternatively, download the tools from https://developer.android.com/studio#command-line-tools-only and make sure to set the ANDROID_HOME environment variable.\n'
-      'See https://developer.android.com/studio/command-line for more details.',
+      'cmdline-tools component is missing\n'
+      'Alternatively, you can install the "Android SDK Command-line Tools (latest)" component through the Android Studio SDK Manager:\n'
+      '  1. Open Android Studio.\n'
+      '  2. Go to Tools > SDK Manager (or Settings/Preferences > Appearance & Behavior > System Settings > Android SDK).\n'
+      '  3. Select the "SDK Tools" tab.\n'
+      '  4. Check "Android SDK Command-line Tools (latest)".\n'
+      '  5. Click "Apply" or "OK" to install.',
+    );
+  });
+
+  testUsingContext('detects missing cmdline tools - suggests sdkmanager path and JAVA_HOME', () async {
+    final Directory sdkDir = fileSystem.directory('/foo/bar');
+    sdkDir
+        .childDirectory('tools')
+        .childDirectory('bin')
+        .childFile('sdkmanager')
+        .createSync(recursive: true);
+
+    sdk
+      ..licensesAvailable = true
+      ..platformToolsAvailable = true
+      ..cmdlineToolsAvailable = false
+      ..directory = sdkDir
+      ..emulatorPath = 'path/to/emulator';
+
+    final androidValidator = AndroidValidator(
+      java: FakeJava(javaHome: '/path/to/jdk'),
+      androidSdk: sdk,
+      logger: logger,
+      platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+      userMessages: UserMessages(),
+      processManager: processManager,
+    );
+
+    final ValidationResult validationResult = await androidValidator.validate();
+    expect(validationResult.type, ValidationType.missing);
+
+    final ValidationMessage cmdlineMessage = validationResult.messages.firstWhere(
+      (ValidationMessage m) => m.type == ValidationMessageType.error,
+    );
+    expect(
+      cmdlineMessage.message,
+      'cmdline-tools component is missing\n'
+      'To install the component, you can run:\n'
+      '  JAVA_HOME="/path/to/jdk" "/foo/bar/tools/bin/sdkmanager" --install "cmdline-tools;latest"\n'
+      'Alternatively, you can install the "Android SDK Command-line Tools (latest)" component through the Android Studio SDK Manager:\n'
+      '  1. Open Android Studio.\n'
+      '  2. Go to Tools > SDK Manager (or Settings/Preferences > Appearance & Behavior > System Settings > Android SDK).\n'
+      '  3. Select the "SDK Tools" tab.\n'
+      '  4. Check "Android SDK Command-line Tools (latest)".\n'
+      '  5. Click "Apply" or "OK" to install.',
     );
   });
 

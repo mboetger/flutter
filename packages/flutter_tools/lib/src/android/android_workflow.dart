@@ -8,6 +8,7 @@ import 'package:process/process.dart';
 
 import '../base/common.dart';
 import '../base/context.dart';
+import '../base/file_system.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
 import '../base/platform.dart';
@@ -221,21 +222,49 @@ class AndroidValidator extends DoctorValidator {
     );
 
     _task = 'Validating Android SDK command line tools are available';
+    var cmdlineToolsMissing = false;
     if (!androidSdk.cmdlineToolsAvailable) {
-      messages.add(
-        const ValidationMessage.error(
-          'cmdline-tools component is missing.\n'
-          'Try installing or updating Android Studio.\n'
-          'Alternatively, download the tools from https://developer.android.com/studio#command-line-tools-only '
-          'and make sure to set the ANDROID_HOME environment variable.\n'
-          'See https://developer.android.com/studio/command-line for more details.',
-        ),
+      cmdlineToolsMissing = true;
+      final File oldSdkManager = androidSdk.directory
+          .childDirectory('tools')
+          .childDirectory('bin')
+          .childFile(_platform.isWindows ? 'sdkmanager.bat' : 'sdkmanager');
+      final sdkManagerMessage = StringBuffer();
+      sdkManagerMessage.writeln('cmdline-tools component is missing');
+      if (oldSdkManager.existsSync()) {
+        sdkManagerMessage.writeln('To install the component, you can run:');
+        final String? javaHome = _java?.javaHome;
+        if (javaHome != null) {
+          if (_platform.isWindows) {
+            sdkManagerMessage.writeln('  set JAVA_HOME=$javaHome');
+            sdkManagerMessage.writeln('  "${oldSdkManager.path}" --install "cmdline-tools;latest"');
+          } else {
+            sdkManagerMessage.writeln(
+              '  JAVA_HOME="$javaHome" "${oldSdkManager.path}" --install "cmdline-tools;latest"',
+            );
+          }
+        } else {
+          sdkManagerMessage.writeln('  "${oldSdkManager.path}" --install "cmdline-tools;latest"');
+        }
+      }
+      sdkManagerMessage.writeln(
+        'Alternatively, you can install the "Android SDK Command-line Tools (latest)" component through the Android Studio SDK Manager:',
       );
-      return ValidationResult(ValidationType.missing, messages);
+      sdkManagerMessage.writeln('  1. Open Android Studio.');
+      sdkManagerMessage.writeln(
+        '  2. Go to Tools > SDK Manager (or Settings/Preferences > Appearance & Behavior > System Settings > Android SDK).',
+      );
+      sdkManagerMessage.writeln('  3. Select the "SDK Tools" tab.');
+      sdkManagerMessage.writeln('  4. Check "Android SDK Command-line Tools (latest)".');
+      sdkManagerMessage.write('  5. Click "Apply" or "OK" to install.');
+
+      messages.add(ValidationMessage.error(sdkManagerMessage.toString()));
     }
 
     _task = 'Validating Android SDK licenses';
-    if (androidSdk.licensesAvailable && !androidSdk.platformToolsAvailable) {
+    if (!cmdlineToolsMissing &&
+        androidSdk.licensesAvailable &&
+        !androidSdk.platformToolsAvailable) {
       messages.add(ValidationMessage.hint(_userMessages.androidSdkLicenseOnly(kAndroidHome)));
       return ValidationResult(ValidationType.partial, messages);
     }
@@ -299,7 +328,15 @@ class AndroidValidator extends DoctorValidator {
 
     // Check JDK version.
     if (!await _checkJavaVersion(messages)) {
-      return ValidationResult(ValidationType.partial, messages, statusInfo: sdkVersionText);
+      return ValidationResult(
+        cmdlineToolsMissing ? ValidationType.missing : ValidationType.partial,
+        messages,
+        statusInfo: sdkVersionText,
+      );
+    }
+
+    if (cmdlineToolsMissing) {
+      return ValidationResult(ValidationType.missing, messages, statusInfo: sdkVersionText);
     }
 
     // Success.
