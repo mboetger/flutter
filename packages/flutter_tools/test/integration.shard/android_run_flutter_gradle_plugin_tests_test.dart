@@ -29,6 +29,53 @@ void main() {
     ], workingDirectory: flutterGradlePluginDirectory.path);
     expect(runResult.processResult, const ProcessResultMatcher());
   });
+
+  testUsingContext(
+    'Flutter Gradle Plugin build does not fail if environment contains global repositories',
+    () async {
+      final gradleFileName = Platform.isWindows ? 'gradlew.bat' : 'gradlew';
+      final gradleExecutable = Platform.isWindows ? '.\\$gradleFileName' : './$gradleFileName';
+      final Directory flutterGradlePluginDirectory = fileSystem
+          .directory(getFlutterRoot())
+          .childDirectory('packages')
+          .childDirectory('flutter_tools')
+          .childDirectory('gradle');
+      globals.gradleUtils?.injectGradleWrapperIfNeeded(flutterGradlePluginDirectory);
+      makeExecutable(flutterGradlePluginDirectory.childFile(gradleFileName));
+
+      final Directory tempDir = fileSystem.systemTempDirectory.createTempSync(
+        'flutter_gradle_init_test.',
+      );
+      try {
+        final File initGradleFile = tempDir.childFile('init.gradle');
+        initGradleFile.writeAsStringSync('''
+        allprojects {
+            repositories {
+                maven { url 'https://example.com/maven' }
+            }
+        }
+      ''');
+
+        final RunResult runResult = await globals.processUtils.run(<String>[
+          gradleExecutable,
+          'help',
+          '--init-script',
+          initGradleFile.path,
+        ], workingDirectory: flutterGradlePluginDirectory.path);
+        expect(runResult.processResult, const ProcessResultMatcher());
+      } finally {
+        tempDir.deleteSync(recursive: true);
+      }
+    },
+  );
+}
+
+String getFlutterRoot() {
+  final String currentDir = fileSystem.currentDirectory.path;
+  if (fileSystem.file(fileSystem.path.join(currentDir, 'bin', 'flutter')).existsSync()) {
+    return currentDir;
+  }
+  return fileSystem.path.normalize(fileSystem.path.join(currentDir, '..', '..'));
 }
 
 void makeExecutable(File file) {
