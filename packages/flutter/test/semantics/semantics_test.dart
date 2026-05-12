@@ -490,6 +490,103 @@ void main() {
       node.updateWith(config: config2);
       expect(node.debugIsDirty, isTrue);
     });
+
+    test('traversal parent is marked dirty when traversal child is detached', () {
+      final owner = SemanticsOwner(onSemanticsUpdate: (SemanticsUpdate update) {});
+      final root = SemanticsNode.root(owner: owner)
+        ..rect = const Rect.fromLTRB(0.0, 0.0, 100.0, 100.0);
+
+      final parent = SemanticsNode()..rect = const Rect.fromLTRB(0.0, 0.0, 10.0, 10.0);
+      final child = SemanticsNode()..rect = const Rect.fromLTRB(10.0, 10.0, 20.0, 20.0);
+
+      // Graft child/parent onto root.
+      root.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..isMergingSemanticsOfDescendants = false,
+        childrenInInversePaintOrder: <SemanticsNode>[parent, child],
+      );
+
+      // Configure traversal identifiers so they are linked.
+      parent.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..traversalParentIdentifier = '111',
+      );
+      child.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..traversalChildIdentifier = '111',
+      );
+
+      // Run sendSemanticsUpdate to register the identifiers in the owner maps and clear dirty flags.
+      owner.sendSemanticsUpdate();
+
+      // Ensure they are not dirty.
+      expect(parent.debugIsDirty, isFalse);
+      expect(child.debugIsDirty, isFalse);
+
+      // Now detach the child node by updating root to omit it.
+      root.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..isMergingSemanticsOfDescendants = false,
+        childrenInInversePaintOrder: <SemanticsNode>[parent],
+      );
+
+      // The traversal parent MUST be marked dirty!
+      expect(parent.debugIsDirty, isTrue);
+    });
+
+    test('traversal parents are marked dirty when traversal child changes traversal parent', () {
+      final owner = SemanticsOwner(onSemanticsUpdate: (SemanticsUpdate update) {});
+      final root = SemanticsNode.root(owner: owner)
+        ..rect = const Rect.fromLTRB(0.0, 0.0, 100.0, 100.0);
+
+      final parentA = SemanticsNode()..rect = const Rect.fromLTRB(0.0, 0.0, 10.0, 10.0);
+      final parentB = SemanticsNode()..rect = const Rect.fromLTRB(0.0, 10.0, 10.0, 20.0);
+      final child = SemanticsNode()..rect = const Rect.fromLTRB(10.0, 10.0, 20.0, 20.0);
+
+      root.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..isMergingSemanticsOfDescendants = false,
+        childrenInInversePaintOrder: <SemanticsNode>[parentA, parentB, child],
+      );
+
+      parentA.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..traversalParentIdentifier = 'AAA',
+      );
+      parentB.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..traversalParentIdentifier = 'BBB',
+      );
+      child.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..traversalChildIdentifier = 'AAA',
+      );
+
+      // Clear dirty flags and register identifiers.
+      owner.sendSemanticsUpdate();
+
+      expect(parentA.debugIsDirty, isFalse);
+      expect(parentB.debugIsDirty, isFalse);
+
+      // Move child to B.
+      child.updateWith(
+        config: SemanticsConfiguration()
+          ..isSemanticBoundary = true
+          ..traversalChildIdentifier = 'BBB',
+      );
+
+      // Both A and B must be marked dirty!
+      expect(parentA.debugIsDirty, isTrue);
+      expect(parentB.debugIsDirty, isTrue);
+    });
   });
 
   test('toStringDeep() does not throw with transform == null', () {

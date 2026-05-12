@@ -3283,6 +3283,12 @@ class SemanticsNode with DiagnosticableTreeMixin {
       childSet.removeWhere((SemanticsNode node) => node == this);
     }
 
+    if (traversalChildIdentifier != null) {
+      final SemanticsNode? traversalParent =
+          owner!._traversalParentNodes[traversalChildIdentifier!];
+      traversalParent?._markDirty();
+    }
+
     _owner = null;
     assert(parent == null || attached == parent!.attached);
     if (_children != null) {
@@ -3730,9 +3736,19 @@ class SemanticsNode with DiagnosticableTreeMixin {
     final mergeAllDescendantsIntoThisNodeValueChanged =
         _mergeAllDescendantsIntoThisNode != config.isMergingSemanticsOfDescendants;
 
+    final Object? oldTraversalChildIdentifier = _traversalChildIdentifier;
     _identifier = config.identifier;
     _traversalParentIdentifier = config.traversalParentIdentifier;
     _traversalChildIdentifier = config.traversalChildIdentifier;
+    final Object? newTraversalChildIdentifier = config.traversalChildIdentifier;
+    if (oldTraversalChildIdentifier != newTraversalChildIdentifier) {
+      if (oldTraversalChildIdentifier != null && owner != null) {
+        owner!._traversalParentNodes[oldTraversalChildIdentifier]?._markDirty();
+      }
+      if (newTraversalChildIdentifier != null && owner != null) {
+        owner!._traversalParentNodes[newTraversalChildIdentifier]?._markDirty();
+      }
+    }
     _attributedLabel = config.attributedLabel;
     _attributedValue = config.attributedValue;
     _attributedIncreasedValue = config.attributedIncreasedValue;
