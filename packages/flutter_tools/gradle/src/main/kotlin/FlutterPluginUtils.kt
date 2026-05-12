@@ -278,7 +278,22 @@ object FlutterPluginUtils {
 
     @JvmStatic
     @JvmName("shouldProjectUseLocalEngine")
-    internal fun shouldProjectUseLocalEngine(project: Project): Boolean = project.hasProperty(PROP_LOCAL_ENGINE_REPO)
+    internal fun shouldProjectUseLocalEngine(project: Project): Boolean {
+        if (project.hasProperty(PROP_LOCAL_ENGINE_REPO)) {
+            return true
+        }
+        var localPropertiesFile = File(project.projectDir.parentFile, "local.properties")
+        if (!localPropertiesFile.exists()) {
+            localPropertiesFile = project.rootProject.file("local.properties")
+        }
+        if (localPropertiesFile.exists()) {
+            val localProperties = readPropertiesIfExist(localPropertiesFile)
+            if (localProperties.containsKey(PROP_LOCAL_ENGINE_REPO)) {
+                return true
+            }
+        }
+        return false
+    }
 
     @JvmStatic
     @JvmName("isProjectVerbose")
@@ -465,10 +480,22 @@ object FlutterPluginUtils {
         if (!shouldProjectUseLocalEngine(project)) {
             return true
         }
-        check(project.hasProperty(PROP_LOCAL_ENGINE_BUILD_MODE)) { "Project must have property '$PROP_LOCAL_ENGINE_BUILD_MODE'" }
+        var localPropertiesFile = File(project.projectDir.parentFile, "local.properties")
+        if (!localPropertiesFile.exists()) {
+            localPropertiesFile = project.rootProject.file("local.properties")
+        }
+        val localEngineBuildMode = if (project.hasProperty(PROP_LOCAL_ENGINE_BUILD_MODE)) {
+            project.property(PROP_LOCAL_ENGINE_BUILD_MODE) as String
+        } else if (localPropertiesFile.exists()) {
+            val localProperties = readPropertiesIfExist(localPropertiesFile)
+            localProperties.getProperty(PROP_LOCAL_ENGINE_BUILD_MODE)
+        } else {
+            null
+        }
+        checkNotNull(localEngineBuildMode) { "Project or local.properties must have property '$PROP_LOCAL_ENGINE_BUILD_MODE'" }
         // Don't configure dependencies for a build mode that the local engine
         // doesn't support.
-        return project.property(PROP_LOCAL_ENGINE_BUILD_MODE) == flutterBuildMode
+        return localEngineBuildMode == flutterBuildMode
     }
 
     /**

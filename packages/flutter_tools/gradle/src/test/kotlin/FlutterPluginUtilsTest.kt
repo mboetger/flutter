@@ -508,6 +508,67 @@ class FlutterPluginUtilsTest {
         assertEquals(false, result)
     }
 
+    @Nested
+    inner class LocalEnginePropertiesTests {
+        @Test
+        fun `shouldProjectUseLocalEngine returns true when PROP_LOCAL_ENGINE_REPO is set in local properties`(
+            @TempDir tempDir: Path
+        ) {
+            val projectDir = tempDir.resolve("android").resolve("app")
+            projectDir.toFile().mkdirs()
+
+            val localProperties = File(projectDir.parent.toFile(), "local.properties")
+            localProperties.writeText("local-engine-repo=/path/to/engine/repo\n")
+
+            val project = mockk<Project>()
+            every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO) } returns false
+            every { project.projectDir } returns projectDir.toFile()
+            every { project.rootProject.file("local.properties") } returns File("/nonexistent")
+
+            val result = FlutterPluginUtils.shouldProjectUseLocalEngine(project)
+            assertTrue(result)
+        }
+
+        @Test
+        fun `shouldProjectUseLocalEngine returns true when PROP_LOCAL_ENGINE_REPO is set in root project local properties`(
+            @TempDir tempDir: Path
+        ) {
+            val projectDir = tempDir.resolve("android").resolve("app")
+            projectDir.toFile().mkdirs()
+
+            val rootLocalProperties = File(tempDir.toFile(), "local.properties")
+            rootLocalProperties.writeText("local-engine-repo=/path/to/engine/repo\n")
+
+            val project = mockk<Project>()
+            every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO) } returns false
+            every { project.projectDir } returns projectDir.toFile()
+            every { project.rootProject.file("local.properties") } returns rootLocalProperties
+
+            val result = FlutterPluginUtils.shouldProjectUseLocalEngine(project)
+            assertTrue(result)
+        }
+
+        @Test
+        fun `supportsBuildMode reads PROP_LOCAL_ENGINE_BUILD_MODE from local properties`(
+            @TempDir tempDir: Path
+        ) {
+            val projectDir = tempDir.resolve("android").resolve("app")
+            projectDir.toFile().mkdirs()
+
+            val localProperties = File(projectDir.parent.toFile(), "local.properties")
+            localProperties.writeText("local-engine-repo=/path/to/engine/repo\nlocal-engine-build-mode=debug\n")
+
+            val project = mockk<Project>()
+            every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO) } returns false
+            every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_BUILD_MODE) } returns false
+            every { project.projectDir } returns projectDir.toFile()
+            every { project.rootProject.file("local.properties") } returns localProperties
+
+            val result = FlutterPluginUtils.supportsBuildMode(project, "debug")
+            assertTrue(result)
+        }
+    }
+
     // getTargetPlatforms
     @Test
     fun `getTargetPlatforms the default if property is not set`() {
