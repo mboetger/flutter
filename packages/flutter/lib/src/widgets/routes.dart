@@ -1979,6 +1979,46 @@ abstract class ModalRoute<T> extends TransitionRoute<T> with LocalHistoryRoute<T
   // declared with any supertype of T.
   final Set<PopEntry<Object?>> _popEntries = <PopEntry<Object?>>{};
 
+  List<PopEntry<Object?>> get _orderedPopEntries {
+    if (_popEntries.isEmpty) {
+      return const <PopEntry<Object?>>[];
+    }
+    if (_popEntries.length == 1) {
+      return _popEntries.toList();
+    }
+    final BuildContext? context = subtreeContext;
+    if (context == null) {
+      return _popEntries.toList();
+    }
+    final orderedPopEntries = <PopEntry<Object?>>[];
+    void collectPopEntries(Element element) {
+      element.visitChildren(collectPopEntries);
+
+      PopEntry<Object?>? popEntry;
+      if (element is StatefulElement) {
+        final State state = element.state;
+        if (state is PopEntry<Object?>) {
+          popEntry = state as PopEntry<Object?>;
+        }
+      }
+      if (popEntry == null && element is PopEntry<Object?>) {
+        popEntry = element as PopEntry<Object?>;
+      }
+      if (popEntry != null && _popEntries.contains(popEntry)) {
+        orderedPopEntries.add(popEntry);
+      }
+    }
+
+    collectPopEntries(context as Element);
+
+    if (orderedPopEntries.length < _popEntries.length) {
+      final Set<PopEntry<Object?>> missing = _popEntries.difference(orderedPopEntries.toSet());
+      orderedPopEntries.addAll(missing);
+    }
+
+    return orderedPopEntries;
+  }
+
   /// Returns [RoutePopDisposition.doNotPop] if any of callbacks added with
   /// [addScopedWillPopCallback] returns either false or null. If they all
   /// return true, the base [Route.willPop]'s result will be returned. The
@@ -2032,7 +2072,7 @@ abstract class ModalRoute<T> extends TransitionRoute<T> with LocalHistoryRoute<T
   ///    method checks.
   @override
   RoutePopDisposition get popDisposition {
-    for (final PopEntry<Object?> popEntry in _popEntries) {
+    for (final PopEntry<Object?> popEntry in _orderedPopEntries) {
       if (!popEntry.canPopNotifier.value) {
         return RoutePopDisposition.doNotPop;
       }
@@ -2043,7 +2083,7 @@ abstract class ModalRoute<T> extends TransitionRoute<T> with LocalHistoryRoute<T
 
   @override
   void onPopInvokedWithResult(bool didPop, T? result) {
-    for (final PopEntry<Object?> popEntry in _popEntries) {
+    for (final PopEntry<Object?> popEntry in _orderedPopEntries) {
       popEntry.onPopInvokedWithResult(didPop, result);
     }
     super.onPopInvokedWithResult(didPop, result);
