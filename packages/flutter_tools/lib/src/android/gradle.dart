@@ -195,10 +195,11 @@ class AndroidGradleBuilder implements AndroidBuilder {
     String? outputDirectoryPath,
     required String buildNumber,
   }) async {
+    final isCustomOutputDirectory = outputDirectoryPath != null;
     Directory outputDirectory = _fileSystem.directory(
       outputDirectoryPath ?? project.android.buildDirectory,
     );
-    if (project.isModule) {
+    if (project.isModule && !isCustomOutputDirectory) {
       // Module projects artifacts are located in `build/host`.
       outputDirectory = outputDirectory.childDirectory('host');
     }
@@ -211,6 +212,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
         target: target,
         outputDirectory: outputDirectory,
         buildNumber: buildNumber,
+        isCustomOutputDirectory: isCustomOutputDirectory,
       );
     }
     printHowToConsumeAar(
@@ -218,7 +220,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
         return androidBuildInfo.buildInfo.modeName;
       }).toSet(),
       androidPackage: project.manifest.androidPackage,
-      repoDirectory: getRepoDirectory(outputDirectory),
+      repoDirectory: isCustomOutputDirectory ? outputDirectory : getRepoDirectory(outputDirectory),
       buildNumber: buildNumber,
       logger: _logger,
       fileSystem: _fileSystem,
@@ -780,6 +782,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     required String target,
     required Directory outputDirectory,
     required String buildNumber,
+    bool isCustomOutputDirectory = false,
   }) async {
     final FlutterManifest manifest = project.manifest;
     if (!manifest.isModule) {
@@ -805,6 +808,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
       '-Poutput-dir=${outputDirectory.path}',
       '-Pis-plugin=${manifest.isPlugin}',
       '-PbuildNumber=$buildNumber',
+      if (isCustomOutputDirectory) '-Pcustom-output-dir=true',
     ];
     if (_logger.isVerbose) {
       command.add('--full-stacktrace');
@@ -846,7 +850,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
 
       // Copy the local engine repo in the output directory.
       try {
-        copyDirectory(localEngineRepo, getRepoDirectory(outputDirectory));
+        copyDirectory(
+          localEngineRepo,
+          isCustomOutputDirectory ? outputDirectory : getRepoDirectory(outputDirectory),
+        );
       } on FileSystemException catch (error, st) {
         throwToolExit(
           'Failed to copy the local engine ${localEngineRepo.path} repo '
@@ -894,7 +901,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
         exitCode: result.exitCode,
       );
     }
-    final Directory repoDirectory = getRepoDirectory(outputDirectory);
+    final Directory repoDirectory = isCustomOutputDirectory
+        ? outputDirectory
+        : getRepoDirectory(outputDirectory);
     if (!repoDirectory.existsSync()) {
       _logger.printStatus(result.stdout, wrap: false);
       _logger.printError(result.stderr, wrap: false);
