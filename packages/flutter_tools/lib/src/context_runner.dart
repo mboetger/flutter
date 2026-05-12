@@ -92,7 +92,7 @@ Future<T> runInContext<T>(FutureOr<T> Function() runner, {Map<Type, Generator>? 
         clientIde: globals.platform.environment['FLUTTER_HOST'],
         config: globals.config,
       ),
-      AndroidBuilder: () => AndroidGradleBuilder(
+      AndroidBuilder: () => AndroidBuilder(
         java: globals.java,
         logger: globals.logger,
         processManager: globals.processManager,
