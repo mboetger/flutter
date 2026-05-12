@@ -46,6 +46,7 @@ void main() {
           minCompileSdkVersionHandler,
           incompatibleJavaAndAgpVersionsHandler,
           outdatedGradleHandler,
+          pubCacheGradleVersionConflictHandler,
           sslExceptionHandler,
           zipExceptionHandler,
           incompatibleJavaAndGradleVersionsHandler,
@@ -1714,6 +1715,52 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
       ProcessManager: () => processManager,
     },
   );
+
+  group('Pub-cache Gradle version conflict', () {
+    const errorMessage = r'''
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file '/Users/rsirokov/.pub-cache/hosted/pub.dartlang.org/devicelocale-0.3.1/android/build.gradle' line: 22
+
+* What went wrong:
+A problem occurred evaluating root project 'devicelocale'.
+> Failed to apply plugin [id 'com.android.internal.version-check']
+   > Minimum supported Gradle version is 5.6.4. Current version is 5.6.2. If using the gradle wrapper, try editing the distributionUrl in /Users/rsirokov/.pub-cache/hosted/pub.dartlang.org/devicelocale-0.3.1/android/gradle/wrapper/gradle-wrapper.properties to gradle-5.6.4-all.zip
+''';
+
+    testWithoutContext('pattern', () {
+      expect(pubCacheGradleVersionConflictHandler.test(errorMessage), isTrue);
+    });
+
+    testUsingContext(
+      'suggestion',
+      () async {
+        final FlutterProject project = FlutterProject.fromDirectoryTest(
+          fileSystem.currentDirectory,
+        );
+        final GradleBuildStatus status = await pubCacheGradleVersionConflictHandler.handler(
+          line: errorMessage,
+          project: project,
+          usesAndroidX: true,
+        );
+
+        expect(status, GradleBuildStatus.exit);
+        expect(
+          testLogger.statusText,
+          contains('Your project is using an incompatible version of Gradle'),
+        );
+        expect(testLogger.statusText, contains('gradle-wrapper.properties'));
+        expect(testLogger.statusText, contains('5.6.4'));
+      },
+      overrides: <Type, Generator>{
+        GradleUtils: () => FakeGradleUtils(),
+        Platform: () => fakePlatform('android'),
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+      },
+    );
+  });
 }
 
 bool formatTestErrorMessage(String errorMessage, GradleHandledError error) {

@@ -74,6 +74,7 @@ final gradleErrors = <GradleHandledError>[
   minCompileSdkVersionHandler,
   incompatibleJavaAndAgpVersionsHandler,
   outdatedGradleHandler,
+  pubCacheGradleVersionConflictHandler,
   sslExceptionHandler,
   zipExceptionHandler,
   incompatibleJavaAndGradleVersionsHandler,
@@ -417,6 +418,32 @@ final outdatedGradleHandler = GradleHandledError(
     return GradleBuildStatus.exit;
   },
   eventLabel: 'outdated-gradle-version',
+);
+
+@visibleForTesting
+final pubCacheGradleVersionConflictHandler = GradleHandledError(
+  test: (String line) {
+    return line.contains('Minimum supported Gradle version is') &&
+        line.contains('gradle-wrapper.properties') &&
+        line.contains('.pub-cache');
+  },
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    final File gradlePropertiesFile = project.android.gradleWrapperPropertiesFile;
+    final pattern = RegExp(r'Minimum supported Gradle version is ([\d\.]+)');
+    final Match? match = pattern.firstMatch(line);
+    final String minVersion = match != null ? match.group(1)! : '5.6.4';
+
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Your project is using an incompatible version of Gradle, '
+      'which fails to build plugins defined in the read-only .pub-cache directory.\n\n'
+      "To fix this, please update the Gradle version specified in your project's "
+      '${gradlePropertiesFile.path} to at least "$minVersion" (e.g., by updating `distributionUrl` '
+      'to `https://services.gradle.org/distributions/gradle-$minVersion-all.zip`).',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'pub-cache-gradle-version-conflict',
 );
 
 final _minCompileSdkVersionPattern = RegExp(r'The minCompileSdk \(([0-9]+)\) specified in a');
