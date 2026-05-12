@@ -697,7 +697,7 @@ class AndroidDevice extends Device {
         if (debuggingOptions.testFlag) ...<String>['--ez', 'test-flag', 'true'],
         if (userIdentifier != null) ...<String>['--user', userIdentifier],
       ],
-      builtPackage.launchActivity,
+      if (prebuiltApplication) builtPackage.id else builtPackage.launchActivity,
     ];
     final String result = (await runAdbCheckedAsync(cmd)).stdout;
     // This invocation returns 0 even when it fails.
