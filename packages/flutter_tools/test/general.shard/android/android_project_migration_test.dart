@@ -7,6 +7,8 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_studio.dart';
 import 'package:flutter_tools/src/android/gradle_utils.dart';
 import 'package:flutter_tools/src/android/migrations/android_studio_java_gradle_conflict_migration.dart';
+import 'package:flutter_tools/src/android/migrations/compile_sdk_version_migration.dart'
+    as compile_sdk;
 import 'package:flutter_tools/src/android/migrations/disable_built_in_kotlin_migration.dart';
 import 'package:flutter_tools/src/android/migrations/disable_new_dsl_migration.dart';
 import 'package:flutter_tools/src/android/migrations/min_sdk_version_migration.dart';
@@ -1016,6 +1018,173 @@ android.newDsl  :  false
         expect(
           project.appGradleFile.readAsStringSync(),
           sampleKotlinDslModuleGradleBuildFile(kotlinReplacementMinSdkText),
+        );
+      });
+    });
+
+    group(
+      'migrate compileSdkVersion to flutter.compileSdkVersion when in a FlutterProject that is an app',
+      () {
+        late MemoryFileSystem memoryFileSystem;
+        late BufferLogger bufferLogger;
+        late FakeAndroidProject project;
+        late compile_sdk.CompileSdkVersionMigration migration;
+
+        setUp(() {
+          memoryFileSystem = MemoryFileSystem.test();
+          memoryFileSystem.currentDirectory.childDirectory('android').createSync();
+          bufferLogger = BufferLogger.test();
+          project = FakeAndroidProject(
+            root: memoryFileSystem.currentDirectory.childDirectory('android'),
+          );
+          project.appGradleFile.parent.createSync(recursive: true);
+          migration = compile_sdk.CompileSdkVersionMigration(project, bufferLogger);
+        });
+
+        testWithoutContext('do nothing when files missing', () async {
+          await migration.migrate();
+          expect(bufferLogger.traceText, contains(compile_sdk.appGradleNotFoundWarning));
+        });
+
+        testWithoutContext('replace when groovy compileSdkVersion space syntax', () async {
+          const compileSdkVersionOld = 'compileSdkVersion 30';
+          project.appGradleFile.writeAsStringSync(
+            sampleModuleGradleBuildFile(compileSdkVersionOld),
+          );
+          await migration.migrate();
+          expect(
+            project.appGradleFile.readAsStringSync(),
+            sampleModuleGradleBuildFile(compile_sdk.replacementCompileSdkText),
+          );
+        });
+
+        testWithoutContext('replace when groovy compileSdkVersion equals syntax', () async {
+          const compileSdkVersionOld = 'compileSdkVersion = 30';
+          project.appGradleFile.writeAsStringSync(
+            sampleModuleGradleBuildFile(compileSdkVersionOld),
+          );
+          await migration.migrate();
+          expect(
+            project.appGradleFile.readAsStringSync(),
+            sampleModuleGradleBuildFile(compile_sdk.groovyReplacementWithEquals),
+          );
+        });
+
+        testWithoutContext('replace when groovy compileSdk space syntax', () async {
+          const compileSdkVersionOld = 'compileSdk 30';
+          project.appGradleFile.writeAsStringSync(
+            sampleModuleGradleBuildFile(compileSdkVersionOld),
+          );
+          await migration.migrate();
+          expect(
+            project.appGradleFile.readAsStringSync(),
+            sampleModuleGradleBuildFile(compile_sdk.replacementCompileSdkText),
+          );
+        });
+
+        testWithoutContext('replace when groovy compileSdk equals syntax', () async {
+          const compileSdkVersionOld = 'compileSdk = 30';
+          project.appGradleFile.writeAsStringSync(
+            sampleModuleGradleBuildFile(compileSdkVersionOld),
+          );
+          await migration.migrate();
+          expect(
+            project.appGradleFile.readAsStringSync(),
+            sampleModuleGradleBuildFile(compile_sdk.groovyReplacementWithEquals),
+          );
+        });
+
+        testWithoutContext('do nothing when already using flutter.compileSdkVersion', () async {
+          project.appGradleFile.writeAsStringSync(
+            sampleModuleGradleBuildFile(compile_sdk.replacementCompileSdkText),
+          );
+          await migration.migrate();
+          expect(
+            project.appGradleFile.readAsStringSync(),
+            sampleModuleGradleBuildFile(compile_sdk.replacementCompileSdkText),
+          );
+        });
+
+        testWithoutContext('avoid rewriting comments', () async {
+          const code =
+              '// compileSdkVersion 30  // old default\n'
+              '        compileSdkVersion 34  // new version';
+          project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(code));
+          await migration.migrate();
+          const expected =
+              '// compileSdkVersion 30  // old default\n'
+              '        compileSdkVersion flutter.compileSdkVersion  // new version';
+          expect(project.appGradleFile.readAsStringSync(), sampleModuleGradleBuildFile(expected));
+        });
+
+        testWithoutContext('do nothing when project is a module', () async {
+          project = FakeAndroidProject(
+            root: memoryFileSystem.currentDirectory.childDirectory('android'),
+            module: true,
+          );
+          migration = compile_sdk.CompileSdkVersionMigration(project, bufferLogger);
+          const compileSdkVersionOld = 'compileSdkVersion 30';
+          project.appGradleFile.writeAsStringSync(
+            sampleModuleGradleBuildFile(compileSdkVersionOld),
+          );
+          await migration.migrate();
+          expect(
+            project.appGradleFile.readAsStringSync(),
+            sampleModuleGradleBuildFile(compileSdkVersionOld),
+          );
+        });
+      },
+    );
+
+    group('migrate compileSdkVersion to flutter.compileSdkVersion - kotlin dsl', () {
+      late MemoryFileSystem memoryFileSystem;
+      late BufferLogger bufferLogger;
+      late FakeAndroidProject project;
+      late compile_sdk.CompileSdkVersionMigration migration;
+
+      setUp(() {
+        memoryFileSystem = MemoryFileSystem.test();
+        memoryFileSystem.currentDirectory.childDirectory('android').createSync();
+        bufferLogger = BufferLogger.test();
+        project = FakeKotlinDslAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android'),
+        );
+        project.appGradleFile.parent.createSync(recursive: true);
+        migration = compile_sdk.CompileSdkVersionMigration(project, bufferLogger);
+      });
+
+      testWithoutContext('do nothing when already using flutter.compileSdkVersion', () async {
+        project.appGradleFile.writeAsStringSync(
+          sampleKotlinDslModuleGradleBuildFile(compile_sdk.kotlinReplacementCompileSdkText),
+        );
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleKotlinDslModuleGradleBuildFile(compile_sdk.kotlinReplacementCompileSdkText),
+        );
+      });
+
+      testWithoutContext('migrate when compileSdk is set using = syntax', () async {
+        const equalsSyntaxCompileSdk30 = 'compileSdk = 30';
+        project.appGradleFile.writeAsStringSync(
+          sampleKotlinDslModuleGradleBuildFile(equalsSyntaxCompileSdk30),
+        );
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleKotlinDslModuleGradleBuildFile(compile_sdk.kotlinReplacementCompileSdkText),
+        );
+      });
+
+      testWithoutContext('migrate when compileSdkVersion is set using = syntax', () async {
+        const equalsSyntaxCompileSdk30 = 'compileSdkVersion = 30';
+        project.appGradleFile.writeAsStringSync(
+          sampleKotlinDslModuleGradleBuildFile(equalsSyntaxCompileSdk30),
+        );
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleKotlinDslModuleGradleBuildFile(compile_sdk.kotlinReplacementCompileSdkText),
         );
       });
     });
