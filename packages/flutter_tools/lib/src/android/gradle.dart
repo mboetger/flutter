@@ -530,7 +530,22 @@ class AndroidGradleBuilder implements AndroidBuilder {
     final baseApplicationName = project.android.getEmbeddingVersion() == AndroidEmbeddingVersion.v2
         ? 'android.app.Application'
         : 'io.flutter.app.FlutterApplication';
-    options.add('-Pbase-application-name=$baseApplicationName');
+    final File gradlePropertiesFile = project.android.hostAppGradleRoot.childFile(
+      'gradle.properties',
+    );
+    var hasBaseApplicationName = false;
+    if (gradlePropertiesFile.existsSync()) {
+      try {
+        hasBaseApplicationName = gradlePropertiesFile.readAsStringSync().contains(
+          RegExp(r'^\s*(base-application-name|baseApplicationName)(?=[ \t=:])', multiLine: true),
+        );
+      } on FileSystemException {
+        // Ignore read errors.
+      }
+    }
+    if (!hasBaseApplicationName) {
+      options.add('-Pbase-application-name=$baseApplicationName');
+    }
     final List<DeferredComponent>? deferredComponents = project.manifest.deferredComponents;
     if (deferredComponents != null) {
       if (deferredComponentsEnabled) {
