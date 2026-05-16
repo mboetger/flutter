@@ -58,7 +58,9 @@ class FlutterPlugin : Plugin<Project> {
             resolveFlutterSdkProperty(flutterRootSystemVal)
                 ?: throw GradleException(
                     "Flutter SDK not found. Define location with flutter.sdk in the " +
-                        "local.properties file or with a FLUTTER_ROOT environment variable."
+                        "local.properties file or with a FLUTTER_ROOT environment variable. " +
+                        "Running `flutter build` or `flutter run` in your project directory " +
+                        "will automatically generate local.properties."
                 )
 
         flutterRoot = project.file(flutterRootPath)
