@@ -1496,4 +1496,94 @@ public class FlutterViewTest {
     flutterView.autofill(values);
     // No exception should be thrown
   }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  @TargetApi(28)
+  @Config(sdk = API_LEVELS.API_28)
+  public void systemGestureInsetsReportedCorrectlyLegacy() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+
+    WindowInsets windowInsets = mock(WindowInsets.class);
+    mockSystemWindowInsets(windowInsets, 100, 100, 100, 100);
+
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+    assertEquals(0, viewportMetricsCaptor.getValue().systemGestureInsetLeft);
+    assertEquals(0, viewportMetricsCaptor.getValue().systemGestureInsetTop);
+    assertEquals(0, viewportMetricsCaptor.getValue().systemGestureInsetRight);
+    assertEquals(0, viewportMetricsCaptor.getValue().systemGestureInsetBottom);
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  @TargetApi(29)
+  @Config(sdk = API_LEVELS.API_29)
+  public void systemGestureInsetsReportedCorrectlyApi29() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+
+    Insets systemGestureInsets = Insets.of(10, 20, 30, 40);
+    WindowInsets windowInsets = mock(WindowInsets.class);
+    mockSystemWindowInsets(windowInsets, 100, 100, 100, 100);
+    when(windowInsets.getSystemGestureInsets()).thenReturn(systemGestureInsets);
+
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+    assertEquals(10, viewportMetricsCaptor.getValue().systemGestureInsetLeft);
+    assertEquals(20, viewportMetricsCaptor.getValue().systemGestureInsetTop);
+    assertEquals(30, viewportMetricsCaptor.getValue().systemGestureInsetRight);
+    assertEquals(40, viewportMetricsCaptor.getValue().systemGestureInsetBottom);
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  @TargetApi(30)
+  @Config(sdk = API_LEVELS.API_30)
+  public void systemGestureInsetsReportedCorrectlyApi30() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+
+    Insets systemGestureInsets = Insets.of(10, 20, 30, 40);
+    WindowInsets windowInsets = mock(WindowInsets.class);
+    mockSystemWindowInsets(windowInsets, -1, -1, -1, -1);
+    when(windowInsets.getInsets(android.view.WindowInsets.Type.systemGestures()))
+        .thenReturn(systemGestureInsets);
+    when(windowInsets.getInsets(android.view.WindowInsets.Type.systemBars()))
+        .thenReturn(Insets.of(0, 0, 0, 0));
+    when(windowInsets.getInsets(android.view.WindowInsets.Type.ime()))
+        .thenReturn(Insets.of(0, 0, 0, 0));
+
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+    assertEquals(10, viewportMetricsCaptor.getValue().systemGestureInsetLeft);
+    assertEquals(20, viewportMetricsCaptor.getValue().systemGestureInsetTop);
+    assertEquals(30, viewportMetricsCaptor.getValue().systemGestureInsetRight);
+    assertEquals(40, viewportMetricsCaptor.getValue().systemGestureInsetBottom);
+  }
 }
