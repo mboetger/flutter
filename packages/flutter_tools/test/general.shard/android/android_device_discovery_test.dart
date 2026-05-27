@@ -92,7 +92,7 @@ void main() {
     },
   );
 
-  testWithoutContext('AndroidDevices throwsToolExit on failing adb', () {
+  testWithoutContext('AndroidDevices throwsToolExit on failing adb (stderr only)', () {
     final ProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
       const FakeCommand(
         command: <String>['adb', 'devices', '-l'],
@@ -118,6 +118,67 @@ void main() {
             'Exit code: 1\n'
             'Error details:\n'
             '<stderr from adb>',
+      ),
+    );
+  });
+
+  testWithoutContext('AndroidDevices throwsToolExit on failing adb (stdout only)', () {
+    final ProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
+      const FakeCommand(
+        command: <String>['adb', 'devices', '-l'],
+        exitCode: 1,
+        stdout: '<stdout from adb>',
+      ),
+    ]);
+    final androidDevices = AndroidDevices(
+      androidSdk: FakeAndroidSdk(),
+      logger: BufferLogger.test(),
+      androidWorkflow: androidWorkflow,
+      processManager: processManager,
+      fileSystem: MemoryFileSystem.test(),
+      platform: FakePlatform(),
+      userMessages: UserMessages(),
+    );
+
+    expect(
+      androidDevices.pollingGetDevices(),
+      throwsToolExit(
+        message:
+            'Adb command failed: adb devices -l\n'
+            'Exit code: 1\n'
+            'Error details:\n'
+            '<stdout from adb>',
+      ),
+    );
+  });
+
+  testWithoutContext('AndroidDevices throwsToolExit on failing adb (both stdout and stderr)', () {
+    final ProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
+      const FakeCommand(
+        command: <String>['adb', 'devices', '-l'],
+        exitCode: 1,
+        stdout: '<stdout from adb>',
+        stderr: '<stderr from adb>',
+      ),
+    ]);
+    final androidDevices = AndroidDevices(
+      androidSdk: FakeAndroidSdk(),
+      logger: BufferLogger.test(),
+      androidWorkflow: androidWorkflow,
+      processManager: processManager,
+      fileSystem: MemoryFileSystem.test(),
+      platform: FakePlatform(),
+      userMessages: UserMessages(),
+    );
+
+    expect(
+      androidDevices.pollingGetDevices(),
+      throwsToolExit(
+        message:
+            'Adb command failed: adb devices -l\n'
+            'Exit code: 1\n'
+            'Error details:\n'
+            'Stderr:\n<stderr from adb>\n\nStdout:\n<stdout from adb>',
       ),
     );
   });
@@ -302,6 +363,34 @@ Use the 'android' tool to install them:
 
     expect(diagnostics, hasLength(1));
     expect(diagnostics.first, contains('you do not have'));
+  });
+
+  testWithoutContext('AndroidDevices getDiagnostics captures adb failure details', () async {
+    final androidDevices = AndroidDevices(
+      userMessages: UserMessages(),
+      androidWorkflow: androidWorkflow,
+      androidSdk: FakeAndroidSdk(),
+      logger: BufferLogger.test(),
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', 'devices', '-l'],
+          exitCode: 1,
+          stderr: '<stderr from adb>',
+        ),
+      ]),
+      platform: FakePlatform(),
+      fileSystem: MemoryFileSystem.test(),
+    );
+
+    final List<String> diagnostics = await androidDevices.getDiagnostics();
+
+    expect(diagnostics, hasLength(1));
+    expect(
+      diagnostics.first,
+      contains(
+        'Adb command failed: adb devices -l\nExit code: 1\nError details:\n<stderr from adb>',
+      ),
+    );
   });
 }
 

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:process/process.dart';
 
 import '../base/common.dart';
@@ -79,10 +81,18 @@ class AndroidDevices extends PollingDeviceDiscovery {
     }
 
     if (result.exitCode != 0) {
+      final String stderr = result.stderr.trim();
+      final String stdout = result.stdout.trim();
+      final String errorDetails;
+      if (stderr.isNotEmpty && stdout.isNotEmpty) {
+        errorDetails = 'Stderr:\n$stderr\n\nStdout:\n$stdout';
+      } else {
+        errorDetails = stderr.isNotEmpty ? stderr : stdout;
+      }
       throwToolExit(
         'Adb command failed: $adbPath devices -l\n'
         'Exit code: ${result.exitCode}\n'
-        'Error details:\n${result.stderr}',
+        'Error details:\n$errorDetails',
       );
     }
 
@@ -96,17 +106,21 @@ class AndroidDevices extends PollingDeviceDiscovery {
     if (_doesNotHaveAdb()) {
       return <String>[];
     }
+    final String adbPath = _androidSdk!.adbPath!;
 
-    final RunResult result = await _processUtils.run(<String>[
-      _androidSdk!.adbPath!,
-      'devices',
-      '-l',
-    ]);
+    final RunResult result = await _processUtils.run(<String>[adbPath, 'devices', '-l']);
     if (result.exitCode != 0) {
-      return <String>[];
+      final String stderr = result.stderr.trim();
+      final String stdout = result.stdout.trim();
+      final errorDetails = stderr.isNotEmpty ? stderr : stdout;
+      final message =
+          'Adb command failed: $adbPath devices -l\n'
+          'Exit code: ${result.exitCode}\n'
+          'Error details:\n$errorDetails';
+      return <String>[message];
     }
     final diagnostics = <String>[];
-    _parseADBDeviceOutput(result.stdout, diagnostics: diagnostics);
+    _parseADBDeviceOutput('${result.stdout}\n${result.stderr}', diagnostics: diagnostics);
     return diagnostics;
   }
 
@@ -134,6 +148,9 @@ class AndroidDevices extends PollingDeviceDiscovery {
     }
 
     for (final String line in text.trim().split('\n')) {
+      if (line.trim().isEmpty) {
+        continue;
+      }
       // Skip lines like: * daemon started successfully *
       if (line.startsWith('* daemon ')) {
         continue;
@@ -149,9 +166,8 @@ class AndroidDevices extends PollingDeviceDiscovery {
         continue;
       }
 
-      if (_kDeviceRegex.hasMatch(line)) {
-        final Match match = _kDeviceRegex.firstMatch(line)!;
-
+      final Match? match = _kDeviceRegex.firstMatch(line);
+      if (match != null) {
         final String deviceID = match[1]!;
         final String deviceState = match[2]!;
         String? rest = match[3];
@@ -160,9 +176,9 @@ class AndroidDevices extends PollingDeviceDiscovery {
         if (rest != null && rest.isNotEmpty) {
           rest = rest.trim();
           for (final String data in rest.split(' ')) {
-            if (data.contains(':')) {
-              final List<String> fields = data.split(':');
-              info[fields[0]] = fields[1];
+            final int colonIndex = data.indexOf(':');
+            if (colonIndex != -1) {
+              info[data.substring(0, colonIndex)] = data.substring(colonIndex + 1);
             }
           }
         }
