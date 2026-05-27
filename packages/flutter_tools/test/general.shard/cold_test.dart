@@ -52,7 +52,7 @@ void main() {
     expect(exitCode, 2);
   });
 
-  testUsingContext('attach starts echoing device log', () async {
+  testUsingContext('attach does not start echoing device log by default', () async {
     final device = FakeDevice();
     final flutterDevice = FakeFlutterDevice(device);
     final devices = <FlutterDevice>[flutterDevice];
@@ -60,6 +60,22 @@ void main() {
     final int exitCode = await ColdRunner(
       devices,
       debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      target: 'main.dart',
+      stayResident: false,
+    ).attach();
+
+    expect(exitCode, 0);
+    expect(flutterDevice.startedEchoingDeviceLog, false);
+  });
+
+  testUsingContext('attach starts echoing device log when verboseSystemLogs is enabled', () async {
+    final device = FakeDevice();
+    final flutterDevice = FakeFlutterDevice(device);
+    final devices = <FlutterDevice>[flutterDevice];
+
+    final int exitCode = await ColdRunner(
+      devices,
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug, verboseSystemLogs: true),
       target: 'main.dart',
       stayResident: false,
     ).attach();
@@ -199,7 +215,9 @@ class FakeFlutterDevice extends Fake implements FlutterDevice {
 
   @override
   Future<void> startEchoingDeviceLog(DebuggingOptions debuggingOptions) async {
-    startedEchoingDeviceLog = true;
+    if (debuggingOptions.verboseSystemLogs) {
+      startedEchoingDeviceLog = true;
+    }
   }
 
   @override

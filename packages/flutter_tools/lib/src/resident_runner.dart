@@ -344,6 +344,9 @@ class FlutterDevice {
   }
 
   Future<void> startEchoingDeviceLog(DebuggingOptions debuggingOptions) async {
+    if (!debuggingOptions.verboseSystemLogs) {
+      return;
+    }
     if (_loggingSubscription != null) {
       return;
     }

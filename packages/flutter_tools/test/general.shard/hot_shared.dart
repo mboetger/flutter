@@ -119,7 +119,9 @@ class FakeFlutterDevice extends Fake implements FlutterDevice {
 
   @override
   Future<void> startEchoingDeviceLog(DebuggingOptions debuggingOptions) async {
-    startedEchoingDeviceLog = true;
+    if (debuggingOptions.verboseSystemLogs) {
+      startedEchoingDeviceLog = true;
+    }
   }
 
   @override
