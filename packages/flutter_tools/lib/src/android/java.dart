@@ -97,6 +97,7 @@ class Java {
           processManager: processManager,
         );
       }
+      logger.printTrace('Configured jdk-dir ($configured) is not runnable, falling back...');
     }
 
     // 2. Bundled with Android Studio
@@ -133,6 +134,7 @@ class Java {
           processManager: processManager,
         );
       }
+      logger.printTrace('JAVA_HOME ($javaHomeEnv) is not runnable, falling back...');
     }
 
     // 4. Fallback to PATH

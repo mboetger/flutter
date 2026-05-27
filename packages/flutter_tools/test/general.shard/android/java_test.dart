@@ -128,6 +128,10 @@ OpenJDK 64-Bit Server VM Zulu19.32+15-CA (build 19.0.2+7, mixed mode, sharing)
           expect(java.javaHome, isNull);
           expect(java.binaryPath, pathJava);
           expect(java.javaSource, JavaSource.path);
+          expect(
+            (logger as BufferLogger).traceText,
+            contains('JAVA_HOME ($javaHome) is not runnable, falling back...'),
+          );
         },
       );
 
@@ -157,6 +161,10 @@ OpenJDK 64-Bit Server VM Zulu19.32+15-CA (build 19.0.2+7, mixed mode, sharing)
           expect(java.javaHome, javaHome);
           expect(java.binaryPath, expectedJavaBinaryPath);
           expect(java.javaSource, JavaSource.javaHome);
+          expect(
+            (logger as BufferLogger).traceText,
+            contains('Configured jdk-dir ($configuredJdkPath) is not runnable, falling back...'),
+          );
         },
       );
 
