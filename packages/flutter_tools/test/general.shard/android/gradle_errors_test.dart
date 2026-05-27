@@ -57,6 +57,8 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          gradleOutOfMemoryErrorHandler,
+          gradleStackOverflowErrorHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -1723,6 +1725,24 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
         isTrue,
       );
       expect(gradleOutOfMemoryErrorHandler.test('  > GC overhead limit exceeded'), isTrue);
+      expect(gradleOutOfMemoryErrorHandler.test('  > Metaspace'), isTrue);
+      expect(
+        gradleOutOfMemoryErrorHandler.test('  > java.lang.OutOfMemoryError: Metaspace'),
+        isTrue,
+      );
+      expect(
+        gradleOutOfMemoryErrorHandler.test(
+          'e: /Users/Metaspace/project/lib/main.dart: error: compilation failed',
+        ),
+        isFalse,
+      );
+      expect(
+        gradleOutOfMemoryErrorHandler.test(
+          r'e: C:\project\Metaspace.dart: error: compilation failed',
+        ),
+        isFalse,
+      );
+      expect(gradleOutOfMemoryErrorHandler.test('Compiling Metaspace.java'), isFalse);
     });
 
     testUsingContext(
@@ -1739,6 +1759,39 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
           contains('Gradle ran out of memory while building your project.'),
         );
         expect(testLogger.statusText, contains('org.gradle.jvmargs=-Xmx3072m'));
+      },
+      overrides: <Type, Generator>{
+        GradleUtils: () => FakeGradleUtils(),
+        Platform: () => fakePlatform('android'),
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+      },
+    );
+  });
+
+  group('StackOverflowError', () {
+    testWithoutContext('pattern', () {
+      expect(gradleStackOverflowErrorHandler.test('  > StackOverflowError'), isTrue);
+      expect(gradleStackOverflowErrorHandler.test('  > java.lang.StackOverflowError'), isTrue);
+    });
+
+    testUsingContext(
+      'suggestion',
+      () async {
+        await gradleStackOverflowErrorHandler.handler(
+          project: FlutterProject.fromDirectoryTest(fileSystem.currentDirectory),
+          usesAndroidX: true,
+          line: '',
+        );
+
+        expect(
+          testLogger.statusText,
+          contains('Gradle ran out of stack space while building your project.'),
+        );
+        expect(
+          testLogger.statusText,
+          contains('This often indicates a circular dependency or an infinite recursion'),
+        );
       },
       overrides: <Type, Generator>{
         GradleUtils: () => FakeGradleUtils(),

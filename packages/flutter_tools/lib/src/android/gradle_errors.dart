@@ -86,6 +86,7 @@ final gradleErrors = <GradleHandledError>[
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
   gradleOutOfMemoryErrorHandler,
+  gradleStackOverflowErrorHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -722,11 +723,20 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
 /// Handler when Gradle runs out of memory (OOM) during the build.
 @visibleForTesting
 final gradleOutOfMemoryErrorHandler = GradleHandledError(
-  test: _lineMatcher(const <String>[
-    'Java heap space',
-    'OutOfMemoryError',
-    'GC overhead limit exceeded',
-  ]),
+  test: (String line) {
+    if (_lineMatcher(const <String>[
+      'Java heap space',
+      'OutOfMemoryError',
+      'GC overhead limit exceeded',
+    ])(line)) {
+      return true;
+    }
+    // Safe Metaspace matching to avoid false positives on paths or filenames.
+    return line.contains('Metaspace') &&
+        !line.contains('/') &&
+        !line.contains(r'\') &&
+        !RegExp(r'\.(dart|java|kt|gradle)\b').hasMatch(line);
+  },
   handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
     globals.printBox(
       '${globals.logger.terminal.warningMark} Gradle ran out of memory while building your project.\n\n'
@@ -740,4 +750,20 @@ final gradleOutOfMemoryErrorHandler = GradleHandledError(
     return GradleBuildStatus.exit;
   },
   eventLabel: 'gradle-out-of-memory-error',
+);
+
+/// Handler when Gradle runs out of stack space (StackOverflow) during the build.
+@visibleForTesting
+final gradleStackOverflowErrorHandler = GradleHandledError(
+  test: _lineMatcher(const <String>['StackOverflowError']),
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Gradle ran out of stack space while building your project.\n\n'
+      'This often indicates a circular dependency or an infinite recursion inside your build.gradle or gradle scripts.\n'
+      'Please audit your custom gradle build files and plugins for loops.',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'gradle-stack-overflow-error',
 );
