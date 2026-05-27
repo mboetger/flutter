@@ -17,27 +17,30 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.view.TextureRegistry.SurfaceTextureEntry
 
-class OtherFaceTexturePlugin :
-    FlutterPlugin,
-    MethodCallHandler {
-    private val tag = "OtherFaceTexturePlugin"
+class OtherFaceTexturePlugin : FlutterPlugin {
     private lateinit var channel: MethodChannel
-    private lateinit var binding: FlutterPluginBinding
     private lateinit var surfaceTextureEntry: SurfaceTextureEntry
-
-    private var surface: Surface? = null
+    private var handler: OtherFaceTexturePluginHandler? = null
 
     override fun onAttachedToEngine(binding: FlutterPluginBinding) {
-        this.binding = binding
         channel = MethodChannel(binding.binaryMessenger, "other_face_texture")
-        channel.setMethodCallHandler(this)
         surfaceTextureEntry = binding.textureRegistry.createSurfaceTexture()
+        handler = OtherFaceTexturePluginHandler(surfaceTextureEntry)
+        channel.setMethodCallHandler(handler)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
-        surfaceTextureEntry.release()
+        handler?.release()
+        handler = null
+        if (::surfaceTextureEntry.isInitialized) {
+            surfaceTextureEntry.release()
+        }
     }
+}
+
+class OtherFaceTexturePluginHandler(private val surfaceTextureEntry: SurfaceTextureEntry) : MethodCallHandler {
+    private var surface: Surface? = null
 
     override fun onMethodCall(
         call: MethodCall,
@@ -54,12 +57,8 @@ class OtherFaceTexturePlugin :
     }
 
     private fun updateTexture(): Long {
-        var surface = this.surface
-        if (surface == null) {
-            surface = Surface(surfaceTextureEntry.surfaceTexture())
-            this.surface = surface
-        }
-        drawOnSurface(surface!!)
+        val surface = this.surface ?: Surface(surfaceTextureEntry.surfaceTexture()).also { this.surface = it }
+        drawOnSurface(surface)
         return surfaceTextureEntry.id()
     }
 
@@ -70,22 +69,28 @@ class OtherFaceTexturePlugin :
             } else {
                 surface.lockCanvas(null)
             }
+        try {
+            // Yellow background
+            canvas.drawRGB(255, 230, 15)
 
-        // Yellow background
-        canvas.drawRGB(255, 230, 15)
+            val paint = Paint()
+            paint.style = Paint.Style.FILL
 
-        val paint = Paint()
-        paint.style = Paint.Style.FILL
+            // Black eyes
+            paint.color = Color.BLACK
+            canvas.drawCircle(225f, 225f, 25f, paint) // Left eye
+            canvas.drawCircle(425f, 225f, 25f, paint) // Right eye
 
-        // Black eyes
-        paint.color = Color.BLACK
-        canvas.drawCircle(225f, 225f, 25f, paint) // Left eye
-        canvas.drawCircle(425f, 225f, 25f, paint) // Right eye
+            // Black mouth
+            paint.color = Color.BLACK
+            canvas.drawCircle(300f, 300f, 50f, paint) // Simple mouth
+        } finally {
+            surface.unlockCanvasAndPost(canvas)
+        }
+    }
 
-        // Black mouth
-        paint.color = Color.BLACK
-        canvas.drawCircle(300f, 300f, 50f, paint) // Simple mouth
-
-        surface.unlockCanvasAndPost(canvas)
+    fun release() {
+        surface?.release()
+        surface = null
     }
 }
