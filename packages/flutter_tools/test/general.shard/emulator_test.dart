@@ -71,6 +71,7 @@ void main() {
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
 
       await expectLater(() async => emulatorManager.getAllAvailableEmulators(), returnsNormally);
@@ -95,6 +96,7 @@ void main() {
           ]),
           androidSdk: sdk,
           androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+          operatingSystemUtils: FakeOperatingSystemUtils(),
         );
 
         final List<Emulator> emulators = await emulatorManager.getAllAvailableEmulators();
@@ -128,6 +130,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
           const FakeCommand(command: <String>['emulator', '-list-avds'], stdout: 'existing-avd-1'),
         ]),
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
 
       await expectLater(() async => emulatorManager.getAllAvailableEmulators(), returnsNormally);
@@ -141,6 +144,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         processManager: fakeProcessManager,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
         fileSystem: fileSystem,
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
 
       expect(await testEmulatorManager.getEmulatorsMatching('Nexus_5'), <Emulator>[emulator1]);
@@ -169,6 +173,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -197,6 +202,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
           ]),
           androidSdk: sdk,
           androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+          operatingSystemUtils: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
         );
         final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -228,6 +234,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -264,6 +271,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -298,6 +306,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator(name: 'test');
 
@@ -335,6 +344,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        operatingSystemUtils: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator(
         name: 'existing-avd-1',
@@ -378,6 +388,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
           ]),
           androidSdk: sdk,
           androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+          operatingSystemUtils: FakeOperatingSystemUtils(),
         );
         final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -437,6 +448,7 @@ class TestEmulatorManager extends EmulatorManager {
     required super.processManager,
     required super.androidWorkflow,
     required super.fileSystem,
+    required super.operatingSystemUtils,
   });
 
   final List<Emulator> allEmulators;

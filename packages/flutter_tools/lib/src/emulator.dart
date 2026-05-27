@@ -17,7 +17,6 @@ import 'base/logger.dart';
 import 'base/os.dart';
 import 'base/process.dart';
 import 'device.dart';
-import 'globals.dart' as globals;
 import 'ios/ios_emulators.dart';
 
 EmulatorManager? get emulatorManager => context.get<EmulatorManager>();
@@ -31,8 +30,10 @@ class EmulatorManager {
     required ProcessManager processManager,
     required AndroidWorkflow androidWorkflow,
     required FileSystem fileSystem,
+    required OperatingSystemUtils operatingSystemUtils,
   }) : _java = java,
        _androidSdk = androidSdk,
+       _operatingSystemUtils = operatingSystemUtils,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager),
        _androidEmulators = AndroidEmulators(
          androidSdk: androidSdk,
@@ -46,6 +47,7 @@ class EmulatorManager {
 
   final Java? _java;
   final AndroidSdk? _androidSdk;
+  final OperatingSystemUtils _operatingSystemUtils;
   final AndroidEmulators _androidEmulators;
   final ProcessUtils _processUtils;
 
@@ -134,9 +136,9 @@ class EmulatorManager {
     final String? sdkId = await _getPreferredSdkId(avdManagerPath);
     if (sdkId == null) {
       final bool isArmHost =
-          globals.os.hostPlatform == HostPlatform.darwin_arm64 ||
-          globals.os.hostPlatform == HostPlatform.linux_arm64 ||
-          globals.os.hostPlatform == HostPlatform.windows_arm64;
+          _operatingSystemUtils.hostPlatform == HostPlatform.darwin_arm64 ||
+          _operatingSystemUtils.hostPlatform == HostPlatform.linux_arm64 ||
+          _operatingSystemUtils.hostPlatform == HostPlatform.windows_arm64;
       final recommendedImage = isArmHost
           ? 'system-images;android-34;google_apis_playstore;arm64-v8a'
           : 'system-images;android-27;google_apis_playstore;x86';
