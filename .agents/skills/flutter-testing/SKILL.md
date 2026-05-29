@@ -46,6 +46,47 @@ Dart unit tests are located in the `test/` subdirectory of the package under tes
     dart --enable-asserts dev/bots/analyze.dart
     ```
 
+### Golden File Tests
+Golden file tests compare the rendered pixels of a widget against a master baseline image using **Skia Gold** (`flutter-gold.skia.org`).
+
+*   **Writing a Golden Test**:
+    1.  Add the `reduced-test-set` tag at the very top of your test file (so it runs on Mac/Windows CI pre-submit):
+        ```dart
+        @Tags(<String>['reduced-test-set'])
+        ```
+    2.  Wrap the widget subtree you want to capture in a **`RepaintBoundary`** (otherwise it captures the full 2400x1800 viewport):
+        ```dart
+        await tester.pumpWidget(
+          const RepaintBoundary(
+            child: MyWidget(),
+          ),
+        );
+        ```
+    3.  Assert using `matchesGoldenFile`. Use the format `test_filename.subtest.png`:
+        ```dart
+        await expectLater(
+          find.byType(RepaintBoundary),
+          matchesGoldenFile('my_widget_test.basic.png'),
+        );
+        ```
+*   **Running/Updating Goldens Locally**:
+    Navigate to the package (e.g., `packages/flutter`) and run with the `--update-goldens` flag:
+    ```bash
+    flutter test --update-goldens test/widgets/my_widget_test.dart
+    ```
+    This generates or updates the baseline images locally under `bin/cache/pkg/skia_goldens/packages/flutter/test/`.
+
+*   **CI Configuration for Goldens**:
+    Any task running golden tests in `.ci.yaml` must include the `goldctl` dependency:
+    ```yaml
+      properties:
+        dependencies: >-
+          [
+            {"dependency": "goldctl", "version": "git_revision:2387d6fff449587eecbb7e45b2692ca0710b63b9"}
+          ]
+    ```
+    *(Note: Copy the exact git revision from an existing task).*
+
 ### Integration Tests (`integration_test` package)
 The `integration_test` package enables self-driving testing of Flutter code on devices and emulators.
 *   **Run using `flutter drive`**:
