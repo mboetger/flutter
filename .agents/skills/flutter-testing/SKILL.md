@@ -16,7 +16,7 @@ This skill helps you run, write, and configure tests in the Flutter monorepo, wh
 ## Repository Structure (Monorepo)
 
 The `flutter/flutter` and `flutter/engine` repositories are merged into a single monorepo:
-- **Monorepo Root**: `/usr/local/google/home/boetger/src/flutter`
+- **Repository Root**: The base directory of the cloned repository.
 - **Framework Code**: Located at the root (e.g., `packages/flutter`, `examples/`).
 - **Engine Code**: Located under the **`engine/src/flutter`** directory.
 - **Engine Build Output**: Located under **`engine/src/out`**.
@@ -38,7 +38,7 @@ Dart unit tests are located in the `test/` subdirectory of the package under tes
     ```bash
     flutter test lib/my_app_test.dart
     ```
-*   **Simulate CI tests locally** (run from monorepo root):
+*   **Simulate CI tests locally** (run from repository root):
     ```bash
     # Run all tests
     dart dev/bots/test.dart
@@ -73,8 +73,8 @@ The `integration_test` package enables self-driving testing of Flutter code on d
 
 ### Device Lab (End-to-End) Tests
 Device Lab tests are automated integration tests run on physical devices, simulators, or emulators, managed by the Flutter team's CI tooling.
-- **Tooling**: [dev/devicelab](file:///usr/local/google/home/boetger/src/flutter/dev/devicelab)
-- **Tests**: [dev/integration_tests](file:///usr/local/google/home/boetger/src/flutter/dev/integration_tests)
+- **Tooling**: `dev/devicelab`
+- **Tests**: `dev/integration_tests`
 
 *   **How to run locally**:
     1. Connect device/emulator.
@@ -156,7 +156,7 @@ For DeviceLab tests, you must create a task entry point that the runner script c
     ```
 
 ### Step 2: Configure the Target in `.ci.yaml`
-You must register the task in the top-level [.ci.yaml](file:///usr/local/google/home/boetger/src/flutter/.ci.yaml) file.
+You must register the task in the top-level `.ci.yaml` file at the repository root.
 
 1.  Open `.ci.yaml` and add a new target entry under `targets:`.
 2.  Set **`bringup: true`** initially. This ensures the test runs in a "non-blocking" staging pool.
@@ -179,14 +179,14 @@ You must register the task in the top-level [.ci.yaml](file:///usr/local/google/
 
 ### Step 3: Assign Ownership in `TESTOWNERS`
 Every test in the repository must have designated owners to triage failures.
-1.  Open [TESTOWNERS](file:///usr/local/google/home/boetger/src/flutter/TESTOWNERS).
+1.  Open `TESTOWNERS` at the repository root.
 2.  Add a line mapping your task file to GitHub handles of the owners and the responsible team:
     ```text
     /dev/devicelab/bin/tasks/my_new_test.dart @your_github_handle @flutter/android
     ```
 
 ### Step 4: Graduate the Test to "Blocking"
-1.  Monitor the test on the [Flutter Build Dashboard](https://flutter-dashboard.appspot.com/) after landing the PR.
+1.  Monitor the test on the Flutter Build Dashboard after landing the PR.
 2.  Once the test has run successfully in post-submit CI multiple times and proven to be stable (non-flaky), submit a follow-up PR to **remove `bringup: true`** from `.ci.yaml`.
 
 ---
@@ -218,7 +218,7 @@ These tests are co-located with their source files (e.g., `*_unittest.cc`).
     ```
 
 ### Android Java Embedder Tests (JUnit / Robolectric)
-Located at [`engine/src/flutter/shell/platform/android/test`](file:///usr/local/google/home/boetger/src/flutter/engine/src/flutter/shell/platform/android/test).
+Located at `engine/src/flutter/shell/platform/android/test`.
 
 *   **Run Android JUnit/Robolectric tests** (from `engine/src/flutter`):
     ```bash
@@ -259,4 +259,4 @@ To run Framework tests against your locally compiled engine within the monorepo:
 
 ### Web Engine Tests
 Web tests are run via the `felt` command.
-- Refer to [engine/src/flutter/lib/web_ui/README.md](file:///usr/local/google/home/boetger/src/flutter/engine/src/flutter/lib/web_ui/README.md) for more details.
+- Refer to `engine/src/flutter/lib/web_ui/README.md` for more details.
