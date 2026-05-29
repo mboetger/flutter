@@ -102,6 +102,13 @@ TaskFunction createEndToEndKeyboardTest() {
   ).call;
 }
 
+TaskFunction createEndToEndSysUiModeTest() {
+  return DriverTest(
+    '${flutterDirectory.path}/dev/integration_tests/ui',
+    'integration_test/sys_ui_mode_test.dart',
+  ).call;
+}
+
 TaskFunction createEndToEndFrameNumberTest() {
   return DriverTest(
     '${flutterDirectory.path}/dev/integration_tests/ui',

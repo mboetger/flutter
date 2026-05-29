@@ -2939,6 +2939,16 @@ targets:
         ["devicelab", "android", "linux", "pixel", "7pro"]
       task_name: integration_ui_textfield
 
+  - name: Linux_pixel_7pro integration_ui_sys_ui_mode
+    recipe: devicelab/devicelab_drone
+    bringup: true
+    presubmit: false
+    timeout: 60
+    properties:
+      tags: >
+        ["devicelab", "android", "linux", "pixel", "7pro"]
+      task_name: integration_ui_sys_ui_mode
+
   # linux mokey benchmark
   - name: Linux_mokey large_image_changer_perf_android
     recipe: devicelab/devicelab_drone
