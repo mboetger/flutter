@@ -77,6 +77,15 @@ void MessageLoopLinux::Terminate() {
   WakeUp(fml::TimePoint::Now());
 }
 
+void MessageLoopLinux::RunOnce() {
+  struct epoll_event event = {};
+  int epoll_result = FML_HANDLE_EINTR(
+      ::epoll_wait(epoll_fd_.get(), &event, 1, -1 /* timeout */));
+  if (epoll_result == 1 && event.data.fd == timer_fd_.get()) {
+    OnEventFired();
+  }
+}
+
 // |fml::MessageLoopImpl|
 void MessageLoopLinux::WakeUp(fml::TimePoint time_point) {
   bool result = TimerRearm(timer_fd_.get(), time_point);

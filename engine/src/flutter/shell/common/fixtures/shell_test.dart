@@ -655,3 +655,9 @@ void hitTestOutsidePlatformViewMain() {
     return HitTestResponse.empty;
   };
 }
+
+@pragma('vm:entry-point')
+void mainKeepAlive() {
+  RawReceivePort();
+  notifyNative();
+}

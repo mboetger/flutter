@@ -81,6 +81,10 @@ void MessageLoopAndroid::Terminate() {
   ALooper_wake(looper_.get());
 }
 
+void MessageLoopAndroid::RunOnce() {
+  ::ALooper_pollOnce(-1, nullptr, nullptr, nullptr);
+}
+
 void MessageLoopAndroid::WakeUp(fml::TimePoint time_point) {
   [[maybe_unused]] bool result = TimerRearm(timer_fd_.get(), time_point);
   FML_DCHECK(result);

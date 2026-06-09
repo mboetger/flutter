@@ -159,6 +159,9 @@ void UIDartState::ScheduleMicrotask(Dart_Handle closure) {
 }
 
 void UIDartState::FlushMicrotasksNow() {
+  if (IsPaused()) {
+    return;
+  }
   microtask_queue_.RunMicrotasks();
 }
 

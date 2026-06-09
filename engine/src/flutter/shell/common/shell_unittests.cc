@@ -8,6 +8,7 @@
 #include <ctime>
 #include <future>
 #include <memory>
+#include <chrono>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -51,6 +52,7 @@
 #include "third_party/rapidjson/include/rapidjson/writer.h"
 #include "third_party/skia/include/codec/SkCodecAnimation.h"
 #include "third_party/skia/include/gpu/ganesh/mock/GrMockTypes.h"
+#include "third_party/dart/runtime/include/dart_tools_api.h"
 #include "third_party/tonic/converter/dart_converter.h"
 
 #ifdef SHELL_ENABLE_VULKAN
@@ -5184,7 +5186,139 @@ TEST_F(ShellTest, ShoulDiscardLayerTreeIfFrameIsSizedIncorrectly) {
   DestroyShell(std::move(shell), task_runners);
 }
 
+TEST_F(ShellTest, PauseBlocksPlatformThreadWhenMerged) {
+  Settings settings = CreateSettingsForFixture();
+  settings.enable_vm_service = true;
+  settings.merged_platform_ui_thread = Settings::MergedPlatformUIThread::kEnabled;
+
+  ThreadHost thread_host(ThreadHost::ThreadHostConfig(
+      "io.flutter.test." + GetCurrentTestName() + ".",
+      ThreadHost::Type::kPlatform | ThreadHost::Type::kRaster |
+          ThreadHost::Type::kIo));
+  TaskRunners task_runners("test", thread_host.platform_thread->GetTaskRunner(),
+                           thread_host.raster_thread->GetTaskRunner(),
+                           thread_host.platform_thread->GetTaskRunner(),
+                           thread_host.io_thread->GetTaskRunner());
+
+  std::unique_ptr<Shell> shell = CreateShell(settings, task_runners);
+  ASSERT_TRUE(shell);
+
+  fml::AutoResetWaitableEvent native_latch;
+  AddNativeCallback("NotifyNative", CREATE_NATIVE_ENTRY([&](auto args) {
+                      native_latch.Signal();
+                    }));
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("mainKeepAlive");
+  RunEngine(shell.get(), std::move(configuration));
+
+  native_latch.Wait();
+
+  // Helper to invoke VM service method and parse the response.
+  auto invoke_vm_service = [](const std::string& request) -> rapidjson::Document {
+    uint8_t* response = nullptr;
+    intptr_t response_length = 0;
+    char* error = nullptr;
+    bool success = Dart_InvokeVMServiceMethod(
+        reinterpret_cast<uint8_t*>(const_cast<char*>(request.c_str())),
+        request.length(), &response, &response_length, &error);
+
+    if (error != nullptr) {
+      std::string error_str(error);
+      free(error);
+      free(response);
+      EXPECT_TRUE(false) << "VM Service error: " << error_str << " for request: " << request;
+      return rapidjson::Document();
+    }
+    EXPECT_TRUE(success);
+    if (!success) {
+      free(response);
+      return rapidjson::Document();
+    }
+
+    rapidjson::Document doc;
+    doc.Parse(reinterpret_cast<char*>(response), response_length);
+    free(response);
+    return doc;
+  };
+
+  // 1. Get the isolate ID from the VM.
+  rapidjson::Document get_vm_doc = invoke_vm_service(
+      R"({"jsonrpc":"2.0","id":"1","method":"getVM","params":{}})");
+  ASSERT_FALSE(get_vm_doc.IsNull());
+
+  std::string isolate_id;
+  ASSERT_TRUE(get_vm_doc.HasMember("result"));
+  ASSERT_TRUE(get_vm_doc["result"].HasMember("isolates"));
+  const auto& isolates = get_vm_doc["result"]["isolates"];
+  ASSERT_TRUE(isolates.IsArray());
+  for (rapidjson::SizeType i = 0; i < isolates.Size(); i++) {
+    if (isolates[i].HasMember("name") && std::string(isolates[i]["name"].GetString()) == "main") {
+      isolate_id = isolates[i]["id"].GetString();
+      break;
+    }
+  }
+  if (isolate_id.empty() && isolates.Size() > 0) {
+    isolate_id = isolates[0]["id"].GetString();
+  }
+  ASSERT_FALSE(isolate_id.empty());
+
+  // 2. Pause the isolate via VM service request.
+  rapidjson::Document pause_doc = invoke_vm_service(
+      R"({"jsonrpc":"2.0","id":"2","method":"pause","params":{"isolateId":")" + isolate_id + R"("}})");
+  ASSERT_FALSE(pause_doc.IsNull());
+
+  // Wait for the isolate to pause deterministically by polling.
+  auto is_isolate_paused = [&](const std::string& id) -> bool {
+    rapidjson::Document doc = invoke_vm_service(
+        R"({"jsonrpc":"2.0","id":"x","method":"getIsolate","params":{"isolateId":")" + id + R"("}})");
+    if (doc.IsNull() || !doc.HasMember("result") || !doc["result"].HasMember("pauseEvent")) {
+      return false;
+    }
+    const auto& pause_event = doc["result"]["pauseEvent"];
+    if (!pause_event.HasMember("kind")) {
+      return false;
+    }
+    std::string kind = pause_event["kind"].GetString();
+    return kind.rfind("Pause", 0) == 0; // Starts with "Pause"
+  };
+
+  bool paused = false;
+  for (int i = 0; i < 100; ++i) {
+    if (is_isolate_paused(isolate_id)) {
+      paused = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  ASSERT_TRUE(paused);
+
+  // 3. Try to post a task to the Platform task runner.
+  // Since UI and Platform threads are merged, the Platform thread is running the isolate pause loop.
+  // If the bug is fixed, the Platform thread should NOT block, and the task should execute.
+  fml::AutoResetWaitableEvent platform_task_latch;
+  bool task_executed = false;
+  task_runners.GetPlatformTaskRunner()->PostTask([&platform_task_latch, &task_executed]() {
+    task_executed = true;
+    platform_task_latch.Signal();
+  });
+
+  // Wait with a timeout. Under the fixed implementation, this should succeed.
+  // Under the buggy implementation, this will time out (fail), reproducing the bug.
+  bool timed_out = platform_task_latch.WaitWithTimeout(fml::TimeDelta::FromSeconds(5));
+  EXPECT_FALSE(timed_out);
+  EXPECT_TRUE(task_executed);
+
+  // 4. Resume the isolate so it can shut down cleanly.
+  rapidjson::Document resume_doc = invoke_vm_service(
+      R"({"jsonrpc":"2.0","id":"3","method":"resume","params":{"isolateId":")" + isolate_id + R"("}})");
+  ASSERT_FALSE(resume_doc.IsNull());
+
+  DestroyShell(std::move(shell), task_runners);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
 // NOLINTEND(clang-analyzer-core.StackAddressEscape)
+

@@ -53,6 +53,10 @@ void MessageLoop::Terminate() {
   loop_->DoTerminate();
 }
 
+void MessageLoop::RunOnce() {
+  loop_->RunOnce();
+}
+
 fml::RefPtr<fml::TaskRunner> MessageLoop::GetTaskRunner() const {
   return task_runner_;
 }

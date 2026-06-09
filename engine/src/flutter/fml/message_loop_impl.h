@@ -39,6 +39,8 @@ class MessageLoopImpl : public Wakeable,
 
   virtual void Terminate() = 0;
 
+  virtual void RunOnce() = 0;
+
   void PostTask(const fml::closure& task, fml::TimePoint target_time);
 
   void AddTaskObserver(intptr_t key, const fml::closure& callback);

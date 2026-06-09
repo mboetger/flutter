@@ -71,6 +71,12 @@ void MessageLoopDarwin::Terminate() {
   CFRunLoopStop(local_loop);
 }
 
+void MessageLoopDarwin::RunOnce() {
+  @autoreleasepool {
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, kDistantFuture, YES);
+  }
+}
+
 void MessageLoopDarwin::WakeUp(fml::TimePoint time_point) {
   // Rearm the timer. The time bases used by CoreFoundation and FXL are
   // different and must be accounted for.

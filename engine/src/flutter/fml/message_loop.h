@@ -34,6 +34,8 @@ class MessageLoop {
 
   void Terminate();
 
+  void RunOnce();
+
   void AddTaskObserver(intptr_t key, const fml::closure& callback);
 
   void RemoveTaskObserver(intptr_t key);

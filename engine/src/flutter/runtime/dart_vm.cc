@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#define FML_USED_ON_EMBEDDER
+
 #include "flutter/runtime/dart_vm.h"
 
 #include <sys/stat.h>
@@ -16,6 +18,8 @@
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/trace_event.h"
 #include "flutter/lib/ui/dart_ui.h"
+#include "flutter/fml/message_loop.h"
+#include "flutter/lib/ui/ui_dart_state.h"
 #include "flutter/runtime/dart_isolate.h"
 #include "flutter/runtime/dart_vm_initializer.h"
 #include "flutter/runtime/ptrace_check.h"
@@ -151,6 +155,46 @@ bool DartFileModifiedCallback(const char* source_url, int64_t since_ms) {
 }
 
 void ThreadExitCallback() {}
+
+static bool OnPausedLoopCallback() {
+  Dart_Isolate isolate = Dart_CurrentIsolate();
+  if (isolate == nullptr || Dart_IsolateData(isolate) == nullptr) {
+    return false;
+  }
+  UIDartState* ui_dart_state = static_cast<UIDartState*>(tonic::DartState::From(isolate));
+  if (ui_dart_state != nullptr && fml::MessageLoop::IsInitializedForCurrentThread()) {
+    if (Dart_HasServiceMessages()) {
+      return true;
+    }
+    ui_dart_state->SetPaused(true);
+    if (Dart_HasServiceMessages()) {
+      ui_dart_state->SetPaused(false);
+      return true;
+    }
+    auto& message_loop = fml::MessageLoop::GetCurrent();
+    while (ui_dart_state->IsPaused()) {
+      message_loop.RunOnce();
+    }
+    return true;
+  }
+  return false;
+}
+
+static void OnWakePausedLoopCallback(Dart_Isolate isolate) {
+  if (isolate == nullptr || Dart_IsolateData(isolate) == nullptr) {
+    return;
+  }
+  UIDartState* ui_dart_state = static_cast<UIDartState*>(tonic::DartState::From(isolate));
+  if (ui_dart_state != nullptr) {
+    ui_dart_state->SetPaused(false);
+    auto ui_task_runner = ui_dart_state->GetTaskRunners().GetUITaskRunner();
+    if (ui_task_runner) {
+      ui_task_runner->PostTask([]() {
+        // Dummy task to wake up the UI thread's loop.
+      });
+    }
+  }
+}
 
 static const char kStdoutStreamId[] = "Stdout";
 static const char kStderrStreamId[] = "Stderr";
@@ -466,6 +510,8 @@ DartVM::DartVM(const std::shared_ptr<const DartVMData>& vm_data,
     DartVMInitializer::Initialize(&params,
                                   settings_.enable_timeline_event_handler,
                                   settings_.trace_systrace);
+    Dart_SetPausedLoopCallback(OnPausedLoopCallback);
+    Dart_SetWakePausedLoopCallback(OnWakePausedLoopCallback);
     // Send the earliest available timestamp in the application lifecycle to
     // timeline. The difference between this timestamp and the time we render
     // the very first frame gives us a good idea about Flutter's startup time.

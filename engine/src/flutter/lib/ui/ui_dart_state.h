@@ -5,6 +5,7 @@
 #ifndef FLUTTER_LIB_UI_UI_DART_STATE_H_
 #define FLUTTER_LIB_UI_UI_DART_STATE_H_
 
+#include <atomic>
 #include <future>
 #include <memory>
 #include <string>
@@ -186,6 +187,9 @@ class UIDartState : public tonic::DartState {
   /// The runtime stage to use for fragment shaders.
   impeller::RuntimeStageBackend GetRuntimeStageBackend() const;
 
+  bool IsPaused() const { return paused_.load(); }
+  void SetPaused(bool paused) { paused_.store(paused); }
+
   virtual Dart_Isolate CreatePlatformIsolate(Dart_Handle entry_point,
                                              char** error);
 
@@ -223,6 +227,7 @@ class UIDartState : public tonic::DartState {
   LogMessageCallback log_message_callback_;
   const std::shared_ptr<IsolateNameServer> isolate_name_server_;
   UIDartState::Context context_;
+  std::atomic<bool> paused_{false};
 
   void AddOrRemoveTaskObserver(bool add);
 };

@@ -39,6 +39,8 @@ class MessageLoopAndroid : public MessageLoopImpl {
 
   void Terminate() override;
 
+  void RunOnce() override;
+
   void WakeUp(fml::TimePoint time_point) override;
 
   void OnEventFired();

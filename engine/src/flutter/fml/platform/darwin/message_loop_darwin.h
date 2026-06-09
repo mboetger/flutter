@@ -38,6 +38,9 @@ class MessageLoopDarwin : public MessageLoopImpl {
   void Terminate() override;
 
   // |fml::MessageLoopImpl|
+  void RunOnce() override;
+
+  // |fml::MessageLoopImpl|
   void WakeUp(fml::TimePoint time_point) override;
 
   static void OnTimerFire(CFRunLoopTimerRef timer, MessageLoopDarwin* loop);

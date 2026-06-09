@@ -35,6 +35,8 @@ class MessageLoopWin : public MessageLoopImpl {
 
   void Terminate() override;
 
+  void RunOnce() override;
+
   void WakeUp(fml::TimePoint time_point) override;
 
   FML_FRIEND_MAKE_REF_COUNTED(MessageLoopWin);

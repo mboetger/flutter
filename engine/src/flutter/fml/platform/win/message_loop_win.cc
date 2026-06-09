@@ -48,6 +48,11 @@ void MessageLoopWin::Terminate() {
   timeEndPeriod(timer_resolution_);
 }
 
+void MessageLoopWin::RunOnce() {
+  FML_CHECK(WaitForSingleObject(timer_.get(), INFINITE) == 0);
+  RunExpiredTasksNow();
+}
+
 void MessageLoopWin::WakeUp(fml::TimePoint time_point) {
   LARGE_INTEGER due_time = {0};
   fml::TimePoint now = fml::TimePoint::Now();
