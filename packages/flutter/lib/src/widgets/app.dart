@@ -1464,6 +1464,7 @@ class _WidgetsAppState extends State<WidgetsApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _updateRouting();
+    _updateBackButtonDispatcher();
     WidgetsBinding.instance.addObserver(this);
     _appLifecycleState = WidgetsBinding.instance.lifecycleState;
   }
@@ -1472,11 +1473,13 @@ class _WidgetsAppState extends State<WidgetsApp> with WidgetsBindingObserver {
   void didUpdateWidget(WidgetsApp oldWidget) {
     super.didUpdateWidget(oldWidget);
     _updateRouting(oldWidget: oldWidget);
+    _updateBackButtonDispatcher();
     _updateLocalizations(oldWidget: oldWidget);
   }
 
   @override
   void dispose() {
+    _backButtonDispatcherWithCallback?.removeCallback(_handleBackButtonDispatcherNotification);
     WidgetsBinding.instance.removeObserver(this);
     _defaultRouteInformationProvider?.dispose();
     _localizationsResolver.dispose();
@@ -1491,6 +1494,31 @@ class _WidgetsAppState extends State<WidgetsApp> with WidgetsBindingObserver {
 
   void _clearNavigatorResource() {
     _navigator = null;
+  }
+
+  BackButtonDispatcher? _backButtonDispatcherWithCallback;
+
+  void _updateBackButtonDispatcher() {
+    if (_usesNavigator) {
+      final BackButtonDispatcher dispatcher = _effectiveBackButtonDispatcher;
+      if (_backButtonDispatcherWithCallback == dispatcher) {
+        return;
+      }
+      _backButtonDispatcherWithCallback?.removeCallback(_handleBackButtonDispatcherNotification);
+      _backButtonDispatcherWithCallback = dispatcher;
+      _backButtonDispatcherWithCallback!.addCallback(_handleBackButtonDispatcherNotification);
+    } else {
+      _backButtonDispatcherWithCallback?.removeCallback(_handleBackButtonDispatcherNotification);
+      _backButtonDispatcherWithCallback = null;
+    }
+  }
+
+  Future<bool> _handleBackButtonDispatcherNotification() {
+    final NavigatorState? navigator = _navigator?.currentState;
+    if (navigator == null) {
+      return Future<bool>.value(false);
+    }
+    return navigator.maybePop();
   }
 
   void _updateRouting({WidgetsApp? oldWidget}) {
@@ -1510,7 +1538,13 @@ class _WidgetsAppState extends State<WidgetsApp> with WidgetsBindingObserver {
       }
     } else if (_usesNavigator) {
       assert(!_usesRouterWithDelegates && !_usesRouterWithConfig);
-      _clearRouterResource();
+      _defaultRouteInformationProvider?.dispose();
+      _defaultRouteInformationProvider = null;
+      if (widget.backButtonDispatcher == null) {
+        _defaultBackButtonDispatcher ??= RootBackButtonDispatcher();
+      } else {
+        _defaultBackButtonDispatcher = null;
+      }
       if (_navigator == null || widget.navigatorKey != oldWidget!.navigatorKey) {
         _navigator = widget.navigatorKey ?? GlobalObjectKey<NavigatorState>(this);
       }
@@ -1606,17 +1640,9 @@ class _WidgetsAppState extends State<WidgetsApp> with WidgetsBindingObserver {
   @override
   Future<bool> didPopRoute() async {
     assert(mounted);
-    // The back button dispatcher should handle the pop route if we use a
-    // router.
-    if (_usesRouterWithDelegates) {
-      return false;
-    }
-
-    final NavigatorState? navigator = _navigator?.currentState;
-    if (navigator == null) {
-      return false;
-    }
-    return navigator.maybePop();
+    // The back button dispatcher handles the pop route if we use a navigator
+    // or router.
+    return false;
   }
 
   @override
@@ -1728,6 +1754,13 @@ class _WidgetsAppState extends State<WidgetsApp> with WidgetsBindingObserver {
     } else {
       assert(routing != null);
       result = routing!;
+    }
+
+    if (_usesNavigator) {
+      result = BackButtonDispatcherScope(
+        backButtonDispatcher: _effectiveBackButtonDispatcher,
+        child: result,
+      );
     }
 
     if (isWindowingEnabled) {

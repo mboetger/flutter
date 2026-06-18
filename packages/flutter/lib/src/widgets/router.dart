@@ -837,7 +837,7 @@ class _RouterState<T> extends State<Router<T>> with RestorationMixin {
 
   @override
   Widget build(BuildContext context) {
-    return UnmanagedRestorationScope(
+    Widget result = UnmanagedRestorationScope(
       bucket: bucket,
       child: _RouterScope(
         routeInformationProvider: widget.routeInformationProvider,
@@ -854,6 +854,13 @@ class _RouterState<T> extends State<Router<T>> with RestorationMixin {
         ),
       ),
     );
+    if (widget.backButtonDispatcher != null) {
+      result = BackButtonDispatcherScope(
+        backButtonDispatcher: widget.backButtonDispatcher!,
+        child: result,
+      );
+    }
+    return result;
   }
 }
 
@@ -1165,11 +1172,67 @@ class ChildBackButtonDispatcher extends BackButtonDispatcher {
   }
 }
 
+/// An inherited widget that associates a [BackButtonDispatcher] with a subtree.
+///
+/// See also:
+///
+///  * [BackButtonListener], which uses this widget to find the ancestor
+///    [BackButtonDispatcher] to register its callback.
+///  * [Router], which wraps its subtree in this widget if it has a
+///    [BackButtonDispatcher].
+class BackButtonDispatcherScope extends InheritedWidget {
+  /// Creates a back button dispatcher scope.
+  const BackButtonDispatcherScope({
+    super.key,
+    required this.backButtonDispatcher,
+    required super.child,
+  });
+
+  /// The back button dispatcher associated with this scope.
+  final BackButtonDispatcher backButtonDispatcher;
+
+  /// Returns the [BackButtonDispatcher] of the nearest ancestor
+  /// [BackButtonDispatcherScope] widget.
+  ///
+  /// Returns null if no [BackButtonDispatcherScope] ancestor is found.
+  static BackButtonDispatcher? maybeOf(BuildContext context) {
+    final BackButtonDispatcherScope? scope = context
+        .dependOnInheritedWidgetOfExactType<BackButtonDispatcherScope>();
+    return scope?.backButtonDispatcher;
+  }
+
+  /// Returns the [BackButtonDispatcher] of the nearest ancestor
+  /// [BackButtonDispatcherScope] widget.
+  ///
+  /// If no [BackButtonDispatcherScope] ancestor is found, this method will assert
+  /// in debug mode, and throw an exception in release mode.
+  static BackButtonDispatcher of(BuildContext context) {
+    final BackButtonDispatcher? dispatcher = maybeOf(context);
+    assert(() {
+      if (dispatcher == null) {
+        throw FlutterError(
+          'BackButtonDispatcherScope.of() called with a context that does not contain a BackButtonDispatcherScope.\n'
+          'No BackButtonDispatcherScope ancestor could be found starting from the context that was passed to BackButtonDispatcherScope.of().\n'
+          'This can happen when the context is from a widget that is not a descendant of a WidgetsApp or Router widget.',
+        );
+      }
+      return true;
+    }());
+    return dispatcher!;
+  }
+
+  @override
+  bool updateShouldNotify(BackButtonDispatcherScope oldWidget) {
+    return backButtonDispatcher != oldWidget.backButtonDispatcher;
+  }
+}
+
 /// A convenience widget that registers a callback for when the back button is pressed.
 ///
-/// In order to use this widget, there must be an ancestor [Router] widget in the tree
-/// that has a [RootBackButtonDispatcher]. e.g. The [Router] widget created by the
-/// [MaterialApp.router] has a built-in [RootBackButtonDispatcher] by default.
+/// In order to use this widget, there must be an ancestor [BackButtonDispatcherScope]
+/// or [Router] widget in the tree that has a [BackButtonDispatcher].
+/// e.g. [WidgetsApp] (and by extension [MaterialApp] and [CupertinoApp])
+/// automatically introduces a [BackButtonDispatcherScope] for its subtree.
 ///
 /// It only applies to platforms that accept back button clicks, such as Android.
 ///
@@ -1199,10 +1262,11 @@ class _BackButtonListenerState extends State<BackButtonListener> {
   void didChangeDependencies() {
     dispatcher?.removeCallback(widget.onBackButtonPressed);
 
-    final BackButtonDispatcher? rootBackDispatcher = Router.of(context).backButtonDispatcher;
+    final BackButtonDispatcher? rootBackDispatcher =
+        BackButtonDispatcherScope.maybeOf(context) ?? Router.maybeOf(context)?.backButtonDispatcher;
     assert(
       rootBackDispatcher != null,
-      'The parent router must have a backButtonDispatcher to use this widget',
+      'The parent router or WidgetsApp must have a backButtonDispatcher to use this widget',
     );
 
     dispatcher = rootBackDispatcher!.createChildBackButtonDispatcher()

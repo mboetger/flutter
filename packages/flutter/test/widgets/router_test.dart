@@ -1729,6 +1729,87 @@ void main() {
       areCreateAndDispose,
     );
   });
+
+  group('BackButtonDispatcherScope tests', () {
+    testWidgets('BackButtonDispatcherScope.maybeOf can return null', (WidgetTester tester) async {
+      final GlobalKey key = GlobalKey();
+      await tester.pumpWidget(Text('dummy', key: key, textDirection: TextDirection.ltr));
+      final BuildContext textContext = key.currentContext!;
+
+      final BackButtonDispatcher? dispatcher = BackButtonDispatcherScope.maybeOf(textContext);
+      expect(dispatcher, isNull);
+    });
+
+    testWidgets('BackButtonDispatcherScope.of throws when not found', (WidgetTester tester) async {
+      final GlobalKey key = GlobalKey();
+      await tester.pumpWidget(Text('dummy', key: key, textDirection: TextDirection.ltr));
+      final BuildContext textContext = key.currentContext!;
+
+      expect(
+        () => BackButtonDispatcherScope.of(textContext),
+        throwsA(
+          isFlutterError.having(
+            (FlutterError e) => e.message,
+            'message',
+            startsWith(
+              'BackButtonDispatcherScope.of() called with a context that does not contain a BackButtonDispatcherScope.',
+            ),
+          ),
+        ),
+      );
+    });
+
+    testWidgets('BackButtonDispatcherScope.of returns the correct dispatcher when present', (
+      WidgetTester tester,
+    ) async {
+      final GlobalKey key = GlobalKey();
+      final BackButtonDispatcher dispatcher = RootBackButtonDispatcher();
+      await tester.pumpWidget(
+        buildBoilerPlate(
+          BackButtonDispatcherScope(
+            backButtonDispatcher: dispatcher,
+            child: Text('dummy', key: key),
+          ),
+        ),
+      );
+      final BuildContext textContext = key.currentContext!;
+
+      final BackButtonDispatcher result = BackButtonDispatcherScope.of(textContext);
+      expect(result, dispatcher);
+    });
+
+    testWidgets(
+      'Descendant widgets dependent on BackButtonDispatcherScope rebuild when the dispatcher changes',
+      (WidgetTester tester) async {
+        final GlobalKey key = GlobalKey();
+        final BackButtonDispatcher dispatcher1 = RootBackButtonDispatcher();
+        final BackButtonDispatcher dispatcher2 = RootBackButtonDispatcher();
+        var buildCount = 0;
+
+        final Widget child = Builder(
+          builder: (BuildContext context) {
+            buildCount++;
+            BackButtonDispatcherScope.of(context);
+            return const Text('dummy');
+          },
+        );
+
+        await tester.pumpWidget(
+          buildBoilerPlate(
+            BackButtonDispatcherScope(key: key, backButtonDispatcher: dispatcher1, child: child),
+          ),
+        );
+        expect(buildCount, 1);
+
+        await tester.pumpWidget(
+          buildBoilerPlate(
+            BackButtonDispatcherScope(key: key, backButtonDispatcher: dispatcher2, child: child),
+          ),
+        );
+        expect(buildCount, 2);
+      },
+    );
+  });
 }
 
 Widget buildBoilerPlate(Widget child) {
