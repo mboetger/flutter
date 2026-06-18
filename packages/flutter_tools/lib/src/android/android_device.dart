@@ -822,16 +822,30 @@ class AndroidDevice extends Device {
     int? expectedHostPort,
     required bool ipv6,
     required Logger logger,
-  }) => LogScanningVMServiceDiscoveryForAttach(
-    // If it's an Android device, attaching relies on past log searching
-    // to find the service protocol.
-    Future<DeviceLogReader>.value(getLogReader(includePastLogs: true)),
-    portForwarder: portForwarder,
-    ipv6: ipv6,
-    devicePort: filterDevicePort,
-    hostPort: expectedHostPort,
-    logger: logger,
-  );
+  }) {
+    final mdnsVMServiceDiscoveryForAttach = MdnsVMServiceDiscoveryForAttach(
+      device: this,
+      appId: appId,
+      deviceVmservicePort: filterDevicePort,
+      hostVmservicePort: expectedHostPort,
+      usesIpv6: ipv6,
+      useDeviceIPAsHost: isWirelesslyConnected,
+    );
+
+    return DelegateVMServiceDiscoveryForAttach(<VMServiceDiscoveryForAttach>[
+      mdnsVMServiceDiscoveryForAttach,
+      LogScanningVMServiceDiscoveryForAttach(
+        // If it's an Android device, attaching relies on past log searching
+        // to find the service protocol.
+        Future<DeviceLogReader>.value(getLogReader(includePastLogs: true)),
+        portForwarder: portForwarder,
+        ipv6: ipv6,
+        devicePort: filterDevicePort,
+        hostPort: expectedHostPort,
+        logger: logger,
+      ),
+    ]);
+  }
 
   @override
   late final DevicePortForwarder? portForwarder = () {
