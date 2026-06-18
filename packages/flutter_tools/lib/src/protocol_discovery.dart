@@ -25,7 +25,11 @@ class ProtocolDiscovery {
     required Logger logger,
   }) : _logger = logger,
        _ipv6 = ipv6 {
-    _deviceLogSubscription = logReader.logLines.listen(_handleLine, onDone: _stopScrapingLogs);
+    _deviceLogSubscription = logReader.logLines.listen(
+      _handleLine,
+      onError: _handleError,
+      onDone: _stopScrapingLogs,
+    );
   }
 
   factory ProtocolDiscovery.vmService(
@@ -129,6 +133,11 @@ class ProtocolDiscovery {
     _uriStreamController.add(uri);
   }
 
+  void _handleError(Object error, StackTrace stackTrace) {
+    _uriStreamController.addError(error, stackTrace);
+    unawaited(_stopScrapingLogs());
+  }
+
   Future<Uri> _forwardPort(Uri deviceUri) async {
     _logger.printTrace('$serviceName URL on device: $deviceUri');
     var hostUri = deviceUri;
@@ -156,6 +165,8 @@ class ProtocolDiscovery {
 class _BufferedStreamController<T extends Object> {
   _BufferedStreamController() : _events = <Object>[];
 
+  bool _isClosed = false;
+
   /// The stream that this controller is controlling.
   Stream<T> get stream {
     return _streamController.stream;
@@ -175,6 +186,9 @@ class _BufferedStreamController<T extends Object> {
         }
       }
       _events.clear();
+      if (_isClosed) {
+        unawaited(streamControllerInstance.close());
+      }
     };
     return streamControllerInstance;
   }();
@@ -184,6 +198,9 @@ class _BufferedStreamController<T extends Object> {
   /// Sends [event] if there is a listener attached to the broadcast stream.
   /// Otherwise, it enqueues [event] until a listener is attached.
   void add(T event) {
+    if (_isClosed) {
+      throw StateError('Cannot add event after close');
+    }
     if (_streamController.hasListener) {
       _streamController.add(event);
     } else {
@@ -193,6 +210,9 @@ class _BufferedStreamController<T extends Object> {
 
   /// Sends or enqueues an error event.
   void addError(Object error, [StackTrace? stackTrace]) {
+    if (_isClosed) {
+      throw StateError('Cannot add error after close');
+    }
     if (_streamController.hasListener) {
       _streamController.addError(error, stackTrace);
     } else {
@@ -201,8 +221,14 @@ class _BufferedStreamController<T extends Object> {
   }
 
   /// Closes the stream.
-  Future<void> close() {
-    return _streamController.close();
+  Future<void> close() async {
+    if (_isClosed) {
+      return;
+    }
+    _isClosed = true;
+    if (_streamController.hasListener) {
+      await _streamController.close();
+    }
   }
 }
 
