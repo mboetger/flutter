@@ -29,6 +29,7 @@ import android.graphics.Insets;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.LocaleList;
 import android.provider.Settings;
 import android.text.InputType;
@@ -1338,6 +1339,58 @@ public class TextInputPluginTest {
             // Imm restarts when clearTextInputClient is called while the IME is hidden.
             textInputPlugin.clearTextInputClient();
             assertEquals(3, testImm.getRestartCount(testView));
+          });
+    }
+  }
+
+  @Test
+  public void handleHotRestart_hidesKeyboardAndClearsClient() {
+    try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
+      scenario.onActivity(
+          activity -> {
+            FlutterView testView = spy(new FlutterView(activity));
+            IBinder mockToken = mock(IBinder.class);
+            when(testView.getWindowToken()).thenReturn(mockToken);
+            when(testView.getApplicationWindowToken()).thenReturn(mockToken);
+
+            TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
+            TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+            ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+            TextInputPlugin textInputPlugin =
+                new TextInputPlugin(
+                    testView,
+                    textInputChannel,
+                    scribeChannel,
+                    mock(PlatformViewsController.class),
+                    mock(PlatformViewsController2.class));
+
+            textInputPlugin.setTextInputClient(
+                123,
+                new TextInputChannel.Configuration(
+                    false,
+                    false,
+                    true,
+                    true,
+                    false,
+                    TextInputChannel.TextCapitalization.NONE,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null));
+
+            // Show soft input on testView
+            InputMethodManager imm = (InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.showSoftInput(testView, 0);
+            assertTrue(testImm.isSoftInputVisible());
+
+            // Perform handleHotRestart
+            textInputPlugin.handleHotRestart();
+
+            // Verify that the soft keyboard is hidden
+            assertFalse(testImm.isSoftInputVisible());
           });
     }
   }

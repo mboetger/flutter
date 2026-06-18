@@ -11,6 +11,7 @@ import android.content.Context;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.LocaleList;
 import android.text.Editable;
 import android.text.InputType;
@@ -571,6 +572,16 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
             (int) Math.ceil(minMax[3] * density));
   }
 
+  private void clearTextInputClientInternal() {
+    mEditable.removeEditingStateListener(this);
+    notifyViewExited();
+    configuration = null;
+    updateAutofillConfigurationIfNeeded(null);
+    inputTarget = new InputTarget(InputTarget.Type.NO_TARGET, 0);
+    unlockPlatformViewInputConnection();
+    lastClientRect = null;
+  }
+
   @VisibleForTesting
   void clearTextInputClient() {
     if (inputTarget.type == InputTarget.Type.VIRTUAL_DISPLAY_PLATFORM_VIEW) {
@@ -590,19 +601,25 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
       // notified before focus nodes that gained focus as part of the same focus event.
       return;
     }
-    mEditable.removeEditingStateListener(this);
-    notifyViewExited();
-    configuration = null;
-    updateAutofillConfigurationIfNeeded(null);
-    inputTarget = new InputTarget(InputTarget.Type.NO_TARGET, 0);
-    unlockPlatformViewInputConnection();
-    lastClientRect = null;
+    clearTextInputClientInternal();
     // When the IME is hidden, we need to restart the input method manager to accomodate
     // some keyboards like the Samsung keyboard that may be caching old state.
     WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(mView);
     if (insets != null && !insets.isVisible(WindowInsetsCompat.Type.ime())) {
       mImm.restartInput(mView);
     }
+  }
+
+  /**
+   * Hides the soft keyboard and clears the active text input client in preparation
+   * for a hot restart of the Flutter engine.
+   */
+  public void handleHotRestart() {
+    final IBinder windowToken = mView.getApplicationWindowToken();
+    if (windowToken != null) {
+      mImm.hideSoftInputFromWindow(windowToken, 0);
+    }
+    clearTextInputClientInternal();
   }
 
   private static class InputTarget {

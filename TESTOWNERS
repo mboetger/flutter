@@ -82,6 +82,7 @@
 /dev/devicelab/bin/tasks/hybrid_android_views_integration_test.dart @gmackall @flutter/android
 /dev/devicelab/bin/tasks/image_list_jit_reported_duration.dart @jtmcdole @flutter/engine
 /dev/devicelab/bin/tasks/image_list_reported_duration.dart @jtmcdole @flutter/engine
+/dev/devicelab/bin/tasks/keyboard_hot_restart_android.dart @loic-sharma @flutter/android
 /dev/devicelab/bin/tasks/large_image_changer_perf_android.dart @jtmcdole @flutter/engine
 /dev/devicelab/bin/tasks/linux_chrome_dev_mode.dart @bkonyi @flutter/tool
 /dev/devicelab/bin/tasks/list_text_layout_impeller_perf__e2e_summary.dart @jtmcdole @flutter/engine

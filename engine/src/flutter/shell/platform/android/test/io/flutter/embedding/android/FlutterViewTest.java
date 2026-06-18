@@ -18,6 +18,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +38,7 @@ import android.media.Image;
 import android.media.Image.Plane;
 import android.media.ImageReader;
 import android.os.Build;
+import android.os.IBinder;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.SparseArray;
@@ -47,6 +49,7 @@ import android.view.View;
 import android.view.ViewStructure;
 import android.view.WindowInsets;
 import android.view.autofill.AutofillValue;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import androidx.core.util.Consumer;
 import androidx.test.core.app.ActivityScenario;
@@ -82,6 +85,7 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowDisplay;
+import org.robolectric.shadows.ShadowInputMethodManager;
 import org.robolectric.shadows.ShadowViewGroup;
 
 @RunWith(AndroidJUnit4.class)
@@ -1495,5 +1499,75 @@ public class FlutterViewTest {
     SparseArray<AutofillValue> values = mock(SparseArray.class);
     flutterView.autofill(values);
     // No exception should be thrown
+  }
+
+  @Test
+  public void testKeyboardIsHiddenOnHotRestart() {
+    IBinder mockToken = mock(IBinder.class);
+    FlutterView flutterView = new TestFlutterView(ctx, mockToken);
+
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    when(flutterEngine.getPlatformViewsController()).thenReturn(platformViewsController);
+    when(flutterEngine.getPlatformViewsController2()).thenReturn(platformViewsController2);
+
+    ArgumentCaptor<FlutterEngine.EngineLifecycleListener> listenerCaptor =
+        ArgumentCaptor.forClass(FlutterEngine.EngineLifecycleListener.class);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+
+    verify(flutterEngine).addEngineLifecycleListener(listenerCaptor.capture());
+    FlutterEngine.EngineLifecycleListener lifecycleListener = listenerCaptor.getValue();
+    assertNotNull(lifecycleListener);
+
+    InputMethodManager imm = (InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+    ShadowInputMethodManager shadowImm = Shadows.shadowOf(imm);
+    
+    // Simulate showing the soft keyboard
+    imm.showSoftInput(flutterView, 0);
+    assertTrue(shadowImm.isSoftInputVisible());
+
+    // Trigger the hot restart (pre-engine restart) event
+    lifecycleListener.onPreEngineRestart();
+
+    // Verify that the keyboard is hidden
+    assertFalse(shadowImm.isSoftInputVisible());
+  }
+
+  @Test
+  public void detachFromFlutterEngine_removesEngineLifecycleListener() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    when(flutterEngine.getPlatformViewsController()).thenReturn(platformViewsController);
+    when(flutterEngine.getPlatformViewsController2()).thenReturn(platformViewsController2);
+
+    ArgumentCaptor<FlutterEngine.EngineLifecycleListener> listenerCaptor =
+        ArgumentCaptor.forClass(FlutterEngine.EngineLifecycleListener.class);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    verify(flutterEngine).addEngineLifecycleListener(listenerCaptor.capture());
+    FlutterEngine.EngineLifecycleListener lifecycleListener = listenerCaptor.getValue();
+    assertNotNull(lifecycleListener);
+
+    flutterView.detachFromFlutterEngine();
+    verify(flutterEngine).removeEngineLifecycleListener(lifecycleListener);
+  }
+
+  private static class TestFlutterView extends FlutterView {
+    private final IBinder windowToken;
+
+    public TestFlutterView(Context context, IBinder windowToken) {
+      super(context);
+      this.windowToken = windowToken;
+    }
+
+    @Override
+    public IBinder getWindowToken() {
+      return windowToken;
+    }
+
+    @Override
+    public IBinder getApplicationWindowToken() {
+      return windowToken;
+    }
   }
 }

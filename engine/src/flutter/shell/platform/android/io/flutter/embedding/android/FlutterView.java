@@ -233,6 +233,21 @@ public class FlutterView extends FrameLayout
         }
       };
 
+  private final FlutterEngine.EngineLifecycleListener engineLifecycleListener =
+      new FlutterEngine.EngineLifecycleListener() {
+        @Override
+        public void onPreEngineRestart() {
+          if (textInputPlugin != null) {
+            textInputPlugin.handleHotRestart();
+          }
+        }
+
+        @Override
+        public void onEngineWillDestroy() {
+          // Do nothing
+        }
+      };
+
   private Consumer<WindowLayoutInfo> windowInfoListener;
   private int widthMode;
   private int heightMode;
@@ -1172,6 +1187,7 @@ public class FlutterView extends FrameLayout
     }
 
     this.flutterEngine = flutterEngine;
+    this.flutterEngine.addEngineLifecycleListener(engineLifecycleListener);
 
     // Instruct our FlutterRenderer that we are now its designated RenderSurface.
     FlutterRenderer flutterRenderer = this.flutterEngine.getRenderer();
@@ -1289,6 +1305,8 @@ public class FlutterView extends FrameLayout
       Log.v(TAG, "FlutterView not attached to an engine. Not detaching.");
       return;
     }
+
+    flutterEngine.removeEngineLifecycleListener(engineLifecycleListener);
 
     // Notify engine attachment listeners of the detachment.
     for (FlutterEngineAttachmentListener listener : flutterEngineAttachmentListeners) {
