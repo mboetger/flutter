@@ -13,12 +13,14 @@ import android.hardware.display.VirtualDisplay;
 import android.os.Build;
 import android.util.DisplayMetrics;
 import android.view.MotionEvent;
+import android.view.Surface.OutOfResourcesException;
 import android.view.View;
 import android.view.View.OnFocusChangeListener;
 import android.view.ViewTreeObserver;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
+import io.flutter.Log;
 
 class VirtualDisplayController {
   private static String TAG = "VirtualDisplayController";
@@ -60,7 +62,15 @@ class VirtualDisplayController {
     // TODO(cyanglaz): find a way to prevent the crash without introducing size mismatch between
     // virtual display and AndroidPlatformView widget.
     // https://github.com/flutter/flutter/issues/93115
-    renderTarget.resize(width, height);
+    try {
+      renderTarget.resize(width, height);
+    } catch (OutOfResourcesException e) {
+      Log.e(
+          TAG,
+          "Failed to create virtual display due to Surface.OutOfResourcesException: "
+              + e.getMessage());
+      return null;
+    }
     int flags = 0;
     VirtualDisplay virtualDisplay =
         displayManager.createVirtualDisplay(
@@ -160,7 +170,16 @@ class VirtualDisplayController {
 
     final DisplayManager displayManager =
         (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
-    renderTarget.resize(width, height);
+    try {
+      renderTarget.resize(width, height);
+    } catch (OutOfResourcesException e) {
+      Log.e(
+          TAG,
+          "Failed to resize virtual display due to Surface.OutOfResourcesException: "
+              + e.getMessage());
+      getView().postDelayed(onNewSizeFrameAvailable, 0);
+      return;
+    }
     int flags = 0;
     virtualDisplay =
         displayManager.createVirtualDisplay(
@@ -235,7 +254,16 @@ class VirtualDisplayController {
   @RequiresApi(API_LEVELS.API_31)
   private void resize31(
       View embeddedView, int width, int height, final Runnable onNewSizeFrameAvailable) {
-    renderTarget.resize(width, height);
+    try {
+      renderTarget.resize(width, height);
+    } catch (OutOfResourcesException e) {
+      Log.e(
+          TAG,
+          "Failed to resize virtual display (API 31+) due to Surface.OutOfResourcesException: "
+              + e.getMessage());
+      embeddedView.postDelayed(onNewSizeFrameAvailable, 0);
+      return;
+    }
     virtualDisplay.resize(width, height, densityDpi);
     // Must update the surface to match the renderTarget's current surface.
     virtualDisplay.setSurface(renderTarget.getSurface());

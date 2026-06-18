@@ -267,6 +267,81 @@ public class PlatformViewWrapperTest {
     assertTrue(eventSent);
   }
 
+  @Test
+  public void constructor_handlesOutOfResourcesException() throws Exception {
+    final Surface surface = mock(Surface.class);
+    final PlatformViewRenderTarget renderTarget = mock(PlatformViewRenderTarget.class);
+    when(renderTarget.getSurface()).thenReturn(surface);
+    when(surface.lockHardwareCanvas())
+        .thenThrow(new android.view.Surface.OutOfResourcesException("Out of resources"));
+
+    final PlatformViewWrapper wrapper = new PlatformViewWrapper(ctx, renderTarget);
+    assertNotNull(wrapper);
+  }
+
+  @Test
+  public void draw_handlesOutOfResourcesException() throws Exception {
+    final Canvas canvas = mock(Canvas.class);
+    final Surface surface = mock(Surface.class);
+    when(surface.isValid()).thenReturn(true);
+    final PlatformViewRenderTarget renderTarget = mock(PlatformViewRenderTarget.class);
+    when(renderTarget.getSurface()).thenReturn(surface);
+    when(surface.lockHardwareCanvas())
+        .thenThrow(new android.view.Surface.OutOfResourcesException("Out of resources"));
+
+    FlutterRenderer.debugDisableSurfaceClear = true;
+    final PlatformViewWrapper wrapperWithRenderTarget =
+        spy(
+            new PlatformViewWrapper(ctx, renderTarget) {
+              @Override
+              public void onDraw(Canvas canvas) {}
+            });
+
+    wrapperWithRenderTarget.draw(canvas);
+
+    verify(wrapperWithRenderTarget, times(0)).invalidate();
+  }
+
+  @Test
+  public void resize_handlesOutOfResourcesException() {
+    final PlatformViewRenderTarget renderTarget = mock(PlatformViewRenderTarget.class);
+    doAnswer(
+            invocation -> {
+              throw new android.view.Surface.OutOfResourcesException("Out of resources");
+            })
+        .when(renderTarget)
+        .resize(anyInt(), anyInt());
+
+    final PlatformViewWrapper wrapper = new PlatformViewWrapper(ctx, renderTarget);
+    wrapper.resizeRenderTarget(100, 100);
+  }
+
+  @Test
+  public void virtualDisplayCreate_handlesOutOfResourcesException() {
+    final Context context = ApplicationProvider.getApplicationContext();
+    final PlatformViewRenderTarget renderTarget = mock(PlatformViewRenderTarget.class);
+    doAnswer(
+            invocation -> {
+              throw new android.view.Surface.OutOfResourcesException("Out of resources");
+            })
+        .when(renderTarget)
+        .resize(anyInt(), anyInt());
+
+    final VirtualDisplayController controller =
+        VirtualDisplayController.create(
+            context,
+            mock(AccessibilityEventsDelegate.class),
+            mock(PlatformView.class),
+            renderTarget,
+            100,
+            100,
+            0,
+            null,
+            mock(OnFocusChangeListener.class));
+
+    assertNull(controller);
+  }
+
   @Implements(ViewGroup.class)
   public static class ShadowViewGroup extends org.robolectric.shadows.ShadowViewGroup {
     @Implementation

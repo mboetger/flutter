@@ -61,11 +61,19 @@ public class PlatformViewWrapper extends FrameLayout {
 
     Surface surface = renderTarget.getSurface();
     if (surface != null && !FlutterRenderer.debugDisableSurfaceClear) {
-      final Canvas canvas = surface.lockHardwareCanvas();
       try {
-        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
-      } finally {
-        surface.unlockCanvasAndPost(canvas);
+        final Canvas canvas = surface.lockHardwareCanvas();
+        if (canvas != null) {
+          try {
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+          } finally {
+            surface.unlockCanvasAndPost(canvas);
+          }
+        }
+      } catch (Surface.OutOfResourcesException e) {
+        Log.e(
+            TAG,
+            "Failed to clear surface due to Surface.OutOfResourcesException: " + e.getMessage());
       }
     }
   }
@@ -93,7 +101,14 @@ public class PlatformViewWrapper extends FrameLayout {
 
   public void resizeRenderTarget(int width, int height) {
     if (renderTarget != null) {
-      renderTarget.resize(width, height);
+      try {
+        renderTarget.resize(width, height);
+      } catch (Surface.OutOfResourcesException e) {
+        Log.e(
+            TAG,
+            "Failed to resize platform view due to Surface.OutOfResourcesException: "
+                + e.getMessage());
+      }
     }
   }
 
@@ -168,7 +183,16 @@ public class PlatformViewWrapper extends FrameLayout {
       return;
     }
 
-    final Canvas targetCanvas = targetSurface.lockHardwareCanvas();
+    Canvas targetCanvas = null;
+    try {
+      targetCanvas = targetSurface.lockHardwareCanvas();
+    } catch (Surface.OutOfResourcesException e) {
+      Log.e(
+          TAG,
+          "Failed to lock hardware canvas due to Surface.OutOfResourcesException: "
+              + e.getMessage());
+      return;
+    }
     if (targetCanvas == null) {
       // Cannot render right now.
       invalidate();
