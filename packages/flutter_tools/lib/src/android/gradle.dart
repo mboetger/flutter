@@ -57,6 +57,17 @@ import 'migrations/top_level_gradle_build_file_migration.dart';
 final _kBuildVariantRegex = RegExp('^BuildVariant: (?<$_kBuildVariantRegexGroupName>.*)\$');
 const _kBuildVariantRegexGroupName = 'variant';
 const _kBuildVariantTaskName = 'printBuildVariants';
+
+final _kGradleTaskRegex = RegExp(r'^>\s+Task\s+:(\S+)');
+final _kGradleNoisePatterns = <RegExp>[
+  RegExp(r'^BUILD SUCCESSFUL in \d+'),
+  RegExp(r'^BUILD FAILED in \d+'),
+  RegExp(r'^\d+ actionable tasks?: \d+'),
+  RegExp(r'^Deprecated Gradle features were used'),
+  RegExp(r'^You can use .*--warning-mode all'),
+  RegExp(r'^See https://docs.gradle.org/'),
+  RegExp(r'^$'),
+];
 @visibleForTesting
 const failedToStripDebugSymbolsErrorMessage = r'''
 Release app bundle failed to strip debug symbols from native libraries.
@@ -280,6 +291,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     VoidCallback? postRunTask,
     int? maxRetries,
     _OutputParser? outputParser,
+    bool parseGranularStatus = false,
   }) async {
     final bool usesAndroidX = isAppUsingAndroidX(project.android.hostAppGradleRoot);
     final String? agpVersion = gradle.getAgpVersion(
@@ -304,11 +316,43 @@ class AndroidGradleBuilder implements AndroidBuilder {
       );
     }
 
+    final Status status = _logger.startProgress("Running Gradle task '$taskName'...");
+    Status? activeStatus = status;
+
     GradleHandledError? detectedGradleError;
     String? detectedGradleErrorLine;
     String? consumeLog(String line) {
       if (outputParser != null) {
         outputParser(line);
+      }
+      final Match? taskMatch = (parseGranularStatus || !_logger.isVerbose)
+          ? _kGradleTaskRegex.firstMatch(line)
+          : null;
+
+      if (parseGranularStatus && taskMatch != null) {
+        final String taskPath = taskMatch.group(1)!;
+        String? progressMessage;
+        if (taskPath.contains('flutterBuild')) {
+          progressMessage = 'Building Dart code...';
+        } else if (taskPath.contains('compile') &&
+            (taskPath.contains('Kotlin') || taskPath.contains('JavaWithJavac'))) {
+          progressMessage = 'Compiling Kotlin/Java...';
+        }
+        if (progressMessage != null) {
+          // Cancel the main status progress spinner (which has generic "Running Gradle task...")
+          // to clear it from the terminal line, and start a sub-status spinner for the specific task.
+          if (activeStatus == status) {
+            status.cancel();
+          } else {
+            // Stop the previous sub-status spinner to finish its line and display its duration,
+            // then start the next sub-status spinner.
+            activeStatus?.stop();
+          }
+          activeStatus = _logger.startProgress(
+            progressMessage,
+            progressIndicatorPadding: kDefaultStatusPadding - 7,
+          );
+        }
       }
       // The log lines that trigger incompatibleKotlinVersionHandler don't
       // always indicate an error, and there are times that that handler
@@ -326,11 +370,15 @@ class AndroidGradleBuilder implements AndroidBuilder {
           break;
         }
       }
+      if (!_logger.isVerbose) {
+        if (taskMatch != null || _kGradleNoisePatterns.any((pattern) => pattern.hasMatch(line))) {
+          return null;
+        }
+      }
       // Pipe stdout/stderr from Gradle.
       return line;
     }
 
-    final Status status = _logger.startProgress("Running Gradle task '$taskName'...");
     final command = <String>[
       gradleExecutablePath,
       ...options, // suppresses gradle output.
@@ -355,7 +403,11 @@ class AndroidGradleBuilder implements AndroidBuilder {
         rethrow;
       }
     } finally {
-      status.stop();
+      if (activeStatus == status) {
+        status.stop();
+      } else {
+        activeStatus?.stop();
+      }
     }
     postRunTask?.call();
     if (exitCode != 0) {
@@ -393,6 +445,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
               retry: retry,
               project: project,
               maxRetries: maxRetries,
+              parseGranularStatus: parseGranularStatus,
             );
             if (exitCode == 0) {
               final successEventLabel = 'gradle-${detectedGradleError!.eventLabel}-success';
@@ -487,8 +540,6 @@ class AndroidGradleBuilder implements AndroidBuilder {
       options.add('--full-stacktrace');
       options.add('--info');
       options.add('-Pverbose=true');
-    } else {
-      options.add('-q');
     }
     if (!buildInfo.androidGradleDaemon) {
       options.add('--no-daemon');
@@ -584,6 +635,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
       maxRetries: maxRetries,
       localGradleErrors: localGradleErrors,
       gradleExecutablePath: gradleExecutablePath,
+      parseGranularStatus: true,
     );
 
     if (exitCode != 0) {
