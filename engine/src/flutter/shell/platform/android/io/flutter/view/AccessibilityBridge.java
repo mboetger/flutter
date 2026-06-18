@@ -17,6 +17,7 @@ import android.opengl.Matrix;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.MotionEvent;
@@ -438,6 +439,9 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
   // to zero, we instruct Flutter to disable animations.
   private final AccessibilityFeatureObserver animationScaleObserver;
 
+  // Listener that is notified when the high text contrast flag is turned on/off.
+  private final ContentObserver highTextContrastObserver;
+
   public AccessibilityBridge(
       @NonNull View rootAccessibilityView,
       @NonNull AccessibilityChannel accessibilityChannel,
@@ -610,9 +614,28 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
         false,
         invertColorsObserver);
 
+    // Initialize and register high text contrast observer
+    highTextContrastObserver =
+        new ContentObserver(new Handler(Looper.getMainLooper())) {
+          @Override
+          public void onChange(boolean selfChange) {
+            onChange(selfChange, null);
+          }
+
+          @Override
+          public void onChange(boolean selfChange, Uri uri) {
+            if (isReleased) {
+              return;
+            }
+            setHighContrastFlag();
+          }
+        };
+    contentResolver.registerContentObserver(
+        Settings.Secure.getUriFor("high_text_contrast_enabled"), false, highTextContrastObserver);
+
     // Initialize and register contrast listener
+    setHighContrastFlag();
     if (Build.VERSION.SDK_INT >= API_LEVELS.API_34) {
-      setHighContrastFlag();
       registerHighContrastObserver(rootAccessibilityView.getContext());
     }
 
@@ -651,6 +674,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
         touchExplorationStateChangeListener);
     contentResolver.unregisterContentObserver(animationScaleObserver);
     contentResolver.unregisterContentObserver(invertColorsObserver);
+    contentResolver.unregisterContentObserver(highTextContrastObserver);
     if (Build.VERSION.SDK_INT >= API_LEVELS.API_34) {
       unregisterHighContrastObserver(rootAccessibilityView.getContext());
     }
@@ -733,14 +757,32 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     }
   }
 
-  @RequiresApi(API_LEVELS.API_34)
   private void setHighContrastFlag() {
+    boolean isHighContrastEnabled = false;
+
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_34) {
+      isHighContrastEnabled = isHighContrastEnabledFromUiModeManager();
+    }
+
+    boolean isHighTextContrastEnabled = false;
+    try {
+      isHighTextContrastEnabled =
+          Settings.Secure.getInt(contentResolver, "high_text_contrast_enabled") == 1;
+    } catch (Settings.SettingNotFoundException e) {
+      Log.d(TAG, "Setting not found: high_text_contrast_enabled, using default: false");
+    }
+
+    updateAccessibilityFeature(
+        AccessibilityFeature.HIGH_CONTRAST, isHighContrastEnabled || isHighTextContrastEnabled);
+  }
+
+  @RequiresApi(API_LEVELS.API_34)
+  private boolean isHighContrastEnabledFromUiModeManager() {
     Context context = rootAccessibilityView.getContext();
     UiModeManager uiModeManager = (UiModeManager) context.getSystemService(Context.UI_MODE_SERVICE);
 
     if (uiModeManager == null) {
-      updateAccessibilityFeature(AccessibilityFeature.HIGH_CONTRAST, false);
-      return;
+      return false;
     }
 
     float uiContrast = uiModeManager.getContrast();
@@ -749,9 +791,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
 
     // 0.0 (standard), 0.5 (medium), 1.0 (high)
     // Any enhancement above standard is considered high contrast
-    boolean isHighContrastEnabled = uiContrast > 0.0f;
-
-    updateAccessibilityFeature(AccessibilityFeature.HIGH_CONTRAST, isHighContrastEnabled);
+    return uiContrast > 0.0f;
   }
 
   private void updateAccessibilityFeature(AccessibilityFeature feature, boolean enabled) {

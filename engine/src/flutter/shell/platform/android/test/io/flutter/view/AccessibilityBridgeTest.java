@@ -1496,6 +1496,48 @@ public class AccessibilityBridgeTest {
     assertEquals(ACCESSIBILITY_FEATURE_NO_ANNOUNCE, featuresCaptor.getValue().intValue());
   }
 
+  @Test
+  public void itSetsHighContrastFlagBasedOnHighTextContrastSecureSetting() {
+    AccessibilityChannel mockChannel = mock(AccessibilityChannel.class);
+    ContentResolver realContentResolver = RuntimeEnvironment.getApplication().getContentResolver();
+    ContentResolver spyContentResolver = spy(realContentResolver);
+
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ null,
+            /* accessibilityChannel= */ mockChannel,
+            /* accessibilityManager= */ null,
+            /* contentResolver= */ spyContentResolver,
+            /* accessibilityViewEmbedder= */ null,
+            /* platformViewsAccessibilityDelegate= */ null);
+
+    ArgumentCaptor<ContentObserver> observerCaptor = ArgumentCaptor.forClass(ContentObserver.class);
+    verify(spyContentResolver)
+        .registerContentObserver(
+            eq(Settings.Secure.getUriFor("high_text_contrast_enabled")),
+            eq(false),
+            observerCaptor.capture());
+    ContentObserver observer = observerCaptor.getValue();
+
+    reset(mockChannel);
+
+    Settings.Secure.putInt(spyContentResolver, "high_text_contrast_enabled", 1);
+    observer.onChange(false);
+
+    ArgumentCaptor<Integer> featuresCaptor = ArgumentCaptor.forClass(Integer.class);
+    verify(mockChannel).setAccessibilityFeatures(featuresCaptor.capture());
+    int expectedFlags = ACCESSIBILITY_FEATURE_HIGH_CONTRAST | ACCESSIBILITY_FEATURE_NO_ANNOUNCE;
+    assertEquals(expectedFlags, featuresCaptor.getValue().intValue());
+
+    reset(mockChannel);
+
+    Settings.Secure.putInt(spyContentResolver, "high_text_contrast_enabled", 0);
+    observer.onChange(false);
+
+    verify(mockChannel).setAccessibilityFeatures(featuresCaptor.capture());
+    assertEquals(ACCESSIBILITY_FEATURE_NO_ANNOUNCE, featuresCaptor.getValue().intValue());
+  }
+
   @Config(sdk = API_LEVELS.API_34)
   @TargetApi(API_LEVELS.API_34)
   @Test
