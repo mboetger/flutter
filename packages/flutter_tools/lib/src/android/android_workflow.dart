@@ -14,11 +14,13 @@ import '../base/logger.dart';
 import '../base/os.dart';
 import '../base/platform.dart';
 import '../base/process.dart';
+import '../base/time.dart';
 import '../base/user_messages.dart';
 import '../base/version.dart';
 import '../convert.dart';
 import '../doctor_validator.dart';
 import '../features.dart';
+import '../persistent_tool_state.dart';
 import 'android_sdk.dart';
 import 'gradle_utils.dart' as gradle_utils;
 import 'java.dart';
@@ -114,6 +116,8 @@ class AndroidValidator extends DoctorValidator {
     required UserMessages userMessages,
     required ProcessManager processManager,
     required OperatingSystemUtils osUtils,
+    required PersistentToolState persistentToolState,
+    SystemClock clock = const SystemClock(),
   }) : _java = java,
        _androidSdk = androidSdk,
        _logger = logger,
@@ -121,6 +125,9 @@ class AndroidValidator extends DoctorValidator {
        _userMessages = userMessages,
        _processManager = processManager,
        _osUtils = osUtils,
+       _persistentToolState = persistentToolState,
+       _clock = clock,
+       _processUtils = ProcessUtils(processManager: processManager, logger: logger),
        super('Android toolchain - develop for Android devices');
 
   final Java? _java;
@@ -130,6 +137,9 @@ class AndroidValidator extends DoctorValidator {
   final UserMessages _userMessages;
   final ProcessManager _processManager;
   final OperatingSystemUtils _osUtils;
+  final PersistentToolState _persistentToolState;
+  final SystemClock _clock;
+  final ProcessUtils _processUtils;
 
   @override
   String get slowWarning => '${_task ?? 'This'} is taking a long time...';
@@ -337,6 +347,35 @@ class AndroidValidator extends DoctorValidator {
     if (!await _checkJavaVersion(messages)) {
       return ValidationResult(ValidationType.partial, messages, statusInfo: sdkVersionText);
     }
+
+    _task = 'Checking for Android SDK updates';
+    final String? sdkManagerPath = androidSdk.sdkManagerPath;
+    if (sdkManagerPath != null && _processManager.canRun(sdkManagerPath)) {
+      final DateTime? lastCheck = _persistentToolState.lastAndroidSdkCheckTime;
+      final DateTime now = _clock.now();
+      if (lastCheck == null || now.difference(lastCheck) >= const Duration(hours: 24)) {
+        _persistentToolState.setLastAndroidSdkCheckTime(now);
+        try {
+          final RunResult result = await _processUtils.run(
+            <String>[sdkManagerPath, '--list'],
+            environment: _java?.environment,
+            timeout: const Duration(seconds: 10),
+          );
+          if (result.exitCode == 0 && result.stdout.contains('Available Updates:')) {
+            messages.add(
+              const ValidationMessage.hint(
+                'A new update to the Android SDK is available. To update, run:\n'
+                '  sdkmanager --update\n'
+                'For more details, see https://developer.android.com/studio/intro/update.html#sdk-manager',
+              ),
+            );
+          }
+        } on Exception catch (e) {
+          _logger.printTrace('Failed to run Android SDK manager to check for updates: $e');
+        }
+      }
+    }
+    _task = null;
 
     // Success.
     return ValidationResult(ValidationType.success, messages, statusInfo: sdkVersionText);

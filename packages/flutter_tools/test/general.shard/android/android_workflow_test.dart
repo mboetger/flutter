@@ -16,6 +16,8 @@ import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/user_messages.dart';
 import 'package:flutter_tools/src/base/version.dart';
 import 'package:flutter_tools/src/doctor_validator.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
+import 'package:flutter_tools/src/persistent_tool_state.dart';
 import 'package:test/fake.dart';
 
 import '../../src/common.dart';
@@ -450,6 +452,7 @@ Review licenses that have not been accepted (y/N)?
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(validationResult.type, ValidationType.partial);
@@ -474,6 +477,7 @@ Review licenses that have not been accepted (y/N)?
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(validationResult.type, ValidationType.partial);
@@ -498,6 +502,7 @@ Review licenses that have not been accepted (y/N)?
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(validationResult.type, ValidationType.partial);
@@ -540,6 +545,7 @@ Review licenses that have not been accepted (y/N)?
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     );
 
     // Invalid sdk and tools.
@@ -584,6 +590,7 @@ Review licenses that have not been accepted (y/N)?
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     );
 
     final ValidationResult validationResult = await androidValidator.validate();
@@ -638,6 +645,7 @@ Review licenses that have not been accepted (y/N)?
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     ).validate();
     expect(validationResult.type, ValidationType.partial);
     expect(validationResult.messages.last.message, errorMessage);
@@ -662,6 +670,10 @@ Review licenses that have not been accepted (y/N)?
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: PersistentToolState.test(
+        directory: fileSystem.directory('/home/me'),
+        logger: logger,
+      ),
     ).validate();
 
     expect(
@@ -732,6 +744,7 @@ Android sdkmanager tool was found, but failed to run
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(
@@ -772,6 +785,7 @@ Android sdkmanager tool was found, but failed to run
         userMessages: UserMessages(),
         processManager: processManager,
         osUtils: FakeOperatingSystemUtils(),
+        persistentToolState: globals.persistentToolState!,
       ).validate();
 
       expect(
@@ -811,6 +825,7 @@ Android sdkmanager tool was found, but failed to run
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(
@@ -848,6 +863,7 @@ Android sdkmanager tool was found, but failed to run
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: FakeOperatingSystemUtils(),
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(
@@ -892,6 +908,7 @@ Android sdkmanager tool was found, but failed to run
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: osUtils,
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(
@@ -930,6 +947,7 @@ Android sdkmanager tool was found, but failed to run
       userMessages: UserMessages(),
       processManager: processManager,
       osUtils: osUtils,
+      persistentToolState: globals.persistentToolState!,
     ).validate();
 
     expect(

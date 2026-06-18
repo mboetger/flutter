@@ -46,6 +46,12 @@ abstract class PersistentToolState {
   /// Whether this client was already determined to be or not be a bot.
   bool? get isRunningOnBot;
   void setIsRunningOnBot(bool value); // Enforced nonnull setter.
+
+  /// Returns the last time the Android SDK updates check was run.
+  ///
+  /// May return null if the check has never run.
+  DateTime? get lastAndroidSdkCheckTime;
+  void setLastAndroidSdkCheckTime(DateTime value);
 }
 
 class _DefaultPersistentToolState implements PersistentToolState {
@@ -69,6 +75,7 @@ class _DefaultPersistentToolState implements PersistentToolState {
   };
   static const _kBotKey = 'is-bot';
   static const _kLicenseHash = 'license-hash';
+  static const _kLastAndroidSdkCheckTime = 'last-android-sdk-check-time';
 
   final Config _config;
 
@@ -114,5 +121,19 @@ class _DefaultPersistentToolState implements PersistentToolState {
   @override
   void setIsRunningOnBot(bool value) {
     _config.setValue(_kBotKey, value);
+  }
+
+  @override
+  DateTime? get lastAndroidSdkCheckTime {
+    final timestamp = _config.getValue(_kLastAndroidSdkCheckTime) as String?;
+    if (timestamp == null) {
+      return null;
+    }
+    return DateTime.tryParse(timestamp);
+  }
+
+  @override
+  void setLastAndroidSdkCheckTime(DateTime value) {
+    _config.setValue(_kLastAndroidSdkCheckTime, value.toIso8601String());
   }
 }
