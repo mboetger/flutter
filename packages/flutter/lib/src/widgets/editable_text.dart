@@ -4151,8 +4151,15 @@ class EditableTextState extends State<EditableText>
     if (_hasFocus && widget.focusNode.consumeKeyboardToken()) {
       _openInputConnection();
     } else if (!_hasFocus) {
-      _closeInputConnectionIfNeeded();
-      widget.controller.clearComposing();
+      // Do not close the connection if the focus was lost because the app is
+      // inactive or paused (e.g. during a lifecycle transition). This avoids
+      // keyboard focus loops on Android when some keyboards steal focus, and
+      // preserves autofill on iOS when Face ID or passcode overlays are shown.
+      final AppLifecycleState? lifecycleState = WidgetsBinding.instance.lifecycleState;
+      if (lifecycleState == null || lifecycleState == AppLifecycleState.resumed) {
+        _closeInputConnectionIfNeeded();
+        widget.controller.clearComposing();
+      }
     }
   }
 

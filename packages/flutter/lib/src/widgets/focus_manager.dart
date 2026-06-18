@@ -1655,23 +1655,8 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
     rootScope._manager = this;
   }
 
-  /// It appears that some Android keyboard implementations can cause
-  /// app lifecycle state changes: adding the app lifecycle listener would
-  /// cause the text field to unfocus as the user is trying to type.
-  ///
-  /// Additionally, on iOS, input fields aren't automatically populated
-  /// with relevant data when using autofill.
-  ///
-  /// Until these are resolved, we won't be adding the listener to mobile platforms.
-  /// https://github.com/flutter/flutter/issues/148475#issuecomment-2118407411
-  /// https://github.com/flutter/flutter/pull/142930#issuecomment-1981750069
-  bool get _respondToLifecycleChange =>
-      kIsWeb ||
-      switch (defaultTargetPlatform) {
-        TargetPlatform.android || TargetPlatform.iOS => false,
-        TargetPlatform.fuchsia || TargetPlatform.linux => true,
-        TargetPlatform.windows || TargetPlatform.macOS => true,
-      };
+  /// Whether the [FocusManager] should respond to application lifecycle changes.
+  bool get _respondToLifecycleChange => true;
 
   /// Registers global input event handlers that are needed to manage focus.
   ///
