@@ -68,12 +68,12 @@ public class TextInputChannel {
           Log.v(TAG, "Received '" + method + "' message.");
           switch (method) {
             case "TextInput.show":
-              textInputMethodHandler.show();
-              result.success(null);
+              boolean showResult = textInputMethodHandler.show();
+              result.success(showResult);
               break;
             case "TextInput.hide":
-              textInputMethodHandler.hide();
-              result.success(null);
+              boolean hideResult = textInputMethodHandler.hide();
+              result.success(hideResult);
               break;
             case "TextInput.setClient":
               try {
@@ -382,14 +382,18 @@ public class TextInputChannel {
     /**
      * Requests that the software keyboard (IME) be displayed on screen for the active text input
      * client.
+     *
+     * @return true if the soft input request was successfully delivered to the InputMethodManager.
      */
-    void show();
+    boolean show();
 
     /**
      * Requests that the software keyboard (IME) be hidden from screen, dismissing the current text
      * input view.
+     *
+     * @return true if the soft input window was successfully hidden.
      */
-    void hide();
+    boolean hide();
 
     /**
      * Requests that the autofill dropdown menu appear for the current client.

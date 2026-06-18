@@ -110,16 +110,17 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
     textInputChannel.setTextInputMethodHandler(
         new TextInputChannel.TextInputMethodHandler() {
           @Override
-          public void show() {
-            showTextInput(mView);
+          public boolean show() {
+            return showTextInput(mView);
           }
 
           @Override
-          public void hide() {
+          public boolean hide() {
             if (inputTarget.type == InputTarget.Type.PHYSICAL_DISPLAY_PLATFORM_VIEW) {
               notifyViewExited();
+              return false;
             } else {
-              hideTextInput(mView);
+              return hideTextInput(mView);
             }
           }
 
@@ -425,18 +426,18 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
   }
 
   @VisibleForTesting
-  void showTextInput(View view) {
+  boolean showTextInput(View view) {
     if (configuration == null
         || configuration.inputType == null
         || configuration.inputType.type != TextInputChannel.TextInputType.NONE) {
       view.requestFocus();
-      mImm.showSoftInput(view, 0);
+      return mImm.showSoftInput(view, 0);
     } else {
-      hideTextInput(view);
+      return hideTextInput(view);
     }
   }
 
-  private void hideTextInput(View view) {
+  private boolean hideTextInput(View view) {
     notifyViewExited();
     // Note: when a virtual display is used, a race condition may lead to us hiding the keyboard
     // here just after a platform view has shown it.
@@ -444,7 +445,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
     // view's text
     // field(by text field here I mean anything that keeps the keyboard open).
     // See: https://github.com/flutter/flutter/issues/34169
-    mImm.hideSoftInputFromWindow(view.getApplicationWindowToken(), 0);
+    return mImm.hideSoftInputFromWindow(view.getApplicationWindowToken(), 0);
   }
 
   @VisibleForTesting

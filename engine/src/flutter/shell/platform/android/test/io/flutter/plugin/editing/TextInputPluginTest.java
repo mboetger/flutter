@@ -88,7 +88,7 @@ import org.robolectric.shadows.ShadowAutofillManager;
 import org.robolectric.shadows.ShadowBuild;
 import org.robolectric.shadows.ShadowInputMethodManager;
 
-@Config(shadows = {TextInputPluginTest.TestImm.class, TextInputPluginTest.TestAfm.class})
+@Config(shadows = {TestImm.class, TestAfm.class})
 @RunWith(AndroidJUnit4.class)
 public class TextInputPluginTest {
   private final Context ctx = ApplicationProvider.getApplicationContext();
@@ -3040,125 +3040,157 @@ public class TextInputPluginTest {
     assertEquals(editorInfo.hintLocales, new LocaleList(hintLocales));
   }
 
-  interface EventHandler {
-    void sendAppPrivateCommand(View view, String action, Bundle data);
+
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void textInputPlugin_showTextInputPropagatesImmResult() throws JSONException {
+    ArgumentCaptor<BinaryMessenger.BinaryMessageHandler> binaryMessageHandlerCaptor =
+        ArgumentCaptor.forClass(BinaryMessenger.BinaryMessageHandler.class);
+    DartExecutor mockBinaryMessenger = mock(DartExecutor.class);
+    TextInputChannel textInputChannel = new TextInputChannel(mockBinaryMessenger);
+
+    TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
+    View testView = new View(ctx);
+    ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+
+    verify(mockBinaryMessenger, times(1))
+        .setMessageHandler(any(String.class), binaryMessageHandlerCaptor.capture());
+    BinaryMessenger.BinaryMessageHandler binaryMessageHandler =
+        binaryMessageHandlerCaptor.getValue();
+
+    // Set a text input client configuration so showTextInput is not short-circuited.
+    textInputPlugin.setTextInputClient(
+        0,
+        new TextInputChannel.Configuration(
+            false,
+            false,
+            true,
+            true,
+            false,
+            TextInputChannel.TextCapitalization.NONE,
+            new TextInputChannel.InputType(TextInputChannel.TextInputType.TEXT, false, false),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+
+    MethodCall showCall = new MethodCall("TextInput.show", null);
+    ByteBuffer encodedShowCall = JSONMethodCodec.INSTANCE.encodeMethodCall(showCall);
+
+    // Case 1: showSoftInput returns true
+    {
+      testImm.setShowSoftInputResult(true);
+      BinaryMessenger.BinaryReply mockReply = mock(BinaryMessenger.BinaryReply.class);
+      ArgumentCaptor<ByteBuffer> replyCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
+
+      binaryMessageHandler.onMessage((ByteBuffer) encodedShowCall.duplicate().rewind(), mockReply);
+
+      verify(mockReply).reply(replyCaptor.capture());
+      ByteBuffer replyBuffer = replyCaptor.getValue();
+      replyBuffer.rewind();
+      Object result = JSONMethodCodec.INSTANCE.decodeEnvelope(replyBuffer);
+      assertEquals(Boolean.TRUE, result);
+    }
+
+    // Case 2: showSoftInput returns false (reproduces failure propagation)
+    {
+      testImm.setShowSoftInputResult(false);
+      BinaryMessenger.BinaryReply mockReply = mock(BinaryMessenger.BinaryReply.class);
+      ArgumentCaptor<ByteBuffer> replyCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
+
+      binaryMessageHandler.onMessage((ByteBuffer) encodedShowCall.duplicate().rewind(), mockReply);
+
+      verify(mockReply).reply(replyCaptor.capture());
+      ByteBuffer replyBuffer = replyCaptor.getValue();
+      replyBuffer.rewind();
+      Object result = JSONMethodCodec.INSTANCE.decodeEnvelope(replyBuffer);
+      assertEquals(Boolean.FALSE, result);
+    }
   }
 
-  @Implements(InputMethodManager.class)
-  public static class TestImm extends ShadowInputMethodManager {
-    private InputMethodSubtype currentInputMethodSubtype;
-    private SparseIntArray restartCounter = new SparseIntArray();
-    private CursorAnchorInfo cursorAnchorInfo;
-    private ArrayList<Integer> selectionUpdateValues;
-    private boolean trackSelection = false;
-    private EventHandler handler;
+  @SuppressWarnings("deprecation")
+  @Test
+  public void textInputPlugin_hideTextInputPropagatesImmResult() throws JSONException {
+    ArgumentCaptor<BinaryMessenger.BinaryMessageHandler> binaryMessageHandlerCaptor =
+        ArgumentCaptor.forClass(BinaryMessenger.BinaryMessageHandler.class);
+    DartExecutor mockBinaryMessenger = mock(DartExecutor.class);
+    TextInputChannel textInputChannel = new TextInputChannel(mockBinaryMessenger);
 
-    public TestImm() {
-      selectionUpdateValues = new ArrayList<Integer>();
+    TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
+    View testView = new View(ctx);
+    ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+
+    verify(mockBinaryMessenger, times(1))
+        .setMessageHandler(any(String.class), binaryMessageHandlerCaptor.capture());
+    BinaryMessenger.BinaryMessageHandler binaryMessageHandler =
+        binaryMessageHandlerCaptor.getValue();
+
+    // Set a text input client configuration.
+    textInputPlugin.setTextInputClient(
+        0,
+        new TextInputChannel.Configuration(
+            false,
+            false,
+            true,
+            true,
+            false,
+            TextInputChannel.TextCapitalization.NONE,
+            new TextInputChannel.InputType(TextInputChannel.TextInputType.TEXT, false, false),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+
+    MethodCall hideCall = new MethodCall("TextInput.hide", null);
+    ByteBuffer encodedHideCall = JSONMethodCodec.INSTANCE.encodeMethodCall(hideCall);
+
+    // Case 1: hideSoftInputFromWindow returns true
+    {
+      testImm.setHideSoftInputResult(true);
+      BinaryMessenger.BinaryReply mockReply = mock(BinaryMessenger.BinaryReply.class);
+      ArgumentCaptor<ByteBuffer> replyCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
+
+      binaryMessageHandler.onMessage((ByteBuffer) encodedHideCall.duplicate().rewind(), mockReply);
+
+      verify(mockReply).reply(replyCaptor.capture());
+      ByteBuffer replyBuffer = replyCaptor.getValue();
+      replyBuffer.rewind();
+      Object result = JSONMethodCodec.INSTANCE.decodeEnvelope(replyBuffer);
+      assertEquals(Boolean.TRUE, result);
     }
 
-    @Implementation
-    public InputMethodSubtype getCurrentInputMethodSubtype() {
-      return currentInputMethodSubtype;
-    }
+    // Case 2: hideSoftInputFromWindow returns false (reproduces failure propagation)
+    {
+      testImm.setHideSoftInputResult(false);
+      BinaryMessenger.BinaryReply mockReply = mock(BinaryMessenger.BinaryReply.class);
+      ArgumentCaptor<ByteBuffer> replyCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
 
-    @Implementation
-    public void restartInput(View view) {
-      int count = restartCounter.get(view.hashCode(), /*defaultValue=*/ 0) + 1;
-      restartCounter.put(view.hashCode(), count);
-    }
+      binaryMessageHandler.onMessage((ByteBuffer) encodedHideCall.duplicate().rewind(), mockReply);
 
-    public void setCurrentInputMethodSubtype(InputMethodSubtype inputMethodSubtype) {
-      this.currentInputMethodSubtype = inputMethodSubtype;
-    }
-
-    public int getRestartCount(View view) {
-      return restartCounter.get(view.hashCode(), /*defaultValue=*/ 0);
-    }
-
-    public void setEventHandler(EventHandler eventHandler) {
-      handler = eventHandler;
-    }
-
-    @Implementation
-    public void sendAppPrivateCommand(View view, String action, Bundle data) {
-      handler.sendAppPrivateCommand(view, action, data);
-    }
-
-    @Implementation
-    public void updateCursorAnchorInfo(View view, CursorAnchorInfo cursorAnchorInfo) {
-      this.cursorAnchorInfo = cursorAnchorInfo;
-    }
-
-    // We simply store the values to verify later.
-    @Implementation
-    public void updateSelection(
-        View view, int selStart, int selEnd, int candidatesStart, int candidatesEnd) {
-      if (trackSelection) {
-        this.selectionUpdateValues.add(selStart);
-        this.selectionUpdateValues.add(selEnd);
-        this.selectionUpdateValues.add(candidatesStart);
-        this.selectionUpdateValues.add(candidatesEnd);
-      }
-    }
-
-    // only track values when enabled via this.
-    public void setTrackSelection(boolean val) {
-      trackSelection = val;
-    }
-
-    // Returns true if the last updateSelection call passed the following values.
-    public ArrayList<Integer> getSelectionUpdateValues() {
-      return selectionUpdateValues;
-    }
-
-    public CursorAnchorInfo getLastCursorAnchorInfo() {
-      return cursorAnchorInfo;
-    }
-  }
-
-  @Implements(AutofillManager.class)
-  public static class TestAfm extends ShadowAutofillManager {
-    public static int empty = -999;
-
-    String finishState;
-    int changeVirtualId = empty;
-    String changeString;
-
-    int enterId = empty;
-    int exitId = empty;
-
-    @Implementation
-    public void cancel() {
-      finishState = "cancel";
-    }
-
-    public void commit() {
-      finishState = "commit";
-    }
-
-    public void notifyViewEntered(View view, int virtualId, Rect absBounds) {
-      enterId = virtualId;
-    }
-
-    public void notifyViewExited(View view, int virtualId) {
-      exitId = virtualId;
-    }
-
-    public void notifyValueChanged(View view, int virtualId, AutofillValue value) {
-      if (Build.VERSION.SDK_INT < API_LEVELS.API_26) {
-        return;
-      }
-      changeVirtualId = virtualId;
-      changeString = value.getTextValue().toString();
-    }
-
-    public void resetStates() {
-      finishState = null;
-      changeVirtualId = empty;
-      changeString = null;
-      enterId = empty;
-      exitId = empty;
+      verify(mockReply).reply(replyCaptor.capture());
+      ByteBuffer replyBuffer = replyCaptor.getValue();
+      replyBuffer.rewind();
+      Object result = JSONMethodCodec.INSTANCE.decodeEnvelope(replyBuffer);
+      assertEquals(Boolean.FALSE, result);
     }
   }
 }
