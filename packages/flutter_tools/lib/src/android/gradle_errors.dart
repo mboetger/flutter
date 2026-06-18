@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  jniMismatchHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,24 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+@visibleForTesting
+final jniMismatchHandler = GradleHandledError(
+  test: _lineMatcher(const <String>['Build aborted: JNI libraries mismatch.']),
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    final jniRegexp = RegExp(r'missing the corresponding libflutter.so:\s*([^.]+)');
+    final Match? match = jniRegexp.firstMatch(line);
+    final String abis = match != null ? (match.group(1) ?? 'unsupported ABIs') : 'unsupported ABIs';
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} JNI libraries mismatch.\n'
+      'The application contains native libraries for the following ABI(s) but is missing the corresponding libflutter.so:\n'
+      '  - $abis\n\n'
+      'This will cause a crash on launch on devices supporting these ABIs.\n'
+      'To resolve this, ensure you are building for all required target platforms or remove the unsupported JNI libraries.',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'jni-mismatch',
 );

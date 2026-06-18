@@ -258,6 +258,45 @@ class FlutterPlugin : Plugin<Project> {
         )
     }
 
+    private fun checkJniMismatch(task: Task, variantBuildMode: String) {
+        val forceCheck = System.getenv("FORCE_JNI_MISMATCH_CHECK") == "true"
+        if (variantBuildMode != "release" && !forceCheck) {
+            return
+        }
+        val outputDirs = task.outputs.files
+        val supportedAbis = PLATFORM_ABI_LIST
+        val mismatches = mutableListOf<String>()
+        for (outputDir in outputDirs) {
+            if (!outputDir.exists() || !outputDir.isDirectory) {
+                continue
+            }
+            val abiDirs = outputDir.listFiles() ?: continue
+            for (abiDir in abiDirs) {
+                if (!abiDir.isDirectory || !supportedAbis.contains(abiDir.name)) {
+                    continue
+                }
+                val files = abiDir.listFiles() ?: continue
+                val hasSoFiles = files.any { it.isFile && it.name.endsWith(".so") }
+                if (hasSoFiles) {
+                    val hasFlutterSo = files.any { it.isFile && it.name == "libflutter.so" }
+                    if (!hasFlutterSo) {
+                        mismatches.add(abiDir.name)
+                    }
+                }
+            }
+        }
+        if (mismatches.isNotEmpty()) {
+            throw GradleException(
+                "Build aborted: JNI libraries mismatch. The application contains " +
+                "native libraries for the following ABI(s) but is missing the corresponding " +
+                "libflutter.so: ${mismatches.distinct().joinToString(", ")}. " +
+                "This will cause a crash on launch on devices supporting these ABIs. " +
+                "To resolve this, ensure you are building for all required target platforms " +
+                "or remove the unsupported JNI libraries."
+            )
+        }
+    }
+
     private fun getExecutableNameForPlatform(baseExecutableName: String): String =
         if (OperatingSystem.current().isWindows) "$baseExecutableName.bat" else baseExecutableName
 
@@ -470,6 +509,16 @@ class FlutterPlugin : Plugin<Project> {
                             .findByPath(":$hostAppProjectName:merge${FlutterPluginUtils.capitalize(appProjectVariant.name)}Assets")
                     check(mergeAssets != null)
                     mergeAssets.dependsOn(copyFlutterAssetsTask)
+
+                    val appMergeJniLibsTaskName = "merge${FlutterPluginUtils.capitalize(appProjectVariant.name)}JniLibFolders"
+                    appProject.tasks.configureEach {
+                        val task: Task = this
+                        if (task.name == appMergeJniLibsTaskName) {
+                            task.doLast {
+                                this@FlutterPlugin.checkJniMismatch(task, variantBuildMode)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -740,8 +789,14 @@ class FlutterPlugin : Plugin<Project> {
                 }
             val mergeJniLibsTaskName = "merge${FlutterPluginUtils.capitalize(variant.name)}JniLibFolders"
             project.tasks.configureEach {
-                if (name == mergeJniLibsTaskName) {
-                    dependsOn(copyJniLibsTaskProvider)
+                val task: Task = this
+                if (task.name == mergeJniLibsTaskName) {
+                    task.dependsOn(copyJniLibsTaskProvider)
+                    if (FlutterPluginUtils.isFlutterAppProject(project)) {
+                        task.doLast {
+                            flutterPlugin.checkJniMismatch(task, variantBuildMode)
+                        }
+                    }
                 }
             }
             val copyFlutterAssetsTaskProvider: TaskProvider<Copy> =

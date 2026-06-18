@@ -57,6 +57,7 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          jniMismatchHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -1714,6 +1715,50 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
       ProcessManager: () => processManager,
     },
   );
+
+  group('JNI libraries mismatch error', () {
+    testUsingContext(
+      'pattern matches JNI mismatch error and prints warning box',
+      () async {
+        const errorMessage =
+            'Build aborted: JNI libraries mismatch. The application contains '
+            'native libraries for the following ABI(s) but is missing the corresponding '
+            'libflutter.so: armeabi-v7a, x86. This will cause a crash on launch on '
+            'devices supporting these ABIs. To resolve this, ensure you are building '
+            'for all required target platforms or remove the unsupported JNI libraries.';
+
+        expect(formatTestErrorMessage(errorMessage, jniMismatchHandler), isTrue);
+
+        final project = FakeFlutterProject();
+        final GradleBuildStatus status = await jniMismatchHandler.handler(
+          line: errorMessage,
+          project: project,
+          usesAndroidX: true,
+        );
+
+        expect(status, equals(GradleBuildStatus.exit));
+        expect(testLogger.statusText, contains('JNI libraries mismatch.'));
+        expect(
+          testLogger.statusText,
+          contains(
+            'The application contains native libraries for the following ABI(s) but is missing the',
+          ),
+        );
+        expect(testLogger.statusText, contains('corresponding libflutter.so:'));
+        expect(testLogger.statusText, contains('- armeabi-v7a, x86'));
+        expect(
+          testLogger.statusText,
+          contains('This will cause a crash on launch on devices supporting these ABIs.'),
+        );
+      },
+      overrides: <Type, Generator>{
+        GradleUtils: () => FakeGradleUtils(),
+        Platform: () => fakePlatform('android'),
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+      },
+    );
+  });
 }
 
 bool formatTestErrorMessage(String errorMessage, GradleHandledError error) {
