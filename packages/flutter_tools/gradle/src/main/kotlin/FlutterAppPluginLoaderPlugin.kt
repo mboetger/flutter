@@ -4,6 +4,7 @@
 
 package com.flutter.gradle
 
+import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.initialization.Settings
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
@@ -28,13 +29,17 @@ class FlutterAppPluginLoaderPlugin : Plugin<Settings> {
         val flutterProjectRoot: File = settings.settingsDir.parentFile
 
         if (!settings.extraProperties.has(FLUTTER_SDK_PATH)) {
+            val localPropertiesFile = File(settings.settingsDir, "local.properties")
+            if (!localPropertiesFile.exists()) {
+                throw GradleException("local.properties file not found. Please run \"flutter pub get\" or \"flutter run\" in the project root to generate it.")
+            }
             val properties = Properties()
-            val localPropertiesFile = File(settings.rootProject.projectDir, "local.properties")
             localPropertiesFile.inputStream().use { properties.load(it) }
-            settings.extraProperties.set(FLUTTER_SDK_PATH, properties.getProperty("flutter.sdk"))
-            assert(
-                settings.extraProperties.get(FLUTTER_SDK_PATH) != null
-            ) { "flutter.sdk not set in local.properties" }
+            val flutterSdkPath = properties.getProperty("flutter.sdk")
+            if (flutterSdkPath == null) {
+                throw GradleException("flutter.sdk not set in local.properties. Please run \"flutter pub get\" or \"flutter run\" in the project root.")
+            }
+            settings.extraProperties.set(FLUTTER_SDK_PATH, flutterSdkPath)
         }
 
         settings.apply {
