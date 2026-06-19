@@ -1862,7 +1862,12 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     }
     if (Build.VERSION.SDK_INT >= API_LEVELS.API_28) {
       setAccessibilityPaneTitle(routeName);
-    } else {
+    }
+    // On Samsung devices running API 28+, setAccessibilityPaneTitle() is ignored
+    // by the system unless a TYPE_WINDOW_STATE_CHANGED event is also explicitly sent.
+    // See https://github.com/flutter/flutter/issues/57606
+    if (Build.VERSION.SDK_INT < API_LEVELS.API_28
+        || "samsung".equalsIgnoreCase(Build.MANUFACTURER)) {
       AccessibilityEvent event =
           obtainAccessibilityEvent(route.id, AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED);
       event.getText().add(routeName);

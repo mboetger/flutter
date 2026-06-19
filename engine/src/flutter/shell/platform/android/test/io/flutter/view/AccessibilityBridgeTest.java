@@ -70,6 +70,7 @@ import org.mockito.MockedStatic;
 import org.mockito.invocation.InvocationOnMock;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowBuild;
 
 @RunWith(AndroidJUnit4.class)
 public class AccessibilityBridgeTest {
@@ -3278,6 +3279,97 @@ public class AccessibilityBridgeTest {
     nonHeadingUpdate.sendUpdateToBridge(accessibilityBridge);
     AccessibilityNodeInfo nonHeadingInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
     assertFalse(nonHeadingInfo.isHeading());
+  }
+
+  @Config(sdk = API_LEVELS.API_28)
+  @TargetApi(API_LEVELS.API_28)
+  @Test
+  public void itAnnouncesRouteNameOnSamsungDevicesWithWindowStateChangedEvent() {
+    ShadowBuild.setManufacturer("samsung");
+
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(mockRootView, mockManager, mockViewEmbedder);
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+    when(mockManager.isEnabled()).thenReturn(true);
+
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+    TestSemanticsNode node1 = new TestSemanticsNode();
+    node1.id = 1;
+    node1.addFlag(AccessibilityBridge.Flag.SCOPES_ROUTE);
+    node1.addFlag(AccessibilityBridge.Flag.NAMES_ROUTE);
+    node1.label = "node1";
+    root.children.add(node1);
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // On Samsung devices, setAccessibilityPaneTitle should still be called
+    verify(mockRootView, times(1)).setAccessibilityPaneTitle(eq("node1"));
+
+    // But critically, a TYPE_WINDOW_STATE_CHANGED event must also be sent
+    ArgumentCaptor<AccessibilityEvent> eventCaptor =
+        ArgumentCaptor.forClass(AccessibilityEvent.class);
+    verify(mockParent, atLeastOnce())
+        .requestSendAccessibilityEvent(eq(mockRootView), eventCaptor.capture());
+    boolean foundWindowStateChanged = false;
+    for (AccessibilityEvent event : eventCaptor.getAllValues()) {
+      if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        foundWindowStateChanged = true;
+        assertEquals("node1", event.getText().get(0).toString());
+      }
+    }
+    assertTrue(foundWindowStateChanged);
+  }
+
+  @Config(sdk = API_LEVELS.API_28)
+  @TargetApi(API_LEVELS.API_28)
+  @Test
+  public void itDoesNotAnnounceRouteNameOnNonSamsungDevicesWithWindowStateChangedEvent() {
+    // Explicitly set manufacturer to a non-samsung brand
+    ShadowBuild.setManufacturer("google");
+
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(mockRootView, mockManager, mockViewEmbedder);
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+    when(mockManager.isEnabled()).thenReturn(true);
+
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+    TestSemanticsNode node1 = new TestSemanticsNode();
+    node1.id = 1;
+    node1.addFlag(AccessibilityBridge.Flag.SCOPES_ROUTE);
+    node1.addFlag(AccessibilityBridge.Flag.NAMES_ROUTE);
+    node1.label = "node1";
+    root.children.add(node1);
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // On non-Samsung devices, setAccessibilityPaneTitle should still be called
+    verify(mockRootView, times(1)).setAccessibilityPaneTitle(eq("node1"));
+
+    // But critically, a TYPE_WINDOW_STATE_CHANGED event must NOT be sent to avoid double
+    // announcements
+    ArgumentCaptor<AccessibilityEvent> eventCaptor =
+        ArgumentCaptor.forClass(AccessibilityEvent.class);
+    verify(mockParent, atLeastOnce())
+        .requestSendAccessibilityEvent(eq(mockRootView), eventCaptor.capture());
+    for (AccessibilityEvent event : eventCaptor.getAllValues()) {
+      assertNotEquals(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, event.getEventType());
+    }
   }
 
   AccessibilityBridge setUpBridge() {
