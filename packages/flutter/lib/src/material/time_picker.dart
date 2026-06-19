@@ -261,15 +261,18 @@ class _DialTimePickerHeader extends StatelessWidget {
         : math.max(0, kMinInteractiveDimension - dayPeriodHeight);
 
     final _HourDialType hourDialType = _TimePickerModel.hourDialTypeOf(context);
+    final bool isCompact = _isCompact(context);
     final RenderObjectWidget orientationSpecificHeader = switch (orientation) {
       Orientation.portrait => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Padding(
             padding: EdgeInsetsDirectional.only(
-              bottom:
-                  (_TimePickerModel.useMaterial3Of(context) ? 20 : 24) -
-                  minInteractiveVerticalPadding / 2,
+              bottom: math.max(
+                0.0,
+                (isCompact ? 8 : (_TimePickerModel.useMaterial3Of(context) ? 20 : 24)) -
+                    minInteractiveVerticalPadding / 2,
+              ),
             ),
             child: Text(
               helpText,
@@ -312,7 +315,7 @@ class _DialTimePickerHeader extends StatelessWidget {
                   : VerticalDirection.down,
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: math.max(0, 16 - minInteractiveVerticalPadding / 2),
+              spacing: isCompact ? 4 : math.max(0, 16 - minInteractiveVerticalPadding / 2),
               children: <Widget>[
                 Row(
                   // Hour/minutes should not change positions in RTL locales.
@@ -2288,6 +2291,11 @@ class _HourMinuteTextFieldState extends State<_HourMinuteTextField> with Restora
 /// Signature for when the time picker entry mode is changed.
 typedef EntryModeChangeCallback = void Function(TimePickerEntryMode mode);
 
+bool _isCompact(BuildContext context) {
+  final Size screenSize = MediaQuery.sizeOf(context);
+  return screenSize.height < 450 || screenSize.width < 360;
+}
+
 /// A Material Design time picker designed to appear inside a popup dialog.
 ///
 /// Pass this widget to [showDialog]. The value returned by [showDialog] is the
@@ -2499,10 +2507,17 @@ class _TimePickerDialogState extends State<TimePickerDialog> with RestorationMix
 
   Size _minDialogSize(BuildContext context, {required bool useMaterial3}) {
     final Orientation orientation = _orientation.value ?? MediaQuery.orientationOf(context);
+    final bool isCompact = _isCompact(context);
 
     switch (_entryMode.value) {
       case TimePickerEntryMode.dial:
       case TimePickerEntryMode.dialOnly:
+        if (isCompact) {
+          return switch (orientation) {
+            Orientation.portrait => const Size(238, 320),
+            Orientation.landscape => const Size(400, 200),
+          };
+        }
         return switch (orientation) {
           Orientation.portrait => _kTimePickerMinPortraitSize,
           Orientation.landscape => _kTimePickerMinLandscapeSize,
@@ -2543,19 +2558,29 @@ class _TimePickerDialogState extends State<TimePickerDialog> with RestorationMix
     final double textScaleFactor =
         MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.1).scale(fontSizeToScale) /
         fontSizeToScale;
+    final bool isCompact = _isCompact(context);
 
     final Size timePickerSize;
     switch (_entryMode.value) {
       case TimePickerEntryMode.dial:
       case TimePickerEntryMode.dialOnly:
-        switch (orientation) {
-          case Orientation.portrait:
-            timePickerSize = _kTimePickerPortraitSize;
-          case Orientation.landscape:
-            timePickerSize = Size(
-              _kTimePickerLandscapeSize.width * textScaleFactor,
-              useMaterial3 ? _kTimePickerLandscapeSize.height : _kTimePickerLandscapeSizeM2.height,
-            );
+        if (isCompact) {
+          timePickerSize = switch (orientation) {
+            Orientation.portrait => const Size(280, 344),
+            Orientation.landscape => const Size(420, 230),
+          };
+        } else {
+          switch (orientation) {
+            case Orientation.portrait:
+              timePickerSize = _kTimePickerPortraitSize;
+            case Orientation.landscape:
+              timePickerSize = Size(
+                _kTimePickerLandscapeSize.width * textScaleFactor,
+                useMaterial3
+                    ? _kTimePickerLandscapeSize.height
+                    : _kTimePickerLandscapeSizeM2.height,
+              );
+          }
         }
       case TimePickerEntryMode.input:
       case TimePickerEntryMode.inputOnly:
@@ -2657,6 +2682,7 @@ class _TimePickerDialogState extends State<TimePickerDialog> with RestorationMix
       // _dialogSize returns "padded" sizes.
       MaterialTapTargetSize.shrinkWrap => const Offset(0, -12),
     };
+    final bool isCompact = _isCompact(context);
     final Size dialogSize =
         _dialogSize(context, useMaterial3: theme.useMaterial3) + tapTargetSizeOffset;
     final Size minDialogSize =
@@ -2666,15 +2692,17 @@ class _TimePickerDialogState extends State<TimePickerDialog> with RestorationMix
       elevation: pickerTheme.elevation ?? defaultTheme.elevation,
       backgroundColor: pickerTheme.backgroundColor ?? defaultTheme.backgroundColor,
       insetPadding: EdgeInsets.symmetric(
-        horizontal: 16,
+        horizontal: isCompact ? 8 : 16,
         vertical:
             (_entryMode.value == TimePickerEntryMode.input ||
                 _entryMode.value == TimePickerEntryMode.inputOnly)
             ? 0
-            : 24,
+            : (isCompact ? 8 : 24),
       ),
       child: Padding(
-        padding: pickerTheme.padding ?? defaultTheme.padding,
+        padding: isCompact
+            ? const EdgeInsets.all(8)
+            : (pickerTheme.padding ?? defaultTheme.padding),
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             final Size constrainedSize = constraints.constrain(dialogSize);
@@ -3021,20 +3049,22 @@ class _TimePickerState extends State<_TimePicker> with RestorationMixin {
           0,
           2 * kMinInteractiveDimension - defaultTheme.dayPeriodPortraitSize.height,
         );
+        final bool isCompact = _isCompact(context);
         final EdgeInsetsGeometry dialPadding = switch (orientation) {
           Orientation.portrait => EdgeInsets.only(
             left: 12,
             right: 12,
-            top: 36 - portraitMinInteractiveVerticalAdjustment / 2,
+            top: isCompact ? 8 : (36 - portraitMinInteractiveVerticalAdjustment / 2),
           ),
-          Orientation.landscape => const EdgeInsetsDirectional.only(start: 64),
+          Orientation.landscape => EdgeInsetsDirectional.only(start: isCompact ? 12 : 64),
         };
+        final Size dialSize = isCompact ? const Size.square(180.0) : defaultTheme.dialSize;
 
         final Widget dial = Padding(
           padding: dialPadding,
           child: ExcludeSemantics(
             child: SizedBox.fromSize(
-              size: defaultTheme.dialSize,
+              size: dialSize,
               child: AspectRatio(
                 aspectRatio: 1,
                 child: _Dial(

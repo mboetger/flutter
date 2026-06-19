@@ -674,23 +674,21 @@ void main() {
         expect(find.text('Cancel'), findsOneWidget);
       });
 
-      testWidgets(
-        'Material3 - large actions label should not overflow in input mode',
-        (WidgetTester tester) async {
-          await startPicker(
-            tester,
-            (TimeOfDay? time) {},
-            entryMode: TimePickerEntryMode.input,
-            materialType: MaterialType.material3,
-            cancelText: 'Very very very long cancel text',
-            confirmText: 'Very very very long confirm text',
-          );
+      testWidgets('Material3 - large actions label should not overflow in input mode', (
+        WidgetTester tester,
+      ) async {
+        await startPicker(
+          tester,
+          (TimeOfDay? time) {},
+          entryMode: TimePickerEntryMode.input,
+          materialType: MaterialType.material3,
+          cancelText: 'Very very very long cancel text',
+          confirmText: 'Very very very long confirm text',
+        );
 
-          // Verify that no overflow errors occur.
-          expect(tester.takeException(), isNull);
-        },
-        variant: TargetPlatformVariant.mobile(),
-      );
+        // Verify that no overflow errors occur.
+        expect(tester.takeException(), isNull);
+      }, variant: TargetPlatformVariant.mobile());
 
       testWidgets('respects MediaQueryData.alwaysUse24HourFormat == false', (
         WidgetTester tester,
@@ -2593,57 +2591,52 @@ void main() {
     },
   );
 
-  testWidgets(
-    'AM/PM buttons have correct selected/checked semantics for platform variant',
-    (WidgetTester tester) async {
-      // Regression test for https://github.com/flutter/flutter/issues/173302
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (BuildContext context) {
-              return TextButton(
-                onPressed: () {
-                  showTimePicker(
-                    context: context,
-                    initialTime: const TimeOfDay(hour: 14, minute: 0),
-                  );
-                },
-                child: const Text('Open Picker'),
-              );
-            },
-          ),
+  testWidgets('AM/PM buttons have correct selected/checked semantics for platform variant', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for https://github.com/flutter/flutter/issues/173302
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) {
+            return TextButton(
+              onPressed: () {
+                showTimePicker(context: context, initialTime: const TimeOfDay(hour: 14, minute: 0));
+              },
+              child: const Text('Open Picker'),
+            );
+          },
         ),
-      );
+      ),
+    );
 
-      await tester.tap(find.text('Open Picker'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Open Picker'));
+    await tester.pumpAndSettle();
 
-      final Finder pmButtonSemantics = find.ancestor(
-        of: find.widgetWithText(InkWell, 'PM'),
-        matching: find.byWidgetPredicate(
-          (Widget widget) => widget is Semantics && (widget.properties.button ?? false),
-        ),
-      );
+    final Finder pmButtonSemantics = find.ancestor(
+      of: find.widgetWithText(InkWell, 'PM'),
+      matching: find.byWidgetPredicate(
+        (Widget widget) => widget is Semantics && (widget.properties.button ?? false),
+      ),
+    );
 
-      final Finder amButtonSemantics = find.ancestor(
-        of: find.widgetWithText(InkWell, 'AM'),
-        matching: find.byWidgetPredicate(
-          (Widget widget) => widget is Semantics && (widget.properties.button ?? false),
-        ),
-      );
+    final Finder amButtonSemantics = find.ancestor(
+      of: find.widgetWithText(InkWell, 'AM'),
+      matching: find.byWidgetPredicate(
+        (Widget widget) => widget is Semantics && (widget.properties.button ?? false),
+      ),
+    );
 
-      bool? getPlatformSemanticProperty(Semantics semantics) {
-        return switch (defaultTargetPlatform) {
-          TargetPlatform.iOS => semantics.properties.selected,
-          _ => semantics.properties.checked,
-        };
-      }
+    bool? getPlatformSemanticProperty(Semantics semantics) {
+      return switch (defaultTargetPlatform) {
+        TargetPlatform.iOS => semantics.properties.selected,
+        _ => semantics.properties.checked,
+      };
+    }
 
-      expect(getPlatformSemanticProperty(tester.widget<Semantics>(pmButtonSemantics)), isTrue);
-      expect(getPlatformSemanticProperty(tester.widget<Semantics>(amButtonSemantics)), isFalse);
-    },
-    variant: TargetPlatformVariant.all(),
-  );
+    expect(getPlatformSemanticProperty(tester.widget<Semantics>(pmButtonSemantics)), isTrue);
+    expect(getPlatformSemanticProperty(tester.widget<Semantics>(amButtonSemantics)), isFalse);
+  }, variant: TargetPlatformVariant.all());
 
   testWidgets('TimePickerDialog does not crash at zero area', (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -2656,6 +2649,113 @@ void main() {
       ),
     );
     expect(tester.getSize(find.byType(TimePickerDialog)), Size.zero);
+  });
+
+  group('Time Picker split-screen/compact viewport layout tests (regression tests for #60516)', () {
+    testWidgets(
+      'Material 3 dial mode fits entirely on small landscape viewport (500x300) without scrolling',
+      (WidgetTester tester) async {
+        addTearDown(tester.view.reset);
+
+        // Simulate a small landscape/split-screen viewport
+        tester.view.physicalSize = const Size(500, 300);
+        tester.view.devicePixelRatio = 1.0;
+
+        // Leverage the existing mediaQueryBoilerplate helper
+        await mediaQueryBoilerplate(tester, materialType: MaterialType.material3);
+
+        expect(find.byType(TimePickerDialog), findsOneWidget);
+
+        // Find the vertical scroll view
+        final Finder verticalScrollViewFinder = find.descendant(
+          of: find.byType(TimePickerDialog),
+          matching: find.byWidgetPredicate(
+            (Widget w) =>
+                w is SingleChildScrollView && w.restorationId == 'time_picker_scroll_view_vertical',
+          ),
+        );
+        final ScrollableState verticalScrollableState = tester.state<ScrollableState>(
+          find.descendant(of: verticalScrollViewFinder, matching: find.byType(Scrollable)),
+        );
+        expect(
+          verticalScrollableState.position.maxScrollExtent,
+          0.0,
+          reason:
+              'The time picker should not require vertical scrolling to fit on a 500x300 landscape screen.',
+        );
+
+        // Find the horizontal scroll view
+        final Finder horizontalScrollViewFinder = find.descendant(
+          of: find.byType(TimePickerDialog),
+          matching: find.byWidgetPredicate(
+            (Widget w) =>
+                w is SingleChildScrollView &&
+                w.restorationId == 'time_picker_scroll_view_horizontal',
+          ),
+        );
+        final ScrollableState horizontalScrollableState = tester.state<ScrollableState>(
+          find.descendant(of: horizontalScrollViewFinder, matching: find.byType(Scrollable)).first,
+        );
+        expect(
+          horizontalScrollableState.position.maxScrollExtent,
+          0.0,
+          reason:
+              'The time picker should not require horizontal scrolling to fit on a 500x300 landscape screen.',
+        );
+      },
+    );
+
+    testWidgets(
+      'Material 3 dial mode fits entirely on small portrait viewport (320x400) without scrolling',
+      (WidgetTester tester) async {
+        addTearDown(tester.view.reset);
+
+        // Simulate a small portrait/split-screen viewport
+        tester.view.physicalSize = const Size(320, 400);
+        tester.view.devicePixelRatio = 1.0;
+
+        await mediaQueryBoilerplate(tester, materialType: MaterialType.material3);
+
+        expect(find.byType(TimePickerDialog), findsOneWidget);
+
+        // Find the vertical scroll view
+        final Finder verticalScrollViewFinder = find.descendant(
+          of: find.byType(TimePickerDialog),
+          matching: find.byWidgetPredicate(
+            (Widget w) =>
+                w is SingleChildScrollView && w.restorationId == 'time_picker_scroll_view_vertical',
+          ),
+        );
+        final ScrollableState verticalScrollableState = tester.state<ScrollableState>(
+          find.descendant(of: verticalScrollViewFinder, matching: find.byType(Scrollable)),
+        );
+        expect(
+          verticalScrollableState.position.maxScrollExtent,
+          0.0,
+          reason:
+              'The time picker should not require vertical scrolling to fit on a 320x400 portrait screen.',
+        );
+
+        // Find the horizontal scroll view
+        final Finder horizontalScrollViewFinder = find.descendant(
+          of: find.byType(TimePickerDialog),
+          matching: find.byWidgetPredicate(
+            (Widget w) =>
+                w is SingleChildScrollView &&
+                w.restorationId == 'time_picker_scroll_view_horizontal',
+          ),
+        );
+        final ScrollableState horizontalScrollableState = tester.state<ScrollableState>(
+          find.descendant(of: horizontalScrollViewFinder, matching: find.byType(Scrollable)).first,
+        );
+        expect(
+          horizontalScrollableState.position.maxScrollExtent,
+          0.0,
+          reason:
+              'The time picker should not require horizontal scrolling to fit on a 320x400 portrait screen.',
+        );
+      },
+    );
   });
 }
 
