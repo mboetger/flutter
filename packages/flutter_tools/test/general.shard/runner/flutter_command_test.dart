@@ -628,6 +628,24 @@ void main() {
     );
 
     testUsingContext(
+      'includes targetPlatform in BuildInfo',
+      () async {
+        final flutterCommand = DummyFlutterCommand();
+        flutterCommand.argParser.addOption('target-platform');
+        final CommandRunner<void> runner = createTestCommandRunner(flutterCommand);
+        await runner.run(<String>['dummy', '--target-platform=android-arm']);
+        final BuildInfo buildInfo = await flutterCommand.getBuildInfo(
+          forcedBuildMode: BuildMode.debug,
+        );
+        expect(buildInfo.targetPlatform, TargetPlatform.android_arm);
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+      },
+    );
+
+    testUsingContext(
       'use fileSystemRoots to generate BuildInfo',
       () async {
         final flutterCommand = DummyFlutterCommand(fileSystemRoots: <String>['foo', 'bar']);

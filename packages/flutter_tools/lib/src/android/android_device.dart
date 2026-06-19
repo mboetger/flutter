@@ -536,7 +536,8 @@ class AndroidDevice extends Device {
       return LaunchResult.failed();
     }
 
-    final TargetPlatform devicePlatform = await targetPlatform;
+    final TargetPlatform devicePlatform =
+        debuggingOptions.buildInfo.targetPlatform ?? await targetPlatform;
 
     var builtPackage = package;
     AndroidArch androidArch;

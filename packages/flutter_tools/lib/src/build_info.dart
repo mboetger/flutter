@@ -55,6 +55,7 @@ class BuildInfo {
     this.useLocalCanvasKit = false,
     this.includeUnsupportedPlatformLibraryStubs = false,
     this.webEnableHotReload = false,
+    this.targetPlatform,
   }) : extraFrontEndOptions = extraFrontEndOptions ?? const <String>[],
        extraGenSnapshotOptions = extraGenSnapshotOptions ?? const <String>[],
        fileSystemRoots = fileSystemRoots ?? const <String>[],
@@ -70,6 +71,7 @@ class BuildInfo {
     String? initializeFromDill,
     List<String>? dartDefines,
     bool? includeUnsupportedPlatformLibraryStubs,
+    TargetPlatform? targetPlatform,
   }) {
     return BuildInfo(
       mode,
@@ -102,10 +104,14 @@ class BuildInfo {
           includeUnsupportedPlatformLibraryStubs ?? this.includeUnsupportedPlatformLibraryStubs,
       webEnableHotReload: webEnableHotReload,
       treeShakeIcons: treeShakeIcons,
+      targetPlatform: targetPlatform ?? this.targetPlatform,
     );
   }
 
   final BuildMode mode;
+
+  /// Target platform for the build (e.g. android_arm versus android_arm64).
+  final TargetPlatform? targetPlatform;
 
   /// Whether the build should subset icon fonts.
   final bool treeShakeIcons;

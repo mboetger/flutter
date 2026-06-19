@@ -42,6 +42,13 @@ abstract class RunCommandBase extends FlutterCommand with DeviceBasedDevelopment
     addNativeNullAssertions(hide: !verboseHelp);
     usesApplicationBinaryOption();
     argParser
+      ..addOption(
+        'target-platform',
+        allowed: <String>['android-arm', 'android-arm64', 'android-x64'],
+        help:
+            'Specify the target platform when building the app for an '
+            'Android device.\nIgnored on iOS.',
+      )
       ..addFlag(
         'trace-startup',
         negatable: false,

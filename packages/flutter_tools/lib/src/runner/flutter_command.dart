@@ -1364,7 +1364,18 @@ abstract class FlutterCommand extends Command<void> {
     BuildMode? forcedBuildMode,
     File? forcedTargetFile,
     bool? forcedUseLocalCanvasKit,
+    TargetPlatform? forcedTargetPlatform,
   }) async {
+    var targetPlatform = forcedTargetPlatform;
+    if (targetPlatform == null && argParser.options.containsKey('target-platform')) {
+      final Object? value = argResults?['target-platform'];
+      // Only parse single-option target platform overrides into BuildInfo.
+      // Multi-option target platforms (e.g., in build apk) are handled separately by their respective commands.
+      if (value is String) {
+        targetPlatform = TargetPlatform.fromName(value);
+      }
+    }
+
     final bool trackWidgetCreation =
         argParser.options.containsKey('track-widget-creation') && boolArg('track-widget-creation');
 
@@ -1539,6 +1550,7 @@ abstract class FlutterCommand extends Command<void> {
           boolArg(FlutterOptions.kAssumeInitializeFromDillUpToDate),
       useLocalCanvasKit: useLocalCanvasKit,
       webEnableHotReload: webEnableHotReload,
+      targetPlatform: targetPlatform,
     );
   }
 
