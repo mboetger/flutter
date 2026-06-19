@@ -402,14 +402,8 @@ class FlutterPlugin : Plugin<Project> {
             return
         }
         // Flutter host module project (Add-to-app).
-        val hostAppProjectName: String? =
-            if (projectToAddTasksTo.rootProject.hasProperty("flutter.hostAppProjectName")) {
-                projectToAddTasksTo.rootProject.property(
-                    "flutter.hostAppProjectName"
-                ) as? String
-            } else {
-                "app"
-            }
+        val hostAppProjectName: String =
+            (projectToAddTasksTo.findProperty("flutter.hostAppProjectName") as? String) ?: "app"
         val appProject: Project? =
             projectToAddTasksTo.rootProject.findProject(":$hostAppProjectName")
         check(appProject != null) {

@@ -71,6 +71,7 @@ class FlutterPluginTest {
         every { project.projectDir } returns projectDir.toFile()
         every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
         every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.file("local.properties") } returns projectDir.parent.resolve("local.properties").toFile()
         val flutterExtension = FlutterExtension()
         every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
         every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
@@ -166,6 +167,7 @@ class FlutterPluginTest {
         every { project.projectDir } returns projectDir.toFile()
         every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
         every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.file("local.properties") } returns projectDir.parent.resolve("local.properties").toFile()
         val flutterExtension = FlutterExtension()
         every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
         every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
@@ -330,6 +332,76 @@ class FlutterPluginTest {
         } else {
             fail("FilePermissions configuration action was not captured")
         }
+    }
+
+    @Test
+    fun `FlutterPlugin hostAppProjectName supports custom host app project name`(
+        @TempDir tempDir: Path
+    ) {
+        // Create a real directory structure to satisfy file exists checks.
+        val projectDir = tempDir.resolve("project-dir").resolve("android").resolve("flutter_module")
+        projectDir.toFile().mkdirs()
+        
+        val fakeFlutterSdkDir = tempDir.resolve("fake-flutter-sdk")
+        fakeFlutterSdkDir.toFile().mkdirs()
+        val fakeCacheDir = fakeFlutterSdkDir.resolve("bin").resolve("cache")
+        fakeCacheDir.toFile().mkdirs()
+        fakeCacheDir.resolve("engine.stamp").writeText(FAKE_ENGINE_STAMP)
+        fakeCacheDir.resolve("engine.realm").writeText(FAKE_ENGINE_REALM)
+
+        val project = mockk<Project>(relaxed = true)
+        val mockRootProject = mockk<Project>(relaxed = true)
+        val mockCustomHostAppProject = mockk<Project>(relaxed = true)
+
+        every { project.rootProject } returns mockRootProject
+        every { project.projectDir } returns projectDir.toFile()
+        val localPropertiesFile = projectDir.parent.resolve("local.properties").toFile()
+        every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
+        every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.file("local.properties") } returns localPropertiesFile
+        every { mockRootProject.file("local.properties") } returns localPropertiesFile
+        
+        // This is a module project (Add-to-app), so isFlutterAppProject returns false
+        every { project.extensions.findByType(ApplicationExtension::class.java) } returns null
+        val mockLibraryExtension = mockk<com.android.build.gradle.LibraryExtension>(relaxed = true)
+        every { project.extensions.findByType(LibraryExtension::class.java) } returns mockLibraryExtension
+        every { project.extensions.findByName("android") } returns mockLibraryExtension
+        every { project.extensions.getByName("android") } returns mockLibraryExtension
+        every { project.extensions.findByType(BaseExtension::class.java) } returns mockLibraryExtension
+        val mockAndroidComponentsExtension = mockk<AndroidComponentsExtension<*, *, *>>(relaxed = true)
+        every { project.extensions.getByType(AndroidComponentsExtension::class.java) } returns mockAndroidComponentsExtension
+        val mockBuildTypes = mockk<org.gradle.api.NamedDomainObjectContainer<com.android.build.gradle.internal.dsl.BuildType>>(relaxed = true)
+        val mockDebugBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>(relaxed = true)
+        val mockReleaseBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>(relaxed = true)
+        every { mockLibraryExtension.buildTypes } returns mockBuildTypes
+        every { mockBuildTypes.getByName("debug") } returns mockDebugBuildType
+        every { mockBuildTypes.getByName("release") } returns mockReleaseBuildType
+
+        // Mock the custom host app property on the subproject
+        every { project.findProperty("flutter.hostAppProjectName") } returns "custom_host_app"
+        
+        // Mock the findProject on rootProject
+        every { mockRootProject.findProject(":custom_host_app") } returns mockCustomHostAppProject
+        every { mockRootProject.findProject(":app") } returns null
+
+        // Return a stable FlutterExtension instance
+        val flutterExtension = FlutterExtension()
+        every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
+        every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
+        every { project.state.failure } returns null
+
+        // Mock the NativePluginLoader to return empty list
+        mockkObject(NativePluginLoaderReflectionBridge)
+        every { NativePluginLoaderReflectionBridge.getPlugins(any(), any()) } returns listOf()
+        every { project.extraProperties } returns mockk(relaxed = true)
+
+        val flutterPlugin = FlutterPlugin()
+        flutterPlugin.apply(project)
+
+        // Verify that the custom host app project was resolved and afterEvaluate was registered on it
+        verify { mockRootProject.findProject(":custom_host_app") }
+        verify(exactly = 0) { mockRootProject.findProject(":app") }
+        verify { mockCustomHostAppProject.afterEvaluate(capture(slot<Action<Project>>())) }
     }
 
     companion object {
