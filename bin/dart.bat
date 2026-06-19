@@ -11,7 +11,7 @@ REM work across all platforms!
 REM
 REM --------------------------------------------------------------------------
 
-SETLOCAL
+SETLOCAL DISABLEDELAYEDEXPANSION
 
 FOR %%i IN ("%~dp0..") DO SET FLUTTER_ROOT=%%~fi
 

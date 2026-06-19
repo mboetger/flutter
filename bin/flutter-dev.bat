@@ -11,7 +11,7 @@ REM continue to work across all platforms!
 REM
 REM --------------------------------------------------------------------------
 
-SETLOCAL
+SETLOCAL DISABLEDELAYEDEXPANSION
 
 REM This is a helper script for development purposes. It runs the Flutter tool
 REM from source code directly, without using the prebuilt snapshot. This is

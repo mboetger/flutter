@@ -11,7 +11,7 @@ REM work across all platforms!
 REM
 REM --------------------------------------------------------------------------
 
-SETLOCAL
+SETLOCAL DISABLEDELAYEDEXPANSION
 
 REM Ensure we are running on 64-bit Windows (32-bit is not supported).
 REM If this is a 32-bit process emulated by WOW64,
