@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include <future>
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -226,6 +227,52 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
   EXPECT_NE(
       holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
       holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+}
+
+TEST(AndroidShellHolder, InitialLocaleIsSet) {
+  Settings settings;
+  // Disable thread merging to prevent deadlock when blocking the platform
+  // (test) thread.
+  settings.merged_platform_ui_thread =
+      Settings::MergedPlatformUIThread::kDisabled;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  // Send a setLocale platform message.
+  std::string json_message =
+      "{\"method\":\"setLocale\",\"args\":[\"en\",\"US\",\"\",\"\"]}";
+  fml::MallocMapping bytes = fml::MallocMapping::Copy(
+      reinterpret_cast<const uint8_t*>(json_message.c_str()),
+      json_message.size());
+
+  auto message = std::make_unique<PlatformMessage>(
+      /*channel=*/"flutter/localization", /*data=*/std::move(bytes),
+      /*response=*/nullptr);
+
+  PlatformView* platform_view = holder->GetPlatformView().get();
+  platform_view->DispatchPlatformMessage(std::move(message));
+
+  // Synchronize with the UI thread.
+  std::promise<std::vector<std::string>> promise;
+  auto future = promise.get_future();
+  holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner()->PostTask(
+      [&promise, shell = holder->GetShellForTesting().get()]() {
+        std::vector<std::string> locale_data;
+        auto engine = shell->GetEngine();
+        if (engine) {
+          locale_data =
+              engine->GetRuntimeController()->GetPlatformData().locale_data;
+        }
+        promise.set_value(locale_data);
+      });
+  auto locale_data = future.get();
+
+  ASSERT_EQ(locale_data.size(), 4U);
+  EXPECT_EQ(locale_data[0], "en");
+  EXPECT_EQ(locale_data[1], "US");
+  EXPECT_EQ(locale_data[2], "");
+  EXPECT_EQ(locale_data[3], "");
 }
 
 }  // namespace testing
