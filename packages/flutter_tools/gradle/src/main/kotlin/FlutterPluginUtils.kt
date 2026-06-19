@@ -777,7 +777,10 @@ object FlutterPluginUtils {
             )
         }
         val platforms: List<String> = getTargetPlatforms(project)
-        platforms.forEach { platform ->
+        val defaultConfig = getLegacyAndroidExtension(project).defaultConfig
+        val abiFilters: Set<String>? = getAbiFilters(defaultConfig)
+        val effectivePlatforms = getEffectivePlatforms(platforms, abiFilters)
+        effectivePlatforms.forEach { platform ->
             val arch: String = formatPlatformString(platform)
             // Add the `libflutter.so` dependency.
             addApiDependencies(
@@ -786,6 +789,101 @@ object FlutterPluginUtils {
                 "io.flutter:${arch}_$flutterBuildMode:$engineVersion"
             )
         }
+    }
+
+    /**
+     * Dynamically extracts `abiFilters` from a product flavor or variant using reflection.
+     * This avoids compile-time signature mismatches across different AGP versions.
+     */
+    @JvmStatic
+    internal fun getAbiFilters(flavor: Any): Set<String>? {
+        try {
+            val ndkConfigMethod = try {
+                flavor.javaClass.getMethod("getNdkConfig")
+            } catch (e: NoSuchMethodException) {
+                null
+            }
+            if (ndkConfigMethod != null) {
+                val ndkConfig = ndkConfigMethod.invoke(flavor) ?: return null
+                val abiFiltersMethod = ndkConfig.javaClass.getMethod("getAbiFilters")
+                @Suppress("UNCHECKED_CAST")
+                return abiFiltersMethod.invoke(ndkConfig) as? Set<String>
+            }
+            val ndkMethod = try {
+                flavor.javaClass.getMethod("getNdk")
+            } catch (e: NoSuchMethodException) {
+                null
+            }
+            if (ndkMethod != null) {
+                val ndk = ndkMethod.invoke(flavor) ?: return null
+                val abiFiltersMethod = ndk.javaClass.getMethod("getAbiFilters")
+                @Suppress("UNCHECKED_CAST")
+                return abiFiltersMethod.invoke(ndk) as? Set<String>
+            }
+        } catch (e: Exception) {
+            // Ignore and return null
+        }
+        return null
+    }
+
+    /**
+     * Resolves the fully-merged `abiFilters` for the given [variant] by checking the
+     * build type, product flavors, and defaultConfig in order of precedence.
+     */
+    @JvmStatic
+    internal fun getAbiFiltersForVariant(
+        @Suppress("DEPRECATION") variant: com.android.build.gradle.api.BaseVariant,
+        project: Project
+    ): Set<String>? {
+        val buildTypeFilters = getAbiFilters(variant.buildType)
+        if (buildTypeFilters != null) {
+            return buildTypeFilters
+        }
+        val productFlavors = variant.productFlavors
+        if (productFlavors != null) {
+            for (flavor in productFlavors) {
+                val flavorFilters = getAbiFilters(flavor)
+                if (flavorFilters != null) {
+                    return flavorFilters
+                }
+            }
+        }
+        val defaultConfig = getLegacyAndroidExtension(project).defaultConfig
+        val defaultConfigFilters = getAbiFilters(defaultConfig)
+        if (defaultConfigFilters != null) {
+            return defaultConfigFilters
+        }
+        return null
+    }
+
+    /**
+     * Filters the given [platforms] based on the user-configured [abiFilters].
+     * If the intersection is empty, falls back to all Flutter-supported platforms
+     * present in [abiFilters]. If that is also empty, returns the original [platforms].
+     */
+    @JvmStatic
+    @JvmName("getEffectivePlatforms")
+    internal fun getEffectivePlatforms(
+        platforms: List<String>,
+        abiFilters: Set<String>?
+    ): List<String> {
+        if (abiFilters == null || abiFilters.isEmpty()) {
+            return platforms
+        }
+        val intersection = platforms.filter { platform ->
+            val abi = FlutterPluginConstants.PLATFORM_ARCH_MAP[platform]
+            abi != null && abiFilters.contains(abi)
+        }
+        if (intersection.isNotEmpty()) {
+            return intersection
+        }
+        val fallback = FlutterPluginConstants.PLATFORM_ARCH_MAP.filterValues { abi ->
+            abiFilters.contains(abi)
+        }.keys.toList()
+        if (fallback.isNotEmpty()) {
+            return fallback
+        }
+        return platforms
     }
 
     // ------------------ Task adders (a subset of the above category)

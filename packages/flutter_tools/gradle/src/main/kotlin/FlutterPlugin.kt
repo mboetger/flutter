@@ -250,12 +250,15 @@ class FlutterPlugin : Plugin<Project> {
     }
 
     private fun addFlutterDependencies(buildType: com.android.builder.model.BuildType) {
-        FlutterPluginUtils.addFlutterDependencies(
-            project!!,
-            buildType,
-            getPluginHandler(project!!),
-            engineVersion!!
-        )
+        val project = this.project!!
+        project.afterEvaluate {
+            FlutterPluginUtils.addFlutterDependencies(
+                project,
+                buildType,
+                getPluginHandler(project),
+                engineVersion!!
+            )
+        }
     }
 
     private fun getExecutableNameForPlatform(baseExecutableName: String): String =
@@ -583,6 +586,8 @@ class FlutterPlugin : Plugin<Project> {
         ): Task {
             // Shorthand
             val project: Project = flutterPlugin.project!!
+            val abiFilters: Set<String>? = FlutterPluginUtils.getAbiFiltersForVariant(variant, project)
+            val effectiveTargetPlatforms = FlutterPluginUtils.getEffectivePlatforms(targetPlatforms, abiFilters)
 
             val fileSystemRootsValue: Array<String>? =
                 project
@@ -691,7 +696,7 @@ class FlutterPlugin : Plugin<Project> {
                     fileSystemRoots = fileSystemRootsValue
                     fileSystemScheme = fileSystemSchemeValue
                     trackWidgetCreation = trackWidgetCreationValue
-                    targetPlatformValues = targetPlatforms
+                    targetPlatformValues = effectiveTargetPlatforms
                     sourceDir = FlutterPluginUtils.getFlutterSourceDirectory(project)
                     intermediateDir =
                         project.file(
@@ -722,7 +727,7 @@ class FlutterPlugin : Plugin<Project> {
                 ) {
                     dependsOn(flutterCompileTask)
                     into(jniLibsDir)
-                    targetPlatforms.forEach { targetPlatform ->
+                    effectiveTargetPlatforms.forEach { targetPlatform ->
                         val abi: String? = FlutterPluginConstants.PLATFORM_ARCH_MAP[targetPlatform]
                         from("${flutterCompileTask.intermediateDir}/$abi") {
                             include("*.so")
