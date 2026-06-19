@@ -844,6 +844,7 @@ class AndroidDevice extends Device {
       logger: _logger,
       deviceId: id,
       adbPath: adbPath,
+      platform: _platform,
     );
   }();
 
@@ -1284,15 +1285,43 @@ class AndroidDevicePortForwarder extends DevicePortForwarder {
     required Logger logger,
     required String deviceId,
     required String adbPath,
+    Platform platform = const LocalPlatform(),
   }) : _deviceId = deviceId,
        _adbPath = adbPath,
        _logger = logger,
+       _platform = platform,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager);
 
   final String _deviceId;
   final String _adbPath;
   final Logger _logger;
+  final Platform _platform;
   final ProcessUtils _processUtils;
+
+  @override
+  String get host {
+    final String? adbServerSocket = _platform.environment['ADB_SERVER_SOCKET'];
+    if (adbServerSocket != null) {
+      if (adbServerSocket.toLowerCase().startsWith('tcp:')) {
+        // Prepend '//' after 'tcp:' to make it a valid URI for Uri.tryParse
+        final uriString = 'tcp://${adbServerSocket.substring(4)}';
+        final Uri? uri = Uri.tryParse(uriString);
+
+        // Ensure the parsed host is not empty, and is not a pure port number
+        // (e.g. if the input was 'tcp:5037', uri.host would be '5037')
+        if (uri != null && uri.host.isNotEmpty && int.tryParse(uri.host) == null) {
+          return uri.host;
+        }
+      }
+    }
+
+    final String? adbServerAddress = _platform.environment['ANDROID_ADB_SERVER_ADDRESS'];
+    if (adbServerAddress != null && adbServerAddress.isNotEmpty) {
+      return adbServerAddress;
+    }
+
+    return '127.0.0.1';
+  }
 
   static int? _extractPort(String portString) {
     return int.tryParse(portString.trim());

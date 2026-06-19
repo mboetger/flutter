@@ -39,6 +39,9 @@ abstract class DevicePortForwarder {
   /// Stops forwarding [forwardedPort].
   Future<void> unforward(ForwardedPort forwardedPort);
 
+  /// The host address where the forwarded ports are listening.
+  String get host => '127.0.0.1';
+
   /// Cleanup allocated resources, like [forwardedPorts].
   Future<void> dispose();
 }
@@ -46,6 +49,9 @@ abstract class DevicePortForwarder {
 // A port forwarder which does not support forwarding ports.
 class NoOpDevicePortForwarder implements DevicePortForwarder {
   const NoOpDevicePortForwarder();
+
+  @override
+  String get host => '127.0.0.1';
 
   @override
   Future<int> forward(int devicePort, {int? hostPort}) async => devicePort;

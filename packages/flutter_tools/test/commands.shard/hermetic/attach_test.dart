@@ -1670,6 +1670,9 @@ class RecordingPortForwarder implements DevicePortForwarder {
   final int defaultHostPort;
 
   @override
+  String get host => '127.0.0.1';
+
+  @override
   Future<void> dispose() async {
     forwardedPorts.clear();
   }

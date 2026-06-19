@@ -140,10 +140,11 @@ class ProtocolDiscovery {
       _logger.printTrace(
         'Forwarded host port $actualHostPort to device port $actualDevicePort for $serviceName',
       );
-      hostUri = deviceUri.replace(port: actualHostPort);
+      hostUri = deviceUri.replace(host: forwarder.host, port: actualHostPort);
     }
 
-    if (InternetAddress(hostUri.host).isLoopback && _ipv6) {
+    final InternetAddress? hostAddress = InternetAddress.tryParse(hostUri.host);
+    if (hostAddress != null && hostAddress.isLoopback && _ipv6) {
       hostUri = hostUri.replace(host: InternetAddress.loopbackIPv6.host);
     }
     return hostUri;
