@@ -12,6 +12,7 @@ import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/project.dart';
 import 'package:test/fake.dart';
 
@@ -57,6 +58,7 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          proguardMinificationErrorHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -1714,6 +1716,106 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
       ProcessManager: () => processManager,
     },
   );
+
+  testUsingContext(
+    'detects and handles proguard minification failure',
+    () async {
+      const errorMessage = '''
+Warning: there were 460 unresolved references to classes or interfaces.
+         You may need to add missing library jars or update their versions.
+         If your code works fine without the missing classes, you can suppress
+         the warnings with '-dontwarn' options.
+         (http://proguard.sourceforge.net/manual/troubleshooting.html#unresolvedclass)
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:minifyReleaseWithProguard'.
+> java.io.IOException: Please correct the above warnings first.
+''';
+
+      // Find a handler that matches this error.
+      final GradleHandledError? matchedError = gradleErrors.cast<GradleHandledError?>().firstWhere(
+        (GradleHandledError? error) => error != null && formatTestErrorMessage(errorMessage, error),
+        orElse: () => null,
+      );
+
+      expect(
+        matchedError,
+        isNotNull,
+        reason: 'No Gradle error handler matched the Proguard minification error',
+      );
+
+      // Extract the exact single line that triggered the match, just like gradle.dart does.
+      final String matchedLine = errorMessage
+          .split('\n')
+          .firstWhere((String line) => matchedError!.test(line));
+
+      final GradleBuildStatus status = await matchedError!.handler(
+        line: matchedLine,
+        project: FakeFlutterProject(),
+        usesAndroidX: true,
+      );
+
+      expect(status, equals(GradleBuildStatus.exit));
+      expect(
+        testLogger.errorText,
+        contains('Proguard minification failed due to unresolved references'),
+      );
+    },
+    overrides: <Type, Generator>{
+      GradleUtils: () => FakeGradleUtils(),
+      Platform: () => fakePlatform('android'),
+      FileSystem: () => fileSystem,
+      ProcessManager: () => processManager,
+    },
+  );
+
+  testUsingContext(
+    'detects and handles flavored R8 minification failure',
+    () async {
+      const errorMessage = '''
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:minifyFreeReleaseWithR8'.
+> java.io.IOException: Please correct the above warnings first.
+''';
+
+      final GradleHandledError? matchedError = gradleErrors.cast<GradleHandledError?>().firstWhere(
+        (GradleHandledError? error) => error != null && formatTestErrorMessage(errorMessage, error),
+        orElse: () => null,
+      );
+
+      expect(
+        matchedError,
+        isNotNull,
+        reason: 'No Gradle error handler matched the flavored R8 minification error',
+      );
+
+      final String matchedLine = errorMessage
+          .split('\n')
+          .firstWhere((String line) => matchedError!.test(line));
+
+      final GradleBuildStatus status = await matchedError!.handler(
+        line: matchedLine,
+        project: FakeFlutterProject(),
+        usesAndroidX: true,
+      );
+
+      expect(status, equals(GradleBuildStatus.exit));
+      expect(
+        testLogger.errorText,
+        contains('Proguard minification failed due to unresolved references'),
+      );
+    },
+    overrides: <Type, Generator>{
+      GradleUtils: () => FakeGradleUtils(),
+      Platform: () => fakePlatform('android'),
+      FileSystem: () => fileSystem,
+      ProcessManager: () => processManager,
+    },
+  );
 }
 
 bool formatTestErrorMessage(String errorMessage, GradleHandledError error) {
@@ -1753,4 +1855,12 @@ class _TestPromptTerminal extends Fake implements AnsiTerminal {
   }
 }
 
-class FakeFlutterProject extends Fake implements FlutterProject {}
+class FakeFlutterProject extends Fake implements FlutterProject {
+  @override
+  final AndroidProject android = FakeAndroidProject();
+}
+
+class FakeAndroidProject extends Fake implements AndroidProject {
+  @override
+  final Directory hostAppGradleRoot = globals.fs.directory('/android');
+}

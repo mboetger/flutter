@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  proguardMinificationErrorHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,34 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+final RegExp _proguardMinificationPattern = RegExp(
+  r"Execution failed for task ':\S+:minify\S+With(Proguard|R8)'",
+);
+
+@visibleForTesting
+final proguardMinificationErrorHandler = GradleHandledError(
+  test: (String line) => _proguardMinificationPattern.hasMatch(line),
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    globals.printError('Proguard minification failed due to unresolved references.');
+
+    final File proguardRulesFile = project.android.hostAppGradleRoot
+        .childDirectory('app')
+        .childFile('proguard-rules.pro');
+
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Minification (ProGuard/R8) failed.\n\n'
+      'This usually happens when a dependency has unresolved references to classes or interfaces.\n'
+      'To resolve this, you can:\n'
+      '1. Add `-dontwarn` rules to your ProGuard configuration file to suppress these warnings if they are harmless:\n'
+      '   ${proguardRulesFile.path}\n'
+      '2. Add `-keep` rules to prevent important classes from being minified or removed.\n'
+      '3. Upgrade the failing dependencies to versions compatible with your current build setup.\n\n'
+      'For more information, see: https://developer.android.com/build/shrink-code',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'proguard-minification-failure',
 );
