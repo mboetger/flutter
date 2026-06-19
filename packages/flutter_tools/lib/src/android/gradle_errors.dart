@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  appPluginLoaderMissingHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,22 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+@visibleForTesting
+final appPluginLoaderMissingHandler = GradleHandledError(
+  test: (String line) {
+    return line.contains('Could not read script') &&
+        line.contains('app_plugin_loader.gradle') &&
+        line.contains('as it does not exist');
+  },
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    globals.printBox(
+      "Your settings.gradle file is trying to apply 'app_plugin_loader.gradle', which does not exist in this version of Flutter. This can happen when the project was created with a newer version of Flutter than the one currently being used.\n\n"
+      "To resolve this, please delete your 'android/settings.gradle' file and run 'flutter create .' to regenerate it, or upgrade Flutter to a newer version.",
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'app-plugin-loader-missing',
 );

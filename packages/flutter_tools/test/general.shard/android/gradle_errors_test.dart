@@ -57,6 +57,7 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          appPluginLoaderMissingHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -1671,7 +1672,7 @@ An exception occurred applying plugin request [id: 'kotlin-android']
   );
 
   testUsingContext(
-    'Failure to apply kotlin-android plugin',
+    'Failure when using new AGP DSL',
     () async {
       const useNewAgpDslErrorHandlerExample = r'''
 FAILURE: Build failed with an exception.
@@ -1714,6 +1715,44 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
       ProcessManager: () => processManager,
     },
   );
+
+  group('missing app_plugin_loader.gradle error', () {
+    const errorMessage =
+        r"> Could not read script '/Users/ralphkleinguevarra/development/flutter/packages/flutter_tools/gradle/app_plugin_loader.gradle' as it does not exist.";
+
+    testWithoutContext('pattern', () {
+      expect(appPluginLoaderMissingHandler.test(errorMessage), isTrue);
+      expect(appPluginLoaderMissingHandler.test('some other error'), isFalse);
+    });
+
+    testUsingContext(
+      'suggestion',
+      () async {
+        final GradleBuildStatus status = await appPluginLoaderMissingHandler.handler(
+          line: errorMessage,
+          project: FlutterProject.fromDirectoryTest(fileSystem.currentDirectory),
+          usesAndroidX: true,
+        );
+
+        expect(status, equals(GradleBuildStatus.exit));
+        expect(
+          testLogger.statusText,
+          contains("Your settings.gradle file is trying to apply 'app_plugin_loader.gradle'"),
+        );
+        expect(testLogger.statusText, contains('does not exist in'));
+        expect(
+          testLogger.statusText,
+          contains("To resolve this, please delete your 'android/settings.gradle' file"),
+        );
+        expect(testLogger.statusText, contains("run 'flutter create .'"));
+        expect(testLogger.statusText, contains('upgrade Flutter to a newer version.'));
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+      },
+    );
+  });
 }
 
 bool formatTestErrorMessage(String errorMessage, GradleHandledError error) {
