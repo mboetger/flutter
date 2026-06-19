@@ -388,6 +388,31 @@ class FlutterPlugin : Plugin<Project> {
                             into(projectToAddTasksTo.layout.buildDirectory.dir("outputs/flutter-apk"))
                             rename { "$filename.apk" }
                         }
+                        val apkFile =
+                            File(
+                                projectToAddTasksTo.layout.buildDirectory
+                                    .dir("outputs/flutter-apk")
+                                    .get()
+                                    .asFile,
+                                "$filename.apk"
+                            )
+                        FlutterPluginUtils.checkUnsupportedAbis(projectToAddTasksTo, apkFile, isBundle = false)
+                    }
+                }
+                val bundleTaskName = "bundle${FlutterPluginUtils.capitalize(variant.name)}"
+                projectToAddTasksTo.tasks.configureEach {
+                    if (name == bundleTaskName) {
+                        doLast {
+                            val bundleDir =
+                                projectToAddTasksTo.layout.buildDirectory
+                                    .dir("outputs/bundle/${variant.name}")
+                                    .get()
+                                    .asFile
+                            val bundleFiles = bundleDir.listFiles { file -> file.isFile && file.name.endsWith(".aab") }
+                            bundleFiles?.forEach { bundleFile ->
+                                FlutterPluginUtils.checkUnsupportedAbis(projectToAddTasksTo, bundleFile, isBundle = true)
+                            }
+                        }
                     }
                 }
             }

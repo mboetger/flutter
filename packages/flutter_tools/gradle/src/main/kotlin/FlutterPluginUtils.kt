@@ -895,4 +895,82 @@ object FlutterPluginUtils {
                 ).toTransform(SingleArtifact.MERGED_MANIFEST) // (3) Indicate the artifact and operation type.
         }
     }
+
+    /**
+     * Inspects the APK or AAB to see if there are any native libraries for unsupported ABIs.
+     * If so, logs a warning message.
+     */
+    @JvmStatic
+    @JvmName("checkUnsupportedAbis")
+    internal fun checkUnsupportedAbis(
+        project: Project,
+        zipFile: File,
+        isBundle: Boolean
+    ) {
+        if (!zipFile.exists()) {
+            project.logger.info("File ${zipFile.absolutePath} does not exist, skipping ABI check.")
+            return
+        }
+        try {
+            java.util.zip.ZipFile(zipFile).use { zip ->
+                val unsupportedAbis = mutableSetOf<String>()
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (entry.isDirectory || !entry.name.endsWith(".so")) {
+                        continue
+                    }
+                    val pathSegments = entry.name.split("/")
+                    val abi =
+                        if (isBundle) {
+                            // For AAB: <feature>/lib/<ABI>/<library>.so
+                            val libIndex = pathSegments.indexOf("lib")
+                            // Ensure the ABI segment exists and is not the filename (last segment)
+                            if (libIndex != -1 && libIndex + 2 < pathSegments.size) {
+                                pathSegments[libIndex + 1]
+                            } else {
+                                null
+                            }
+                        } else {
+                            // For APK: lib/<ABI>/<library>.so
+                            // Ensure the path starts with lib/ and has at least 3 segments (so ABI is not the filename)
+                            if (pathSegments.size >= 3 && pathSegments[0] == "lib") {
+                                pathSegments[1]
+                            } else {
+                                null
+                            }
+                        }
+                    if (abi != null && !FlutterPluginConstants.PLATFORM_ABI_LIST.contains(abi)) {
+                        unsupportedAbis.add(abi)
+                    }
+                }
+                if (unsupportedAbis.isNotEmpty()) {
+                    val fileType = if (isBundle) "AAB" else "APK"
+                    val unsupportedList = unsupportedAbis.sorted().joinToString(", ")
+                    val supportedList = FlutterPluginConstants.PLATFORM_ABI_LIST.joinToString(", ")
+                    // Format supported list with single quotes for the Gradle code snippet
+                    val supportedListForGradle = FlutterPluginConstants.PLATFORM_ABI_LIST.joinToString(", ") { "'$it'" }
+
+                    project.logger.warn(
+                        """
+                        [Flutter] WARNING: The produced $fileType contains native libraries for the following unsupported architectures: [$unsupportedList].
+                        Flutter only supports the following architectures: [$supportedList].
+                        This can cause the app to crash at runtime on devices with the unsupported architectures because the Android system will attempt to load the app in that architecture's mode but will fail to find 'libflutter.so'.
+                        To resolve this, ensure that your dependencies do not package native libraries for unsupported architectures, or use ndk.abiFilters in your build.gradle to filter them out:
+
+                        android {
+                            defaultConfig {
+                                ndk {
+                                    abiFilters $supportedListForGradle
+                                }
+                            }
+                        }
+                        """.trimIndent()
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            project.logger.info("Failed to scan ${zipFile.name} for unsupported ABIs: ${e.message}")
+        }
+    }
 }
