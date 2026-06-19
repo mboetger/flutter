@@ -27,6 +27,7 @@ import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -330,6 +331,63 @@ class FlutterPluginTest {
         } else {
             fail("FilePermissions configuration action was not captured")
         }
+    }
+
+    @Test
+    fun `Add2App - host app project name error message points out root project's gradle properties`(
+        @TempDir tempDir: Path
+    ) {
+        val projectDir = tempDir.resolve("project-dir").resolve("android").resolve("app")
+        projectDir.toFile().mkdirs()
+        val settingsFile = projectDir.parent.resolve("settings.gradle")
+        settingsFile.writeText("empty for now")
+        val fakeFlutterSdkDir = tempDir.resolve("fake-flutter-sdk")
+        fakeFlutterSdkDir.toFile().mkdirs()
+        val fakeCacheDir = fakeFlutterSdkDir.resolve("bin").resolve("cache")
+        fakeCacheDir.toFile().mkdirs()
+        val fakeEngineStampFile = fakeCacheDir.resolve("engine.stamp")
+        fakeEngineStampFile.writeText(FAKE_ENGINE_STAMP)
+        val fakeEngineRealmFile = fakeCacheDir.resolve("engine.realm")
+        fakeEngineRealmFile.writeText(FAKE_ENGINE_REALM)
+
+        val project = mockk<Project>(relaxed = true)
+        val rootProject = mockk<Project>(relaxed = true)
+        every { project.rootProject } returns rootProject
+        every { project.projectDir } returns projectDir.toFile()
+        every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
+        every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.state.failure as Throwable? } returns null
+
+        val flutterExtension = FlutterExtension()
+        every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
+        every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
+
+        // Mock isFlutterAppProject to return false (Add2App module is a library)
+        every { project.extensions.findByType(ApplicationExtension::class.java) } returns null
+        val mockLibraryExtension = mockk<LibraryExtension>(relaxed = true)
+        every { project.extensions.findByType(LibraryExtension::class.java) } returns mockLibraryExtension
+        every { project.extensions.getByType(LibraryExtension::class.java) } returns mockLibraryExtension
+        every { project.extensions.findByName("android") } returns mockLibraryExtension
+
+        val mockDebugBuildType = mockk<com.android.build.api.dsl.LibraryBuildType>(relaxed = true)
+        val mockReleaseBuildType = mockk<com.android.build.api.dsl.LibraryBuildType>(relaxed = true)
+        every { mockLibraryExtension.buildTypes.getByName("debug") } returns mockDebugBuildType
+        every { mockLibraryExtension.buildTypes.getByName("release") } returns mockReleaseBuildType
+
+        val mockBaseExtension = mockk<BaseExtension>(relaxed = true)
+        every { project.extensions.findByType(BaseExtension::class.java) } returns mockBaseExtension
+
+        // Mock root project to not have hostAppProjectName, and app project to not exist
+        every { rootProject.hasProperty("flutter.hostAppProjectName") } returns false
+        every { rootProject.findProject(":app") } returns null
+
+        val flutterPlugin = FlutterPlugin()
+        val exception =
+            assertThrows(IllegalStateException::class.java) {
+                flutterPlugin.apply(project)
+            }
+
+        assertContains(exception.message ?: "", "in the root project's gradle.properties")
     }
 
     companion object {

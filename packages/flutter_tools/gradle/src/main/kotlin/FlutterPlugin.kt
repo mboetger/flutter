@@ -413,7 +413,7 @@ class FlutterPlugin : Plugin<Project> {
         val appProject: Project? =
             projectToAddTasksTo.rootProject.findProject(":$hostAppProjectName")
         check(appProject != null) {
-            "Project :$hostAppProjectName doesn't exist. To customize the host app project name, set `flutter.hostAppProjectName=<project-name>` in gradle.properties."
+            "Project :$hostAppProjectName doesn't exist. To customize the host app project name, set `flutter.hostAppProjectName=<project-name>` in the root project's gradle.properties."
         }
         // Wait for the host app project configuration.
         appProject.afterEvaluate {
