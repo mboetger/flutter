@@ -1080,6 +1080,7 @@ base class PipelineOwner with DiagnosticableTreeMixin {
     if (_rootNode == value) {
       return;
     }
+    _rootNode?.clearSemantics();
     _rootNode?.detach();
     _rootNode = value;
     _rootNode?.attach(this);

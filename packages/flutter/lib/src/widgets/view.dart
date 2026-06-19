@@ -552,6 +552,9 @@ class _RawViewElement extends RenderTreeRootElement {
     assert(_effectivePipelineOwner.rootNode == null);
     _effectivePipelineOwner.rootNode = renderObject;
     _attachView();
+    if (_effectivePipelineOwner.semanticsOwner != null) {
+      renderObject.scheduleInitialSemantics();
+    }
   }
 
   @override
