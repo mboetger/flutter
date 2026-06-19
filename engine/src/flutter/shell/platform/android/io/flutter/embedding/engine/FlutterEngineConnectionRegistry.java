@@ -13,6 +13,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.fragment.app.FragmentActivity;
 import androidx.lifecycle.Lifecycle;
 import io.flutter.Log;
 import io.flutter.embedding.android.ExclusiveAppComponent;
@@ -731,6 +732,12 @@ import java.util.Set;
     @NonNull
     public Activity getActivity() {
       return activity;
+    }
+
+    @Override
+    @Nullable
+    public FragmentActivity getFragmentActivity() {
+      return activity instanceof FragmentActivity ? (FragmentActivity) activity : null;
     }
 
     @NonNull

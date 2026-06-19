@@ -8,6 +8,7 @@ import android.app.Activity;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.fragment.app.FragmentActivity;
 import io.flutter.plugin.common.PluginRegistry;
 
 /**
@@ -27,6 +28,17 @@ public interface ActivityPluginBinding {
    */
   @NonNull
   Activity getActivity();
+
+  /**
+   * Returns the {@link androidx.fragment.app.FragmentActivity} that is currently attached to the
+   * {@link io.flutter.embedding.engine.FlutterEngine} that owns this {@code ActivityPluginBinding}.
+   *
+   * <p>Returns {@code null} if the attached activity is not a {@code FragmentActivity}.
+   */
+  @Nullable
+  default FragmentActivity getFragmentActivity() {
+    return null;
+  }
 
   /**
    * Returns the {@code Lifecycle} associated with the attached {@code Activity}.
