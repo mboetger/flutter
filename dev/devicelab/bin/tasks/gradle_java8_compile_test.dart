@@ -86,6 +86,12 @@ class AaaPlugin: FlutterPlugin, MethodCallHandler {
             options: <String>['apk', '--debug', '--target-platform=android-arm'],
           );
         });
+
+        section('AAR compiles');
+        await testPluginAarBuilding(
+          pluginProject,
+          options: <String>['--no-profile', '--no-release'],
+        );
       });
       return TaskResult.success(null);
     } on TaskResult catch (taskResult) {

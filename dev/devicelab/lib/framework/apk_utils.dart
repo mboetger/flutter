@@ -422,6 +422,61 @@ class FlutterModuleProject {
   }
 
   String get rootPath => path.join(parent.path, name);
+
+  /// Adds a plugin to the pubspec.
+  Future<void> addPlugin(String plugin, {List<String> options = const <String>[]}) async {
+    await inDirectory(Directory(rootPath), () async {
+      await flutter('pub', options: <String>['add', plugin, ...options]);
+    });
+  }
+}
+
+/// Runs `flutter build aar` on [moduleProject] and verifies that a Maven repo is created.
+Future<void> testAarBuilding(
+  FlutterModuleProject moduleProject, {
+  List<String> options = const <String>[],
+}) async {
+  await inDirectory(Directory(moduleProject.rootPath), () async {
+    await flutter('build', options: <String>['aar', ...options]);
+  });
+
+  final repoDir = Directory(path.join(moduleProject.rootPath, 'build', 'host', 'outputs', 'repo'));
+  if (!repoDir.existsSync()) {
+    throw TaskResult.failure('AAR build did not create a Maven repository at: ${repoDir.path}');
+  }
+
+  final List<File> aarFiles = repoDir
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((File file) => path.extension(file.path) == '.aar')
+      .toList();
+
+  if (aarFiles.isEmpty) {
+    throw TaskResult.failure('AAR build did not produce any .aar files in ${repoDir.path}');
+  }
+}
+
+/// Creates a temporary [FlutterModuleProject], adds the plugin as a path dependency, and builds AAR.
+Future<void> testPluginAarBuilding(
+  FlutterPluginProject pluginProject, {
+  List<String> options = const <String>[],
+}) async {
+  final Directory tempDir = Directory.systemTemp.createTempSync(
+    'flutter_devicelab_aar_plugin_test.',
+  );
+  try {
+    final FlutterModuleProject moduleProject = await FlutterModuleProject.create(
+      tempDir,
+      'hello_module',
+    );
+    await moduleProject.addPlugin(
+      pluginProject.name,
+      options: <String>['--path', pluginProject.rootPath],
+    );
+    await testAarBuilding(moduleProject, options: options);
+  } finally {
+    rmTree(tempDir);
+  }
 }
 
 Future<void> _runGradleTask({

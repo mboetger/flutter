@@ -122,6 +122,9 @@ Future<void> main() async {
         ], arm64ApkFiles);
 
         checkCollectionDoesNotContain<String>(debugAssets, arm64ApkFiles);
+
+        section('AAR content for plugin project');
+        await testPluginAarBuilding(pluginProject);
       });
 
       await runProjectTest((FlutterProject project) async {
@@ -164,6 +167,11 @@ Future<void> main() async {
             'Not producing external native build output directory in $modifiedPath',
           );
         }
+      });
+
+      await runModuleProjectTest((FlutterModuleProject moduleProject) async {
+        section('AAR content for module project');
+        await testAarBuilding(moduleProject);
       });
 
       return TaskResult.success(null);

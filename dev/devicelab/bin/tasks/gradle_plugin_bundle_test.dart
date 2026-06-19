@@ -177,6 +177,12 @@ Future<void> main() async {
           'base/lib/arm64-v8a/libflutter.so',
         ], bundleFiles);
       });
+
+      await runModuleProjectTest((FlutterModuleProject moduleProject) async {
+        section('AAR content for module project');
+        await testAarBuilding(moduleProject);
+      });
+
       return TaskResult.success(null);
     } on TaskResult catch (taskResult) {
       return taskResult;

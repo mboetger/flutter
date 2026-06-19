@@ -34,6 +34,13 @@ Future<void> main() async {
           ]);
         });
       });
+
+      await runModuleProjectTest((FlutterModuleProject moduleProject) async {
+        section('AAR contains plugin classes');
+        await moduleProject.addPlugin('google_maps_flutter:^2.12.1');
+        await testAarBuilding(moduleProject, options: <String>['--no-profile', '--no-release']);
+      });
+
       return TaskResult.success(null);
     } on TaskResult catch (taskResult) {
       return taskResult;

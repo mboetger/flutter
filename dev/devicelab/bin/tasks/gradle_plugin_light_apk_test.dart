@@ -109,6 +109,9 @@ Future<void> main() async {
           'lib/armeabi-v7a/libflutter.so',
           'lib/armeabi-v7a/libapp.so',
         ], apkFiles);
+
+        section('AAR content for plugin project');
+        await testPluginAarBuilding(pluginProject);
       });
 
       await runProjectTest((FlutterProject project) async {
@@ -237,6 +240,11 @@ Future<void> main() async {
         )) {
           throw failure(output, result);
         }
+      });
+
+      await runModuleProjectTest((FlutterModuleProject moduleProject) async {
+        section('AAR content for module project');
+        await testAarBuilding(moduleProject);
       });
 
       return TaskResult.success(null);
