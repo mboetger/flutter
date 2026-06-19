@@ -480,6 +480,7 @@ import java.util.Set;
   void onStart() {
     Log.v(TAG, "onStart()");
     ensureAlive();
+    ensureAttached();
     doInitialFlutterViewRun();
     // This is a workaround for a bug on some OnePlus phones. The visibility of the application
     // window is still true after locking the screen on some OnePlus phones, and shows a black
@@ -599,6 +600,7 @@ import java.util.Set;
   void onResume() {
     Log.v(TAG, "onResume()");
     ensureAlive();
+    ensureAttached();
     flutterEngine.getRenderer().restoreSurfaceProducers();
     if (host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
       flutterEngine.getLifecycleChannel().appIsResumed();
@@ -649,7 +651,7 @@ import java.util.Set;
   void onPause() {
     Log.v(TAG, "onPause()");
     ensureAlive();
-    if (host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
+    if (isAttached && host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
       flutterEngine.getLifecycleChannel().appIsInactive();
     }
   }
@@ -672,7 +674,7 @@ import java.util.Set;
     Log.v(TAG, "onStop()");
     ensureAlive();
 
-    if (host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
+    if (isAttached && host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
       flutterEngine.getLifecycleChannel().appIsPaused();
     }
 
@@ -1036,7 +1038,7 @@ import java.util.Set;
   void onWindowFocusChanged(boolean hasFocus) {
     ensureAlive();
     Log.v(TAG, "Received onWindowFocusChanged: " + (hasFocus ? "true" : "false"));
-    if (host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
+    if (isAttached && host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
       // TODO(gspencergoog): Once we have support for multiple windows/views,
       // this code will need to consult the list of windows/views to determine if
       // any windows in the app are focused and call the appropriate function.
@@ -1083,6 +1085,28 @@ import java.util.Set;
     if (host == null) {
       throw new IllegalStateException(
           "Cannot execute method on a destroyed FlutterActivityAndFragmentDelegate.");
+    }
+  }
+
+  /**
+   * Ensures that this delegate is attached to the {@link FlutterEngine} before performing
+   * lifecycle operations.
+   *
+   * <p>This is necessary because in multi-activity/fragment scenarios sharing a single cached
+   * engine, this delegate may have been evicted and detached by another activity/fragment
+   * entering the foreground, and needs to re-attach when its own host comes back to the
+   * foreground.
+   */
+  private void ensureAttached() {
+    if (!isAttached) {
+      Log.v(TAG, "Delegate is not attached. Re-attaching to FlutterEngine.");
+      onAttach(host.getContext());
+      if (host.attachToEngineAutomatically()
+          && flutterView != null
+          && !flutterView.isAttachedToFlutterEngine()) {
+        Log.v(TAG, "Attaching FlutterEngine to FlutterView after re-attaching.");
+        flutterView.attachToFlutterEngine(flutterEngine);
+      }
     }
   }
 
