@@ -129,14 +129,20 @@ Future<Depfile> copyAssets(
         file.parent.createSync(recursive: true);
         final DevFSContent content = entry.value.content;
         if (content is DevFSFileContent && content.file is File) {
-          inputs.add(content.file as File);
+          // Resolve symbolic links to ensure we copy the actual target file's
+          // content (avoiding copy failures on Windows) and that the depfile
+          // tracks the resolved target file for correct incremental builds.
+          final File fileToCopy = environment.fileSystem.file(
+            (content.file as File).resolveSymbolicLinksSync(),
+          );
+          inputs.add(fileToCopy);
           var doCopy = true;
           switch (entry.value.kind) {
             case AssetKind.regular:
               if (entry.value.transformers.isNotEmpty) {
                 transformResource = await transformPool.request();
                 final AssetTransformationFailure? failure = await assetTransformer.transformAsset(
-                  asset: content.file as File,
+                  asset: fileToCopy,
                   outputPath: file.path,
                   workingDirectory: environment.projectDir.path,
                   transformerEntries: entry.value.transformers,
@@ -152,13 +158,13 @@ Future<Depfile> copyAssets(
               }
             case AssetKind.font:
               doCopy = !await iconTreeShaker.subsetFont(
-                input: content.file as File,
+                input: fileToCopy,
                 outputPath: file.path,
                 relativePath: entry.key,
                 quiet: quiet,
               );
             case AssetKind.shader:
-              var inputToCompiler = content.file as File;
+              var inputToCompiler = fileToCopy;
               if (entry.value.transformers.isNotEmpty) {
                 transformResource = await transformPool.request();
                 final transformedShaderSourcePath = '${file.path}.transformed';
@@ -185,7 +191,7 @@ Future<Depfile> copyAssets(
               );
           }
           if (doCopy) {
-            await (content.file as File).copy(file.path);
+            await fileToCopy.copy(file.path);
           }
         } else {
           await file.writeAsBytes(await entry.value.content.contentsAsBytes());
@@ -240,14 +246,20 @@ Future<Depfile> copyAssets(
               file.parent.createSync(recursive: true);
               final DevFSContent content = entry.value.content;
               if (content is DevFSFileContent && content.file is File) {
-                inputs.add(content.file as File);
+                // Resolve symbolic links to ensure we copy the actual target file's
+                // content (avoiding copy failures on Windows) and that the depfile
+                // tracks the resolved target file for correct incremental builds.
+                final File fileToCopy = environment.fileSystem.file(
+                  (content.file as File).resolveSymbolicLinksSync(),
+                );
+                inputs.add(fileToCopy);
                 if (!await iconTreeShaker.subsetFont(
-                  input: content.file as File,
+                  input: fileToCopy,
                   outputPath: file.path,
                   relativePath: entry.key,
                   quiet: quiet,
                 )) {
-                  await (content.file as File).copy(file.path);
+                  await fileToCopy.copy(file.path);
                 }
               } else {
                 await file.writeAsBytes(await entry.value.contentsAsBytes());
