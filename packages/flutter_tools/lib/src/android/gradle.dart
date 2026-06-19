@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -177,6 +178,24 @@ class AndroidGradleBuilder implements AndroidBuilder {
        _fileSystemUtils = FileSystemUtils(fileSystem: fileSystem, platform: platform),
        _processUtils = ProcessUtils(logger: logger, processManager: processManager);
 
+  Future<void> _buildQueue = Future<void>.value();
+
+  // WARNING: Do NOT call any public, serialized methods of this class from
+  // within other serialized methods, as this will cause a re-entrant deadlock.
+  // Always delegate to private, unserialized helper methods.
+  Future<T> _runSerialized<T>(Future<T> Function() callback) {
+    final completer = Completer<T>();
+    _buildQueue = _buildQueue.whenComplete(() async {
+      try {
+        final T result = await callback();
+        completer.complete(result);
+      } catch (err, stack) {
+        completer.completeError(err, stack);
+      }
+    });
+    return completer.future;
+  }
+
   final Java? _java;
   final Logger _logger;
   final ProcessUtils _processUtils;
@@ -196,35 +215,37 @@ class AndroidGradleBuilder implements AndroidBuilder {
     required Future<void> Function(FlutterProject, {required bool releaseMode}) generateTooling,
     String? outputDirectoryPath,
     required String buildNumber,
-  }) async {
-    Directory outputDirectory = _fileSystem.directory(
-      outputDirectoryPath ?? project.android.buildDirectory,
-    );
-    if (project.isModule) {
-      // Module projects artifacts are located in `build/host`.
-      outputDirectory = outputDirectory.childDirectory('host');
-    }
-
-    for (final androidBuildInfo in androidBuildInfo) {
-      await generateTooling(project, releaseMode: androidBuildInfo.buildInfo.isRelease);
-      await buildGradleAar(
-        project: project,
-        androidBuildInfo: androidBuildInfo,
-        target: target,
-        outputDirectory: outputDirectory,
-        buildNumber: buildNumber,
+  }) {
+    return _runSerialized(() async {
+      Directory outputDirectory = _fileSystem.directory(
+        outputDirectoryPath ?? project.android.buildDirectory,
       );
-    }
-    printHowToConsumeAar(
-      buildModes: androidBuildInfo.map<String>((AndroidBuildInfo androidBuildInfo) {
-        return androidBuildInfo.buildInfo.modeName;
-      }).toSet(),
-      androidPackage: project.manifest.androidPackage,
-      repoDirectory: getRepoDirectory(outputDirectory),
-      buildNumber: buildNumber,
-      logger: _logger,
-      fileSystem: _fileSystem,
-    );
+      if (project.isModule) {
+        // Module projects artifacts are located in `build/host`.
+        outputDirectory = outputDirectory.childDirectory('host');
+      }
+
+      for (final androidBuildInfo in androidBuildInfo) {
+        await generateTooling(project, releaseMode: androidBuildInfo.buildInfo.isRelease);
+        await buildGradleAar(
+          project: project,
+          androidBuildInfo: androidBuildInfo,
+          target: target,
+          outputDirectory: outputDirectory,
+          buildNumber: buildNumber,
+        );
+      }
+      printHowToConsumeAar(
+        buildModes: androidBuildInfo.map<String>((AndroidBuildInfo androidBuildInfo) {
+          return androidBuildInfo.buildInfo.modeName;
+        }).toSet(),
+        androidPackage: project.manifest.androidPackage,
+        repoDirectory: getRepoDirectory(outputDirectory),
+        buildNumber: buildNumber,
+        logger: _logger,
+        fileSystem: _fileSystem,
+      );
+    });
   }
 
   /// Builds the APK.
@@ -234,16 +255,18 @@ class AndroidGradleBuilder implements AndroidBuilder {
     required AndroidBuildInfo androidBuildInfo,
     required String target,
     bool configOnly = false,
-  }) async {
-    await buildGradleApp(
-      project: project,
-      androidBuildInfo: androidBuildInfo,
-      target: target,
-      isBuildingBundle: false,
-      localGradleErrors: gradleErrors,
-      configOnly: configOnly,
-      maxRetries: 1,
-    );
+  }) {
+    return _runSerialized(() async {
+      await buildGradleApp(
+        project: project,
+        androidBuildInfo: androidBuildInfo,
+        target: target,
+        isBuildingBundle: false,
+        localGradleErrors: gradleErrors,
+        configOnly: configOnly,
+        maxRetries: 1,
+      );
+    });
   }
 
   /// Builds the App Bundle.
@@ -255,18 +278,20 @@ class AndroidGradleBuilder implements AndroidBuilder {
     bool validateDeferredComponents = true,
     bool deferredComponentsEnabled = false,
     bool configOnly = false,
-  }) async {
-    await buildGradleApp(
-      project: project,
-      androidBuildInfo: androidBuildInfo,
-      target: target,
-      isBuildingBundle: true,
-      localGradleErrors: gradleErrors,
-      validateDeferredComponents: validateDeferredComponents,
-      deferredComponentsEnabled: deferredComponentsEnabled,
-      configOnly: configOnly,
-      maxRetries: 1,
-    );
+  }) {
+    return _runSerialized(() async {
+      await buildGradleApp(
+        project: project,
+        androidBuildInfo: androidBuildInfo,
+        target: target,
+        isBuildingBundle: true,
+        localGradleErrors: gradleErrors,
+        validateDeferredComponents: validateDeferredComponents,
+        deferredComponentsEnabled: deferredComponentsEnabled,
+        configOnly: configOnly,
+        maxRetries: 1,
+      );
+    });
   }
 
   Future<int> _runGradleTask(
@@ -903,92 +928,93 @@ class AndroidGradleBuilder implements AndroidBuilder {
   }
 
   @override
-  Future<List<String>> getBuildVariants({required FlutterProject project}) async {
-    late Stopwatch sw;
-    var exitCode = 1;
-    final results = <String>[];
+  Future<List<String>> getBuildVariants({required FlutterProject project}) {
+    return _runSerialized(() async {
+      late Stopwatch sw;
+      var exitCode = 1;
+      final results = <String>[];
 
-    try {
-      exitCode = await _runGradleTask(
-        _kBuildVariantTaskName,
-        preRunTask: () {
-          sw = Stopwatch()..start();
-        },
-        postRunTask: () {
-          final Duration elapsedDuration = sw.elapsed;
-          _analytics.send(
-            Event.timing(
-              workflow: 'print',
-              variableName: 'android build variants',
-              elapsedMilliseconds: elapsedDuration.inMilliseconds,
-            ),
-          );
-        },
-        options: const <String>['-q'],
-        project: project,
-        localGradleErrors: gradleErrors,
-        gradleExecutablePath: _gradleUtils.getExecutable(project),
-        outputParser: (String line) {
-          if (_kBuildVariantRegex.firstMatch(line) case final RegExpMatch match) {
-            results.add(match.namedGroup(_kBuildVariantRegexGroupName)!);
-          }
-        },
-      );
-    } on Error catch (error) {
-      _logger.printError(error.toString());
-    }
+      try {
+        exitCode = await _runGradleTask(
+          _kBuildVariantTaskName,
+          preRunTask: () {
+            sw = Stopwatch()..start();
+          },
+          postRunTask: () {
+            final Duration elapsedDuration = sw.elapsed;
+            _analytics.send(
+              Event.timing(
+                workflow: 'print',
+                variableName: 'android build variants',
+                elapsedMilliseconds: elapsedDuration.inMilliseconds,
+              ),
+            );
+          },
+          options: const <String>['-q'],
+          project: project,
+          localGradleErrors: gradleErrors,
+          gradleExecutablePath: _gradleUtils.getExecutable(project),
+          outputParser: (String line) {
+            if (_kBuildVariantRegex.firstMatch(line) case final RegExpMatch match) {
+              results.add(match.namedGroup(_kBuildVariantRegexGroupName)!);
+            }
+          },
+        );
+      } on Error catch (error) {
+        _logger.printError(error.toString());
+      }
 
-    if (exitCode != 0) {
-      return const <String>[];
-    }
+      if (exitCode != 0) {
+        return const <String>[];
+      }
 
-    return results;
+      return results;
+    });
   }
 
   @override
-  Future<String> outputsAppLinkSettings(
-    String buildVariant, {
-    required FlutterProject project,
-  }) async {
-    final String taskName = _getOutputAppLinkSettingsTaskFor(buildVariant);
-    final Directory directory = await project.buildDirectory
-        .childDirectory('deeplink_data')
-        .create(recursive: true);
-    final String outputPath = globals.fs.path.join(
-      directory.absolute.path,
-      'app-link-settings-$buildVariant.json',
-    );
-    late Stopwatch sw;
-    var exitCode = 1;
-    try {
-      exitCode = await _runGradleTask(
-        taskName,
-        preRunTask: () {
-          sw = Stopwatch()..start();
-        },
-        postRunTask: () {
-          final Duration elapsedDuration = sw.elapsed;
-          _analytics.send(
-            Event.timing(
-              workflow: 'outputs',
-              variableName: 'app link settings',
-              elapsedMilliseconds: elapsedDuration.inMilliseconds,
-            ),
-          );
-        },
-        options: <String>['-q', '-PoutputPath=$outputPath'],
-        project: project,
-        localGradleErrors: gradleErrors,
-        gradleExecutablePath: _gradleUtils.getExecutable(project),
+  Future<String> outputsAppLinkSettings(String buildVariant, {required FlutterProject project}) {
+    return _runSerialized(() async {
+      final String taskName = _getOutputAppLinkSettingsTaskFor(buildVariant);
+      final Directory directory = await project.buildDirectory
+          .childDirectory('deeplink_data')
+          .create(recursive: true);
+      final String outputPath = globals.fs.path.join(
+        directory.absolute.path,
+        'app-link-settings-$buildVariant.json',
       );
-    } on Error catch (error) {
-      _logger.printError(error.toString());
-    }
+      late Stopwatch sw;
+      var exitCode = 1;
+      try {
+        exitCode = await _runGradleTask(
+          taskName,
+          preRunTask: () {
+            sw = Stopwatch()..start();
+          },
+          postRunTask: () {
+            final Duration elapsedDuration = sw.elapsed;
+            _analytics.send(
+              Event.timing(
+                workflow: 'outputs',
+                variableName: 'app link settings',
+                elapsedMilliseconds: elapsedDuration.inMilliseconds,
+              ),
+            );
+          },
+          options: <String>['-q', '-PoutputPath=$outputPath'],
+          project: project,
+          localGradleErrors: gradleErrors,
+          gradleExecutablePath: _gradleUtils.getExecutable(project),
+        );
+      } on Error catch (error) {
+        _logger.printError(error.toString());
+      }
 
-    if (exitCode != 0) {
-      throwToolExit('Gradle task $taskName failed with exit code $exitCode');
-    }
-    return outputPath;
+      if (exitCode != 0) {
+        throwToolExit('Gradle task $taskName failed with exit code $exitCode');
+      }
+      return outputPath;
+    });
   }
 }
 
