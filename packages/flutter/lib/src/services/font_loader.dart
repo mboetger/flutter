@@ -30,7 +30,9 @@ class FontLoader {
   /// Registers a font asset to be loaded by this font loader.
   ///
   /// The [bytes] argument specifies the actual font asset bytes. Currently,
-  /// only OpenType (OTF) and TrueType (TTF) fonts are supported.
+  /// only TrueType (.ttf), OpenType (.otf), and TrueType Collection (.ttc)
+  /// fonts are supported. Flutter does not support `.woff` and `.woff2`
+  /// fonts on all platforms (specifically native platforms like Android and iOS).
   ///
   /// The [load] method will load fonts in the order this is called.
   void addFont(Future<ByteData> bytes) {
