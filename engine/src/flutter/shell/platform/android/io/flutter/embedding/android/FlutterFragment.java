@@ -29,6 +29,7 @@ import io.flutter.Log;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterShellArgs;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
+import io.flutter.embedding.engine.plugins.util.GeneratedPluginRegister;
 import io.flutter.plugin.platform.PlatformPlugin;
 import io.flutter.plugin.view.SensitiveContentPlugin;
 import java.util.ArrayList;
@@ -1606,6 +1607,10 @@ public class FlutterFragment extends Fragment
     FragmentActivity attachedActivity = getActivity();
     if (attachedActivity instanceof FlutterEngineConfigurator) {
       ((FlutterEngineConfigurator) attachedActivity).configureFlutterEngine(flutterEngine);
+    } else {
+      if (!isFlutterEngineInjected()) {
+        GeneratedPluginRegister.registerGeneratedPlugins(flutterEngine);
+      }
     }
   }
 
