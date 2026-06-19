@@ -1446,4 +1446,42 @@ public class FlutterLoaderTest {
           arguments.contains(expectedArg));
     }
   }
+
+  @Test
+  public void itLoadsVMFlagsFromManifestDuringBackgroundExecution() {
+    FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
+    FlutterLoader flutterLoader = new FlutterLoader(mockFlutterJNI);
+    Bundle metadata = new Bundle();
+
+    // Configure the metadata flag in the manifest mock.
+    metadata.putBoolean("io.flutter.embedding.android.EnableSoftwareRendering", true);
+    ctx.getApplicationInfo().metaData = metadata;
+
+    FlutterLoader.Settings settings = new FlutterLoader.Settings();
+    assertFalse(flutterLoader.initialized());
+    flutterLoader.startInitialization(ctx, settings);
+
+    // Call ensureInitializationComplete with null arguments (simulating background execution).
+    flutterLoader.ensureInitializationComplete(ctx, null, false);
+    shadowOf(getMainLooper()).idle();
+
+    // Verify the arguments passed to JNI.
+    ArgumentCaptor<String[]> shellArgsCaptor = ArgumentCaptor.forClass(String[].class);
+    verify(mockFlutterJNI, times(1))
+        .init(
+            eq(ctx),
+            shellArgsCaptor.capture(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyLong(),
+            anyInt());
+    List<String> arguments = Arrays.asList(shellArgsCaptor.getValue());
+
+    // We expect the VM flag to be passed to JNI initialization even when arguments are null.
+    assertTrue(
+        "Expected flag --enable-software-rendering was not found in JNI arguments",
+        arguments.contains("--enable-software-rendering"));
+  }
 }
+
