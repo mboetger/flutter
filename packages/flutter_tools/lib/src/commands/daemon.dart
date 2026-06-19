@@ -225,6 +225,17 @@ class Daemon {
   final _onExitCompleter = Completer<int>();
   final _domainMap = <String, Domain>{};
 
+  Logger? get _logger {
+    if (notifyingLogger != null) {
+      return notifyingLogger;
+    }
+    try {
+      return globals.logger;
+    } on Object catch (_) {
+      return null;
+    }
+  }
+
   @visibleForTesting
   void registerDomain(Domain domain) {
     _domainMap[domain.name] = domain;
@@ -267,12 +278,23 @@ class Daemon {
   }
 
   Future<void> shutdown({Object? error}) async {
-    await devToolsDomain?.dispose();
-    await _commandSubscription?.cancel();
-    await connection.dispose();
-    for (final Domain domain in _domainMap.values) {
-      await domain.dispose();
+    try {
+      await devToolsDomain?.dispose();
+    } on Object catch (e, st) {
+      _logger?.printError('Error disposing DevTools domain: $e\n$st');
     }
+    await _commandSubscription?.cancel();
+    for (final Domain domain in _domainMap.values) {
+      if (domain == devToolsDomain) {
+        continue;
+      }
+      try {
+        await domain.dispose();
+      } on Object catch (e, st) {
+        _logger?.printError('Error disposing domain ${domain.name}: $e\n$st');
+      }
+    }
+    await connection.dispose();
     if (!_onExitCompleter.isCompleted) {
       if (error == null) {
         _onExitCompleter.complete(0);
@@ -655,6 +677,25 @@ class AppDomain extends Domain {
   static String _getNewAppId() => _uuidGenerator.v4();
 
   final _apps = <AppInstance>[];
+
+  @visibleForTesting
+  List<AppInstance> get apps => _apps;
+
+  @override
+  Future<void> dispose() async {
+    final appsToDispose = List<AppInstance>.of(_apps);
+    await Future.wait<void>(
+      appsToDispose.map((AppInstance app) async {
+        try {
+          await app.stop();
+        } on Object catch (error, stackTrace) {
+          daemon._logger?.printError(
+            'Error stopping app during AppDomain disposal: $error\n$stackTrace',
+          );
+        }
+      }),
+    );
+  }
 
   final operationQueue = DebounceOperationQueue<OperationResult, OperationType>();
 
