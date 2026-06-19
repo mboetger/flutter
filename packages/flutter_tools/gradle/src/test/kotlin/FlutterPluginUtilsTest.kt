@@ -1853,4 +1853,139 @@ class FlutterPluginUtilsTest {
             mockPrintTask.description = "Prints out all build variants for this Android project"
         }
     }
+
+    @Nested
+    inner class IsFlutterPluginProject {
+        @Test
+        fun `returns false if parent directory does not exist`() {
+            val project = mockk<Project>()
+            val projectDir = File("relative_file_without_parent")
+            every { project.projectDir } returns projectDir
+
+            assertFalse(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+
+        @Test
+        fun `returns false if pubspec yaml does not exist`(@TempDir tempDir: Path) {
+            val project = mockk<Project>()
+            val projectDir = tempDir.resolve("android").toFile().apply { mkdirs() }
+            every { project.projectDir } returns projectDir
+
+            assertFalse(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+
+        @Test
+        fun `returns false if pubspec yaml is empty`(@TempDir tempDir: Path) {
+            val project = mockk<Project>()
+            val projectDir = tempDir.resolve("android").toFile().apply { mkdirs() }
+            val pubspecFile = tempDir.resolve("pubspec.yaml").toFile()
+            pubspecFile.writeText("")
+            every { project.projectDir } returns projectDir
+
+            assertFalse(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+
+        @Test
+        fun `returns false if pubspec has flutter but no plugin`(@TempDir tempDir: Path) {
+            val project = mockk<Project>()
+            val projectDir = tempDir.resolve("android").toFile().apply { mkdirs() }
+            val pubspecFile = tempDir.resolve("pubspec.yaml").toFile()
+            pubspecFile.writeText(
+                """
+                name: my_app
+                dependencies:
+                  flutter:
+                    sdk: flutter
+                flutter:
+                  assets:
+                    - images/
+                """.trimIndent()
+            )
+            every { project.projectDir } returns projectDir
+
+            assertFalse(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+
+        @Test
+        fun `returns true if pubspec has plugin under flutter`(@TempDir tempDir: Path) {
+            val project = mockk<Project>()
+            val projectDir = tempDir.resolve("android").toFile().apply { mkdirs() }
+            val pubspecFile = tempDir.resolve("pubspec.yaml").toFile()
+            pubspecFile.writeText(
+                """
+                name: my_plugin
+                flutter:
+                  plugin:
+                    platforms:
+                      android:
+                        package: com.example
+                """.trimIndent()
+            )
+            every { project.projectDir } returns projectDir
+
+            assertTrue(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+
+        @Test
+        fun `returns true if pubspec has comments and plugin under flutter`(@TempDir tempDir: Path) {
+            val project = mockk<Project>()
+            val projectDir = tempDir.resolve("android").toFile().apply { mkdirs() }
+            val pubspecFile = tempDir.resolve("pubspec.yaml").toFile()
+            pubspecFile.writeText(
+                """
+                name: my_plugin
+                # Some comment
+                flutter: # flutter config
+                  # another comment
+                  plugin: # plugin config
+                    platforms:
+                      android:
+                        package: com.example
+                """.trimIndent()
+            )
+            every { project.projectDir } returns projectDir
+
+            assertTrue(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+
+        @Test
+        fun `returns false if plugin is under dependencies instead of flutter`(@TempDir tempDir: Path) {
+            val project = mockk<Project>()
+            val projectDir = tempDir.resolve("android").toFile().apply { mkdirs() }
+            val pubspecFile = tempDir.resolve("pubspec.yaml").toFile()
+            pubspecFile.writeText(
+                """
+                name: my_app
+                dependencies:
+                  flutter:
+                    sdk: flutter
+                  plugin:
+                    some_dep: 1.0.0
+                """.trimIndent()
+            )
+            every { project.projectDir } returns projectDir
+
+            assertFalse(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+
+        @Test
+        fun `returns false if plugin key is commented out`(@TempDir tempDir: Path) {
+            val project = mockk<Project>()
+            val projectDir = tempDir.resolve("android").toFile().apply { mkdirs() }
+            val pubspecFile = tempDir.resolve("pubspec.yaml").toFile()
+            pubspecFile.writeText(
+                """
+                name: my_app
+                flutter:
+                  # plugin:
+                  assets:
+                    - images/
+                """.trimIndent()
+            )
+            every { project.projectDir } returns projectDir
+
+            assertFalse(FlutterPluginUtils.isFlutterPluginProject(project))
+        }
+    }
 }
+

@@ -401,6 +401,9 @@ class FlutterPlugin : Plugin<Project> {
             )
             return
         }
+        if (FlutterPluginUtils.isFlutterPluginProject(projectToAddTasksTo)) {
+            return
+        }
         // Flutter host module project (Add-to-app).
         val hostAppProjectName: String? =
             if (projectToAddTasksTo.rootProject.hasProperty("flutter.hostAppProjectName")) {

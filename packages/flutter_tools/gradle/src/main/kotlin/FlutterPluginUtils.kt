@@ -731,6 +731,49 @@ object FlutterPluginUtils {
         ) != null
 
     /**
+     * Returns true if the [project] is a Flutter plugin project.
+     *
+     * A project is considered a Flutter plugin if its root directory (the parent of the
+     * gradle project directory) contains a `pubspec.yaml` file with a top-level `flutter:`
+     * section containing a nested `plugin:` key.
+     */
+    @JvmStatic
+    @JvmName("isFlutterPluginProject")
+    internal fun isFlutterPluginProject(project: Project): Boolean {
+        val sourceDir = project.projectDir.parentFile ?: return false
+        val pubspecFile = File(sourceDir, "pubspec.yaml")
+        if (!pubspecFile.exists()) {
+            return false
+        }
+        val lines = pubspecFile.readLines()
+        var inFlutterSection = false
+        for (line in lines) {
+            // Strip trailing comment if any
+            val lineWithoutComment = line.split('#')[0]
+            val trimmed = lineWithoutComment.trim()
+            if (trimmed.isEmpty()) {
+                continue
+            }
+            val isIndented = line.startsWith(" ") || line.startsWith("\t")
+            // Check for top-level flutter: key (no indentation)
+            if (!isIndented && trimmed == "flutter:") {
+                inFlutterSection = true
+                continue
+            }
+            // If we hit another top-level key, we are out of the flutter section
+            if (inFlutterSection && !isIndented) {
+                inFlutterSection = false
+            }
+            // If we are in the flutter section and find the plugin key (must be indented)
+            if (inFlutterSection && trimmed == "plugin:") {
+                return true
+            }
+        }
+        return false
+    }
+
+
+    /**
      * Ensures that the dependencies required by the Flutter project are available.
      * This includes:
      *    1. The embedding
