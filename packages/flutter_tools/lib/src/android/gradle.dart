@@ -354,6 +354,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
       if (detectedGradleError == null) {
         rethrow;
       }
+    } on ArgumentError catch (exception) {
+      _handleGradleArgumentError(exception);
+      rethrow;
     } finally {
       status.stop();
     }
@@ -869,6 +872,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
         allowReentrantFlutter: true,
         environment: _java?.environment,
       );
+    } on ArgumentError catch (exception) {
+      _handleGradleArgumentError(exception);
+      rethrow;
     } finally {
       status.stop();
     }
@@ -1367,4 +1373,16 @@ String _getTargetPlatformByLocalEnginePath(String engineOutPath) {
     result = 'android-arm64';
   }
   return result;
+}
+
+void _handleGradleArgumentError(ArgumentError exception) {
+  final String message = exception.message?.toString() ?? '';
+  if (message.contains('Cannot find executable for')) {
+    throwToolExit(
+      'Gradlew executable not found.\n'
+      'To resolve this, please make sure that your Android project is configured correctly '
+      'and has the Gradle wrapper. You can regenerate the project files by running '
+      "\"flutter create .\" in your project's root directory.",
+    );
+  }
 }
