@@ -438,6 +438,13 @@ static void UpdateDisplayMetrics(JNIEnv* env,
   ANDROID_SHELL_HOLDER->UpdateDisplayMetrics();
 }
 
+static void WindowFocusChanged(JNIEnv* env,
+                               jobject jcaller,
+                               jlong shell_holder,
+                               jboolean has_focus) {
+  ANDROID_SHELL_HOLDER->GetPlatformView()->WindowFocusChanged(has_focus);
+}
+
 static bool IsSurfaceControlEnabled(JNIEnv* env,
                                     jobject jcaller,
                                     jlong shell_holder) {
@@ -933,6 +940,11 @@ bool RegisterApi(JNIEnv* env) {
           .name = "nativeUpdateDisplayMetrics",
           .signature = "(J)V",
           .fnPtr = reinterpret_cast<void*>(&UpdateDisplayMetrics),
+      },
+      {
+          .name = "nativeWindowFocusChanged",
+          .signature = "(JZ)V",
+          .fnPtr = reinterpret_cast<void*>(&WindowFocusChanged),
       },
       {
           .name = "nativeIsSurfaceControlEnabled",

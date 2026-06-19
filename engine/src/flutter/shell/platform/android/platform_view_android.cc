@@ -38,6 +38,7 @@
 #include "flutter/shell/platform/android/android_surface_vk_impeller.h"
 #include "flutter/shell/platform/android/image_external_texture_vk_impeller.h"
 #endif
+#include "flutter/lib/ui/window/view_focus.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_wrapper.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -244,6 +245,13 @@ void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
         latch.Signal();
       });
   latch.Wait();
+}
+
+void PlatformViewAndroid::WindowFocusChanged(bool has_focus) {
+  SendViewFocusEvent(ViewFocusEvent(
+      kImplicitViewId,
+      has_focus ? ViewFocusState::kFocused : ViewFocusState::kUnfocused,
+      ViewFocusDirection::kUndefined));
 }
 
 void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,

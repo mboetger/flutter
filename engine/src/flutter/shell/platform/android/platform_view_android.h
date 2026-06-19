@@ -69,6 +69,8 @@ class PlatformViewAndroid final : public PlatformView {
 
   void NotifyChanged(const DlISize& size);
 
+  void WindowFocusChanged(bool has_focus);
+
   // |PlatformView|
   void NotifyDestroyed() override;
 

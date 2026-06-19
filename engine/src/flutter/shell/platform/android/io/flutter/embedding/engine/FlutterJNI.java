@@ -287,6 +287,15 @@ public class FlutterJNI {
 
   private native void nativeUpdateDisplayMetrics(long nativeShellHolderId);
 
+  @UiThread
+  public void windowFocusChanged(boolean hasFocus) {
+    ensureRunningOnMainThread();
+    ensureAttachedToNative();
+    nativeWindowFocusChanged(nativeShellHolderId, hasFocus);
+  }
+
+  private native void nativeWindowFocusChanged(long nativeShellHolderId, boolean hasFocus);
+
   public void updateRefreshRate() {
     if (!FlutterJNI.loadLibraryCalled) {
       return;

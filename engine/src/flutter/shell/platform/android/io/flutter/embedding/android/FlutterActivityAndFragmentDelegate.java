@@ -1046,6 +1046,9 @@ import java.util.Set;
         flutterEngine.getLifecycleChannel().noWindowsAreFocused();
       }
     }
+    if (flutterEngine != null && flutterEngine.getFlutterJNI() != null) {
+      flutterEngine.getFlutterJNI().windowFocusChanged(hasFocus);
+    }
   }
 
   /**

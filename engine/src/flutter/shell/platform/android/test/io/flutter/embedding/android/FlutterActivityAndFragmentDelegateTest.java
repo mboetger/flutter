@@ -37,6 +37,7 @@ import io.flutter.Build;
 import io.flutter.FlutterInjector;
 import io.flutter.embedding.android.FlutterActivityAndFragmentDelegate.Host;
 import io.flutter.embedding.engine.FlutterEngine;
+import io.flutter.embedding.engine.FlutterJNI;
 import io.flutter.embedding.engine.FlutterEngineCache;
 import io.flutter.embedding.engine.FlutterEngineGroup;
 import io.flutter.embedding.engine.FlutterEngineGroupCache;
@@ -169,6 +170,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsInactive();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsPaused();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsDetached();
+            verify(mockFlutterEngine.getFlutterJNI(), times(1)).windowFocusChanged(false);
 
             // When the app regains focus, it should go to resumed again.
             delegate.onWindowFocusChanged(true);
@@ -178,6 +180,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsInactive();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsPaused();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsDetached();
+            verify(mockFlutterEngine.getFlutterJNI(), times(1)).windowFocusChanged(true);
 
             // When the Activity/Fragment is paused, an inactive message should have been sent to
             // Flutter.
@@ -245,6 +248,8 @@ public class FlutterActivityAndFragmentDelegateTest {
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsPaused();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsInactive();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsDetached();
+            verify(mockFlutterEngine.getFlutterJNI(), times(1)).windowFocusChanged(false);
+            verify(mockFlutterEngine.getFlutterJNI(), times(1)).windowFocusChanged(true);
           });
     }
   }
@@ -1672,6 +1677,9 @@ public class FlutterActivityAndFragmentDelegateTest {
 
     FlutterRenderer renderer = mock(FlutterRenderer.class);
     when(engine.getRenderer()).thenReturn(renderer);
+
+    FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
+    when(engine.getFlutterJNI()).thenReturn(mockFlutterJNI);
 
     when(engine.getSettingsChannel()).thenReturn(fakeSettingsChannel);
     when(engine.getSystemChannel()).thenReturn(mock(SystemChannel.class));

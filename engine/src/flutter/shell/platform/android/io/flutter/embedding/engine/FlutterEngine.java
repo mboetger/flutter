@@ -563,6 +563,12 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     return renderer;
   }
 
+  /** The JNI interface associated with this {@code FlutterEngine}. */
+  @NonNull
+  public FlutterJNI getFlutterJNI() {
+    return flutterJNI;
+  }
+
   /** System channel that sends accessibility requests and events from Flutter to Android. */
   @NonNull
   public AccessibilityChannel getAccessibilityChannel() {
