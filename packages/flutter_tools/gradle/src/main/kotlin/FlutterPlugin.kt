@@ -423,19 +423,21 @@ class FlutterPlugin : Plugin<Project> {
             androidLibraryExtension.libraryVariants.all libraryVariantAll@{
                 val libraryVariant = this
                 var copyFlutterAssetsTask: Task? = null
-                val androidAppExtension =
-                    appProject.extensions.findByName("android") as? AbstractAppExtension
-                check(androidAppExtension != null)
-                androidAppExtension.applicationVariants.all applicationVariantAll@{
-                    val appProjectVariant = this
+                val androidExtension = appProject.extensions.findByName("android")
+                check(androidExtension != null) {
+                    "Project :$hostAppProjectName does not have an 'android' extension."
+                }
+
+                @Suppress("DEPRECATION")
+                fun configureAppProjectVariant(appProjectVariant: com.android.build.gradle.api.BaseVariant) {
                     val appAssembleTask: Task = appProjectVariant.assembleProvider.get()
                     if (!FlutterPluginUtils.shouldConfigureFlutterTask(project, appAssembleTask)) {
-                        return@applicationVariantAll
+                        return
                     }
 
-                    // Find a compatible application variant in the host app.
+                    // Find a compatible variant in the host project.
                     //
-                    // For example, consider a host app that defines the following variants:
+                    // For example, consider a host project that defines the following variants:
                     // | ----------------- | ----------------------------- |
                     // |   Build Variant   |   Flutter Equivalent Variant  |
                     // | ----------------- | ----------------------------- |
@@ -446,16 +448,16 @@ class FlutterPlugin : Plugin<Project> {
                     // | ----------------- | ----------------------------- |
                     //
                     // This mapping is based on the following rules:
-                    // 1. If the host app build variant name is `profile` then the equivalent
+                    // 1. If the host project build variant name is `profile` then the equivalent
                     //    Flutter variant is `profile`.
-                    // 2. If the host app build variant is debuggable
+                    // 2. If the host project build variant is debuggable
                     //    (e.g. `buildType.debuggable = true`), then the equivalent Flutter
                     //    variant is `debug`.
                     // 3. Otherwise, the equivalent Flutter variant is `release`.
                     val variantBuildMode: String =
                         FlutterPluginUtils.buildModeFor(libraryVariant.buildType)
                     if (FlutterPluginUtils.buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
-                        return@applicationVariantAll
+                        return
                     }
                     copyFlutterAssetsTask = copyFlutterAssetsTask ?: addFlutterDeps(
                         libraryVariant,
@@ -468,8 +470,29 @@ class FlutterPlugin : Plugin<Project> {
                         projectToAddTasksTo
                             .tasks
                             .findByPath(":$hostAppProjectName:merge${FlutterPluginUtils.capitalize(appProjectVariant.name)}Assets")
-                    check(mergeAssets != null)
+                    check(mergeAssets != null) {
+                        "Merge assets task not found for variant ${appProjectVariant.name} in host project :$hostAppProjectName."
+                    }
                     mergeAssets.dependsOn(copyFlutterAssetsTask)
+                }
+
+                when (androidExtension) {
+                    is AbstractAppExtension -> {
+                        androidExtension.applicationVariants.all {
+                            configureAppProjectVariant(this)
+                        }
+                    }
+                    is LibraryExtension -> {
+                        androidExtension.libraryVariants.all {
+                            configureAppProjectVariant(this)
+                        }
+                    }
+                    else -> {
+                        throw IllegalStateException(
+                            "The host project :$hostAppProjectName must be either an Android Application or Android Library project, " +
+                            "but its 'android' extension has class ${androidExtension.javaClass.name}."
+                        )
+                    }
                 }
             }
         }

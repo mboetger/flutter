@@ -70,7 +70,10 @@ class FlutterPluginTest {
         every { project.extensions.findByName("android") } returns mockAbstractAppExtension
         every { project.projectDir } returns projectDir.toFile()
         every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
-        every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.file(any<Any>()) } answers {
+            val path = firstArg<Any>()
+            if (path is java.io.File) path else java.io.File(path.toString())
+        }
         val flutterExtension = FlutterExtension()
         every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
         every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
@@ -117,7 +120,7 @@ class FlutterPluginTest {
             listOf()
         // mock method calls that are invoked by the args to NativePluginLoaderReflectionBridge
         every { project.extraProperties } returns mockk()
-        every { project.file(flutterExtension.source!!) } returns mockk()
+        // General project.file mock handles this
         val flutterPlugin = FlutterPlugin()
         flutterPlugin.apply(project)
 
@@ -165,7 +168,10 @@ class FlutterPluginTest {
             }
         every { project.projectDir } returns projectDir.toFile()
         every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
-        every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.file(any<Any>()) } answers {
+            val path = firstArg<Any>()
+            if (path is java.io.File) path else java.io.File(path.toString())
+        }
         val flutterExtension = FlutterExtension()
         every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
         every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
@@ -212,7 +218,7 @@ class FlutterPluginTest {
             listOf()
         // mock method calls that are invoked by the args to NativePluginLoaderReflectionBridge
         every { project.extraProperties } returns mockk()
-        every { project.file(flutterExtension.source!!) } returns mockk()
+        // General project.file mock handles this
         // Set up the task container and our task capture
         val taskContainer = mockk<TaskContainer>(relaxed = true)
         every { project.tasks } returns taskContainer
