@@ -470,7 +470,9 @@ public class PlatformPlugin {
   private void disableEdgeToEdge() {
     if (isEdgeToEdge) {
       isEdgeToEdge = false;
-      WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), true);
+      // Do NOT call WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), true);
+      // Once edge-to-edge is enabled (or forced by the OS), we maintain the window-level
+      // edge-to-edge layout to prevent jarring layout shifts during transitions.
     }
   }
 

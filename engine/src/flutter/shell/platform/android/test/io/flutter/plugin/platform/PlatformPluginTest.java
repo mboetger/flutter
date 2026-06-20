@@ -586,7 +586,7 @@ public class PlatformPluginTest {
   // SYSTEM_UI_FLAG_*, setSystemUiVisibility
   @Config(sdk = API_LEVELS.API_29)
   @Test
-  public void switchFromEdgeToEdgeToImmersive_restoresDecorFitsSystemWindows() {
+  public void switchFromEdgeToEdgeToImmersive_doesNotRestoreDecorFitsSystemWindows() {
     View fakeDecorView = mock(View.class);
     Window fakeWindow = mock(Window.class);
     Activity mockActivity = mock(Activity.class);
@@ -604,8 +604,10 @@ public class PlatformPluginTest {
       platformPlugin.mPlatformMessageHandler.showSystemUiMode(
           PlatformChannel.SystemUiMode.IMMERSIVE);
 
-      // Should restore decor fits system windows when leaving edge-to-edge.
-      windowCompatMock.verify(() -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, true));
+      // Verify that we did NOT call setDecorFitsSystemWindows(fakeWindow, true)
+      // to avoid causing a layout shift.
+      windowCompatMock.verify(
+          () -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, true), never());
 
       // Should apply immersive flags via setSystemUiVisibility.
       verify(fakeDecorView)
@@ -959,5 +961,69 @@ public class PlatformPluginTest {
         PlatformChannel.HapticFeedbackType.ERROR_NOTIFICATION);
     verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.REJECT);
     clearInvocations(fakeDecorView);
+  }
+
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void switchFromEdgeToEdgeToManualWithAllOverlays_doesNotRestoreDecorFitsSystemWindows() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    try (MockedStatic<WindowCompat> windowCompatMock = mockStatic(WindowCompat.class)) {
+      // First, enter edge-to-edge mode.
+      platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+          PlatformChannel.SystemUiMode.EDGE_TO_EDGE);
+      windowCompatMock.verify(() -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, false));
+
+      // Then switch to manual with both top and bottom overlays.
+      java.util.List<PlatformChannel.SystemUiOverlay> overlays = new java.util.ArrayList<>();
+      overlays.add(PlatformChannel.SystemUiOverlay.TOP_OVERLAYS);
+      overlays.add(PlatformChannel.SystemUiOverlay.BOTTOM_OVERLAYS);
+      platformPlugin.mPlatformMessageHandler.showSystemOverlays(overlays);
+
+      // Verify that we did NOT call setDecorFitsSystemWindows(fakeWindow, true)
+      // to avoid causing a layout shift.
+      windowCompatMock.verify(
+          () -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, true), never());
+    }
+  }
+
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void switchFromEdgeToEdgeToImmersiveToManual_doesNotRestoreDecorFitsSystemWindows() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    try (MockedStatic<WindowCompat> windowCompatMock = mockStatic(WindowCompat.class)) {
+      // 1. Enter edge-to-edge mode.
+      platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+          PlatformChannel.SystemUiMode.EDGE_TO_EDGE);
+      windowCompatMock.verify(() -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, false));
+
+      // 2. Switch to immersive.
+      platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+          PlatformChannel.SystemUiMode.IMMERSIVE);
+      windowCompatMock.verify(
+          () -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, true), never());
+
+      // 3. Switch to manual with both top and bottom overlays.
+      java.util.List<PlatformChannel.SystemUiOverlay> overlays = new java.util.ArrayList<>();
+      overlays.add(PlatformChannel.SystemUiOverlay.TOP_OVERLAYS);
+      overlays.add(PlatformChannel.SystemUiOverlay.BOTTOM_OVERLAYS);
+      platformPlugin.mPlatformMessageHandler.showSystemOverlays(overlays);
+
+      // Verify that we still did NOT call setDecorFitsSystemWindows(fakeWindow, true)
+      // throughout the whole sequence.
+      windowCompatMock.verify(
+          () -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, true), never());
+    }
   }
 }
