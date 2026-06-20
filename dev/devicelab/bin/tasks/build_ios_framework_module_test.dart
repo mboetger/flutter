@@ -61,13 +61,81 @@ Future<void> main() async {
 }
 
 Future<void> _addPlugin(Directory projectDir) async {
-  section('Add plugins');
+  final Directory tempDir = projectDir.parent;
+  final packageInfoDir = Directory(path.join(tempDir.path, 'package_info'));
+  if (!packageInfoDir.existsSync()) {
+    section('Create local plugins');
+    await inDirectory(tempDir, () async {
+      await Future.wait(<Future<void>>[
+        flutter(
+          'create',
+          options: <String>[
+            '--org',
+            'io.flutter.devicelab',
+            '--template=plugin',
+            '--platforms=ios,macos',
+            '--no-pub',
+            'package_info',
+          ],
+        ),
+        flutter(
+          'create',
+          options: <String>[
+            '--org',
+            'io.flutter.devicelab',
+            '--template=plugin',
+            '--platforms=ios',
+            '--no-pub',
+            'connectivity',
+          ],
+        ),
+        flutter(
+          'create',
+          options: <String>[
+            '--org',
+            'io.flutter.devicelab',
+            '--template=plugin',
+            '--platforms=macos',
+            '--no-pub',
+            'connectivity_macos',
+          ],
+        ),
+      ]);
+    });
 
+    // Edit podspecs to add Reachability dependency
+    section('Add Reachability dependency to local plugins');
+    final iosPodspec = File(path.join(tempDir.path, 'connectivity', 'ios', 'connectivity.podspec'));
+    String iosPodspecContent = iosPodspec.readAsStringSync();
+    iosPodspecContent = iosPodspecContent.replaceFirst(
+      "s.dependency 'Flutter'",
+      "s.dependency 'Flutter'\n  s.dependency 'Reachability'",
+    );
+    iosPodspec.writeAsStringSync(iosPodspecContent, flush: true);
+
+    final macosPodspec = File(
+      path.join(tempDir.path, 'connectivity_macos', 'macos', 'connectivity_macos.podspec'),
+    );
+    String macosPodspecContent = macosPodspec.readAsStringSync();
+    macosPodspecContent = macosPodspecContent.replaceFirst(
+      "s.dependency 'FlutterMacOS'",
+      "s.dependency 'FlutterMacOS'\n  s.dependency 'Reachability'",
+    );
+    macosPodspec.writeAsStringSync(macosPodspecContent, flush: true);
+  }
+
+  section('Add plugins to project pubspec');
   final pubspec = File(path.join(projectDir.path, 'pubspec.yaml'));
   String content = pubspec.readAsStringSync();
   content = content.replaceFirst(
     '\ndependencies:\n',
-    '\ndependencies:\n  package_info: 2.0.2\n  connectivity: 3.0.6\n',
+    '\ndependencies:\n'
+        '  package_info:\n'
+        '    path: ../package_info\n'
+        '  connectivity:\n'
+        '    path: ../connectivity\n'
+        '  connectivity_macos:\n'
+        '    path: ../connectivity_macos\n',
   );
   pubspec.writeAsStringSync(content, flush: true);
   await inDirectory(projectDir, () async {

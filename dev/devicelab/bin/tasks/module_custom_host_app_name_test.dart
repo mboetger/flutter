@@ -60,12 +60,30 @@ Future<void> main() async {
       );
       await pubspec.writeAsString(content, flush: true);
 
+      section('Create local plugin');
+
+      await inDirectory(tempDir, () async {
+        await flutter(
+          'create',
+          options: <String>[
+            '--org',
+            'io.flutter.devicelab',
+            '--template=plugin',
+            '--platforms=android,ios',
+            '--android-language=java',
+            '--ios-language=objc',
+            '--no-pub',
+            'local_plugin',
+          ],
+        );
+      });
+
       section('Add plugins');
 
       content = await pubspec.readAsString();
       content = content.replaceFirst(
         '${Platform.lineTerminator}dependencies:${Platform.lineTerminator}',
-        '${Platform.lineTerminator}dependencies:${Platform.lineTerminator}',
+        '${Platform.lineTerminator}dependencies:${Platform.lineTerminator}  local_plugin:${Platform.lineTerminator}    path: ../local_plugin${Platform.lineTerminator}',
       );
       await pubspec.writeAsString(content, flush: true);
       await inDirectory(projectDir, () async {
