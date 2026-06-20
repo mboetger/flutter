@@ -352,6 +352,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     this.flutterJNI = flutterJNI;
 
     this.dartExecutor = new DartExecutor(flutterJNI, assetManager, engineId);
+    this.dartExecutor.getBinaryMessenger().enableBufferingIncomingMessages();
     this.dartExecutor.onAttachedToJNI();
 
     DeferredComponentManager deferredComponentManager =
@@ -432,6 +433,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
 
     ProcessTextPlugin processTextPlugin = new ProcessTextPlugin(this.getProcessTextChannel());
     this.pluginRegistry.add(processTextPlugin);
+    this.dartExecutor.getBinaryMessenger().disableBufferingIncomingMessages();
   }
 
   private void attachToJni() {

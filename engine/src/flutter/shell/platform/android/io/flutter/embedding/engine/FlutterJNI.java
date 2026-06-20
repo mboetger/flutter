@@ -375,6 +375,26 @@ public class FlutterJNI {
   @Nullable private Long nativeShellHolderId;
   @Nullable private AccessibilityDelegate accessibilityDelegate;
   @Nullable private PlatformMessageHandler platformMessageHandler;
+
+  private static class DeferredPlatformMessage {
+    @NonNull public final String channel;
+    @Nullable public final ByteBuffer message;
+    public final int replyId;
+    public final long messageData;
+
+    DeferredPlatformMessage(
+        @NonNull String channel,
+        @Nullable ByteBuffer message,
+        int replyId,
+        long messageData) {
+      this.channel = channel;
+      this.message = message;
+      this.replyId = replyId;
+      this.messageData = messageData;
+    }
+  }
+
+  @Nullable private List<DeferredPlatformMessage> deferredMessages = new ArrayList<>();
   @Nullable private LocalizationPlugin localizationPlugin;
   @Nullable private PlatformViewsController platformViewsController;
   @Nullable private PlatformViewsController2 platformViewsController2;
@@ -498,6 +518,15 @@ public class FlutterJNI {
       nativeShellHolderId = null;
     } finally {
       shellHolderLock.writeLock().unlock();
+    }
+    synchronized (this) {
+      if (deferredMessages != null) {
+        for (DeferredPlatformMessage deferredMessage : deferredMessages) {
+          nativeCleanupMessageData(deferredMessage.messageData);
+        }
+        deferredMessages.clear();
+        deferredMessages = null;
+      }
     }
   }
 
@@ -1107,7 +1136,20 @@ public class FlutterJNI {
   @UiThread
   public void setPlatformMessageHandler(@Nullable PlatformMessageHandler platformMessageHandler) {
     ensureRunningOnMainThread();
-    this.platformMessageHandler = platformMessageHandler;
+    synchronized (this) {
+      this.platformMessageHandler = platformMessageHandler;
+      if (platformMessageHandler != null && deferredMessages != null) {
+        for (DeferredPlatformMessage deferredMessage : deferredMessages) {
+          this.platformMessageHandler.handleMessageFromDart(
+              deferredMessage.channel,
+              deferredMessage.message,
+              deferredMessage.replyId,
+              deferredMessage.messageData);
+        }
+        deferredMessages.clear();
+        deferredMessages = null;
+      }
+    }
   }
 
   private native void nativeCleanupMessageData(long messageData);
@@ -1132,18 +1174,26 @@ public class FlutterJNI {
       ByteBuffer message,
       final int replyId,
       final long messageData) {
-    if (platformMessageHandler != null) {
-      platformMessageHandler.handleMessageFromDart(channel, message, replyId, messageData);
-    } else {
-      nativeCleanupMessageData(messageData);
+    synchronized (this) {
+      if (platformMessageHandler != null) {
+        platformMessageHandler.handleMessageFromDart(channel, message, replyId, messageData);
+      } else {
+        if (deferredMessages != null) {
+          deferredMessages.add(new DeferredPlatformMessage(channel, message, replyId, messageData));
+        } else {
+          nativeCleanupMessageData(messageData);
+        }
+      }
     }
   }
 
   // Called by native to respond to a platform message that we sent.
   @SuppressWarnings("unused")
   private void handlePlatformMessageResponse(int replyId, ByteBuffer reply) {
-    if (platformMessageHandler != null) {
-      platformMessageHandler.handlePlatformMessageResponse(replyId, reply);
+    synchronized (this) {
+      if (platformMessageHandler != null) {
+        platformMessageHandler.handlePlatformMessageResponse(replyId, reply);
+      }
     }
   }
 
