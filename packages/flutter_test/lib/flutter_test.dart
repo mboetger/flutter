@@ -84,7 +84,7 @@ export 'src/recording_canvas.dart';
 export 'src/restoration.dart';
 export 'src/stack_manipulation.dart';
 export 'src/test_async_utils.dart';
-export 'src/test_compat.dart';
+export 'src/test_compat.dart' hide excludeTags, hasMatchingTests, includeTags, matchesTags;
 export 'src/test_default_binary_messenger.dart';
 export 'src/test_exception_reporter.dart';
 export 'src/test_pointer.dart';

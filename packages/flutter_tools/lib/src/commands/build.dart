@@ -177,6 +177,16 @@ abstract class BuildSubCommand extends FlutterCommand {
   BuildSubCommand({required this.logger, required bool verboseHelp}) {
     requiresPubspecYaml();
     usesFatalWarningsOption(verboseHelp: verboseHelp);
+    argParser
+      ..addOption(
+        'tags',
+        help: 'Run only tests associated with the specified tags in integration tests.',
+      )
+      ..addOption(
+        'exclude-tags',
+        abbr: 'x',
+        help: 'Run only tests that do not have the specified tags in integration tests.',
+      );
   }
 
   @protected

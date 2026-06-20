@@ -4,6 +4,7 @@
 
 import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
+import 'package:boolean_selector/boolean_selector.dart';
 import 'package:file/file.dart';
 import 'package:meta/meta.dart';
 import 'package:package_config/package_config_types.dart';
@@ -1475,6 +1476,27 @@ abstract class FlutterCommand extends Command<void> {
 
     final Map<String, Object?> defineConfigJsonMap = extractDartDefineConfigJsonMap();
     final List<String> dartDefines = extractDartDefines(defineConfigJsonMap: defineConfigJsonMap);
+
+    if (argParser.options.containsKey('tags') && stringArg('tags') != null) {
+      final String tags = stringArg('tags')!;
+      try {
+        BooleanSelector.parse(tags);
+      } on FormatException catch (e) {
+        throwToolExit('Invalid --tags selector "$tags": ${e.message}');
+      }
+      dartDefines.removeWhere((define) => define.startsWith('integration_test.tags='));
+      dartDefines.add('integration_test.tags=$tags');
+    }
+    if (argParser.options.containsKey('exclude-tags') && stringArg('exclude-tags') != null) {
+      final String excludeTags = stringArg('exclude-tags')!;
+      try {
+        BooleanSelector.parse(excludeTags);
+      } on FormatException catch (e) {
+        throwToolExit('Invalid --exclude-tags selector "$excludeTags": ${e.message}');
+      }
+      dartDefines.removeWhere((define) => define.startsWith('integration_test.exclude-tags='));
+      dartDefines.add('integration_test.exclude-tags=$excludeTags');
+    }
 
     final bool useCdn =
         !argParser.options.containsKey(FlutterOptions.kWebResourcesCdnFlag) ||

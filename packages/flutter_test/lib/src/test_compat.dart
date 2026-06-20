@@ -8,6 +8,7 @@ library;
 
 import 'dart:async';
 
+import 'package:boolean_selector/boolean_selector.dart';
 import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 import 'package:meta/meta.dart';
 import 'package:test_api/scaffolding.dart' show Timeout;
@@ -24,6 +25,48 @@ import 'package:test_api/src/backend/suite_platform.dart'; // ignore: implementa
 import 'package:test_api/src/backend/test.dart'; // ignore: implementation_imports
 
 export 'package:test_api/fake.dart' show Fake;
+
+const String _filterTags = String.fromEnvironment('integration_test.tags');
+const String _filterExcludeTags = String.fromEnvironment('integration_test.exclude-tags');
+
+/// The tags to include when running integration tests.
+@visibleForTesting
+BooleanSelector? includeTags = _filterTags.isEmpty ? null : BooleanSelector.parse(_filterTags);
+
+/// The tags to exclude when running integration tests.
+@visibleForTesting
+BooleanSelector? excludeTags = _filterExcludeTags.isEmpty
+    ? null
+    : BooleanSelector.parse(_filterExcludeTags);
+
+/// Returns whether the given [tags] match the [includeTags] and [excludeTags] selectors.
+@visibleForTesting
+bool matchesTags(Set<String> tags) {
+  if (includeTags != null && !includeTags!.evaluate(tags.contains)) {
+    return false;
+  }
+  if (excludeTags != null && excludeTags!.evaluate(tags.contains)) {
+    return false;
+  }
+  return true;
+}
+
+/// Returns whether the [group] or any of its subgroups contains a test that matches the tags.
+@visibleForTesting
+bool hasMatchingTests(Group group) {
+  for (final GroupEntry entry in group.entries) {
+    if (entry is Group) {
+      if (hasMatchingTests(entry)) {
+        return true;
+      }
+    } else {
+      if (matchesTags(entry.metadata.tags)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 Declarer? _localDeclarer;
 Declarer get _declarer {
@@ -54,6 +97,9 @@ Future<void> _runGroup(
   List<Group> parents,
   _Reporter reporter,
 ) async {
+  if (!hasMatchingTests(group)) {
+    return;
+  }
   parents.add(group);
   try {
     final bool skipGroup = group.metadata.skip;
@@ -68,10 +114,15 @@ Future<void> _runGroup(
         if (entry is Group) {
           await _runGroup(suiteConfig, entry, parents, reporter);
         } else if (entry.metadata.skip) {
-          await _runSkippedTest(suiteConfig, entry as Test, parents, reporter);
+          final test = entry as Test;
+          if (matchesTags(test.metadata.tags)) {
+            await _runSkippedTest(suiteConfig, test, parents, reporter);
+          }
         } else {
           final test = entry as Test;
-          await _runLiveTest(suiteConfig, test.load(suiteConfig, groups: parents), reporter);
+          if (matchesTags(test.metadata.tags)) {
+            await _runLiveTest(suiteConfig, test.load(suiteConfig, groups: parents), reporter);
+          }
         }
       }
     }
