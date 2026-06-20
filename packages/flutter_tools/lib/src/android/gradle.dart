@@ -1003,47 +1003,124 @@ void printHowToConsumeAar({
 }) {
   assert(buildModes.isNotEmpty);
   buildNumber ??= '1.0';
+  androidPackage ??= 'unknown';
 
   logger.printStatus('\nConsuming the Module', emphasis: true);
   logger.printStatus('''
-  1. Open ${fileSystem.path.join('<host>', 'app', 'build.gradle')}
-  2. Ensure you have the repositories configured, otherwise add them:
+  1. Open ${fileSystem.path.join('<host>', 'settings.gradle')} (Groovy) or ${fileSystem.path.join('<host>', 'settings.gradle.kts')} (Kotlin DSL)
+  2. Ensure you have the repositories configured in the dependencyResolutionManagement block.
+     Add the following repositories (merge them into your existing repositories block if one exists):
 
-      String storageUrl = System.env.$kFlutterStorageBaseUrl ?: "https://storage.googleapis.com"
-      repositories {
-        maven {
-            url '${repoDirectory.path}'
-        }
-        maven {
-            url "\$storageUrl/download.flutter.io"
-        }
-      }
+     For settings.gradle (Groovy):
 
-  3. Make the host app depend on the Flutter module:
+         dependencyResolutionManagement {
+           repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+           repositories {
+             google()
+             mavenCentral()
+             String storageUrl = System.env.$kFlutterStorageBaseUrl ?: "https://storage.googleapis.com"
+             maven {
+               url '${repoDirectory.path}'
+             }
+             maven {
+               url "\$storageUrl/download.flutter.io"
+             }
+           }
+         }
 
-    dependencies {''');
+     For settings.gradle.kts (Kotlin DSL):
+
+         dependencyResolutionManagement {
+           repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+           repositories {
+             google()
+             mavenCentral()
+             val storageUrl = System.getenv("$kFlutterStorageBaseUrl") ?: "https://storage.googleapis.com"
+             maven {
+               url = uri("${repoDirectory.path}")
+             }
+             maven {
+               url = uri("\$storageUrl/download.flutter.io")
+             }
+           }
+         }
+
+  3. Alternatively, for older projects without settings.gradle repository configuration, configure the repositories in ${fileSystem.path.join('<host>', 'app', 'build.gradle')} (Groovy) or ${fileSystem.path.join('<host>', 'app', 'build.gradle.kts')} (Kotlin DSL):
+
+     For build.gradle (Groovy):
+
+         String storageUrl = System.env.$kFlutterStorageBaseUrl ?: "https://storage.googleapis.com"
+         repositories {
+           maven {
+             url '${repoDirectory.path}'
+           }
+           maven {
+             url "\$storageUrl/download.flutter.io"
+           }
+         }
+
+     For build.gradle.kts (Kotlin DSL):
+
+         val storageUrl = System.getenv("$kFlutterStorageBaseUrl") ?: "https://storage.googleapis.com"
+         repositories {
+           maven {
+             url = uri("${repoDirectory.path}")
+           }
+           maven {
+             url = uri("\$storageUrl/download.flutter.io")
+           }
+         }
+
+  4. Open ${fileSystem.path.join('<host>', 'app', 'build.gradle')} (Groovy) or ${fileSystem.path.join('<host>', 'app', 'build.gradle.kts')} (Kotlin DSL) and add the dependencies:
+
+     For build.gradle (Groovy):
+
+         dependencies {''');
 
   for (final buildMode in buildModes) {
     logger.printStatus("""
-      ${buildMode}Implementation '$androidPackage:flutter_$buildMode:$buildNumber'""");
+           ${buildMode}Implementation '$androidPackage:flutter_$buildMode:$buildNumber'""");
   }
 
   logger.printStatus('''
-    }
+         }
+
+     For build.gradle.kts (Kotlin DSL):
+
+         dependencies {''');
+
+  for (final buildMode in buildModes) {
+    logger.printStatus('''
+           ${buildMode}Implementation("$androidPackage:flutter_$buildMode:$buildNumber")''');
+  }
+
+  logger.printStatus('''
+         }
 ''');
 
   if (buildModes.contains('profile')) {
     logger.printStatus('''
+  5. Add the `profile` build type:
 
-  4. Add the `profile` build type:
+     For build.gradle (Groovy):
 
-    android {
-      buildTypes {
-        profile {
-          initWith debug
-        }
-      }
-    }
+         android {
+           buildTypes {
+             profile {
+               initWith debug
+             }
+           }
+         }
+
+     For build.gradle.kts (Kotlin DSL):
+
+         android {
+           buildTypes {
+             create("profile") {
+               initWith(getByName("debug"))
+             }
+           }
+         }
 ''');
   }
 
