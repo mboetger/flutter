@@ -310,6 +310,7 @@ class CupertinoTextField extends StatefulWidget {
     this.contextMenuBuilder = _defaultContextMenuBuilder,
     this.spellCheckConfiguration,
     this.magnifierConfiguration,
+    this.hintLocales,
   }) : assert(obscuringCharacter.length == 1),
        smartDashesType =
            smartDashesType ?? (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
@@ -450,6 +451,7 @@ class CupertinoTextField extends StatefulWidget {
     this.contextMenuBuilder = _defaultContextMenuBuilder,
     this.spellCheckConfiguration,
     this.magnifierConfiguration,
+    this.hintLocales,
   }) : assert(obscuringCharacter.length == 1),
        smartDashesType =
            smartDashesType ?? (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
@@ -847,6 +849,9 @@ class CupertinoTextField extends StatefulWidget {
   /// configuration, then [cupertinoMisspelledTextStyle] is used by default.
   final SpellCheckConfiguration? spellCheckConfiguration;
 
+  /// {@macro flutter.services.TextInputConfiguration.hintLocales}
+  final List<Locale>? hintLocales;
+
   /// The [TextStyle] used to indicate misspelled words in the Cupertino style.
   ///
   /// See also:
@@ -1043,6 +1048,9 @@ class CupertinoTextField extends StatefulWidget {
             ? const <String>[]
             : kDefaultContentInsertionMimeTypes,
       ),
+    );
+    properties.add(
+      DiagnosticsProperty<List<Locale>?>('hintLocales', hintLocales, defaultValue: null),
     );
   }
 
@@ -1439,6 +1447,7 @@ class _CupertinoTextFieldState extends State<CupertinoTextField>
       autofillConfiguration: autofillConfiguration,
     );
   }
+
   // AutofillClient implementation end.
 
   @override
@@ -1635,6 +1644,7 @@ class _CupertinoTextFieldState extends State<CupertinoTextField>
             contentInsertionConfiguration: widget.contentInsertionConfiguration,
             contextMenuBuilder: widget.contextMenuBuilder,
             spellCheckConfiguration: spellCheckConfiguration,
+            hintLocales: widget.hintLocales,
           ),
         ),
       ),

@@ -163,6 +163,7 @@ class CupertinoTextFormFieldRow extends FormField<String> {
     ui.BoxHeightStyle? selectionHeightStyle,
     ui.BoxWidthStyle? selectionWidthStyle,
     super.restorationId,
+    this.hintLocales,
   }) : assert(initialValue == null || controller == null),
        assert(obscuringCharacter.length == 1),
        assert(maxLines == null || maxLines > 0),
@@ -238,6 +239,7 @@ class CupertinoTextFormFieldRow extends FormField<String> {
                  placeholder: placeholder,
                  placeholderStyle: placeholderStyle,
                  contextMenuBuilder: contextMenuBuilder,
+                 hintLocales: hintLocales,
                  spellCheckConfiguration: spellCheckConfiguration,
                  selectionHeightStyle:
                      selectionHeightStyle ?? EditableText.defaultSelectionHeightStyle,
@@ -274,6 +276,9 @@ class CupertinoTextFormFieldRow extends FormField<String> {
 
   /// {@macro flutter.material.TextFormField.onChanged}
   final ValueChanged<String>? onChanged;
+
+  /// {@macro flutter.services.TextInputConfiguration.hintLocales}
+  final List<Locale>? hintLocales;
 
   static Widget _defaultContextMenuBuilder(
     BuildContext context,
