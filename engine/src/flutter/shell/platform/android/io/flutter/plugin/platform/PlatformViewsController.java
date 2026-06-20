@@ -643,7 +643,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
 
     // Size the embedded view.
     final View embeddedView = platformView.getView();
-    embeddedView.setLayoutParams(new FrameLayout.LayoutParams(physicalWidth, physicalHeight));
+    embeddedView.setLayoutParams(
+        new FrameLayout.LayoutParams(physicalWidth, physicalHeight, Gravity.LEFT | Gravity.TOP));
 
     // Accessibility in the embedded view is initially disabled because if a Flutter app
     // disabled accessibility in the first frame, the embedding won't receive an update to
@@ -1237,7 +1238,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     parentView.bringToFront();
 
     final FrameLayout.LayoutParams layoutParams =
-        new FrameLayout.LayoutParams(viewWidth, viewHeight);
+        new FrameLayout.LayoutParams(viewWidth, viewHeight, Gravity.LEFT | Gravity.TOP);
     final View view = platformViews.get(viewId).getView();
     if (view != null) {
       view.setLayoutParams(layoutParams);
@@ -1267,7 +1268,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
       flutterView.addView(overlayView);
     }
 
-    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(width, height);
+    FrameLayout.LayoutParams layoutParams =
+        new FrameLayout.LayoutParams(width, height, Gravity.LEFT | Gravity.TOP);
     layoutParams.leftMargin = x;
     layoutParams.topMargin = y;
     overlayView.setLayoutParams(layoutParams);

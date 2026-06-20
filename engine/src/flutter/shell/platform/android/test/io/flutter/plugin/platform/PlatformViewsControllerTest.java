@@ -2138,6 +2138,102 @@ public class PlatformViewsControllerTest {
     platformViewsControllerDelegator.attach(context, registry, executor);
   }
 
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void configureForTextureLayerCompositionSetsGravityLeftTop() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+    PlatformViewRegistry registry = platformViewsController.getRegistry();
+
+    registry.registerViewFactory(
+        "testType",
+        new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+          @Override
+          public PlatformView create(Context context, int viewId, Object args) {
+            return new PlatformView() {
+              private final View view = new View(context);
+
+              @Override
+              public View getView() {
+                return view;
+              }
+
+              @Override
+              public void dispose() {}
+            };
+          }
+        });
+
+    int viewId = 0;
+    final PlatformViewCreationRequest request =
+        new PlatformViewCreationRequest(
+            viewId, "testType", 0, 0, 128, 128, View.LAYOUT_DIRECTION_LTR, null);
+    PlatformView pView = platformViewsController.createPlatformView(request, true);
+    platformViewsController.configureForTextureLayerComposition(pView, request);
+
+    FrameLayout.LayoutParams layoutParams =
+        (FrameLayout.LayoutParams) pView.getView().getLayoutParams();
+    assertEquals(android.view.Gravity.LEFT | android.view.Gravity.TOP, layoutParams.gravity);
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void onDisplayPlatformViewSetsGravityLeftTop() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    jni.attachToNative();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    final PlatformView platformView = mock(PlatformView.class);
+    final View view = new View(ApplicationProvider.getApplicationContext());
+    when(platformView.getView()).thenReturn(view);
+    final PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    when(viewFactory.create(any(), anyInt(), any())).thenReturn(platformView);
+
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+
+    // Simulate create call from the framework.
+    createPlatformView(jni, platformViewsController, 0, "testType", /* hybrid=*/ true);
+
+    platformViewsController.onBeginFrame();
+    platformViewsController.onDisplayPlatformView(
+        0,
+        /* x=*/ 0,
+        /* y=*/ 0,
+        /* width=*/ 10,
+        /* height=*/ 10,
+        /* viewWidth=*/ 10,
+        /* viewHeight=*/ 10,
+        /* mutatorsStack=*/ new FlutterMutatorsStack());
+
+    FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) view.getLayoutParams();
+    assertEquals(android.view.Gravity.LEFT | android.view.Gravity.TOP, layoutParams.gravity);
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void onDisplayOverlaySurfaceSetsGravityLeftTop() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    final PlatformOverlayView overlayImageView =
+        new PlatformOverlayView(ApplicationProvider.getApplicationContext());
+    final FlutterOverlaySurface overlaySurface =
+        platformViewsController.createOverlaySurface(overlayImageView);
+
+    platformViewsController.onDisplayOverlaySurface(
+        overlaySurface.getId(), /* x=*/ 0, /* y=*/ 0, /* width=*/ 10, /* height=*/ 10);
+
+    FrameLayout.LayoutParams layoutParams =
+        (FrameLayout.LayoutParams) overlayImageView.getLayoutParams();
+    assertEquals(android.view.Gravity.LEFT | android.view.Gravity.TOP, layoutParams.gravity);
+  }
+
   /**
    * For convenience when writing tests, this allows us to make fake messages from Flutter via
    * Platform Channels. Typically those calls happen on the ui thread which dispatches to the

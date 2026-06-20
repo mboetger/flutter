@@ -60,57 +60,59 @@ class RTLMirrorRepro extends StatefulWidget {
 class _RTLMirrorReproState extends State<RTLMirrorRepro> {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        // Blue Box (Flutter)
-        // In RTL, Row adds children from Right to Left.
-        // So this first child will be on the RIGHT.
-        InkWell(
-          key: const ValueKey('blue_box'),
-          onTap: () {
-            setState(() {
-              blueTapped = true;
-            });
-          },
-          child: Container(
-            width: 150,
-            height: 150,
-            color: Colors.blue,
-            child: const Center(
-              child: Text('Blue Box', style: TextStyle(color: Colors.white)),
+    return Center(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // Blue Box (Flutter)
+          // In RTL, Row adds children from Right to Left.
+          // So this first child will be on the RIGHT.
+          InkWell(
+            key: const ValueKey('blue_box'),
+            onTap: () {
+              setState(() {
+                blueTapped = true;
+              });
+            },
+            child: Container(
+              width: 150,
+              height: 150,
+              color: Colors.blue,
+              child: const Center(
+                child: Text('Blue Box', style: TextStyle(color: Colors.white)),
+              ),
             ),
           ),
-        ),
-        // Red Box (Platform View 2)
-        // This second child will be on the LEFT.
-        SizedBox(
-          width: 150,
-          height: 150,
-          child: Stack(
-            children: [
-              const Positioned.fill(
-                child: AndroidView(viewType: 'blue_orange_gradient_platform_view'),
-              ),
-              Center(
-                child: SizedBox(
-                  width: 125,
-                  height: 125,
-                  child: InkWell(
-                    key: const ValueKey('red_box_overlay'),
-                    onTap: () {
-                      setState(() {
-                        redTapped = true;
-                      });
-                    },
-                    child: Container(color: Colors.red),
+          // Red Box (Platform View 2)
+          // This second child will be on the LEFT.
+          SizedBox(
+            width: 150,
+            height: 150,
+            child: Stack(
+              children: [
+                const Positioned.fill(
+                  child: AndroidView(viewType: 'blue_orange_gradient_platform_view'),
+                ),
+                Center(
+                  child: SizedBox(
+                    width: 125,
+                    height: 125,
+                    child: InkWell(
+                      key: const ValueKey('red_box_overlay'),
+                      onTap: () {
+                        setState(() {
+                          redTapped = true;
+                        });
+                      },
+                      child: Container(color: Colors.red),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
