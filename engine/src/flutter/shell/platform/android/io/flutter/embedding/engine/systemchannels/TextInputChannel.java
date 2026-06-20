@@ -83,9 +83,10 @@ public class TextInputChannel {
                 textInputMethodHandler.setClient(
                     textInputClientId, Configuration.fromJson(jsonConfiguration));
                 result.success(null);
-              } catch (JSONException | NoSuchFieldException exception) {
+              } catch (JSONException | NoSuchFieldException | IndexOutOfBoundsException exception) {
                 // JSONException: missing keys or bad value types.
                 // NoSuchFieldException: one or more values were invalid.
+                // IndexOutOfBoundsException: invalid selection or composing bounds in editing state.
                 result.error("error", exception.getMessage(), null);
               }
               break;
@@ -110,7 +111,7 @@ public class TextInputChannel {
                 final JSONObject editingState = (JSONObject) args;
                 textInputMethodHandler.setEditingState(TextEditState.fromJson(editingState));
                 result.success(null);
-              } catch (JSONException exception) {
+              } catch (JSONException | IndexOutOfBoundsException exception) {
                 result.error("error", exception.getMessage(), null);
               }
               break;
