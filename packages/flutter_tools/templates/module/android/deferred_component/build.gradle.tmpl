@@ -18,14 +18,16 @@ if (flutterVersionName == null) {
 
 apply plugin: "com.android.dynamic-feature"
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
 android {
     namespace = "{{androidIdentifier}}.{{componentName}}"
     compileSdk = flutter.compileSdkVersion
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
 
     sourceSets {
         applicationVariants.all { variant ->

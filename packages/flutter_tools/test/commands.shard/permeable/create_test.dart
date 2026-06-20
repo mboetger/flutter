@@ -3741,8 +3741,9 @@ void main() {
 
     final String buildGradleContent = await buildGradleFile.readAsString();
 
-    expect(buildGradleContent.contains('sourceCompatibility = JavaVersion.VERSION_'), true);
-    expect(buildGradleContent.contains('targetCompatibility = JavaVersion.VERSION_'), true);
+    expect(buildGradleContent.contains('java {'), true);
+    expect(buildGradleContent.contains('toolchain {'), true);
+    expect(buildGradleContent.contains('languageVersion.set(JavaLanguageVersion.of(17))'), true);
   });
 
   testUsingContext('Android Kotlin plugin sets explicit compatibility version', () async {
@@ -3768,8 +3769,9 @@ void main() {
 
     final String buildGradleContent = await buildGradleFile.readAsString();
 
-    expect(buildGradleContent.contains('sourceCompatibility = JavaVersion.VERSION_'), true);
-    expect(buildGradleContent.contains('targetCompatibility = JavaVersion.VERSION_'), true);
+    expect(buildGradleContent.contains('java {'), true);
+    expect(buildGradleContent.contains('toolchain {'), true);
+    expect(buildGradleContent.contains('languageVersion.set(JavaLanguageVersion.of(17))'), true);
     // jvmTarget should be set to the same value.
     expect(
       buildGradleContent.contains('jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17'),

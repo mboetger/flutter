@@ -5,6 +5,13 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+
 def localProperties = new Properties()
 def localPropertiesFile = new File(buildscript.sourceFile.parentFile.parentFile, "local.properties")
 if (localPropertiesFile.exists()) {
@@ -31,10 +38,6 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
 
     defaultConfig {
         minSdk = flutter.minSdkVersion

@@ -2,14 +2,16 @@ def flutterPluginVersion = "managed"
 
 apply plugin: "com.android.application"
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
 android {
     namespace = "{{androidIdentifier}}.host"
     compileSdk = {{compileSdkVersion}}
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
 
     defaultConfig {
         applicationId = "{{androidIdentifier}}.host"
