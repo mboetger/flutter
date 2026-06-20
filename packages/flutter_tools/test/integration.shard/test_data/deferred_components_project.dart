@@ -3886,7 +3886,7 @@ storeFile=key.jks
           <activity
               android:name=".MainActivity"
               android:exported="true"
-              android:launchMode="singleTop"
+              android:launchMode="singleTask"
               android:theme="@style/LaunchTheme"
               android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
               android:hardwareAccelerated="true"

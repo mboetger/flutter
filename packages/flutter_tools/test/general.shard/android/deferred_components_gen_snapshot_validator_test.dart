@@ -452,7 +452,7 @@ loading-units:
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
         </activity>
         <!-- Don't delete the meta-data below.
@@ -533,7 +533,7 @@ loading-units:
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
         </activity>
         <!-- Don't delete the meta-data below.
@@ -605,7 +605,7 @@ loading-units:
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <meta-data android:name="io.flutter.embedding.engine.deferredcomponents.DeferredComponentManager.loadingUnitMapping"
                 android:value="3:component1,2:component2,4:component2"/>
@@ -678,7 +678,7 @@ loading-units:
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
         </activity>
         <!-- Don't delete the meta-data below.
@@ -753,7 +753,7 @@ loading-units:
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
         </activity>
         <!-- Don't delete the meta-data below.

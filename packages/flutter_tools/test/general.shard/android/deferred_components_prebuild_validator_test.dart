@@ -284,7 +284,7 @@ void main() {
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
         </activity>
         <!-- Don't delete the meta-data below.
