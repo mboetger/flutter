@@ -36,6 +36,7 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
   private static final String TAG = "FlutterSurfaceView";
 
   private final boolean renderTransparently;
+  private final boolean zOrderOnTop;
   private boolean isSurfaceAvailableForRendering = false;
   private boolean isPaused = false;
   @Nullable private FlutterRenderer flutterRenderer;
@@ -85,7 +86,7 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
 
   /** Constructs a {@code FlutterSurfaceView} programmatically, without any XML attributes. */
   public FlutterSurfaceView(@NonNull Context context) {
-    this(context, null, false);
+    this(context, null, false, false);
   }
 
   /**
@@ -93,28 +94,43 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
    * control over whether or not this {@code FlutterSurfaceView} renders with transparency.
    */
   public FlutterSurfaceView(@NonNull Context context, boolean renderTransparently) {
-    this(context, null, renderTransparently);
+    this(context, null, renderTransparently, renderTransparently);
+  }
+
+  /**
+   * Constructs a {@code FlutterSurfaceView} programmatically, without any XML attributes, and with
+   * control over whether or not this {@code FlutterSurfaceView} renders with transparency and
+   * whether its surface is Z-ordered on top of its window.
+   */
+  public FlutterSurfaceView(
+      @NonNull Context context, boolean renderTransparently, boolean zOrderOnTop) {
+    this(context, null, renderTransparently, zOrderOnTop);
   }
 
   /** Constructs a {@code FlutterSurfaceView} in an XML-inflation-compliant manner. */
   public FlutterSurfaceView(@NonNull Context context, @NonNull AttributeSet attrs) {
-    this(context, attrs, false);
+    this(context, attrs, false, false);
   }
 
   private FlutterSurfaceView(
-      @NonNull Context context, @Nullable AttributeSet attrs, boolean renderTransparently) {
+      @NonNull Context context,
+      @Nullable AttributeSet attrs,
+      boolean renderTransparently,
+      boolean zOrderOnTop) {
     super(context, attrs);
     this.renderTransparently = renderTransparently;
+    this.zOrderOnTop = zOrderOnTop;
     this.surfaceHolderCallbackCompat =
         new SurfaceHolderCallbackCompat(surfaceCallback, this, flutterRenderer);
     init();
   }
 
   private void init() {
-    // If transparency is desired then we'll enable a transparent pixel format and place
-    // our Window above everything else to get transparent background rendering.
+    // If transparency is desired then we'll enable a transparent pixel format.
     if (renderTransparently) {
       getHolder().setFormat(PixelFormat.TRANSPARENT);
+    }
+    if (zOrderOnTop) {
       setZOrderOnTop(true);
     }
 

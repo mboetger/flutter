@@ -142,6 +142,7 @@ public class FlutterFragment extends Fragment
    * this {@code FlutterFragment}
    */
   protected static final String ARG_FLUTTERVIEW_TRANSPARENCY_MODE = "flutterview_transparency_mode";
+  protected static final String ARG_FLUTTERVIEW_Z_ORDER_ON_TOP = "flutterview_z_order_on_top";
   /** See {@link #shouldAttachEngineToActivity()}. */
   protected static final String ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY =
       "should_attach_engine_to_activity";
@@ -259,6 +260,7 @@ public class FlutterFragment extends Fragment
     private FlutterShellArgs shellArgs = null;
     private RenderMode renderMode = RenderMode.surface;
     private TransparencyMode transparencyMode = TransparencyMode.transparent;
+    private Boolean zOrderOnTop = null;
     private boolean shouldAttachEngineToActivity = true;
     private boolean shouldAutomaticallyHandleOnBackPressed = false;
     private boolean shouldDelayFirstAndroidViewDraw = false;
@@ -359,6 +361,24 @@ public class FlutterFragment extends Fragment
     @NonNull
     public NewEngineFragmentBuilder transparencyMode(@NonNull TransparencyMode transparencyMode) {
       this.transparencyMode = transparencyMode;
+      return this;
+    }
+
+    /**
+     * Control whether the {@link FlutterSurfaceView}'s surface is placed on top of its window.
+     *
+     * <p>This only has an effect when {@link RenderMode} is {@link RenderMode#surface}.
+     *
+     * <p>By default, this is true when {@link TransparencyMode} is {@code transparent}, and
+     * false when it is {@code opaque}.
+     *
+     * <p>Setting this to false is the recommended way to prevent the Flutter view from
+     * obscuring native {@link io.flutter.plugin.platform.PlatformView}s when using a transparent
+     * background.
+     */
+    @NonNull
+    public NewEngineFragmentBuilder zOrderOnTop(boolean zOrderOnTop) {
+      this.zOrderOnTop = zOrderOnTop;
       return this;
     }
 
@@ -468,6 +488,9 @@ public class FlutterFragment extends Fragment
       args.putString(
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
           transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
+      args.putBoolean(
+          ARG_FLUTTERVIEW_Z_ORDER_ON_TOP,
+          zOrderOnTop != null ? zOrderOnTop : transparencyMode == TransparencyMode.transparent);
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
       args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
       args.putBoolean(
@@ -557,6 +580,7 @@ public class FlutterFragment extends Fragment
     private boolean handleDeeplinking = false;
     private RenderMode renderMode = RenderMode.surface;
     private TransparencyMode transparencyMode = TransparencyMode.transparent;
+    private Boolean zOrderOnTop = null;
     private boolean shouldAttachEngineToActivity = true;
     private boolean shouldAutomaticallyHandleOnBackPressed = false;
     private boolean shouldDelayFirstAndroidViewDraw = false;
@@ -606,6 +630,24 @@ public class FlutterFragment extends Fragment
     public CachedEngineFragmentBuilder transparencyMode(
         @NonNull TransparencyMode transparencyMode) {
       this.transparencyMode = transparencyMode;
+      return this;
+    }
+
+    /**
+     * Control whether the {@link FlutterSurfaceView}'s surface is placed on top of its window.
+     *
+     * <p>This only has an effect when {@link RenderMode} is {@link RenderMode#surface}.
+     *
+     * <p>By default, this is true when {@link TransparencyMode} is {@code transparent}, and
+     * false when it is {@code opaque}.
+     *
+     * <p>Setting this to false is the recommended way to prevent the Flutter view from
+     * obscuring native {@link io.flutter.plugin.platform.PlatformView}s when using a transparent
+     * background.
+     */
+    @NonNull
+    public CachedEngineFragmentBuilder zOrderOnTop(boolean zOrderOnTop) {
+      this.zOrderOnTop = zOrderOnTop;
       return this;
     }
 
@@ -715,6 +757,9 @@ public class FlutterFragment extends Fragment
       args.putString(
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
           transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
+      args.putBoolean(
+          ARG_FLUTTERVIEW_Z_ORDER_ON_TOP,
+          zOrderOnTop != null ? zOrderOnTop : transparencyMode == TransparencyMode.transparent);
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
       args.putBoolean(
           ARG_SHOULD_AUTOMATICALLY_HANDLE_ON_BACK_PRESSED, shouldAutomaticallyHandleOnBackPressed);
@@ -803,6 +848,7 @@ public class FlutterFragment extends Fragment
     private @NonNull boolean handleDeeplinking = false;
     private @NonNull RenderMode renderMode = RenderMode.surface;
     private @NonNull TransparencyMode transparencyMode = TransparencyMode.transparent;
+    private Boolean zOrderOnTop = null;
     private boolean shouldAttachEngineToActivity = true;
     private boolean shouldAutomaticallyHandleOnBackPressed = false;
     private boolean shouldDelayFirstAndroidViewDraw = false;
@@ -867,6 +913,24 @@ public class FlutterFragment extends Fragment
     public NewEngineInGroupFragmentBuilder transparencyMode(
         @NonNull TransparencyMode transparencyMode) {
       this.transparencyMode = transparencyMode;
+      return this;
+    }
+
+    /**
+     * Control whether the {@link FlutterSurfaceView}'s surface is placed on top of its window.
+     *
+     * <p>This only has an effect when {@link RenderMode} is {@link RenderMode#surface}.
+     *
+     * <p>By default, this is true when {@link TransparencyMode} is {@code transparent}, and
+     * false when it is {@code opaque}.
+     *
+     * <p>Setting this to false is the recommended way to prevent the Flutter view from
+     * obscuring native {@link io.flutter.plugin.platform.PlatformView}s when using a transparent
+     * background.
+     */
+    @NonNull
+    public NewEngineInGroupFragmentBuilder zOrderOnTop(boolean zOrderOnTop) {
+      this.zOrderOnTop = zOrderOnTop;
       return this;
     }
 
@@ -967,6 +1031,9 @@ public class FlutterFragment extends Fragment
       args.putString(
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
           transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
+      args.putBoolean(
+          ARG_FLUTTERVIEW_Z_ORDER_ON_TOP,
+          zOrderOnTop != null ? zOrderOnTop : transparencyMode == TransparencyMode.transparent);
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
       args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
       args.putBoolean(
@@ -1510,6 +1577,14 @@ public class FlutterFragment extends Fragment
         getArguments()
             .getString(ARG_FLUTTERVIEW_TRANSPARENCY_MODE, TransparencyMode.transparent.name());
     return TransparencyMode.valueOf(transparencyModeName);
+  }
+
+  @Override
+  public boolean shouldZOrderOnTop() {
+    return getArguments()
+        .getBoolean(
+            ARG_FLUTTERVIEW_Z_ORDER_ON_TOP,
+            getTransparencyMode() == TransparencyMode.transparent);
   }
 
   /**

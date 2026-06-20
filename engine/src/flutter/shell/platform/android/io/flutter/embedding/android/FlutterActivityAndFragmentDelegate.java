@@ -410,7 +410,9 @@ import java.util.Set;
     if (host.getRenderMode() == RenderMode.surface) {
       FlutterSurfaceView flutterSurfaceView =
           new FlutterSurfaceView(
-              host.getContext(), host.getTransparencyMode() == TransparencyMode.transparent);
+              host.getContext(),
+              host.getTransparencyMode() == TransparencyMode.transparent,
+              host.shouldZOrderOnTop());
 
       // Allow our host to customize FlutterSurfaceView, if desired.
       host.onFlutterSurfaceViewCreated(flutterSurfaceView);
@@ -1254,6 +1256,15 @@ import java.util.Set;
      * be connected to the host {@link android.app.Activity}, allowing plugins to interact with it.
      */
     boolean shouldAttachEngineToActivity();
+
+    /**
+     * Returns whether the {@link FlutterSurfaceView} should be Z-ordered on top of its window.
+     *
+     * <p>Defaults to true if {@link #getTransparencyMode()} is {@link TransparencyMode#transparent}.
+     */
+    default boolean shouldZOrderOnTop() {
+      return getTransparencyMode() == TransparencyMode.transparent;
+    }
 
     /**
      * Invoked by this delegate when the {@link FlutterSurfaceView} that renders the Flutter UI is

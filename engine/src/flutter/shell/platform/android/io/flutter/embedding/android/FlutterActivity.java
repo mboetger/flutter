@@ -18,6 +18,7 @@ import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.EXTRA_DA
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.EXTRA_DESTROY_ENGINE_WITH_ACTIVITY;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.EXTRA_ENABLE_STATE_RESTORATION;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.EXTRA_INITIAL_ROUTE;
+import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.EXTRA_Z_ORDER_ON_TOP;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.INITIAL_ROUTE_META_DATA_KEY;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.NORMAL_THEME_META_DATA_KEY;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.deepLinkEnabled;
@@ -259,6 +260,7 @@ public class FlutterActivity extends Activity
     private final Class<? extends FlutterActivity> activityClass;
     private String initialRoute = DEFAULT_INITIAL_ROUTE;
     private String backgroundMode = DEFAULT_BACKGROUND_MODE;
+    private Boolean zOrderOnTop = null;
     @Nullable private List<String> dartEntrypointArgs;
 
     /**
@@ -329,6 +331,27 @@ public class FlutterActivity extends Activity
     }
 
     /**
+     * Control whether the {@link FlutterSurfaceView}'s surface is placed on top of its window.
+     *
+     * <p>This only has an effect when {@link RenderMode} is {@link RenderMode#surface}.
+     *
+     * <p>By default, this is true when {@link BackgroundMode} is {@code transparent}, and
+     * false when it is {@code opaque}.
+     *
+     * <p>Setting this to false is the recommended way to prevent the Flutter view from
+     * obscuring native {@link io.flutter.plugin.platform.PlatformView}s when using a transparent
+     * background.
+     *
+     * @param zOrderOnTop Whether to Z-order on top.
+     * @return The engine intent builder.
+     */
+    @NonNull
+    public NewEngineIntentBuilder zOrderOnTop(boolean zOrderOnTop) {
+      this.zOrderOnTop = zOrderOnTop;
+      return this;
+    }
+
+    /**
      * Creates and returns an {@link Intent} that will launch a {@code FlutterActivity} with the
      * desired configuration.
      *
@@ -344,6 +367,9 @@ public class FlutterActivity extends Activity
               .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, true);
       if (dartEntrypointArgs != null) {
         intent.putExtra(EXTRA_DART_ENTRYPOINT_ARGS, new ArrayList(dartEntrypointArgs));
+      }
+      if (zOrderOnTop != null) {
+        intent.putExtra(EXTRA_Z_ORDER_ON_TOP, zOrderOnTop);
       }
       return intent;
     }
@@ -372,6 +398,7 @@ public class FlutterActivity extends Activity
     private final String cachedEngineId;
     private boolean destroyEngineWithActivity = false;
     private String backgroundMode = DEFAULT_BACKGROUND_MODE;
+    private Boolean zOrderOnTop = null;
 
     /**
      * Constructor that allows this {@code CachedEngineIntentBuilder} to be used by subclasses of
@@ -433,6 +460,27 @@ public class FlutterActivity extends Activity
     }
 
     /**
+     * Control whether the {@link FlutterSurfaceView}'s surface is placed on top of its window.
+     *
+     * <p>This only has an effect when {@link RenderMode} is {@link RenderMode#surface}.
+     *
+     * <p>By default, this is true when {@link BackgroundMode} is {@code transparent}, and
+     * false when it is {@code opaque}.
+     *
+     * <p>Setting this to false is the recommended way to prevent the Flutter view from
+     * obscuring native {@link io.flutter.plugin.platform.PlatformView}s when using a transparent
+     * background.
+     *
+     * @param zOrderOnTop Whether to Z-order on top.
+     * @return The builder.
+     */
+    @NonNull
+    public CachedEngineIntentBuilder zOrderOnTop(boolean zOrderOnTop) {
+      this.zOrderOnTop = zOrderOnTop;
+      return this;
+    }
+
+    /**
      * Creates and returns an {@link Intent} that will launch a {@code FlutterActivity} with the
      * desired configuration.
      *
@@ -441,10 +489,15 @@ public class FlutterActivity extends Activity
      */
     @NonNull
     public Intent build(@NonNull Context context) {
-      return new Intent(context, activityClass)
-          .putExtra(EXTRA_CACHED_ENGINE_ID, cachedEngineId)
-          .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, destroyEngineWithActivity)
-          .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode);
+      Intent intent =
+          new Intent(context, activityClass)
+              .putExtra(EXTRA_CACHED_ENGINE_ID, cachedEngineId)
+              .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, destroyEngineWithActivity)
+              .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode);
+      if (zOrderOnTop != null) {
+        intent.putExtra(EXTRA_Z_ORDER_ON_TOP, zOrderOnTop);
+      }
+      return intent;
     }
   }
 
@@ -485,6 +538,7 @@ public class FlutterActivity extends Activity
     private String dartEntrypoint = DEFAULT_DART_ENTRYPOINT;
     private String initialRoute = DEFAULT_INITIAL_ROUTE;
     private String backgroundMode = DEFAULT_BACKGROUND_MODE;
+    private Boolean zOrderOnTop = null;
 
     /**
      * Constructor that allows this {@code NewEngineInGroupIntentBuilder} to be used by subclasses
@@ -574,6 +628,27 @@ public class FlutterActivity extends Activity
     }
 
     /**
+     * Control whether the {@link FlutterSurfaceView}'s surface is placed on top of its window.
+     *
+     * <p>This only has an effect when {@link RenderMode} is {@link RenderMode#surface}.
+     *
+     * <p>By default, this is true when {@link BackgroundMode} is {@code transparent}, and
+     * false when it is {@code opaque}.
+     *
+     * <p>Setting this to false is the recommended way to prevent the Flutter view from
+     * obscuring native {@link io.flutter.plugin.platform.PlatformView}s when using a transparent
+     * background.
+     *
+     * @param zOrderOnTop Whether to Z-order on top.
+     * @return The engine group intent builder.
+     */
+    @NonNull
+    public NewEngineInGroupIntentBuilder zOrderOnTop(boolean zOrderOnTop) {
+      this.zOrderOnTop = zOrderOnTop;
+      return this;
+    }
+
+    /**
      * Creates and returns an {@link Intent} that will launch a {@code FlutterActivity} with the
      * desired configuration.
      *
@@ -582,12 +657,17 @@ public class FlutterActivity extends Activity
      */
     @NonNull
     public Intent build(@NonNull Context context) {
-      return new Intent(context, activityClass)
-          .putExtra(EXTRA_DART_ENTRYPOINT, dartEntrypoint)
-          .putExtra(EXTRA_INITIAL_ROUTE, initialRoute)
-          .putExtra(EXTRA_CACHED_ENGINE_GROUP_ID, cachedEngineGroupId)
-          .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode)
-          .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, true);
+      Intent intent =
+          new Intent(context, activityClass)
+              .putExtra(EXTRA_DART_ENTRYPOINT, dartEntrypoint)
+              .putExtra(EXTRA_INITIAL_ROUTE, initialRoute)
+              .putExtra(EXTRA_CACHED_ENGINE_GROUP_ID, cachedEngineGroupId)
+              .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode)
+              .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, true);
+      if (zOrderOnTop != null) {
+        intent.putExtra(EXTRA_Z_ORDER_ON_TOP, zOrderOnTop);
+      }
+      return intent;
     }
   }
 
@@ -1260,6 +1340,13 @@ public class FlutterActivity extends Activity
     return getBackgroundMode() == BackgroundMode.opaque
         ? TransparencyMode.opaque
         : TransparencyMode.transparent;
+  }
+
+  @Override
+  public boolean shouldZOrderOnTop() {
+    return getIntent().hasExtra(EXTRA_Z_ORDER_ON_TOP)
+        ? getIntent().getBooleanExtra(EXTRA_Z_ORDER_ON_TOP, false)
+        : getTransparencyMode() == TransparencyMode.transparent;
   }
 
   /**
