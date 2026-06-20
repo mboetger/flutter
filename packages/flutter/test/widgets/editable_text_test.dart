@@ -8,6 +8,7 @@
 @Tags(<String>['reduced-test-set'])
 library;
 
+import 'dart:async';
 import 'dart:convert' show jsonDecode;
 import 'dart:math' as math;
 import 'dart:ui';
@@ -15844,6 +15845,126 @@ void main() {
   );
 
   group('Spell check', () {
+    testWidgets('Spell check suggestions are correctly sent via setEditingState to the platform', (
+      WidgetTester tester,
+    ) async {
+      final log = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+        MethodCall methodCall,
+      ) async {
+        log.add(methodCall);
+        return null;
+      });
+
+      const suggestionSpans = <SuggestionSpan>[
+        SuggestionSpan(TextRange(start: 0, end: 4), <String>['hello', 'help']),
+      ];
+      final fakeSpellCheckService = FakeSpellCheckService(
+        suggestionSpansByText: const <String, List<SuggestionSpan>?>{'helo': suggestionSpans},
+      );
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(),
+            cursorColor: const Color(0xFF0000FF),
+            backgroundCursorColor: const Color(0xFF808080),
+            spellCheckConfiguration: SpellCheckConfiguration(
+              spellCheckService: fakeSpellCheckService,
+              misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
+            ),
+          ),
+        ),
+      );
+
+      // Focus the text field to open the connection.
+      await tester.showKeyboard(find.byType(EditableText));
+      await tester.pumpAndSettle();
+
+      log.clear();
+
+      // Trigger a spell check by entering text.
+      await tester.enterText(find.byType(EditableText), 'helo');
+      await tester.pump(); // Allow the async spell check service call to resolve.
+
+      // Verify that setEditingState was called on the platform with the correct suggestionSpans.
+      final MethodCall setEditingStateCall = log.lastWhere(
+        (MethodCall m) => m.method == 'TextInput.setEditingState',
+      );
+      final arguments = setEditingStateCall.arguments as Map<String, dynamic>;
+      expect(arguments['text'], 'helo');
+      expect(arguments['suggestionSpans'], <Map<String, dynamic>>[
+        <String, dynamic>{
+          'start': 0,
+          'end': 4,
+          'suggestions': <String>['hello', 'help'],
+        },
+      ]);
+    });
+
+    testWidgets(
+      'Spell check does not send suggestions via setEditingState if the text changed during the async request',
+      (WidgetTester tester) async {
+        final log = <MethodCall>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+          MethodCall methodCall,
+        ) async {
+          log.add(methodCall);
+          return null;
+        });
+
+        final completer = Completer<List<SuggestionSpan>?>();
+        final fakeSpellCheckService = DelayedFakeSpellCheckService(completer.future);
+
+        await tester.pumpWidget(
+          TestWidgetsApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(),
+              cursorColor: const Color(0xFF0000FF),
+              backgroundCursorColor: const Color(0xFF808080),
+              spellCheckConfiguration: SpellCheckConfiguration(
+                spellCheckService: fakeSpellCheckService,
+                misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
+              ),
+            ),
+          ),
+        );
+
+        // Focus the text field to open the connection.
+        await tester.showKeyboard(find.byType(EditableText));
+        await tester.pumpAndSettle();
+
+        log.clear();
+
+        // Trigger a spell check for 'helo' by entering text.
+        await tester.enterText(find.byType(EditableText), 'helo');
+
+        // Before the spell check completes, change the text of the controller.
+        await tester.enterText(find.byType(EditableText), 'hello');
+
+        // Resolve the first spell check request for 'helo'.
+        completer.complete(<SuggestionSpan>[
+          const SuggestionSpan(TextRange(start: 0, end: 4), <String>['hello', 'help']),
+        ]);
+        await tester.pump();
+
+        // Verify that TextInput.setEditingState was NOT called with suggestionSpans for the stale 'helo' text.
+        final Iterable<MethodCall> setEditingStateCalls = log.where(
+          (MethodCall m) => m.method == 'TextInput.setEditingState',
+        );
+        for (final call in setEditingStateCalls) {
+          final arguments = call.arguments as Map<String, dynamic>;
+          if (arguments['text'] == 'helo') {
+            expect(arguments['suggestionSpans'], isNull);
+          }
+        }
+      },
+    );
+
     testWidgets('Spell check configured properly when spell check disabled by default', (
       WidgetTester tester,
     ) async {
@@ -19273,5 +19394,15 @@ class _EditableTextStatefulMenuState extends State<_EditableTextStatefulMenu> {
       'Initial: $initialValue, Current: ${widget.value}',
       textDirection: TextDirection.ltr,
     );
+  }
+}
+
+class DelayedFakeSpellCheckService implements SpellCheckService {
+  DelayedFakeSpellCheckService(this.future);
+  final Future<List<SuggestionSpan>?> future;
+
+  @override
+  Future<List<SuggestionSpan>?> fetchSpellCheckSuggestions(Locale locale, String text) {
+    return future;
   }
 }

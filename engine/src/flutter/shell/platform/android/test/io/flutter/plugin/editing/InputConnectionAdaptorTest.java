@@ -1382,6 +1382,50 @@ public class InputConnectionAdaptorTest {
     }
   }
 
+  @Test
+  public void testGetExtractedText_propagatesSpellCheckSuggestionSpans() {
+    ListenableEditingState editable = sampleEditable(0, 0, "hello wrld");
+
+    java.util.List<String> suggestions = java.util.Arrays.asList("world", "word");
+    TextInputChannel.SuggestionSpanRepresentation suggestionSpanRep =
+        new TextInputChannel.SuggestionSpanRepresentation(6, 10, suggestions);
+
+    TextInputChannel.TextEditState editState =
+        new TextInputChannel.TextEditState(
+            "hello wrld",
+            0,
+            0,
+            -1,
+            -1,
+            java.util.Arrays.asList(suggestionSpanRep));
+
+    editable.setEditingState(editState);
+
+    InputConnectionAdaptor adaptor = sampleInputConnectionAdaptor(editable);
+
+    ExtractedTextRequest request = new ExtractedTextRequest();
+    request.flags = InputConnection.GET_TEXT_WITH_STYLES;
+
+    ExtractedText extractedText = adaptor.getExtractedText(request, 0);
+    CharSequence textWithStyles = extractedText.text;
+
+    assertTrue(textWithStyles instanceof android.text.Spanned);
+    android.text.Spanned spanned = (android.text.Spanned) textWithStyles;
+
+    android.text.style.SuggestionSpan[] spans =
+        spanned.getSpans(0, spanned.length(), android.text.style.SuggestionSpan.class);
+
+    assertEquals(1, spans.length);
+    android.text.style.SuggestionSpan appliedSpan = spans[0];
+
+    assertEquals(
+        android.text.style.SuggestionSpan.FLAG_MISSPELLED,
+        appliedSpan.getFlags() & android.text.style.SuggestionSpan.FLAG_MISSPELLED);
+    java.util.List<String> appliedSuggestions = java.util.Arrays.asList(appliedSpan.getSuggestions());
+    assertTrue(appliedSuggestions.contains("world"));
+    assertTrue(appliedSuggestions.contains("word"));
+  }
+
   @Implements(InputMethodManager.class)
   public static class TestImm extends ShadowInputMethodManager {
     public static int empty = -999;

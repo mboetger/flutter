@@ -21,7 +21,7 @@ class FakeTextInputControl with TextInputControl {
   }
 
   @override
-  void setEditingState(TextEditingValue value) {}
+  void setEditingState(TextEditingValue value, {List<SuggestionSpan>? suggestionSpans}) {}
 
   @override
   void updateConfig(TextInputConfiguration configuration) {}

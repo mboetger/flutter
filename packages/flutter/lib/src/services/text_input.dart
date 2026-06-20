@@ -24,6 +24,7 @@ import 'clipboard.dart' show Clipboard;
 import 'keyboard_inserted_content.dart';
 import 'message_codec.dart';
 import 'platform_channel.dart';
+import 'spell_check.dart';
 import 'system_channels.dart';
 import 'text_editing.dart';
 import 'text_editing_delta.dart';
@@ -1728,9 +1729,9 @@ class TextInputConnection {
 
   /// Requests that the text input control change its internal state to match
   /// the given state.
-  void setEditingState(TextEditingValue value) {
+  void setEditingState(TextEditingValue value, {List<SuggestionSpan>? suggestionSpans}) {
     assert(attached);
-    TextInput._instance._setEditingState(value);
+    TextInput._instance._setEditingState(value, suggestionSpans: suggestionSpans);
   }
 
   /// Send the size and transform of the editable text to engine.
@@ -2349,9 +2350,9 @@ class TextInput {
     }
   }
 
-  void _setEditingState(TextEditingValue value) {
+  void _setEditingState(TextEditingValue value, {List<SuggestionSpan>? suggestionSpans}) {
     for (final TextInputControl control in _inputControls) {
-      control.setEditingState(value);
+      control.setEditingState(value, suggestionSpans: suggestionSpans);
     }
   }
 
@@ -2554,7 +2555,7 @@ mixin TextInputControl {
   ///
   /// This method is called when the editing state of the attached input client
   /// has changed.
-  void setEditingState(TextEditingValue value) {}
+  void setEditingState(TextEditingValue value, {List<SuggestionSpan>? suggestionSpans}) {}
 
   /// Informs the text input control about client position changes.
   ///
@@ -2677,9 +2678,21 @@ class _PlatformTextInputControl with TextInputControl {
   }
 
   @override
-  void setEditingState(TextEditingValue value) {
+  void setEditingState(TextEditingValue value, {List<SuggestionSpan>? suggestionSpans}) {
+    final Map<String, dynamic> json = value.toJSON();
+    if (suggestionSpans != null && suggestionSpans.isNotEmpty) {
+      json['suggestionSpans'] = suggestionSpans
+          .map(
+            (SuggestionSpan span) => <String, dynamic>{
+              'start': span.range.start,
+              'end': span.range.end,
+              'suggestions': span.suggestions,
+            },
+          )
+          .toList();
+    }
     _channel
-        .invokeMethod<void>('TextInput.setEditingState', value.toJSON())
+        .invokeMethod<void>('TextInput.setEditingState', json)
         .then(
           (void _) {},
           onError: (Object error, StackTrace stack) =>
@@ -2928,6 +2941,7 @@ class SystemContextMenuController with SystemContextMenuClient, Diagnosticable {
     );
     callback?.call();
   }
+
   // End SystemContextMenuClient.
 
   /// Shows the system context menu anchored on the given [Rect].

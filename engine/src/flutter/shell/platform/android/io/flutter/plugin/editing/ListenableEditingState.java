@@ -7,6 +7,8 @@ package io.flutter.plugin.editing;
 import android.text.Editable;
 import android.text.Selection;
 import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.SuggestionSpan;
 import android.view.View;
 import android.view.inputmethod.BaseInputConnection;
 import androidx.annotation.NonNull;
@@ -53,6 +55,7 @@ class ListenableEditingState extends SpannableStringBuilder {
   private int mComposingStartWhenBeginBatchEdit;
   private int mComposingEndWhenBeginBatchEdit;
 
+  private final View mView;
   private BaseInputConnection mDummyConnection;
 
   // The View is only used for creating a dummy BaseInputConnection for setComposingRegion. The View
@@ -60,6 +63,7 @@ class ListenableEditingState extends SpannableStringBuilder {
   public ListenableEditingState(
       @Nullable TextInputChannel.TextEditState initialState, @NonNull View view) {
     super();
+    mView = view;
 
     Editable self = this;
     mDummyConnection =
@@ -160,6 +164,28 @@ class ListenableEditingState extends SpannableStringBuilder {
     }
 
     setComposingRange(newState.composingStart, newState.composingEnd);
+
+    // Clear old SuggestionSpans
+    SuggestionSpan[] oldSpans = getSpans(0, length(), SuggestionSpan.class);
+    for (SuggestionSpan span : oldSpans) {
+      removeSpan(span);
+    }
+
+    // Apply new SuggestionSpans
+    if (newState.suggestionSpans != null) {
+      for (TextInputChannel.SuggestionSpanRepresentation spanRep : newState.suggestionSpans) {
+        SuggestionSpan suggestionSpan =
+            new SuggestionSpan(
+                mView.getContext(),
+                spanRep.suggestions.toArray(new String[0]),
+                SuggestionSpan.FLAG_MISSPELLED);
+        setSpan(
+            suggestionSpan,
+            spanRep.start,
+            spanRep.end,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+      }
+    }
 
     // Updates from the framework should not have a delta created for it as they have already been
     // applied on the framework side.

@@ -4021,13 +4021,22 @@ class EditableTextState extends State<EditableText>
     if (localValue == _lastKnownRemoteTextEditingValue) {
       return;
     }
-    _textInputConnection!.setEditingState(localValue);
+    _textInputConnection!.setEditingState(localValue, suggestionSpans: _suggestionSpans);
     _lastKnownRemoteTextEditingValue = localValue;
   }
 
   TextEditingValue get _value => widget.controller.value;
   set _value(TextEditingValue value) {
     widget.controller.value = value;
+  }
+
+  List<SuggestionSpan>? get _suggestionSpans {
+    if (spellCheckEnabled &&
+        spellCheckResults != null &&
+        spellCheckResults!.spellCheckedText == _value.text) {
+      return spellCheckResults!.suggestionSpans;
+    }
+    return null;
   }
 
   bool get _hasFocus => widget.focusNode.hasFocus;
@@ -4124,7 +4133,7 @@ class EditableTextState extends State<EditableText>
       _schedulePeriodicPostFrameCallbacks();
       _textInputConnection!
         ..updateStyle(_getTextInputStyle(context))
-        ..setEditingState(localValue)
+        ..setEditingState(localValue, suggestionSpans: _suggestionSpans)
         ..show();
       if (_needsAutofill) {
         // Request autofill AFTER the size and the transform have been sent to
@@ -4188,7 +4197,7 @@ class EditableTextState extends State<EditableText>
     newConnection
       ..show()
       ..updateStyle(_getTextInputStyle(context))
-      ..setEditingState(_value);
+      ..setEditingState(_value, suggestionSpans: _suggestionSpans);
     _lastKnownRemoteTextEditingValue = _value;
   }
 
@@ -4675,18 +4684,25 @@ class EditableTextState extends State<EditableText>
         return;
       }
 
-      spellCheckResults = SpellCheckResults(text, suggestions);
-      final double? lineHeightScaleFactor = MediaQuery.maybeLineHeightScaleFactorOverrideOf(
-        context,
-      );
-      final double? letterSpacing = MediaQuery.maybeLetterSpacingOverrideOf(context);
-      final double? wordSpacing = MediaQuery.maybeWordSpacingOverrideOf(context);
-      renderEditable.text = _OverridingTextStyleTextSpanUtils.applyTextSpacingOverrides(
-        lineHeightScaleFactor: lineHeightScaleFactor,
-        letterSpacing: letterSpacing,
-        wordSpacing: wordSpacing,
-        textSpan: buildTextSpan(),
-      );
+      // Guard against text changes that occurred during the async spell check request.
+      // This prevents out-of-order completed requests from overwriting newer results.
+      if (text == _value.text) {
+        spellCheckResults = SpellCheckResults(text, suggestions);
+        if (_hasInputConnection) {
+          _textInputConnection!.setEditingState(_value, suggestionSpans: suggestions);
+        }
+        final double? lineHeightScaleFactor = MediaQuery.maybeLineHeightScaleFactorOverrideOf(
+          context,
+        );
+        final double? letterSpacing = MediaQuery.maybeLetterSpacingOverrideOf(context);
+        final double? wordSpacing = MediaQuery.maybeWordSpacingOverrideOf(context);
+        renderEditable.text = _OverridingTextStyleTextSpanUtils.applyTextSpacingOverrides(
+          lineHeightScaleFactor: lineHeightScaleFactor,
+          letterSpacing: letterSpacing,
+          wordSpacing: wordSpacing,
+          textSpan: buildTextSpan(),
+        );
+      }
     } catch (exception, stack) {
       FlutterError.reportError(
         FlutterErrorDetails(

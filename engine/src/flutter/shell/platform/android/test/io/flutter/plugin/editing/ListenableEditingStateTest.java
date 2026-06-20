@@ -17,6 +17,9 @@ import io.flutter.embedding.android.KeyboardManager;
 import io.flutter.embedding.engine.systemchannels.ScribeChannel;
 import io.flutter.embedding.engine.systemchannels.TextInputChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import android.text.style.SuggestionSpan;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -436,5 +439,113 @@ public class ListenableEditingStateTest {
       selectionChanged = false;
       composingRegionChanged = false;
     }
+  }
+
+  @Test
+  public void testSetEditingState_appliesSpellCheckSuggestionSpans() {
+    ListenableEditingState editingState = new ListenableEditingState(null, new View(ctx));
+
+    List<String> suggestions = Arrays.asList("world", "word");
+    TextInputChannel.SuggestionSpanRepresentation suggestionSpanRep =
+        new TextInputChannel.SuggestionSpanRepresentation(6, 10, suggestions);
+
+    TextInputChannel.TextEditState editState =
+        new TextInputChannel.TextEditState(
+            "hello wrld",
+            0,
+            0,
+            -1,
+            -1,
+            Arrays.asList(suggestionSpanRep));
+
+    editingState.setEditingState(editState);
+
+    SuggestionSpan[] spans =
+        editingState.getSpans(0, editingState.length(), SuggestionSpan.class);
+
+    assertEquals(1, spans.length);
+    SuggestionSpan appliedSpan = spans[0];
+
+    assertEquals(
+        SuggestionSpan.FLAG_MISSPELLED,
+        appliedSpan.getFlags() & SuggestionSpan.FLAG_MISSPELLED);
+    List<String> appliedSuggestions = Arrays.asList(appliedSpan.getSuggestions());
+    assertTrue(appliedSuggestions.contains("world"));
+    assertTrue(appliedSuggestions.contains("word"));
+  }
+
+  @Test
+  public void testSetEditingState_clearsOldSuggestionSpans() {
+    ListenableEditingState editingState = new ListenableEditingState(null, new View(ctx));
+
+    List<String> suggestions = Arrays.asList("world", "word");
+    TextInputChannel.SuggestionSpanRepresentation suggestionSpanRep =
+        new TextInputChannel.SuggestionSpanRepresentation(6, 10, suggestions);
+
+    TextInputChannel.TextEditState editStateWithSpans =
+        new TextInputChannel.TextEditState(
+            "hello wrld",
+            0,
+            0,
+            -1,
+            -1,
+            Arrays.asList(suggestionSpanRep));
+
+    editingState.setEditingState(editStateWithSpans);
+
+    assertEquals(1, editingState.getSpans(0, editingState.length(), SuggestionSpan.class).length);
+
+    TextInputChannel.TextEditState editStateWithoutSpans =
+        new TextInputChannel.TextEditState(
+            "hello wrld",
+            0,
+            0,
+            -1,
+            -1,
+            new ArrayList<>());
+
+    editingState.setEditingState(editStateWithoutSpans);
+
+    assertEquals(0, editingState.getSpans(0, editingState.length(), SuggestionSpan.class).length);
+  }
+
+  @Test
+  public void testSetEditingState_handlesNullOrEmptySuggestionSpans() {
+    ListenableEditingState editingState = new ListenableEditingState(null, new View(ctx));
+
+    TextInputChannel.TextEditState editStateNull =
+        new TextInputChannel.TextEditState(
+            "hello wrld",
+            0,
+            0,
+            -1,
+            -1,
+            null);
+
+    editingState.setEditingState(editStateNull);
+    assertEquals(0, editingState.getSpans(0, editingState.length(), SuggestionSpan.class).length);
+
+    TextInputChannel.TextEditState editStateEmpty =
+        new TextInputChannel.TextEditState(
+            "hello wrld",
+            0,
+            0,
+            -1,
+            -1,
+            new ArrayList<>());
+
+    editingState.setEditingState(editStateEmpty);
+    assertEquals(0, editingState.getSpans(0, editingState.length(), SuggestionSpan.class).length);
+  }
+
+  @Test(expected = IndexOutOfBoundsException.class)
+  public void testTextEditStateConstructor_throwsOnInvalidSuggestionSpanRange() {
+    new TextInputChannel.TextEditState(
+        "hello wrld",
+        0,
+        0,
+        -1,
+        -1,
+        Arrays.asList(new TextInputChannel.SuggestionSpanRepresentation(6, 11, Arrays.asList("world"))));
   }
 }

@@ -795,15 +795,44 @@ public class TextInputChannel {
   }
 
   /** State of an on-going text editing session. */
+  public static class SuggestionSpanRepresentation {
+    public final int start;
+    public final int end;
+    @NonNull public final List<String> suggestions;
+
+    public SuggestionSpanRepresentation(int start, int end, @NonNull List<String> suggestions) {
+      this.start = start;
+      this.end = end;
+      this.suggestions = suggestions;
+    }
+  }
+
   public static class TextEditState {
     @NonNull
     public static TextEditState fromJson(@NonNull JSONObject textEditState) throws JSONException {
+      List<SuggestionSpanRepresentation> suggestionSpans = new ArrayList<>();
+      if (textEditState.has("suggestionSpans")) {
+        JSONArray spansJson = textEditState.getJSONArray("suggestionSpans");
+        for (int i = 0; i < spansJson.length(); i++) {
+          JSONObject spanJson = spansJson.getJSONObject(i);
+          int start = spanJson.getInt("start");
+          int end = spanJson.getInt("end");
+          JSONArray suggestionsJson = spanJson.getJSONArray("suggestions");
+          List<String> suggestions = new ArrayList<>();
+          for (int j = 0; j < suggestionsJson.length(); j++) {
+            suggestions.add(suggestionsJson.getString(j));
+          }
+          suggestionSpans.add(new SuggestionSpanRepresentation(start, end, suggestions));
+        }
+      }
+
       return new TextEditState(
           textEditState.getString("text"),
           textEditState.getInt("selectionBase"),
           textEditState.getInt("selectionExtent"),
           textEditState.getInt("composingBase"),
-          textEditState.getInt("composingExtent"));
+          textEditState.getInt("composingExtent"),
+          suggestionSpans);
     }
 
     @NonNull public final String text;
@@ -811,6 +840,7 @@ public class TextInputChannel {
     public final int selectionEnd;
     public final int composingStart;
     public final int composingEnd;
+    public final List<SuggestionSpanRepresentation> suggestionSpans;
 
     public TextEditState(
         @NonNull String text,
@@ -818,6 +848,17 @@ public class TextInputChannel {
         int selectionEnd,
         int composingStart,
         int composingEnd)
+        throws IndexOutOfBoundsException {
+      this(text, selectionStart, selectionEnd, composingStart, composingEnd, null);
+    }
+
+    public TextEditState(
+        @NonNull String text,
+        int selectionStart,
+        int selectionEnd,
+        int composingStart,
+        int composingEnd,
+        List<SuggestionSpanRepresentation> suggestionSpans)
         throws IndexOutOfBoundsException {
 
       if ((selectionStart != -1 || selectionEnd != -1)
@@ -844,11 +885,26 @@ public class TextInputChannel {
         throw new IndexOutOfBoundsException("invalid selection end: " + selectionEnd);
       }
 
+      if (suggestionSpans != null) {
+        for (SuggestionSpanRepresentation span : suggestionSpans) {
+          if (span.start < 0 || span.start > span.end || span.end > text.length()) {
+            throw new IndexOutOfBoundsException(
+                "invalid suggestion span range: ("
+                    + span.start
+                    + ", "
+                    + span.end
+                    + ") for text length: "
+                    + text.length());
+          }
+        }
+      }
+
       this.text = text;
       this.selectionStart = selectionStart;
       this.selectionEnd = selectionEnd;
       this.composingStart = composingStart;
       this.composingEnd = composingEnd;
+      this.suggestionSpans = suggestionSpans;
     }
 
     public boolean hasSelection() {
