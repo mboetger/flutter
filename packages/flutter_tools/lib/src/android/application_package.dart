@@ -125,13 +125,27 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
     }
 
     if (androidProject.isUsingGradle && androidProject.isSupportedVersion) {
-      Directory apkDirectory = getApkDirectory(androidProject.parent);
+      final Directory apkDirectory = getApkDirectory(androidProject.parent);
       if (androidProject.parent.isModule && buildInfo != null) {
         // Module builds output the apk in a subdirectory that corresponds
         // to the buildmode of the apk.
-        apkDirectory = apkDirectory.childDirectory(buildInfo.mode.cliName);
+        // We look in both the buildmode subdirectory and the flattened directory.
+        final File subdirectoryApkFile = apkDirectory
+            .childDirectory(buildInfo.mode.cliName)
+            .childFile(filename);
+        final File flattenedApkFile = apkDirectory.childFile(filename);
+        if (flattenedApkFile.existsSync()) {
+          apkFile = flattenedApkFile;
+        } else if (subdirectoryApkFile.existsSync()) {
+          apkFile = subdirectoryApkFile;
+        } else {
+          // If neither exists (e.g. before the build has run), default to the
+          // unified/flattened path, which aligns with the goal of path unification.
+          apkFile = flattenedApkFile;
+        }
+      } else {
+        apkFile = apkDirectory.childFile(filename);
       }
-      apkFile = apkDirectory.childFile(filename);
       if (apkFile.existsSync()) {
         // Grab information from the .apk. The gradle build script might alter
         // the application Id, so we need to look at what was actually built.
