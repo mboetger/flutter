@@ -4,6 +4,7 @@
 
 package dev.flutter.multipleflutters
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -63,6 +64,55 @@ class MainActivity : FragmentActivity() {
                     12345 + i,
                     flutterFragment
                 ).commit()
+        }
+    }
+
+    override fun onPostResume() {
+        super.onPostResume()
+        for (fragment in supportFragmentManager.fragments) {
+            if (fragment is FlutterFragment) {
+                fragment.onPostResume()
+            }
+        }
+    }
+
+    @Deprecated("Deprecated in parent class, but required for FlutterFragment forwarding")
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        for (fragment in supportFragmentManager.fragments) {
+            if (fragment is FlutterFragment) {
+                fragment.onBackPressed()
+            }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        for (fragment in supportFragmentManager.fragments) {
+            if (fragment is FlutterFragment) {
+                fragment.onUserLeaveHint()
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        for (fragment in supportFragmentManager.fragments) {
+            if (fragment is FlutterFragment) {
+                fragment.onNewIntent(intent)
+            }
+        }
+        super.onNewIntent(intent)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        for (fragment in supportFragmentManager.fragments) {
+            if (fragment is FlutterFragment) {
+                fragment.onRequestPermissionsResult(requestCode, permissions, grantResults)
+            }
         }
     }
 
