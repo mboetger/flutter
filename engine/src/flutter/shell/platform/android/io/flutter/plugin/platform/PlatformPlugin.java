@@ -43,6 +43,7 @@ public class PlatformPlugin {
   @Nullable private final PlatformPluginDelegate platformPluginDelegate;
   private PlatformChannel.SystemChromeStyle currentTheme;
   private int mEnabledOverlays;
+  private boolean mHasEnabledOverlaysBeenSet = false;
   private boolean isEdgeToEdge = false;
   private static final String TAG = "PlatformPlugin";
 
@@ -373,6 +374,7 @@ public class PlatformPlugin {
       // to ensure contrast with buttons on the nav and status bars, unless the contrast is not
       // enforced in the overlay styling.
       isEdgeToEdge = true;
+      mHasEnabledOverlaysBeenSet = true;
       enableEdgeToEdge();
       if (currentTheme != null) {
         setSystemChromeSystemUIOverlayStyle(currentTheme);
@@ -384,6 +386,7 @@ public class PlatformPlugin {
     }
 
     mEnabledOverlays = enabledOverlays;
+    mHasEnabledOverlaysBeenSet = true;
     updateSystemUiOverlays();
   }
 
@@ -420,6 +423,7 @@ public class PlatformPlugin {
     }
 
     mEnabledOverlays = enabledOverlays;
+    mHasEnabledOverlaysBeenSet = true;
     updateSystemUiOverlays();
   }
 
@@ -432,12 +436,16 @@ public class PlatformPlugin {
    * PlatformPlugin}.
    */
   public void updateSystemUiOverlays() {
-    if (isEdgeToEdge) {
-      // In edge-to-edge mode, re-apply the modern API instead of using deprecated
-      // setSystemUiVisibility(), which could interfere with WindowCompat on API < 30.
-      enableEdgeToEdge();
-    } else {
-      activity.getWindow().getDecorView().setSystemUiVisibility(mEnabledOverlays);
+    // Only apply overlays if they have been explicitly configured by the Flutter app,
+    // to avoid polluting or resetting the host Activity's decor view in add-to-app.
+    if (mHasEnabledOverlaysBeenSet) {
+      if (isEdgeToEdge) {
+        // In edge-to-edge mode, re-apply the modern API instead of using deprecated
+        // setSystemUiVisibility(), which could interfere with WindowCompat on API < 30.
+        enableEdgeToEdge();
+      } else {
+        activity.getWindow().getDecorView().setSystemUiVisibility(mEnabledOverlays);
+      }
     }
     if (currentTheme != null) {
       setSystemChromeSystemUIOverlayStyle(currentTheme);

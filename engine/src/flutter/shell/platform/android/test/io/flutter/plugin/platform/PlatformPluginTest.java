@@ -644,6 +644,59 @@ public class PlatformPluginTest {
   }
 
   @SuppressWarnings("deprecation")
+  @Test
+  public void updateSystemUiOverlays_doesNotUnconditionallyOverwriteDecorViewSystemUiVisibility() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+
+    // Create PlatformPlugin. By default, it will not be in edge-to-edge mode.
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // Trigger updateSystemUiOverlays (e.g., when FlutterFragment/FlutterActivity onPostResume is
+    // called).
+    platformPlugin.updateSystemUiOverlays();
+
+    // Under the expected correct behavior for add-to-app, resuming the Flutter fragment
+    // should NOT unconditionally overwrite the shared Activity window's decor view with the
+    // default layout flags (SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN) unless specifically requested.
+    // However, the buggy code does exactly this, which will cause this verification to fail.
+    int expectedDefaultFlags =
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+    verify(fakeDecorView, never()).setSystemUiVisibility(expectedDefaultFlags);
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void updateSystemUiOverlays_restoresSystemUiVisibilityIfExplicitlySet() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // 1. Explicitly request a system UI mode (this must set mHasEnabledOverlaysBeenSet = true)
+    platformPlugin.mPlatformMessageHandler.showSystemUiMode(PlatformChannel.SystemUiMode.LEAN_BACK);
+    int expectedFlags =
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN;
+    verify(fakeDecorView).setSystemUiVisibility(expectedFlags);
+    clearInvocations(fakeDecorView);
+
+    // 2. Trigger updateSystemUiOverlays (e.g. on resume)
+    platformPlugin.updateSystemUiOverlays();
+
+    // 3. Verify that the custom flags are correctly re-applied/restored
+    verify(fakeDecorView).setSystemUiVisibility(expectedFlags);
+  }
+
+  @SuppressWarnings("deprecation")
   @Config(sdk = API_LEVELS.API_29)
   @Test
   public void switchFromAnyModeToEdgeToEdge_clearsSystemUiVisibility() {
