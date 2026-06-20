@@ -34,8 +34,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
 /**
  * Flutter default implementation of DeferredComponentManager that downloads deferred component from
@@ -58,6 +60,7 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
   private @NonNull SparseIntArray sessionIdToLoadingUnitId;
   private @NonNull SparseArray<String> sessionIdToState;
   private @NonNull Map<String, Integer> nameToSessionId;
+  private @NonNull Set<String> loadedComponents;
 
   protected @NonNull SparseArray<String> loadingUnitIdToComponentNames;
   protected @NonNull SparseArray<String> loadingUnitIdToSharedLibraryNames;
@@ -98,18 +101,8 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
                   String.format(
                       "Module \"%s\" (sessionId %d) install successfully.",
                       sessionIdToName.get(sessionId), sessionId));
-              loadAssets(sessionIdToLoadingUnitId.get(sessionId), sessionIdToName.get(sessionId));
-              // We only load Dart shared lib for the loading unit id requested. Other loading units
-              // (if present) in the deferred component are not loaded, but can be loaded by
-              // calling again with their loading unit id. If no valid loadingUnitId was included in
-              // the installation request such as for an asset only feature, then we can skip this.
-              if (sessionIdToLoadingUnitId.get(sessionId) > 0) {
-                loadDartLibrary(
-                    sessionIdToLoadingUnitId.get(sessionId), sessionIdToName.get(sessionId));
-              }
-              if (channel != null) {
-                channel.completeInstallSuccess(sessionIdToName.get(sessionId));
-              }
+              loadAssetsAndDartLibrary(
+                  sessionIdToLoadingUnitId.get(sessionId), sessionIdToName.get(sessionId));
               sessionIdToName.delete(sessionId);
               sessionIdToLoadingUnitId.delete(sessionId);
               sessionIdToState.put(sessionId, "installed");
@@ -211,6 +204,7 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
     sessionIdToLoadingUnitId = new SparseIntArray();
     sessionIdToState = new SparseArray<>();
     nameToSessionId = new HashMap<>();
+    loadedComponents = new HashSet<>();
 
     loadingUnitIdToComponentNames = new SparseArray<>();
     loadingUnitIdToSharedLibraryNames = new SparseArray<>();
@@ -288,6 +282,17 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
     }
   }
 
+  private void loadAssetsAndDartLibrary(int loadingUnitId, @NonNull String componentName) {
+    loadAssets(loadingUnitId, componentName);
+    if (loadingUnitId > 0) {
+      loadDartLibrary(loadingUnitId, componentName);
+    }
+    loadedComponents.add(componentName);
+    if (channel != null) {
+      channel.completeInstallSuccess(componentName);
+    }
+  }
+
   public void installDeferredComponent(int loadingUnitId, @Nullable String componentName) {
     String resolvedComponentName =
         componentName != null ? componentName : loadingUnitIdToComponentNames.get(loadingUnitId);
@@ -301,6 +306,17 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
     if (resolvedComponentName.isEmpty() && loadingUnitId > 0) {
       // No need to load assets as base assets are already loaded.
       loadDartLibrary(loadingUnitId, resolvedComponentName);
+      return;
+    }
+
+    if (splitInstallManager.getInstalledModules().contains(resolvedComponentName)) {
+      if (loadedComponents.contains(resolvedComponentName)) {
+        if (channel != null) {
+          channel.completeInstallSuccess(resolvedComponentName);
+        }
+        return;
+      }
+      loadAssetsAndDartLibrary(loadingUnitId, resolvedComponentName);
       return;
     }
 
@@ -369,6 +385,9 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
       Log.e(
           TAG, "Deferred component name was null and could not be resolved from loading unit id.");
       return "unknown";
+    }
+    if (loadedComponents.contains(resolvedComponentName)) {
+      return "installed";
     }
     if (!nameToSessionId.containsKey(resolvedComponentName)) {
       if (splitInstallManager.getInstalledModules().contains(resolvedComponentName)) {
@@ -488,6 +507,7 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
     if (nameToSessionId.get(resolvedComponentName) != null) {
       sessionIdToState.delete(nameToSessionId.get(resolvedComponentName));
     }
+    loadedComponents.remove(resolvedComponentName);
     return true;
   }
 

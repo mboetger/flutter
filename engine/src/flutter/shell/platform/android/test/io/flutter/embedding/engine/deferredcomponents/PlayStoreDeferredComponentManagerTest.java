@@ -12,6 +12,7 @@ import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
@@ -23,6 +24,14 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import com.google.android.play.core.splitinstall.SplitInstallManager;
+import com.google.android.play.core.tasks.Task;
+import com.google.android.play.core.tasks.OnSuccessListener;
+import io.flutter.embedding.engine.systemchannels.DeferredComponentChannel;
+import java.lang.reflect.Field;
+import java.util.HashSet;
+import java.util.Set;
+
 import io.flutter.embedding.engine.FlutterEngineFlags;
 import io.flutter.embedding.engine.FlutterJNI;
 import java.io.File;
@@ -343,5 +352,77 @@ public class PlayStoreDeferredComponentManagerTest {
     Context spyContext = createSpyContext(bundle);
     TestPlayStoreDeferredComponentManager playStoreManager =
         new TestPlayStoreDeferredComponentManager(spyContext, jni);
+  }
+
+  @Test
+  public void installDeferredComponent_whenAlreadyInstalled_loadsImmediately() throws Exception {
+    TestFlutterJNI jni = new TestFlutterJNI();
+    Bundle bundle = new Bundle();
+    bundle.putString(PlayStoreDeferredComponentManager.MAPPING_KEY, "123:TestModuleName");
+    Context spyContext = createSpyContext(bundle);
+    doReturn(null).when(spyContext).getAssets();
+
+    String soTestFilename = "libapp.so-123.part.so";
+    String soTestPath = "test/path/" + soTestFilename;
+    doReturn(new File(soTestPath)).when(spyContext).getFilesDir();
+
+    // Create a real manager instance
+    PlayStoreDeferredComponentManager playStoreManager =
+        new PlayStoreDeferredComponentManager(spyContext, jni);
+    jni.setDeferredComponentManager(playStoreManager);
+
+    // Mock and set the DeferredComponentChannel to verify the future/method channel completes
+    DeferredComponentChannel mockChannel = mock(DeferredComponentChannel.class);
+    playStoreManager.setDeferredComponentChannel(mockChannel);
+
+    // Mock SplitInstallManager
+    SplitInstallManager mockSplitInstallManager = mock(SplitInstallManager.class);
+    Set<String> installedModules = new HashSet<>();
+    installedModules.add("TestModuleName");
+    when(mockSplitInstallManager.getInstalledModules()).thenReturn(installedModules);
+
+    // Mock startInstall to return a mocked Task that succeeds immediately (simulate play store return)
+    @SuppressWarnings("unchecked")
+    Task<Integer> mockTask = mock(Task.class);
+    when(mockTask.addOnSuccessListener(any())).thenAnswer(invocation -> {
+      OnSuccessListener<Integer> listener = invocation.getArgument(0);
+      listener.onSuccess(1);
+      return mockTask;
+    });
+    when(mockTask.addOnFailureListener(any())).thenReturn(mockTask);
+    when(mockSplitInstallManager.startInstall(any())).thenReturn(mockTask);
+
+    // Inject our mocked SplitInstallManager using reflection
+    Field splitInstallManagerField =
+        PlayStoreDeferredComponentManager.class.getDeclaredField("splitInstallManager");
+    splitInstallManagerField.setAccessible(true);
+    splitInstallManagerField.set(playStoreManager, mockSplitInstallManager);
+
+    // Run the test
+    playStoreManager.installDeferredComponent(123, "TestModuleName");
+
+    // Assert that the manager immediately loaded the library and assets
+    assertEquals(1, jni.loadDartDeferredLibraryCalled);
+    assertEquals(1, jni.updateAssetManagerCalled);
+    assertEquals(0, jni.deferredComponentInstallFailureCalled);
+
+    // Assert that the channel was notified of success, completing the Dart future
+    verify(mockChannel).completeInstallSuccess("TestModuleName");
+
+    // Assert that the state is "installed"
+    assertEquals("installed", playStoreManager.getDeferredComponentInstallState(123, "TestModuleName"));
+
+    // Reset mock channel invocations to isolate the second call
+    org.mockito.Mockito.clearInvocations(mockChannel);
+
+    // Call install again for the same component
+    playStoreManager.installDeferredComponent(123, "TestModuleName");
+
+    // Assert that JNI load functions were NOT called again (counts remain at 1)
+    assertEquals(1, jni.loadDartDeferredLibraryCalled);
+    assertEquals(1, jni.updateAssetManagerCalled);
+
+    // Assert that the channel was still notified of success for the second request
+    verify(mockChannel).completeInstallSuccess("TestModuleName");
   }
 }
