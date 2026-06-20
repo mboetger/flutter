@@ -509,6 +509,21 @@ import java.util.Set;
               + " attached.");
     }
   }
+
+  @Override
+  public void onWindowFocusChanged(boolean hasFocus) {
+    if (isAttachedToActivity()) {
+      try (TraceSection e =
+          TraceSection.scoped("FlutterEngineConnectionRegistry#onWindowFocusChanged")) {
+        activityPluginBinding.onWindowFocusChanged(hasFocus);
+      }
+    } else {
+      Log.e(
+          TAG,
+          "Attempted to notify ActivityAware plugins of onWindowFocusChanged, but no Activity was"
+              + " attached.");
+    }
+  }
   // ------- End ActivityControlSurface -----
 
   // ----- Start ServiceControlSurface ----
@@ -847,7 +862,7 @@ import java.util.Set;
 
     void onWindowFocusChanged(boolean hasFocus) {
       for (io.flutter.plugin.common.PluginRegistry.WindowFocusChangedListener listener :
-          onWindowFocusChangedListeners) {
+          new HashSet<>(onWindowFocusChangedListeners)) {
         listener.onWindowFocusChanged(hasFocus);
       }
     }

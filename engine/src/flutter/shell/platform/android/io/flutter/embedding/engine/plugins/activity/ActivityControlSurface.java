@@ -132,4 +132,13 @@ public interface ActivityControlSurface {
    * in the {@link android.app.Activity} or {@code Fragment}.
    */
   void onRestoreInstanceState(@Nullable Bundle bundle);
+
+  /**
+   * Call this method from the {@link android.app.Activity} or {@code Fragment} that is attached to
+   * this {@code ActivityControlSurface}'s {@link io.flutter.embedding.engine.FlutterEngine} when
+   * the associated window focus changes.
+   *
+   * @param hasFocus True if the window has focus, false otherwise.
+   */
+  void onWindowFocusChanged(boolean hasFocus);
 }

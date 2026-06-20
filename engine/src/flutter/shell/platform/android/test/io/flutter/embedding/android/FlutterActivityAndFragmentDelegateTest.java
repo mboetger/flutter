@@ -169,6 +169,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsInactive();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsPaused();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsDetached();
+            verify(mockFlutterEngine.getActivityControlSurface(), times(1)).onWindowFocusChanged(false);
 
             // When the app regains focus, it should go to resumed again.
             delegate.onWindowFocusChanged(true);
@@ -178,6 +179,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsInactive();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsPaused();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsDetached();
+            verify(mockFlutterEngine.getActivityControlSurface(), times(1)).onWindowFocusChanged(true);
 
             // When the Activity/Fragment is paused, an inactive message should have been sent to
             // Flutter.
@@ -245,6 +247,8 @@ public class FlutterActivityAndFragmentDelegateTest {
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsPaused();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsInactive();
             verify(mockFlutterEngine.getLifecycleChannel(), never()).appIsDetached();
+            verify(mockFlutterEngine.getActivityControlSurface(), times(1)).onWindowFocusChanged(false);
+            verify(mockFlutterEngine.getActivityControlSurface(), times(1)).onWindowFocusChanged(true);
           });
     }
   }

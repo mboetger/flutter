@@ -173,6 +173,65 @@ public class FlutterEngineConnectionRegistryTest {
     verify(platformViewsController).setSoftwareRendering(true);
   }
 
+  @Test
+  public void windowFocusChangedListenerReceivesEvents() {
+    Context context = mock(Context.class);
+    FlutterEngine flutterEngine = mock(FlutterEngine.class);
+    PlatformViewsController platformViewsController = mock(PlatformViewsController.class);
+    when(flutterEngine.getPlatformViewsController()).thenReturn(platformViewsController);
+    PlatformViewsController2 platformViewsController2 = mock(PlatformViewsController2.class);
+    when(flutterEngine.getPlatformViewsController2()).thenReturn(platformViewsController2);
+    PlatformViewsControllerDelegator platformViewsControllerDelegator =
+        mock(PlatformViewsControllerDelegator.class);
+    when(flutterEngine.getPlatformViewsControllerDelegator())
+        .thenReturn(platformViewsControllerDelegator);
+
+    PackageManager packageManager = mock(PackageManager.class);
+    String packageName = "io.flutter.test";
+    ApplicationInfo applicationInfo = new ApplicationInfo();
+    applicationInfo.metaData = new Bundle();
+    when(context.getPackageName()).thenReturn(packageName);
+    when(context.getPackageManager()).thenReturn(packageManager);
+    try {
+      when(packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA))
+          .thenReturn(applicationInfo);
+    } catch (PackageManager.NameNotFoundException e) {
+      fail("Mocking application info threw an exception");
+    }
+
+    FlutterLoader flutterLoader = mock(FlutterLoader.class);
+
+    ExclusiveAppComponent<Activity> appComponent = mock(ExclusiveAppComponent.class);
+    Activity activity = mock(Activity.class);
+    when(appComponent.getAppComponent()).thenReturn(activity);
+    when(activity.getIntent()).thenReturn(mock(Intent.class));
+
+    Lifecycle lifecycle = mock(Lifecycle.class);
+
+    FlutterEngineConnectionRegistry registry =
+        new FlutterEngineConnectionRegistry(context, flutterEngine, flutterLoader, null);
+    FakeActivityAwareFlutterPlugin fakePlugin = new FakeActivityAwareFlutterPlugin();
+    registry.add(fakePlugin);
+    registry.attachToActivity(appComponent, lifecycle);
+
+    PluginRegistry.WindowFocusChangedListener mockListener =
+        mock(PluginRegistry.WindowFocusChangedListener.class);
+    fakePlugin.binding.addOnWindowFocusChangedListener(mockListener);
+
+    // Trigger focus change
+    registry.onWindowFocusChanged(false);
+    verify(mockListener, times(1)).onWindowFocusChanged(false);
+
+    registry.onWindowFocusChanged(true);
+    verify(mockListener, times(1)).onWindowFocusChanged(true);
+
+    // Remove listener
+    fakePlugin.binding.removeOnWindowFocusChangedListener(mockListener);
+    registry.onWindowFocusChanged(false);
+    // Should still be 1 (not updated to 2) from the previous call
+    verify(mockListener, times(1)).onWindowFocusChanged(false);
+  }
+
   private static class FakeFlutterPlugin implements FlutterPlugin {
     public int attachmentCallCount = 0;
     public int detachmentCallCount = 0;
