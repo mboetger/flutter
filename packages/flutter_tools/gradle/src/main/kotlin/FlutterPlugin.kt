@@ -658,7 +658,7 @@ class FlutterPlugin : Plugin<Project> {
             val isUsedAsSubproject: Boolean =
                 packageAssets != null && cleanPackageAssets != null && !isBuildingAar
 
-            val variantBuildMode: String = FlutterPluginUtils.buildModeFor(variant.buildType)
+            val variantBuildMode: String = FlutterPluginUtils.buildModeFor(project, variant.buildType)
             val flavorValue: String = variant.flavorName
             val taskName: String =
                 FlutterPluginUtils.toCamelCase(

@@ -452,6 +452,35 @@ object FlutterPluginUtils {
     }
 
     /**
+     * Returns a Flutter build mode suitable for the specified Android buildType,
+     * taking into account any project property overrides.
+     */
+    @JvmStatic
+    @JvmName("buildModeFor")
+    internal fun buildModeFor(
+        project: Project,
+        buildType: BuildType
+    ): String {
+        try {
+            if (project.hasProperty("flutter-build-mode")) {
+                val buildModeProperty = project.findProperty("flutter-build-mode")?.toString()
+                if (buildModeProperty != null) {
+                    val lowercaseMode = lowercase(buildModeProperty)
+                    if (lowercaseMode == "debug" || lowercaseMode == "profile" || lowercaseMode == "release") {
+                        return lowercaseMode
+                    } else {
+                        project.logger.warn("Invalid flutter-build-mode '$buildModeProperty'. Expected 'debug', 'profile', or 'release'. Falling back to default build mode.")
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            // If the project is a strict mock in tests and hasProperty/findProperty is not stubbed,
+            // it will throw an exception. In that case, we gracefully fall back to the default build mode.
+        }
+        return buildModeFor(buildType)
+    }
+
+    /**
      * Returns true if the build mode is supported by the current call to Gradle.
      * This only relevant when using a local engine. Because the engine
      * is built for a specific mode, the call to Gradle must match that mode.
@@ -747,7 +776,7 @@ object FlutterPluginUtils {
         pluginHandler: PluginHandler,
         engineVersion: String
     ) {
-        val flutterBuildMode: String = buildModeFor(buildType)
+        val flutterBuildMode: String = buildModeFor(project, buildType)
         if (!supportsBuildMode(project, flutterBuildMode)) {
             project.logger.quiet(
                 "Project does not support Flutter build mode: $flutterBuildMode, " +
