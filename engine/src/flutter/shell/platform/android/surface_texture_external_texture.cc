@@ -132,10 +132,14 @@ bool SurfaceTextureExternalTexture::ShouldUpdate() {
 }
 
 void SurfaceTextureExternalTexture::Update() {
-  jni_facade_->SurfaceTextureUpdateTexImage(
-      fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
-  transform_ = jni_facade_->SurfaceTextureGetTransformMatrix(
-      fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
+  // Only retrieve the transform matrix if the texture update succeeded.
+  // This avoids unnecessary JNI calls on failure and preserves the last
+  // successful transform matrix to prevent visual layout regressions.
+  if (jni_facade_->SurfaceTextureUpdateTexImage(
+          fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_))) {
+    transform_ = jni_facade_->SurfaceTextureGetTransformMatrix(
+        fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
+  }
 }
 
 const SkM44& SurfaceTextureExternalTexture::GetCurrentUVTransformation() const {

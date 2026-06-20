@@ -114,7 +114,7 @@ class PlatformViewAndroidJNI {
   /// @brief      Updates the texture image to the most recent frame from the
   ///             image stream.
   ///
-  virtual void SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) = 0;
+  virtual bool SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Gets the transform matrix from the SurfaceTexture.

@@ -1561,7 +1561,7 @@ void PlatformViewAndroidJNIImpl::SurfaceTextureAttachToGLContext(
   env->CallVoidMethod(surface_texture_local_ref.obj(),
                       g_attach_to_gl_context_method, textureId);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 bool PlatformViewAndroidJNIImpl::SurfaceTextureShouldUpdate(
@@ -1587,25 +1587,25 @@ bool PlatformViewAndroidJNIImpl::SurfaceTextureShouldUpdate(
   return shouldUpdate;
 }
 
-void PlatformViewAndroidJNIImpl::SurfaceTextureUpdateTexImage(
+bool PlatformViewAndroidJNIImpl::SurfaceTextureUpdateTexImage(
     JavaLocalRef surface_texture) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
 
   if (surface_texture.is_null()) {
-    return;
+    return false;
   }
 
   fml::jni::ScopedJavaLocalRef<jobject> surface_texture_local_ref(
       env, env->CallObjectMethod(surface_texture.obj(),
                                  g_java_weak_reference_get_method));
   if (surface_texture_local_ref.is_null()) {
-    return;
+    return false;
   }
 
   env->CallVoidMethod(surface_texture_local_ref.obj(),
                       g_update_tex_image_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  return fml::jni::CheckException(env);
 }
 
 SkM44 PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
@@ -1628,7 +1628,9 @@ SkM44 PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
 
   env->CallVoidMethod(surface_texture_local_ref.obj(),
                       g_get_transform_matrix_method, transformMatrix.obj());
-  FML_CHECK(fml::jni::CheckException(env));
+  if (!fml::jni::CheckException(env)) {
+    return {};
+  }
 
   float* m = env->GetFloatArrayElements(transformMatrix.obj(), nullptr);
 
@@ -1658,7 +1660,7 @@ void PlatformViewAndroidJNIImpl::SurfaceTextureDetachFromGLContext(
   env->CallVoidMethod(surface_texture_local_ref.obj(),
                       g_detach_from_gl_context_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 JavaLocalRef

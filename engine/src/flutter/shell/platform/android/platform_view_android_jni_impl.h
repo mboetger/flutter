@@ -51,7 +51,7 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   bool SurfaceTextureShouldUpdate(JavaLocalRef surface_texture) override;
 
-  void SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) override;
+  bool SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) override;
 
   SkM44 SurfaceTextureGetTransformMatrix(JavaLocalRef surface_texture) override;
 

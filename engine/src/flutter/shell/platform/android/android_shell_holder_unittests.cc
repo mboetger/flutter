@@ -52,7 +52,7 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
               SurfaceTextureShouldUpdate,
               (JavaLocalRef surface_texture),
               (override));
-  MOCK_METHOD(void,
+  MOCK_METHOD(bool,
               SurfaceTextureUpdateTexImage,
               (JavaLocalRef surface_texture),
               (override));
