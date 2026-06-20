@@ -2402,12 +2402,12 @@ class TextSelectionGestureDetectorBuilder {
   // inversion of the base and offset happens.
   TextSelection? _dragStartSelection;
 
-  // For iOS long press behavior when the field is not focused. iOS uses this value
-  // to determine if a long press began on a field that was not focused.
+  // Tracks whether a long press gesture began on a field that was not focused.
   //
   // If the field was not focused when the long press began, a long press will select
   // the word and a long press move will select word-by-word. If the field was
-  // focused, the cursor moves to the long press position.
+  // focused, the cursor moves to the long press position (collapsing the selection
+  // and making the cursor/handles movable on platforms like Android and iOS).
   bool _longPressStartedWithoutFocus = false;
 
   /// Handler for [TextSelectionGestureDetector.onTapTrackStart].
@@ -2768,6 +2768,9 @@ class TextSelectionGestureDetectorBuilder {
       case TargetPlatform.fuchsia:
       case TargetPlatform.linux:
       case TargetPlatform.windows:
+        if (!renderEditable.hasFocus) {
+          _longPressStartedWithoutFocus = true;
+        }
         renderEditable.selectWord(cause: SelectionChangedCause.longPress);
         if (editableText.context.mounted) {
           Feedback.forLongPress(editableText.context);
@@ -2833,12 +2836,22 @@ class TextSelectionGestureDetectorBuilder {
       case TargetPlatform.fuchsia:
       case TargetPlatform.linux:
       case TargetPlatform.windows:
-        renderEditable.selectWordsInRange(
-          from:
-              details.globalPosition - details.offsetFromOrigin - editableOffset - scrollableOffset,
-          to: details.globalPosition,
-          cause: SelectionChangedCause.longPress,
-        );
+        if (_longPressStartedWithoutFocus || renderEditable.readOnly) {
+          renderEditable.selectWordsInRange(
+            from:
+                details.globalPosition -
+                details.offsetFromOrigin -
+                editableOffset -
+                scrollableOffset,
+            to: details.globalPosition,
+            cause: SelectionChangedCause.longPress,
+          );
+        } else {
+          renderEditable.selectPositionAt(
+            from: details.globalPosition,
+            cause: SelectionChangedCause.longPress,
+          );
+        }
     }
 
     _showMagnifierIfSupportedByPlatform(details.globalPosition);
