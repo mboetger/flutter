@@ -8,7 +8,6 @@
         https://developer.android.com/studio/write/java8-support.html#supported_features -->
         <ignore regexp="^Try-with-resources requires API level 19"/>
     </issue>
-    <issue id="UnknownNullness" severity="ignore" />
     <issue id="SyntheticAccessor" severity="ignore" />
     <!-- Flutter provides custom splash screens as a feature -->
     <issue id="CustomSplashScreen" severity="ignore" />

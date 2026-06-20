@@ -1,27 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 8.3.0 [11479570] " type="baseline" client="" dependencies="true" name="" variant="all" version="8.3.0 [11479570] ">
-
-    <issue
-        id="HardcodedDebugMode"
-        message="Avoid hardcoding the debug mode; leaving it out allows debug and release builds to automatically assign one"
-        errorLine1="    &lt;application android:label=&quot;Flutter Shell&quot; android:name=&quot;FlutterApplication&quot; android:debuggable=&quot;true&quot;>"
-        errorLine2="                                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../../../flutter/shell/platform/android/AndroidManifest.xml"
-            line="13"
-            column="82"/>
-    </issue>
-
-    <issue
-        id="ClickableViewAccessibility"
-        message="Custom view `FlutterView` overrides `onTouchEvent` but not `performClick`"
-        errorLine1="  public boolean onTouchEvent(MotionEvent event) {"
-        errorLine2="                 ~~~~~~~~~~~~">
-        <location
-            file="../../../flutter/shell/platform/android/io/flutter/view/FlutterView.java"
-            line="474"
-            column="18"/>
-    </issue>
+<issues format="6" by="lint 9.0.0 [14742923] " type="baseline" client="" dependencies="true" name="" variant="all" version="9.0.0 [14742923] ">
 
     <issue
         id="ClickableViewAccessibility"
@@ -30,8 +8,2978 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
-            line="896"
+            line="966"
             column="18"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public AccessibilityNodeInfo obtainAccessibilityNodeInfo(View rootView) {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="765"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public AccessibilityNodeInfo obtainAccessibilityNodeInfo(View rootView) {"
+        errorLine2="                                                           ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="765"
+            column="60"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public AccessibilityNodeInfo obtainAccessibilityNodeInfo(View rootView, int virtualViewId) {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="770"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public AccessibilityNodeInfo obtainAccessibilityNodeInfo(View rootView, int virtualViewId) {"
+        errorLine2="                                                           ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="770"
+            column="60"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualViewId) {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="801"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public AccessibilityNodeInfo findFocus(int focus) {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="1760"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean onAccessibilityHoverEvent(MotionEvent event) {"
+        errorLine2="                                           ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="1845"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean onAccessibilityHoverEvent(MotionEvent event, boolean ignorePlatformViews) {"
+        errorLine2="                                           ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="1863"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public AccessibilityEvent obtainAccessibilityEvent(int eventType) {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="2319"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      View embeddedView, View eventOrigin, AccessibilityEvent event) {"
+        errorLine2="      ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="3362"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      View embeddedView, View eventOrigin, AccessibilityEvent event) {"
+        errorLine2="                         ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="3362"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      View embeddedView, View eventOrigin, AccessibilityEvent event) {"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/AccessibilityBridge.java"
+            line="3362"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      BinaryMessenger.TaskQueue taskQueue) {"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/BasicMessageChannel.java"
+            line="68"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ByteBuffer encodeMessage(@Nullable ByteBuffer message) {"
+        errorLine2="         ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/BinaryCodec.java"
+            line="49"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ByteBuffer decodeMessage(@Nullable ByteBuffer message) {"
+        errorLine2="         ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/BinaryCodec.java"
+            line="54"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public TaskQueueOptions setIsSerial(boolean isSerial) {"
+        errorLine2="           ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/BinaryMessenger.java"
+            line="53"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  default TaskQueue makeBackgroundTaskQueue() {"
+        errorLine2="          ~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/BinaryMessenger.java"
+            line="67"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  default TaskQueue makeBackgroundTaskQueue(TaskQueueOptions options) {"
+        errorLine2="          ~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/BinaryMessenger.java"
+            line="79"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  default TaskQueue makeBackgroundTaskQueue(TaskQueueOptions options) {"
+        errorLine2="                                            ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/BinaryMessenger.java"
+            line="79"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public final Object getSystemService(String name) {"
+        errorLine2="               ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/test/io/flutter/CustomShadowContextImpl.java"
+            line="14"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public final Object getSystemService(String name) {"
+        errorLine2="                                       ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/test/io/flutter/CustomShadowContextImpl.java"
+            line="14"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public TaskQueue makeBackgroundTaskQueue(TaskQueueOptions options) {"
+        errorLine2="         ~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/dart/DartExecutor.java"
+            line="208"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public TaskQueue makeBackgroundTaskQueue(TaskQueueOptions options) {"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/dart/DartExecutor.java"
+            line="208"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void completeInstallSuccess(String componentName) {"
+        errorLine2="                                     ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/DeferredComponentChannel.java"
+            line="109"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void completeInstallError(String componentName, String errorMessage) {"
+        errorLine2="                                   ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/DeferredComponentChannel.java"
+            line="126"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void completeInstallError(String componentName, String errorMessage) {"
+        errorLine2="                                                         ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/DeferredComponentChannel.java"
+            line="126"
+            column="58"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  void setJNI(FlutterJNI flutterJNI);"
+        errorLine2="              ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="49"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  void setDeferredComponentChannel(DeferredComponentChannel channel);"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="70"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  void installDeferredComponent(int loadingUnitId, String componentName);"
+        errorLine2="                                                   ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="125"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  String getDeferredComponentInstallState(int loadingUnitId, String componentName);"
+        errorLine2="  ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="160"
+            column="3"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  String getDeferredComponentInstallState(int loadingUnitId, String componentName);"
+        errorLine2="                                                             ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="160"
+            column="62"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  void loadAssets(int loadingUnitId, String componentName);"
+        errorLine2="                                     ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="182"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  void loadDartLibrary(int loadingUnitId, String componentName);"
+        errorLine2="                                          ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="209"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  boolean uninstallDeferredComponent(int loadingUnitId, String componentName);"
+        errorLine2="                                                        ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/deferredcomponents/DeferredComponentManager.java"
+            line="233"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ErrorLogResult(String tag) {"
+        errorLine2="                        ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/ErrorLogResult.java"
+            line="18"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ErrorLogResult(String tag, int level) {"
+        errorLine2="                        ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/ErrorLogResult.java"
+            line="22"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String errorCode, @Nullable String errorMessage, @Nullable Object errorDetails) {"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/ErrorLogResult.java"
+            line="32"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public EventChannel(BinaryMessenger messenger, String name) {"
+        errorLine2="                      ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="47"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public EventChannel(BinaryMessenger messenger, String name) {"
+        errorLine2="                                                 ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="47"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public EventChannel(BinaryMessenger messenger, String name, MethodCodec codec) {"
+        errorLine2="                      ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="59"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public EventChannel(BinaryMessenger messenger, String name, MethodCodec codec) {"
+        errorLine2="                                                 ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="59"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public EventChannel(BinaryMessenger messenger, String name, MethodCodec codec) {"
+        errorLine2="                                                              ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="59"
+            column="63"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      BinaryMessenger messenger,"
+        errorLine2="      ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="75"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String name,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="76"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      MethodCodec codec,"
+        errorLine2="      ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="77"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      BinaryMessenger.TaskQueue taskQueue) {"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="78"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void setStreamHandler(final StreamHandler handler) {"
+        errorLine2="                                     ~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="107"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void onListen(Object arguments, EventSink events);"
+        errorLine2="                  ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="139"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void onListen(Object arguments, EventSink events);"
+        errorLine2="                                    ~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="139"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void onCancel(Object arguments);"
+        errorLine2="                  ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="153"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void success(Object event);"
+        errorLine2="                 ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="167"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void error(String errorCode, String errorMessage, Object errorDetails);"
+        errorLine2="               ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="176"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void error(String errorCode, String errorMessage, Object errorDetails);"
+        errorLine2="                                 ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="176"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void error(String errorCode, String errorMessage, Object errorDetails);"
+        errorLine2="                                                      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/common/EventChannel.java"
+            line="176"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static CachedEngineIntentBuilder withCachedEngine(@NonNull String cachedEngineId) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="361"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public CachedEngineIntentBuilder destroyEngineWithActivity(boolean destroyEngineWithActivity) {"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="405"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static NewEngineInGroupIntentBuilder withNewEngineInGroup(@NonNull String engineGroupId) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="474"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  @VisibleForTesting protected FlutterActivityAndFragmentDelegate delegate;"
+        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="597"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ExclusiveAppComponent&lt;Activity> getExclusiveAppComponent() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="627"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected OnBackInvokedCallback getOnBackInvokedCallback() {"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="695"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected void onSaveInstanceState(Bundle outState) {"
+        errorLine2="                                     ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="871"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public String getInitialRoute() {"
+        errorLine2="         ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivity.java"
+            line="1189"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    FlutterActivityAndFragmentDelegate createDelegate(FlutterActivityAndFragmentDelegate.Host host);"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivityAndFragmentDelegate.java"
+            line="86"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    FlutterActivityAndFragmentDelegate createDelegate(FlutterActivityAndFragmentDelegate.Host host);"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivityAndFragmentDelegate.java"
+            line="86"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static boolean deepLinkEnabled(Bundle metaData) {"
+        errorLine2="                                        ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterActivityLaunchConfigs.java"
+            line="55"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String aotSharedLibraryName,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/loader/FlutterApplicationInfo.java"
+            line="23"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String vmSnapshotData,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/loader/FlutterApplicationInfo.java"
+            line="24"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String isolateSnapshotData,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/loader/FlutterApplicationInfo.java"
+            line="25"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String flutterAssetsDir,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/loader/FlutterApplicationInfo.java"
+            line="26"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String domainNetworkPolicy,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/loader/FlutterApplicationInfo.java"
+            line="27"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String nativeLibraryDir,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/loader/FlutterApplicationInfo.java"
+            line="28"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static FlutterCallbackInformation lookupCallbackInformation(long handle) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/FlutterCallbackInformation.java"
+            line="27"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Flag getFlagByEngineArgument(String arg) {"
+        errorLine2="                ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java"
+            line="510"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Flag getFlagByEngineArgument(String arg) {"
+        errorLine2="                                             ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java"
+            line="510"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Flag getFlagFromIntentKey(String intentKey) {"
+        errorLine2="                ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java"
+            line="525"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Flag getFlagFromIntentKey(String intentKey) {"
+        errorLine2="                                          ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java"
+            line="525"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static boolean isDisabled(Flag flag) {"
+        errorLine2="                                   ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java"
+            line="539"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Flag getReplacementFlagIfDeprecated(Flag flag) {"
+        errorLine2="                ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java"
+            line="544"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Flag getReplacementFlagIfDeprecated(Flag flag) {"
+        errorLine2="                                                    ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineFlags.java"
+            line="544"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterEngine createAndRunDefaultEngine(@NonNull Context context) {"
+        errorLine2="         ~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="81"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterEngine createAndRunEngine("
+        errorLine2="         ~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="98"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterEngine createAndRunEngine("
+        errorLine2="         ~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="117"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterEngine createAndRunEngine(@NonNull Options options) {"
+        errorLine2="         ~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="139"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Context getContext() {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="231"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public DartEntrypoint getDartEntrypoint() {"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="240"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public String getInitialRoute() {"
+        errorLine2="           ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="248"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public List&lt;String> getDartEntrypointArgs() {"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="253"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public PlatformViewsController getPlatformViewsController() {"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="258"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setDartEntrypoint(DartEntrypoint dartEntrypoint) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="286"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setDartEntrypoint(DartEntrypoint dartEntrypoint) {"
+        errorLine2="                                     ~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="286"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setInitialRoute(String initialRoute) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="297"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setInitialRoute(String initialRoute) {"
+        errorLine2="                                   ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="297"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setDartEntrypointArgs(List&lt;String> dartEntrypointArgs) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="307"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setDartEntrypointArgs(List&lt;String> dartEntrypointArgs) {"
+        errorLine2="                                         ~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="307"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setPlatformViewsController("
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="317"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setAutomaticallyRegisterPlugins(boolean automaticallyRegisterPlugins) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="330"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Options setWaitForRestorationData(boolean waitForRestorationData) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterEngineGroup.java"
+            line="343"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected void starting(Description description) {"
+        errorLine2="                          ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/test/io/flutter/embedding/engine/renderer/FlutterEngineRule.java"
+            line="32"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected void finished(Description description) {"
+        errorLine2="                          ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/test/io/flutter/embedding/engine/renderer/FlutterEngineRule.java"
+            line="49"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterActivityAndFragmentDelegate createDelegate("
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1013"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      FlutterActivityAndFragmentDelegate.Host host) {"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1014"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ExclusiveAppComponent&lt;Activity> getExclusiveAppComponent() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1082"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {"
+        errorLine2="      ~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1120"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void onViewCreated(View view, Bundle savedInstanceState) {"
+        errorLine2="                            ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1171"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void onViewCreated(View view, Bundle savedInstanceState) {"
+        errorLine2="                                       ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1171"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void onSaveInstanceState(Bundle outState) {"
+        errorLine2="                                  ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1188"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void onActivityResult(int requestCode, int resultCode, Intent data) {"
+        errorLine2="                                                                ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragment.java"
+            line="1314"
+            column="65"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public CachedEngineIntentBuilder destroyEngineWithActivity(boolean destroyEngineWithActivity) {"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragmentActivity.java"
+            line="226"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static NewEngineInGroupIntentBuilder withNewEngineInGroup(@NonNull String engineGroupId) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragmentActivity.java"
+            line="275"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected void onActivityResult(int requestCode, int resultCode, Intent data) {"
+        errorLine2="                                                                   ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragmentActivity.java"
+            line="664"
+            column="68"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected String getInitialRoute() {"
+        errorLine2="            ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragmentActivity.java"
+            line="898"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected FrameLayout provideRootLayout(Context context) {"
+        errorLine2="                                          ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterFragmentActivity.java"
+            line="966"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Bitmap decodeImage("
+        errorLine2="                ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/image/FlutterImageDecoder.java"
+            line="46"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ImageReader getImageReader() {"
+        errorLine2="         ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterImageView.java"
+            line="52"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterImageView(@NonNull Context context, int width, int height, SurfaceKind kind) {"
+        errorLine2="                                                                           ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterImageView.java"
+            line="74"
+            column="76"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected void onDraw(Canvas canvas) {"
+        errorLine2="                        ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterImageView.java"
+            line="248"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static FlutterInjector instance() {"
+        errorLine2="                ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/FlutterInjector.java"
+            line="54"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ExecutorService executorService() {"
+        errorLine2="         ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/FlutterInjector.java"
+            line="103"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Builder setFlutterLoader(@NonNull FlutterLoader flutterLoader) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/FlutterInjector.java"
+            line="138"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Builder setDeferredComponentManager("
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/FlutterInjector.java"
+            line="143"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Builder setFlutterJNIFactory(@NonNull FlutterJNI.Factory factory) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/FlutterInjector.java"
+            line="149"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Builder setExecutorService(@NonNull ExecutorService executorService) {"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/FlutterInjector.java"
+            line="154"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterInjector build() {"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/FlutterInjector.java"
+            line="178"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterJNI provideFlutterJNI() {"
+        errorLine2="           ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="130"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void loadLibrary(Context context) {"
+        errorLine2="                          ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="144"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      int[] displayFeaturesBounds,"
+        errorLine2="      ~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="699"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      int[] displayFeaturesType,"
+        errorLine2="      ~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="700"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      int[] displayFeaturesState,"
+        errorLine2="      ~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="701"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      ByteBuffer message,"
+        errorLine2="      ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1132"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterOverlaySurface createOverlaySurface() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1311"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public SurfaceControl.Transaction createTransaction() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1345"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterOverlaySurface createOverlaySurface2() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1385"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      FlutterMutatorsStack mutatorsStack) {"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1438"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public String[] computePlatformResolvedLocale(@NonNull String[] strings) {"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1472"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      FlutterMutatorsStack mutatorsStack) {"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1656"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Bitmap getBitmap() {"
+        errorLine2="         ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterJNI.java"
+            line="1667"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public void setLogTag(String tag) {"
+        errorLine2="                          ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/loader/FlutterLoader.java"
+            line="757"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void draw(Canvas canvas) {"
+        errorLine2="                   ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorView.java"
+            line="114"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void dispatchDraw(Canvas canvas) {"
+        errorLine2="                           ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorView.java"
+            line="141"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean requestSendAccessibilityEvent(View child, AccessibilityEvent event) {"
+        errorLine2="                                               ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorView.java"
+            line="180"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterMutator(Rect rect) {"
+        errorLine2="                          ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="59"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterMutator(Rect rect, float[] radiis) {"
+        errorLine2="                          ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="71"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterMutator(Rect rect, float[] radiis) {"
+        errorLine2="                                     ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="71"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterMutator(Path path) {"
+        errorLine2="                          ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="82"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterMutator(Matrix matrix) {"
+        errorLine2="                          ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="92"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public FlutterMutatorType getType() {"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="112"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Rect getRect() {"
+        errorLine2="           ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="121"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Path getPath() {"
+        errorLine2="           ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="130"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public Matrix getMatrix() {"
+        errorLine2="           ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="139"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void pushTransform(float[] values) {"
+        errorLine2="                            ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="173"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void pushClipRRect(int left, int top, int right, int bottom, float[] radiis) {"
+        errorLine2="                                                                      ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="202"
+            column="71"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void pushClipPath(Path path) {"
+        errorLine2="                           ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="228"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public List&lt;FlutterMutator> getMutators() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="238"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public List&lt;Path> getFinalClippingPaths() {"
+        errorLine2="         ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="251"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Matrix getFinalMatrix() {"
+        errorLine2="         ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack.java"
+            line="259"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Surface getSurface() {"
+        errorLine2="         ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/FlutterOverlaySurface.java"
+            line="26"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    String getAssetFilePathByName(@NonNull String assetFileName);"
+        errorLine2="    ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/plugins/FlutterPlugin.java"
+            line="205"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    String getAssetFilePathByName(@NonNull String assetFileName, @NonNull String packageName);"
+        errorLine2="    ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/plugins/FlutterPlugin.java"
+            line="211"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    String getAssetFilePathBySubpath(@NonNull String assetSubpath);"
+        errorLine2="    ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/plugins/FlutterPlugin.java"
+            line="221"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    String getAssetFilePathBySubpath(@NonNull String assetSubpath, @NonNull String packageName);"
+        errorLine2="    ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/plugins/FlutterPlugin.java"
+            line="227"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public SurfaceProducer createSurfaceProducer(SurfaceLifecycle lifecycle) {"
+        errorLine2="                                               ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="225"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Bitmap getBitmap() {"
+        errorLine2="         ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1343"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public List&lt;DisplayFeature> getDisplayFeatures() {"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1450"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public List&lt;DisplayFeature> getDisplayCutouts() {"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1454"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public void setDisplayFeatures(List&lt;DisplayFeature> newFeatures) {"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1458"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public void setDisplayCutouts(List&lt;DisplayFeature> newCutouts) {"
+        errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1463"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public DisplayFeature(Rect bounds, DisplayFeatureType type, DisplayFeatureState state) {"
+        errorLine2="                          ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1484"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public DisplayFeature(Rect bounds, DisplayFeatureType type, DisplayFeatureState state) {"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1484"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public DisplayFeature(Rect bounds, DisplayFeatureType type, DisplayFeatureState state) {"
+        errorLine2="                                                                ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/renderer/FlutterRenderer.java"
+            line="1484"
+            column="65"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean gatherTransparentRegion(Region region) {"
+        errorLine2="                                         ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterSurfaceView.java"
+            line="144"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void setRenderSurface(Surface renderSurface) {"
+        errorLine2="                               ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterTextureView.java"
+            line="232"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected WindowInfoRepositoryCallbackAdapterWrapper createWindowInfoRepo() {"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
+            line="543"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected void setWindowInfoListenerDisplayFeatures(WindowLayoutInfo layoutInfo) {"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
+            line="600"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ZeroSides calculateShouldZeroSides() {"
+        errorLine2="         ~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
+            line="663"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public BinaryMessenger getBinaryMessenger() {"
+        errorLine2="         ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
+            line="1129"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterImageView getCurrentImageSurface() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
+            line="1367"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterRenderer.ViewportMetrics getViewportMetrics() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
+            line="1620"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public WindowInsets getWindowInsets(Context context) {"
+        errorLine2="         ~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterViewDelegate.java"
+            line="33"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public WindowInsets getWindowInsets(Context context) {"
+        errorLine2="                                      ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterViewDelegate.java"
+            line="33"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public List&lt;Rect> getCaptionBarInsets(Context context) {"
+        errorLine2="         ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterViewDelegate.java"
+            line="46"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public List&lt;Rect> getCaptionBarInsets(Context context) {"
+        errorLine2="                                        ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterViewDelegate.java"
+            line="46"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      Context context, FlutterRenderer.ViewportMetrics viewportMetrics) {"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterViewDelegate.java"
+            line="56"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      Context context, FlutterRenderer.ViewportMetrics viewportMetrics) {"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterViewDelegate.java"
+            line="56"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Handler createAsyncHandler(Looper looper) {"
+        errorLine2="                ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/util/HandlerCompat.java"
+            line="31"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static Handler createAsyncHandler(Looper looper) {"
+        errorLine2="                                           ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/util/HandlerCompat.java"
+            line="31"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected ImageReader createImageReader33() {"
+        errorLine2="            ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/ImageReaderPlatformViewRenderTarget.java"
+            line="57"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected ImageReader createImageReader29() {"
+        errorLine2="            ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/ImageReaderPlatformViewRenderTarget.java"
+            line="76"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected ImageReader createImageReader() {"
+        errorLine2="            ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/ImageReaderPlatformViewRenderTarget.java"
+            line="88"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ImageReaderPlatformViewRenderTarget(ImageTextureEntry textureEntry) {"
+        errorLine2="                                             ~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/ImageReaderPlatformViewRenderTarget.java"
+            line="98"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Surface getSurface() {"
+        errorLine2="         ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/ImageReaderPlatformViewRenderTarget.java"
+            line="139"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      View view,"
+        errorLine2="      ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="69"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      TextInputChannel textInputChannel,"
+        errorLine2="      ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="71"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      ScribeChannel scribeChannel,"
+        errorLine2="      ~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="72"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      KeyboardDelegate keyboardDelegate,"
+        errorLine2="      ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="73"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      ListenableEditingState editable,"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="74"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      EditorInfo editorInfo,"
+        errorLine2="      ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="75"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      FlutterJNI flutterJNI) {"
+        errorLine2="      ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="76"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      View view,"
+        errorLine2="      ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="102"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      TextInputChannel textInputChannel,"
+        errorLine2="      ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="104"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      ScribeChannel scribeChannel,"
+        errorLine2="      ~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="105"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      KeyboardDelegate keyboardDelegate,"
+        errorLine2="      ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="106"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      ListenableEditingState editable,"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="107"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      EditorInfo editorInfo) {"
+        errorLine2="      ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="108"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Editable getEditable() {"
+        errorLine2="         ~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="154"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean handleKeyEvent(KeyEvent event) {"
+        errorLine2="                                ~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="304"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean commitContent(InputContentInfo inputContentInfo, int flags, Bundle opts) {"
+        errorLine2="                               ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="496"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean commitContent(InputContentInfo inputContentInfo, int flags, Bundle opts) {"
+        errorLine2="                                                                             ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/editing/InputConnectionAdaptor.java"
+            line="496"
+            column="78"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public KeyEmbedderResponder(BinaryMessenger messenger) {"
+        errorLine2="                              ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/KeyEmbedderResponder.java"
+            line="59"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Map&lt;Long, Long> getPressedState() {"
+        errorLine2="         ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/KeyEmbedderResponder.java"
+            line="450"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    Map&lt;Long, Long> getKeyboardState();"
+        errorLine2="    ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/KeyboardChannel.java"
+            line="73"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    BinaryMessenger getBinaryMessenger();"
+        errorLine2="    ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/KeyboardManager.java"
+            line="167"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Map&lt;Long, Long> getKeyboardState() {"
+        errorLine2="         ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/KeyboardManager.java"
+            line="267"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    public PressingGoal(int mask, KeyPair[] keys) {"
+        errorLine2="                                  ~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/KeyboardMap.java"
+            line="36"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static TogglingGoal[] getTogglingGoals() {"
+        errorLine2="                ~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/KeyboardMap.java"
+            line="609"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static PlatformViewCreationRequest createHCPPRequest("
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="65"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      int viewId, String viewType, int direction, ByteBuffer params) {"
+        errorLine2="                  ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="66"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      int viewId, String viewType, int direction, ByteBuffer params) {"
+        errorLine2="                                                  ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="66"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static PlatformViewCreationRequest createHybridCompositionRequest("
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="70"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      int viewId, String viewType, int direction, ByteBuffer params) {"
+        errorLine2="                  ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="71"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      int viewId, String viewType, int direction, ByteBuffer params) {"
+        errorLine2="                                                  ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="71"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static PlatformViewCreationRequest createTLHCWithFallbackRequest("
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="76"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      String viewType,"
+        errorLine2="      ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="78"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      ByteBuffer params) {"
+        errorLine2="      ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/PlatformViewCreationRequest.java"
+            line="85"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public abstract PlatformView create(Context context, int viewId, @Nullable Object args);"
+        errorLine2="                                      ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewFactory.java"
+            line="31"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean registerViewFactory(String viewTypeId, PlatformViewFactory factory) {"
+        errorLine2="                                     ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewRegistryImpl.java"
+            line="20"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean registerViewFactory(String viewTypeId, PlatformViewFactory factory) {"
+        errorLine2="                                                        ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewRegistryImpl.java"
+            line="20"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  Surface getSurface();"
+        errorLine2="  ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewRenderTarget.java"
+            line="34"
+            column="3"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public boolean requestSendAccessibilityEvent(View child, AccessibilityEvent event) {"
+        errorLine2="                                               ~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewWrapper.java"
+            line="128"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void draw(Canvas canvas) {"
+        errorLine2="                   ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewWrapper.java"
+            line="158"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public ViewTreeObserver.OnGlobalFocusChangeListener getActiveFocusListener() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewWrapper.java"
+            line="219"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public PlatformViewsChannel getPlatformViewsChannel() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController.java"
+            line="510"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public PlatformView createPlatformView("
+        errorLine2="         ~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController.java"
+            line="517"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public MotionEvent toMotionEvent("
+        errorLine2="         ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController.java"
+            line="699"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      float density, PlatformViewTouch touch, boolean usingVirtualDisplay) {"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController.java"
+            line="700"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public PlatformViewRegistry getRegistry() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController.java"
+            line="963"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void setFlutterJNI(FlutterJNI flutterJNI) {"
+        errorLine2="                            ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController.java"
+            line="994"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public SparseArray&lt;PlatformOverlayView> getOverlayLayerViews() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController.java"
+            line="1428"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void setFlutterJNI(FlutterJNI flutterJNI) {"
+        errorLine2="                            ~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController2.java"
+            line="98"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public PlatformView createFlutterPlatformView(@NonNull PlatformViewCreationRequest request) {"
+        errorLine2="         ~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController2.java"
+            line="107"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public MotionEvent toMotionEvent(float density, PlatformViewTouch touch) {"
+        errorLine2="         ~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController2.java"
+            line="152"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public MotionEvent toMotionEvent(float density, PlatformViewTouch touch) {"
+        errorLine2="                                                  ~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController2.java"
+            line="152"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public PlatformViewRegistry getRegistry() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController2.java"
+            line="315"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public SurfaceControl.Transaction createTransaction() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController2.java"
+            line="688"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public FlutterOverlaySurface createOverlaySurface() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsController2.java"
+            line="706"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      PlatformViewsController platformViewsController,"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsControllerDelegator.java"
+            line="25"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      PlatformViewsController2 platformViewsController2) {"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/PlatformViewsControllerDelegator.java"
+            line="26"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    Map&lt;String, String> queryTextActions();"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/ProcessTextChannel.java"
+            line="104"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Map&lt;String, String> queryTextActions() {"
+        errorLine2="         ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/text/ProcessTextPlugin.java"
+            line="50"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public DisplayMetrics getPastDisplayMetrics(int configId) {"
+        errorLine2="         ~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/SettingsChannel.java"
+            line="50"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected Drawable getDrawable(int id) {"
+        errorLine2="            ~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/test/io/flutter/embedding/android/SplashShadowResources.java"
+            line="40"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected Drawable getDrawable(int id, @Nullable Resources.Theme theme) {"
+        errorLine2="            ~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/test/io/flutter/embedding/android/SplashShadowResources.java"
+            line="48"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void onAttachToRenderer(FlutterRenderer flutterRenderer) {"
+        errorLine2="                                 ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/SurfaceHolderCallbackCompat.java"
+            line="32"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      SurfaceHolder.Callback innerCallback,"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/SurfaceHolderCallbackCompat.java"
+            line="185"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="      FlutterSurfaceView flutterSurfaceView,"
+        errorLine2="      ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/SurfaceHolderCallbackCompat.java"
+            line="186"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public SurfaceProducerPlatformViewRenderTarget(SurfaceProducer producer) {"
+        errorLine2="                                                 ~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/SurfaceProducerPlatformViewRenderTarget.java"
+            line="18"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Surface getSurface() {"
+        errorLine2="         ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/SurfaceProducerPlatformViewRenderTarget.java"
+            line="54"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  protected Surface createSurface() {"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/SurfaceTexturePlatformViewRenderTarget.java"
+            line="58"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public SurfaceTexturePlatformViewRenderTarget(SurfaceTextureEntry surfaceTextureEntry) {"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/SurfaceTexturePlatformViewRenderTarget.java"
+            line="63"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public Surface getSurface() {"
+        errorLine2="         ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/plugin/platform/SurfaceTexturePlatformViewRenderTarget.java"
+            line="103"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public void commitContent(int inputClientId, Map&lt;String, Object> content) {"
+        errorLine2="                                               ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/embedding/engine/systemchannels/TextInputChannel.java"
+            line="333"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  SurfaceProducer createSurfaceProducer(SurfaceLifecycle lifecycle);"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/TextureRegistry.java"
+            line="71"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    Surface getSurface();"
+        errorLine2="    ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/TextureRegistry.java"
+            line="139"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    Surface getForcedNewSurface();"
+        errorLine2="    ~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/TextureRegistry.java"
+            line="157"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void setCallback(Callback callback);"
+        errorLine2="                     ~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/TextureRegistry.java"
+            line="166"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="    void pushImage(Image image);"
+        errorLine2="                   ~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/view/TextureRegistry.java"
+            line="299"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static TraceSection scoped(String name) {"
+        errorLine2="                ~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/util/TraceSection.java"
+            line="22"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static TraceSection scoped(String name) {"
+        errorLine2="                                    ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/util/TraceSection.java"
+            line="22"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static void beginAsyncSection(String sectionName, int cookie) {"
+        errorLine2="                                       ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/util/TraceSection.java"
+            line="60"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static void endAsyncSection(String sectionName, int cookie) {"
+        errorLine2="                                     ~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/util/TraceSection.java"
+            line="65"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnknownNullness"
+        message="Unknown nullability; explicitly declare as `@Nullable` or `@NonNull` to improve Kotlin interoperability; see https://developer.android.com/kotlin/interop#nullability_annotations"
+        errorLine1="  public static boolean hasChildViewOfType(@Nullable View root, Class&lt;? extends View>[] viewTypes) {"
+        errorLine2="                                                                ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../../../flutter/shell/platform/android/io/flutter/util/ViewUtils.java"
+            line="78"
+            column="65"/>
     </issue>
 
 </issues>
