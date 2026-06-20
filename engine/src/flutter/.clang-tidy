@@ -13,6 +13,7 @@ Checks: >-
   objc-*,
   -objc-nsinvocation-argument-lifetime,
   readability-identifier-naming,
+  readability-uppercase-literal-suffix,
   -google-build-using-namespace,
   -google-default-arguments,
   -google-objc-global-variable-declaration,
@@ -44,6 +45,8 @@ CheckOptions:
     value: "lower_case"
   - key: readability-identifier-naming.PrivateMemberSuffix
     value: "_"
+  - key: readability-uppercase-literal-suffix.NewSuffixes
+    value: "L;LL;U;UL;ULL;LU;LLU"
 
 # Intended to include (lint) all headers except:
 # ... those in ../../gen (generated files don't need to follow clang tidy)
