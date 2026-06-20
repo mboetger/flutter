@@ -38,9 +38,15 @@ public class FlutterTestRunner extends Runner {
             rule = (TestRule) field.get(instance);
             break;
           }
-        } catch (InvocationTargetException | NoSuchMethodException e) {
+        } catch (InvocationTargetException e) {
           throw new RuntimeException("Unable to construct " + testClass.getName() + " object for testing");
-        } catch (InstantiationException | IllegalAccessException e) {
+        } catch (NoSuchMethodException e) {
+          throw new RuntimeException("Unable to construct " + testClass.getName() + " object for testing");
+        } catch (InstantiationException e) {
+          // This might occur if the developer did not make the rule public.
+          // We could call field.setAccessible(true) but it seems better to throw.
+          throw new RuntimeException("Unable to access activity rule", e);
+        } catch (IllegalAccessException e) {
           // This might occur if the developer did not make the rule public.
           // We could call field.setAccessible(true) but it seems better to throw.
           throw new RuntimeException("Unable to access activity rule", e);
