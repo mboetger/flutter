@@ -344,4 +344,59 @@ public class PlayStoreDeferredComponentManagerTest {
     TestPlayStoreDeferredComponentManager playStoreManager =
         new TestPlayStoreDeferredComponentManager(spyContext, jni);
   }
+
+  @Test
+  public void loadAssetsMultipleComponentsKeepsBothAssets() throws NameNotFoundException {
+    TestFlutterJNI jni = new TestFlutterJNI();
+
+    // Create mock AssetManagers for each stage.
+    AssetManager mockAssetManager1 = mock(AssetManager.class);
+    AssetManager mockAssetManager2 = mock(AssetManager.class);
+
+    // Create mock package contexts that will be returned by createPackageContext.
+    Context mockPackageContext1 = mock(Context.class);
+    when(mockPackageContext1.getAssets()).thenReturn(mockAssetManager1);
+    when(mockPackageContext1.getPackageName()).thenReturn("io.flutter.test");
+
+    Context mockPackageContext2 = mock(Context.class);
+    when(mockPackageContext2.getAssets()).thenReturn(mockAssetManager2);
+    when(mockPackageContext2.getPackageName()).thenReturn("io.flutter.test");
+
+    // If the bug is present, the manager reassigns its internal context field to the package context,
+    // so a subsequent loadAssets call will invoke createPackageContext on mockPackageContext1 instead
+    // of mockApplicationContext. Set up mockPackageContext1 to return a package context with an error
+    // asset manager to detect this.
+    Context mockPackageContextWithError = mock(Context.class);
+    AssetManager mockAssetManagerError = mock(AssetManager.class);
+    when(mockPackageContextWithError.getAssets()).thenReturn(mockAssetManagerError);
+    when(mockPackageContextWithError.getPackageName()).thenReturn("io.flutter.test");
+    doReturn(mockPackageContextWithError).when(mockPackageContext1).createPackageContext(any(), anyInt());
+
+    // Create the spy application context using the existing helper method.
+    // This avoids ~10 lines of boilerplate and ensures compatibility with Play Core APIs.
+    Context spyContext = createSpyContext(null);
+
+    // Override the default createPackageContext stubbing on the spy context to return
+    // mockPackageContext1 on the first call, and mockPackageContext2 on the second call.
+    doReturn(mockPackageContext1)
+        .doReturn(mockPackageContext2)
+        .when(spyContext).createPackageContext(any(), anyInt());
+
+    TestPlayStoreDeferredComponentManager playStoreManager =
+        new TestPlayStoreDeferredComponentManager(spyContext, jni);
+    jni.setDeferredComponentManager(playStoreManager);
+
+    // Load first component.
+    playStoreManager.loadAssets(1, "images");
+    assertEquals(1, jni.updateAssetManagerCalled);
+    assertEquals(mockAssetManager1, jni.assetManager);
+
+    // Load second component.
+    playStoreManager.loadAssets(2, "audios");
+    assertEquals(2, jni.updateAssetManagerCalled);
+    
+    // Assert that the asset manager passed to FlutterJNI is mockAssetManager2 (loaded from context created from original application context),
+    // not mockAssetManagerError (loaded from context created from packageContext1).
+    assertEquals(mockAssetManager2, jni.assetManager);
+  }
 }

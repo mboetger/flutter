@@ -50,6 +50,7 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
   private @NonNull SplitInstallManager splitInstallManager;
   private @Nullable FlutterJNI flutterJNI;
   private @Nullable DeferredComponentChannel channel;
+  private final @NonNull Context baseContext;
   private @NonNull Context context;
   private @NonNull FlutterApplicationInfo flutterApplicationInfo;
   // Each request to install a feature module gets a session ID. These maps associate
@@ -201,6 +202,7 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
 
   public PlayStoreDeferredComponentManager(
       @NonNull Context context, @Nullable FlutterJNI flutterJNI) {
+    this.baseContext = context;
     this.context = context;
     this.flutterJNI = flutterJNI;
     this.flutterApplicationInfo = ApplicationInfoLoader.load(context);
@@ -389,7 +391,10 @@ public class PlayStoreDeferredComponentManager implements DeferredComponentManag
     // the apk's `assets` directory allowing them to be accessed by
     // Android's AssetManager directly.
     try {
-      context = context.createPackageContext(context.getPackageName(), 0);
+      // Always use baseContext (the original application context) to recreate the package context.
+      // Calling createPackageContext on an already modified package context (this.context)
+      // can cause subsequent split APKs to not be resolved, losing assets from previously loaded components.
+      context = baseContext.createPackageContext(baseContext.getPackageName(), 0);
 
       AssetManager assetManager = context.getAssets();
       flutterJNI.updateJavaAssetManager(assetManager, flutterApplicationInfo.flutterAssetsDir);
