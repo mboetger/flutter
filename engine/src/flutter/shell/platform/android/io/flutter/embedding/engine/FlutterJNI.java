@@ -214,7 +214,7 @@ public class FlutterJNI {
   private static boolean initCalled = false;
   // END methods related to FlutterLoader
 
-  @Nullable private static AsyncWaitForVsyncDelegate asyncWaitForVsyncDelegate;
+
 
   /**
    * This value is updated by the VsyncWaiter when it is initialized.
@@ -296,41 +296,7 @@ public class FlutterJNI {
 
   private native void nativeUpdateRefreshRate(float refreshRateFPS);
 
-  /**
-   * The Android vsync waiter implementation in C++ needs to know when a vsync signal arrives, which
-   * is obtained via Java API. The delegate set here is called on the C++ side when the engine is
-   * ready to wait for the next vsync signal. The delegate is expected to add a postFrameCallback to
-   * the {@link android.view.Choreographer}, and call {@link onVsync} to notify the engine.
-   *
-   * @param delegate The delegate that will call the engine back on the next vsync signal.
-   */
-  public void setAsyncWaitForVsyncDelegate(@Nullable AsyncWaitForVsyncDelegate delegate) {
-    asyncWaitForVsyncDelegate = delegate;
-  }
 
-  // Called by native.
-  private static void asyncWaitForVsync(final long cookie) {
-    if (asyncWaitForVsyncDelegate != null) {
-      asyncWaitForVsyncDelegate.asyncWaitForVsync(cookie);
-    } else {
-      throw new IllegalStateException(
-          "An AsyncWaitForVsyncDelegate must be registered with FlutterJNI before asyncWaitForVsync() is invoked.");
-    }
-  }
-
-  private native void nativeOnVsync(long frameDelayNanos, long refreshPeriodNanos, long cookie);
-
-  /**
-   * Notifies the engine that the Choreographer has signaled a vsync.
-   *
-   * @param frameDelayNanos The time in nanoseconds when the frame started being rendered,
-   *     subtracted from the {@link System#nanoTime} timebase.
-   * @param refreshPeriodNanos The display refresh period in nanoseconds.
-   * @param cookie An opaque handle to the C++ VSyncWaiter object.
-   */
-  public void onVsync(long frameDelayNanos, long refreshPeriodNanos, long cookie) {
-    nativeOnVsync(frameDelayNanos, refreshPeriodNanos, cookie);
-  }
 
   @NonNull
   @Deprecated
@@ -1737,9 +1703,7 @@ public class FlutterJNI {
     void resetSemantics();
   }
 
-  public interface AsyncWaitForVsyncDelegate {
-    void asyncWaitForVsync(final long cookie);
-  }
+
 
   /** Whether the SurfaceControl swapchain required for hcpp is enabled and active. */
   public boolean IsSurfaceControlEnabled() {

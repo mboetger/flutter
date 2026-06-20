@@ -28,17 +28,7 @@ class VsyncWaiterAndroid final : public VsyncWaiter {
   // |VsyncWaiter|
   void AwaitVSync() override;
 
-  static void OnVsyncFromNDK(int64_t frame_nanos, void* data);
 
-  static void OnVsyncFromJava(JNIEnv* env,
-                              jclass jcaller,
-                              jlong frameDelayNanos,
-                              jlong refreshPeriodNanos,
-                              jlong java_baton);
-
-  static void ConsumePendingCallback(std::weak_ptr<VsyncWaiter>* weak_this,
-                                     fml::TimePoint frame_start_time,
-                                     fml::TimePoint frame_target_time);
 
   static void OnUpdateRefreshRate(JNIEnv* env,
                                   jclass jcaller,

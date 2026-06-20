@@ -5,7 +5,6 @@
 package io.flutter.view;
 
 import android.hardware.display.DisplayManager;
-import android.view.Choreographer;
 import android.view.Display;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
@@ -45,7 +44,7 @@ public class VsyncWaiter {
   private static DisplayListener listener;
   private long refreshPeriodNanos = -1;
   private FlutterJNI flutterJNI;
-  private FrameCallback frameCallback = new FrameCallback(0);
+
 
   @NonNull
   public static VsyncWaiter getInstance(float fps, @NonNull FlutterJNI flutterJNI) {
@@ -83,49 +82,11 @@ public class VsyncWaiter {
     listener = null;
   }
 
-  private class FrameCallback implements Choreographer.FrameCallback {
 
-    private long cookie;
-
-    FrameCallback(long cookie) {
-      this.cookie = cookie;
-    }
-
-    @Override
-    public void doFrame(long frameTimeNanos) {
-      long delay = System.nanoTime() - frameTimeNanos;
-      if (delay < 0) {
-        delay = 0;
-      }
-      flutterJNI.onVsync(delay, refreshPeriodNanos, cookie);
-      frameCallback = this;
-    }
-  }
-
-  private final FlutterJNI.AsyncWaitForVsyncDelegate asyncWaitForVsyncDelegate =
-      new FlutterJNI.AsyncWaitForVsyncDelegate() {
-
-        private Choreographer.FrameCallback obtainFrameCallback(final long cookie) {
-          if (frameCallback != null) {
-            frameCallback.cookie = cookie;
-            FrameCallback ret = frameCallback;
-            frameCallback = null;
-            return ret;
-          }
-          return new FrameCallback(cookie);
-        }
-
-        @Override
-        public void asyncWaitForVsync(long cookie) {
-          Choreographer.getInstance().postFrameCallback(obtainFrameCallback(cookie));
-        }
-      };
 
   private VsyncWaiter(@NonNull FlutterJNI flutterJNI) {
     this.flutterJNI = flutterJNI;
   }
 
-  public void init() {
-    flutterJNI.setAsyncWaitForVsyncDelegate(asyncWaitForVsyncDelegate);
-  }
+
 }

@@ -144,8 +144,7 @@ public class FlutterLoader {
 
       final DisplayManager dm =
           (DisplayManager) appContext.getSystemService(Context.DISPLAY_SERVICE);
-      VsyncWaiter waiter = VsyncWaiter.getInstance(dm, flutterJNI);
-      waiter.init();
+      VsyncWaiter.getInstance(dm, flutterJNI);
 
       // Use a background thread for initialization tasks that require disk access.
       Callable<InitResult> initTask =

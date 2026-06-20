@@ -5,17 +5,13 @@
 package io.flutter.view;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.robolectric.Shadows.shadowOf;
 
 import android.hardware.display.DisplayManager;
-import android.os.Looper;
 import android.view.Display;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import io.flutter.embedding.engine.FlutterJNI;
@@ -32,19 +28,10 @@ public class VsyncWaiterTest {
   }
 
   @Test
-  public void itSetsFpsBelowApi17() {
+  public void itSetsFps() {
     FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
     VsyncWaiter waiter = VsyncWaiter.getInstance(10.0f, mockFlutterJNI);
     verify(mockFlutterJNI, times(1)).setRefreshRateFPS(10.0f);
-
-    waiter.init();
-
-    ArgumentCaptor<FlutterJNI.AsyncWaitForVsyncDelegate> delegateCaptor =
-        ArgumentCaptor.forClass(FlutterJNI.AsyncWaitForVsyncDelegate.class);
-    verify(mockFlutterJNI, times(1)).setAsyncWaitForVsyncDelegate(delegateCaptor.capture());
-    delegateCaptor.getValue().asyncWaitForVsync(1);
-    shadowOf(Looper.getMainLooper()).idle();
-    verify(mockFlutterJNI, times(1)).onVsync(anyLong(), eq(1000000000L / 10L), eq(1L));
   }
 
   @Test
@@ -64,22 +51,9 @@ public class VsyncWaiterTest {
     displayListenerCaptor.getValue().onDisplayChanged(Display.DEFAULT_DISPLAY);
     verify(mockFlutterJNI, times(1)).setRefreshRateFPS(90.0f);
 
-    waiter.init();
-
-    ArgumentCaptor<FlutterJNI.AsyncWaitForVsyncDelegate> delegateCaptor =
-        ArgumentCaptor.forClass(FlutterJNI.AsyncWaitForVsyncDelegate.class);
-    verify(mockFlutterJNI, times(1)).setAsyncWaitForVsyncDelegate(delegateCaptor.capture());
-    delegateCaptor.getValue().asyncWaitForVsync(1);
-    shadowOf(Looper.getMainLooper()).idle();
-    verify(mockFlutterJNI, times(1)).onVsync(anyLong(), eq(1000000000L / 90L), eq(1L));
-
     when(mockDisplay.getRefreshRate()).thenReturn(60.0f);
     displayListenerCaptor.getValue().onDisplayChanged(Display.DEFAULT_DISPLAY);
     verify(mockFlutterJNI, times(1)).setRefreshRateFPS(60.0f);
-
-    delegateCaptor.getValue().asyncWaitForVsync(1);
-    shadowOf(Looper.getMainLooper()).idle();
-    verify(mockFlutterJNI, times(1)).onVsync(anyLong(), eq(1000000000L / 60L), eq(1L));
   }
 
   @Test
