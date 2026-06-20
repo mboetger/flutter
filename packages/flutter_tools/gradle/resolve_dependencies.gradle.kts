@@ -16,8 +16,8 @@ import java.nio.file.Paths
 
 val storageUrl: String = System.getenv("FLUTTER_STORAGE_BASE_URL") ?: "https://storage.googleapis.com"
 
-val flutterRoot = projectDir.parentFile?.parentFile?.parentFile
-requireNotNull(flutterRoot) { "Flutter root directory not found!" }
+val flutterRoot: java.io.File = projectDir.parentFile?.parentFile?.parentFile
+    ?: throw IllegalArgumentException("Flutter root directory not found!")
 
 require(flutterRoot.isDirectory) { "Flutter root is not a valid directory!" }
 
@@ -48,22 +48,35 @@ if (engineRealm.isNotEmpty()) {
 }
 
 repositories {
-    google()
-    mavenCentral()
+    val gradleRepos: String? = System.getenv("FLUTTER_GRADLE_REPOS")
+    if (!gradleRepos.isNullOrBlank()) {
+        gradleRepos.split(',', ';').forEach { repoUrl ->
+            val trimmed = repoUrl.trim()
+            if (trimmed.isNotEmpty()) {
+                maven { url = uri(trimmed) }
+            }
+        }
+    } else {
+        google()
+        mavenCentral()
+    }
     maven {
         url = uri("$storageUrl/${engineRealm}download.flutter.io")
     }
 }
 
 configurations {
+    val releaseImplementation = maybeCreate("releaseImplementation")
+    val debugImplementation = maybeCreate("debugImplementation")
+    
     create("flutterRelease") {
-        extendsFrom(configurations.getByName("releaseImplementation"))
+        extendsFrom(releaseImplementation)
     }
     create("flutterDebug") {
-        extendsFrom(configurations.getByName("debugImplementation"))
+        extendsFrom(debugImplementation)
     }
     create("flutterProfile") {
-        extendsFrom(configurations.getByName("debugImplementation"))
+        extendsFrom(debugImplementation)
     }
 }
 
