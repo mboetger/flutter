@@ -1092,6 +1092,8 @@ class RootBackButtonDispatcher extends BackButtonDispatcher with WidgetsBindingO
   /// Create a root back button dispatcher.
   RootBackButtonDispatcher();
 
+  Future<void> _popping = Future<void>.value();
+
   @override
   void addCallback(ValueGetter<Future<bool>> callback) {
     if (!hasCallbacks) {
@@ -1109,7 +1111,17 @@ class RootBackButtonDispatcher extends BackButtonDispatcher with WidgetsBindingO
   }
 
   @override
-  Future<bool> didPopRoute() => invokeCallback(Future<bool>.value(false));
+  Future<bool> didPopRoute() {
+    final completer = Completer<bool>();
+    _popping = _popping.then((_) async {
+      final bool handled = await invokeCallback(Future<bool>.value(false));
+      completer.complete(handled);
+      if (handled) {
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    });
+    return completer.future;
+  }
 }
 
 /// A variant of [BackButtonDispatcher] which listens to notifications from a
