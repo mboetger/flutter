@@ -16813,6 +16813,188 @@ void main() {
       );
     });
 
+    testWidgets(
+      'selection handles are hidden (opacity 0.0) when magnifier is active and shouldDisplayHandlesInMagnifier is false',
+      (WidgetTester tester) async {
+        controller.text = 'hello world';
+        final GlobalKey magnifierKey = GlobalKey();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: EditableText(
+                  controller: controller,
+                  showSelectionHandles: true,
+                  autofocus: true,
+                  focusNode: focusNode,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  selectionControls: materialTextSelectionControls,
+                  keyboardType: TextInputType.text,
+                  magnifierConfiguration: TextMagnifierConfiguration(
+                    shouldDisplayHandlesInMagnifier: false,
+                    magnifierBuilder:
+                        (
+                          BuildContext context,
+                          MagnifierController controller,
+                          ValueNotifier<MagnifierInfo>? notifier,
+                        ) {
+                          return TextMagnifier(key: magnifierKey, magnifierInfo: notifier!);
+                        },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Tap to show selection handles.
+        await tester.tapAt(textOffsetToPosition(tester, 5));
+        await tester.pumpAndSettle();
+
+        final handles = List<RenderBox>.of(
+          tester.renderObjectList<RenderBox>(
+            find.descendant(
+              of: find.byType(CompositedTransformFollower),
+              matching: find.byType(Padding),
+            ),
+          ),
+        );
+        expect(handles, hasLength(1));
+        final RenderBox handle = handles.first;
+
+        // Verify handle is fully visible before dragging (magnifier not active).
+        FadeTransition fadeTransition = tester.widget<FadeTransition>(
+          find
+              .descendant(
+                of: find.byType(CompositedTransformFollower),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        );
+        expect(fadeTransition.opacity.value, 1.0);
+
+        // Start drag to activate magnifier.
+        final TestGesture gesture = await tester.startGesture(
+          handle.localToGlobal(Offset(handle.size.width / 2, handle.size.height / 2)),
+        );
+        await tester.pump(const Duration(milliseconds: 150));
+        expect(find.byKey(magnifierKey), findsOneWidget);
+
+        // Verify handle is hidden immediately when magnifier is active.
+        fadeTransition = tester.widget<FadeTransition>(
+          find
+              .descendant(
+                of: find.byType(CompositedTransformFollower),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        );
+        expect(fadeTransition.opacity.value, 0.0);
+
+        // End drag to deactivate magnifier.
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        // Verify handle is visible again.
+        fadeTransition = tester.widget<FadeTransition>(
+          find
+              .descendant(
+                of: find.byType(CompositedTransformFollower),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        );
+        expect(fadeTransition.opacity.value, 1.0);
+      },
+    );
+
+    testWidgets(
+      'selection handles remain visible (opacity 1.0) when magnifier is active and shouldDisplayHandlesInMagnifier is true',
+      (WidgetTester tester) async {
+        controller.text = 'hello world';
+        final GlobalKey magnifierKey = GlobalKey();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: EditableText(
+                  controller: controller,
+                  showSelectionHandles: true,
+                  autofocus: true,
+                  focusNode: focusNode,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  selectionControls: materialTextSelectionControls,
+                  keyboardType: TextInputType.text,
+                  magnifierConfiguration: TextMagnifierConfiguration(
+                    magnifierBuilder:
+                        (
+                          BuildContext context,
+                          MagnifierController controller,
+                          ValueNotifier<MagnifierInfo>? notifier,
+                        ) {
+                          return TextMagnifier(key: magnifierKey, magnifierInfo: notifier!);
+                        },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Tap to show selection handles.
+        await tester.tapAt(textOffsetToPosition(tester, 5));
+        await tester.pumpAndSettle();
+
+        final handles = List<RenderBox>.of(
+          tester.renderObjectList<RenderBox>(
+            find.descendant(
+              of: find.byType(CompositedTransformFollower),
+              matching: find.byType(Padding),
+            ),
+          ),
+        );
+        expect(handles, hasLength(1));
+        final RenderBox handle = handles.first;
+
+        // Verify handle is visible before dragging.
+        FadeTransition fadeTransition = tester.widget<FadeTransition>(
+          find
+              .descendant(
+                of: find.byType(CompositedTransformFollower),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        );
+        expect(fadeTransition.opacity.value, 1.0);
+
+        // Start drag to activate magnifier.
+        final TestGesture gesture = await tester.startGesture(
+          handle.localToGlobal(Offset(handle.size.width / 2, handle.size.height / 2)),
+        );
+        await tester.pump(const Duration(milliseconds: 150));
+        expect(find.byKey(magnifierKey), findsOneWidget);
+
+        // Verify handle remains visible when magnifier is active.
+        fadeTransition = tester.widget<FadeTransition>(
+          find
+              .descendant(
+                of: find.byType(CompositedTransformFollower),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        );
+        expect(fadeTransition.opacity.value, 1.0);
+
+        // End drag.
+        await gesture.up();
+        await tester.pumpAndSettle();
+      },
+    );
+
     testWidgets('magnifier is in correct position when EditableText is scaled', (
       WidgetTester tester,
     ) async {

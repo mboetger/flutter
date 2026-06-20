@@ -1099,6 +1099,10 @@ class SelectionOverlay {
        _toolbarLocation = toolbarLocation,
        assert(debugCheckHasOverlay(context)) {
     assert(debugMaybeDispatchCreated('widgets', 'SelectionOverlay', this));
+    _magnifierAwareImmediateVisibility = _MagnifierAwareImmediateVisibility(
+      magnifierVisibility: _magnifierVisibility,
+      shouldDisplayHandlesInMagnifier: magnifierConfiguration.shouldDisplayHandlesInMagnifier,
+    );
   }
 
   /// {@macro flutter.widgets.SelectionOverlay.context}
@@ -1107,6 +1111,9 @@ class SelectionOverlay {
   final ValueNotifier<MagnifierInfo> _magnifierInfo = ValueNotifier<MagnifierInfo>(
     MagnifierInfo.empty,
   );
+
+  final ValueNotifier<bool> _magnifierVisibility = ValueNotifier<bool>(false);
+  late final _MagnifierAwareImmediateVisibility _magnifierAwareImmediateVisibility;
 
   // [MagnifierController.show] and [MagnifierController.hide] should not be
   // called directly, except from inside [showMagnifier] and [hideMagnifier]. If
@@ -1181,6 +1188,8 @@ class SelectionOverlay {
       return;
     }
 
+    _magnifierVisibility.value = true;
+
     _magnifierController.show(
       context: context,
       below: magnifierConfiguration.shouldDisplayHandlesInMagnifier ? null : _handles?.start,
@@ -1201,6 +1210,7 @@ class SelectionOverlay {
       return;
     }
 
+    _magnifierVisibility.value = false;
     _magnifierController.hide();
   }
 
@@ -1729,6 +1739,7 @@ class SelectionOverlay {
   /// Hides the entire overlay including the toolbar and the handles.
   /// {@endtemplate}
   void hide() {
+    _magnifierVisibility.value = false;
     _magnifierController.hide();
     hideHandles();
     if (_toolbar != null ||
@@ -1761,6 +1772,8 @@ class SelectionOverlay {
     assert(debugMaybeDispatchDisposed(this));
     hide();
     _magnifierInfo.dispose();
+    _magnifierAwareImmediateVisibility.dispose();
+    _magnifierVisibility.dispose();
   }
 
   Widget _buildStartHandle(BuildContext context) {
@@ -1781,6 +1794,7 @@ class SelectionOverlay {
         onSelectionHandleDragEnd: _handleStartHandleDragEnd,
         selectionControls: selectionControls,
         visibility: startHandlesVisible,
+        immediateVisibility: _magnifierAwareImmediateVisibility,
         preferredLineHeight: _lineHeightAtStart,
         dragStartBehavior: dragStartBehavior,
       );
@@ -1812,6 +1826,7 @@ class SelectionOverlay {
         onSelectionHandleDragEnd: _handleEndHandleDragEnd,
         selectionControls: selectionControls,
         visibility: endHandlesVisible,
+        immediateVisibility: _magnifierAwareImmediateVisibility,
         preferredLineHeight: _lineHeightAtEnd,
         dragStartBehavior: dragStartBehavior,
       );
@@ -1980,6 +1995,104 @@ class _SelectionToolbarWrapperState extends State<_SelectionToolbarWrapper>
   }
 }
 
+class _MagnifierAwareImmediateVisibility extends ValueNotifier<bool> {
+  _MagnifierAwareImmediateVisibility({
+    required ValueListenable<bool> magnifierVisibility,
+    required bool shouldDisplayHandlesInMagnifier,
+  }) : _magnifierVisibility = magnifierVisibility,
+       _shouldDisplayHandlesInMagnifier = shouldDisplayHandlesInMagnifier,
+       super(shouldDisplayHandlesInMagnifier || !magnifierVisibility.value) {
+    _magnifierVisibility.addListener(_update);
+  }
+
+  final ValueListenable<bool> _magnifierVisibility;
+  final bool _shouldDisplayHandlesInMagnifier;
+
+  void _update() {
+    value = _shouldDisplayHandlesInMagnifier || !_magnifierVisibility.value;
+  }
+
+  @override
+  void dispose() {
+    _magnifierVisibility.removeListener(_update);
+    super.dispose();
+  }
+}
+
+class _MagnifierAwareOpacityAnimation extends Animation<double> {
+  _MagnifierAwareOpacityAnimation({
+    required this.controllerAnimation,
+    required this.immediateVisibility,
+  }) {
+    controllerAnimation.addListener(_handleDelay);
+    controllerAnimation.addStatusListener(_handleStatusDelay);
+    immediateVisibility.addListener(_handleImmediateVisibilityChanged);
+  }
+
+  final Animation<double> controllerAnimation;
+  final ValueListenable<bool> immediateVisibility;
+
+  final Set<VoidCallback> _listeners = <VoidCallback>{};
+  final Set<AnimationStatusListener> _statusListeners = <AnimationStatusListener>{};
+
+  void _handleDelay() {
+    for (final listener in List<VoidCallback>.from(_listeners)) {
+      if (_listeners.contains(listener)) {
+        listener();
+      }
+    }
+  }
+
+  void _handleStatusDelay(AnimationStatus status) {
+    final AnimationStatus currentStatus = this.status;
+    for (final listener in List<AnimationStatusListener>.from(_statusListeners)) {
+      if (_statusListeners.contains(listener)) {
+        listener(currentStatus);
+      }
+    }
+  }
+
+  void _handleImmediateVisibilityChanged() {
+    _handleDelay();
+    _handleStatusDelay(status);
+  }
+
+  @override
+  void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
+
+  @override
+  void addStatusListener(AnimationStatusListener listener) {
+    _statusListeners.add(listener);
+  }
+
+  @override
+  void removeStatusListener(AnimationStatusListener listener) {
+    _statusListeners.remove(listener);
+  }
+
+  @override
+  double get value => immediateVisibility.value ? controllerAnimation.value : 0.0;
+
+  @override
+  AnimationStatus get status =>
+      immediateVisibility.value ? controllerAnimation.status : AnimationStatus.dismissed;
+
+  void dispose() {
+    controllerAnimation.removeListener(_handleDelay);
+    controllerAnimation.removeStatusListener(_handleStatusDelay);
+    immediateVisibility.removeListener(_handleImmediateVisibilityChanged);
+    _listeners.clear();
+    _statusListeners.clear();
+  }
+}
+
 /// This widget represents a single draggable selection handle.
 class _SelectionHandleOverlay extends StatefulWidget {
   /// Create selection overlay.
@@ -1992,6 +2105,7 @@ class _SelectionHandleOverlay extends StatefulWidget {
     this.onSelectionHandleDragEnd,
     required this.selectionControls,
     this.visibility,
+    this.immediateVisibility,
     required this.preferredLineHeight,
     this.dragStartBehavior = DragStartBehavior.start,
   });
@@ -2003,6 +2117,7 @@ class _SelectionHandleOverlay extends StatefulWidget {
   final ValueChanged<DragEndDetails>? onSelectionHandleDragEnd;
   final TextSelectionControls selectionControls;
   final ValueListenable<bool>? visibility;
+  final ValueListenable<bool>? immediateVisibility;
   final double preferredLineHeight;
   final TextSelectionHandleType type;
   final DragStartBehavior dragStartBehavior;
@@ -2014,13 +2129,23 @@ class _SelectionHandleOverlay extends StatefulWidget {
 class _SelectionHandleOverlayState extends State<_SelectionHandleOverlay>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  Animation<double> get _opacity => _controller.view;
+  late Animation<double> _opacity;
 
   @override
   void initState() {
     super.initState();
 
     _controller = AnimationController(duration: SelectionOverlay.fadeDuration, vsync: this);
+
+    final ValueListenable<bool>? immediateVisibility = widget.immediateVisibility;
+    if (immediateVisibility != null) {
+      _opacity = _MagnifierAwareOpacityAnimation(
+        controllerAnimation: _controller.view,
+        immediateVisibility: immediateVisibility,
+      );
+    } else {
+      _opacity = _controller.view;
+    }
 
     _handleVisibilityChanged();
     widget.visibility?.addListener(_handleVisibilityChanged);
@@ -2051,11 +2176,29 @@ class _SelectionHandleOverlayState extends State<_SelectionHandleOverlay>
     oldWidget.visibility?.removeListener(_handleVisibilityChanged);
     _handleVisibilityChanged();
     widget.visibility?.addListener(_handleVisibilityChanged);
+
+    if (oldWidget.immediateVisibility != widget.immediateVisibility) {
+      if (_opacity is _MagnifierAwareOpacityAnimation) {
+        (_opacity as _MagnifierAwareOpacityAnimation).dispose();
+      }
+      final ValueListenable<bool>? immediateVisibility = widget.immediateVisibility;
+      if (immediateVisibility != null) {
+        _opacity = _MagnifierAwareOpacityAnimation(
+          controllerAnimation: _controller.view,
+          immediateVisibility: immediateVisibility,
+        );
+      } else {
+        _opacity = _controller.view;
+      }
+    }
   }
 
   @override
   void dispose() {
     widget.visibility?.removeListener(_handleVisibilityChanged);
+    if (_opacity is _MagnifierAwareOpacityAnimation) {
+      (_opacity as _MagnifierAwareOpacityAnimation).dispose();
+    }
     _controller.dispose();
     super.dispose();
   }
