@@ -21,6 +21,10 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.view.LayoutInflater;
+import android.view.View;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import androidx.activity.BackEventCompat;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.OnBackPressedDispatcher;
@@ -494,4 +498,49 @@ public class FlutterFragmentTest {
     verify(spyCtx, times(1)).registerComponentCallbacks(any());
     verify(spyCtx, times(1)).unregisterComponentCallbacks(any());
   }
+
+  @Test
+  public void itDoesNotCrashOnCreateViewIfDelegateIsNull() {
+    FlutterFragment fragment = FlutterFragment.createDefault();
+    View view = fragment.onCreateView(mock(LayoutInflater.class), null, null);
+    assertNull(view);
+  }
+
+  @Test
+  public void itDoesNotCrashOnCreateViewIfDelegateIsDetached() {
+    FlutterActivityAndFragmentDelegate mockDelegate =
+        mock(FlutterActivityAndFragmentDelegate.class);
+    when(mockDelegate.isAttached()).thenReturn(false);
+    TestDelegateFactory delegateFactory = new TestDelegateFactory(mockDelegate);
+
+    FlutterFragment fragment = FlutterFragment.createDefault();
+    fragment.setDelegateFactory(delegateFactory);
+
+    View view = fragment.onCreateView(mock(LayoutInflater.class), null, null);
+    assertNull(view);
+    verify(mockDelegate, never()).onCreateView(any(), any(), any(), anyInt(), anyBoolean());
+  }
+
+  @Test
+  public void itDoesNotCrashOnIsFlutterEngineInjectedIfDelegateIsNull() {
+    FlutterFragment fragment = FlutterFragment.createDefault();
+    // delegate is null initially since onAttach has not been called.
+    assertFalse(fragment.isFlutterEngineInjected());
+  }
+
+  @Test
+  public void itDoesNotCrashOnShouldDestroyEngineWithHostIfDelegateIsNull() {
+    FlutterFragment fragment = FlutterFragment.createDefault();
+    // delegate is null. With default arguments, it should return the default value (true).
+    assertTrue(fragment.shouldDestroyEngineWithHost());
+  }
+
+  @Test
+  public void itDoesNotCrashOnGetFlutterEngineIfDelegateIsNull() {
+    FlutterFragment fragment = FlutterFragment.createDefault();
+    // delegate is null.
+    assertNull(fragment.getFlutterEngine());
+  }
 }
+
+

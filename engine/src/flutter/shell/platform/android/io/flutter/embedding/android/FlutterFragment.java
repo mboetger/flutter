@@ -1118,12 +1118,15 @@ public class FlutterFragment extends Fragment
   @Override
   public View onCreateView(
       LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-    return delegate.onCreateView(
-        inflater,
-        container,
-        savedInstanceState,
-        /*flutterViewId=*/ FLUTTER_VIEW_ID,
-        shouldDelayFirstAndroidViewDraw());
+    if (stillAttachedForEvent("onCreateView")) {
+      return delegate.onCreateView(
+          inflater,
+          container,
+          savedInstanceState,
+          /*flutterViewId=*/ FLUTTER_VIEW_ID,
+          shouldDelayFirstAndroidViewDraw());
+    }
+    return null;
   }
 
   @Override
@@ -1386,7 +1389,7 @@ public class FlutterFragment extends Fragment
    * FlutterFragment} rather than one that was created implicitly in the {@code FlutterFragment}.
    */
   /* package */ boolean isFlutterEngineInjected() {
-    return delegate.isFlutterEngineFromHost();
+    return delegate != null && delegate.isFlutterEngineFromHost();
   }
 
   /**
@@ -1400,7 +1403,7 @@ public class FlutterFragment extends Fragment
   public boolean shouldDestroyEngineWithHost() {
     boolean explicitDestructionRequested =
         getArguments().getBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, false);
-    if (getCachedEngineId() != null || delegate.isFlutterEngineFromHost()) {
+    if (getCachedEngineId() != null || (delegate != null && delegate.isFlutterEngineFromHost())) {
       // Only destroy a cached engine if explicitly requested by app developer.
       return explicitDestructionRequested;
     } else {
@@ -1555,7 +1558,7 @@ public class FlutterFragment extends Fragment
    */
   @Nullable
   public FlutterEngine getFlutterEngine() {
-    return delegate.getFlutterEngine();
+    return delegate != null ? delegate.getFlutterEngine() : null;
   }
 
   @Nullable
