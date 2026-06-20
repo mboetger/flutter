@@ -556,46 +556,44 @@ void main() {
     ),
   );
 
-  testWidgets(
-    'does not crash when long press is cancelled after unmounting',
-    (WidgetTester tester) async {
-      // Regression test for b/425840577.
-      final scrollController = ScrollController();
-      addTearDown(scrollController.dispose);
+  testWidgets('does not crash when long press is cancelled after unmounting', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for b/425840577.
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
 
-      await tester.pumpWidget(
-        TestWidgetsApp(
-          home: CustomScrollView(
-            controller: scrollController,
-            slivers: <Widget>[
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, int index) => index == 0 ? const TestTextField() : const SizedBox(height: 50),
-                  childCount: 200,
-                  addAutomaticKeepAlives: false,
-                ),
+    await tester.pumpWidget(
+      TestWidgetsApp(
+        home: CustomScrollView(
+          controller: scrollController,
+          slivers: <Widget>[
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (_, int index) => index == 0 ? const TestTextField() : const SizedBox(height: 50),
+                childCount: 200,
+                addAutomaticKeepAlives: false,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
 
-      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-      // Start a long press, don't release it, and don't completely reach kLongPressTimeout so the
-      // gesture is not accepted and is cancelled when the recognizer is disposed.
-      await tester.startGesture(tester.getCenter(find.byType(TestTextField)));
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pumpAndSettle();
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+    // Start a long press, don't release it, and don't completely reach kLongPressTimeout so the
+    // gesture is not accepted and is cancelled when the recognizer is disposed.
+    await tester.startGesture(tester.getCenter(find.byType(TestTextField)));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
 
-      // While attempting to long press, scroll the TextField out of view
-      // to dispose of it and its gesture recognizers.
-      scrollController.jumpTo(8000.0);
-      await tester.pump();
-      expect(state.mounted, isFalse);
-      // Should reach the end of the test without any failures.
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
-  );
+    // While attempting to long press, scroll the TextField out of view
+    // to dispose of it and its gesture recognizers.
+    scrollController.jumpTo(8000.0);
+    await tester.pump();
+    expect(state.mounted, isFalse);
+    // Should reach the end of the test without any failures.
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets(
     'TextSelectionGestureDetectorBuilder right click Apple platforms',
@@ -1246,36 +1244,34 @@ void main() {
   });
 
   // Regression test for https://github.com/flutter/flutter/issues/37032.
-  testWidgets(
-    "selection handle's GestureDetector should not cover the entire screen",
-    (WidgetTester tester) async {
-      final controller = TextEditingController(text: 'a');
-      addTearDown(controller.dispose);
+  testWidgets("selection handle's GestureDetector should not cover the entire screen", (
+    WidgetTester tester,
+  ) async {
+    final controller = TextEditingController(text: 'a');
+    addTearDown(controller.dispose);
 
-      await tester.pumpWidget(
-        TestWidgetsApp(home: TestTextField(autofocus: true, controller: controller)),
-      );
+    await tester.pumpWidget(
+      TestWidgetsApp(home: TestTextField(autofocus: true, controller: controller)),
+    );
 
-      await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
 
-      final Finder gestureDetector = find.descendant(
-        of: find.byType(CompositedTransformFollower),
-        matching: find.descendant(
-          of: find.byType(FadeTransition),
-          matching: find.byType(RawGestureDetector),
-        ),
-      );
+    final Finder gestureDetector = find.descendant(
+      of: find.byType(CompositedTransformFollower),
+      matching: find.descendant(
+        of: find.byType(FadeTransition),
+        matching: find.byType(RawGestureDetector),
+      ),
+    );
 
-      expect(gestureDetector, findsOneWidget);
-      // The GestureDetector's size should not exceed that of the TextField.
-      final Rect hitRect = tester.getRect(gestureDetector);
-      final Rect textFieldRect = tester.getRect(find.byType(TestTextField));
+    expect(gestureDetector, findsOneWidget);
+    // The GestureDetector's size should not exceed that of the TextField.
+    final Rect hitRect = tester.getRect(gestureDetector);
+    final Rect textFieldRect = tester.getRect(find.byType(TestTextField));
 
-      expect(hitRect.size.width, lessThanOrEqualTo(textFieldRect.size.width));
-      expect(hitRect.size.height, lessThanOrEqualTo(textFieldRect.size.height));
-    },
-    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS}),
-  );
+    expect(hitRect.size.width, lessThanOrEqualTo(textFieldRect.size.width));
+    expect(hitRect.size.height, lessThanOrEqualTo(textFieldRect.size.height));
+  }, variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS}));
 
   group('SelectionOverlay', () {
     Future<SelectionOverlay> pumpApp(
@@ -1665,7 +1661,12 @@ void main() {
         await mockClipboard.handleMethodCall(
           const MethodCall('Clipboard.setData', <String, dynamic>{'text': 'pasteablestring'}),
         );
+        // The value is cached, so update() won't query the clipboard again.
         await expectLater(notifier.update(), completes);
+        expect(notifier.value, ClipboardStatus.notPasteable);
+
+        // forceUpdate() bypasses the cache to fetch the latest status.
+        await expectLater(notifier.forceUpdate(), completes);
         expect(notifier.value, ClipboardStatus.pasteable);
       });
     });
@@ -2134,6 +2135,11 @@ class FakeClipboardStatusNotifier extends ClipboardStatusNotifier {
   bool updateCalled = false;
   @override
   Future<void> update() async {
+    updateCalled = true;
+  }
+
+  @override
+  Future<void> forceUpdate() async {
     updateCalled = true;
   }
 }

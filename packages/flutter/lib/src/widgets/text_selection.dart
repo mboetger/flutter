@@ -3783,6 +3783,14 @@ class ClipboardStatusNotifier extends ValueNotifier<ClipboardStatus> with Widget
 
   /// Check the [Clipboard] and update [value] if needed.
   Future<void> update() async {
+    if (value != ClipboardStatus.unknown) {
+      return;
+    }
+    return forceUpdate();
+  }
+
+  /// Check the [Clipboard] and update [value] unconditionally.
+  Future<void> forceUpdate() async {
     if (_disposed) {
       return;
     }
@@ -3840,7 +3848,8 @@ class ClipboardStatusNotifier extends ValueNotifier<ClipboardStatus> with Widget
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
-        update();
+        value = ClipboardStatus.unknown;
+        forceUpdate();
       case AppLifecycleState.detached:
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:

@@ -2794,7 +2794,7 @@ class EditableTextState extends State<EditableText>
           );
       }
     }
-    clipboardStatus.update();
+    clipboardStatus.value = ClipboardStatus.pasteable;
   }
 
   /// Cut current selection to [Clipboard].
@@ -2821,7 +2821,7 @@ class EditableTextState extends State<EditableText>
       }, debugLabel: 'EditableText.bringSelectionIntoView');
       hideToolbar();
     }
-    clipboardStatus.update();
+    clipboardStatus.value = ClipboardStatus.pasteable;
   }
 
   void Function(Object, StackTrace) _reportClipboardError(String context) {
@@ -5198,7 +5198,7 @@ class EditableTextState extends State<EditableText>
       return false;
     }
     _liveTextInputStatus?.update();
-    clipboardStatus.update();
+    clipboardStatus.forceUpdate();
     _selectionOverlay!.showToolbar();
     // Listen to parent scroll events when the toolbar is visible so it can be
     // hidden during a scroll on supported platforms.
@@ -6869,6 +6869,11 @@ class _WebClipboardStatusNotifier extends ClipboardStatusNotifier {
 
   @override
   Future<void> update() {
+    return Future<void>.value();
+  }
+
+  @override
+  Future<void> forceUpdate() {
     return Future<void>.value();
   }
 }
