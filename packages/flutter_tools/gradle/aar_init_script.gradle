@@ -33,7 +33,17 @@ void configureProject(Project project, String outputDir) {
     project.publishing {
         repositories {
             maven {
-                url = project.file("${outputDir}/outputs/repo").toURI()
+                if (project.hasProperty("repository-url")) {
+                    url = project.uri(project.property("repository-url"))
+                    if (project.hasProperty("repository-username") && project.hasProperty("repository-password")) {
+                        credentials {
+                            username = project.property("repository-username")
+                            password = project.property("repository-password")
+                        }
+                    }
+                } else {
+                    url = project.file("${outputDir}/outputs/repo").toURI()
+                }
             }
         }
     }

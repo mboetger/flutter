@@ -196,6 +196,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
     required Future<void> Function(FlutterProject, {required bool releaseMode}) generateTooling,
     String? outputDirectoryPath,
     required String buildNumber,
+    String? repositoryUrl,
+    String? repositoryUsername,
+    String? repositoryPassword,
   }) async {
     Directory outputDirectory = _fileSystem.directory(
       outputDirectoryPath ?? project.android.buildDirectory,
@@ -213,6 +216,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
         target: target,
         outputDirectory: outputDirectory,
         buildNumber: buildNumber,
+        repositoryUrl: repositoryUrl,
+        repositoryUsername: repositoryUsername,
+        repositoryPassword: repositoryPassword,
       );
     }
     printHowToConsumeAar(
@@ -775,6 +781,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
     required String target,
     required Directory outputDirectory,
     required String buildNumber,
+    String? repositoryUrl,
+    String? repositoryUsername,
+    String? repositoryPassword,
   }) async {
     final FlutterManifest manifest = project.manifest;
     if (!manifest.isModule) {
@@ -807,6 +816,13 @@ class AndroidGradleBuilder implements AndroidBuilder {
       command.add('-Pverbose=true');
     } else {
       command.add('-q');
+    }
+    if (repositoryUrl != null) {
+      command.add('-Prepository-url=$repositoryUrl');
+      if (repositoryUsername != null && repositoryPassword != null) {
+        command.add('-Prepository-username=$repositoryUsername');
+        command.add('-Prepository-password=$repositoryPassword');
+      }
     }
     if (!buildInfo.androidGradleDaemon) {
       command.add('--no-daemon');

@@ -23,6 +23,9 @@ class FakeAndroidBuilder implements AndroidBuilder {
     required Future<void> Function(FlutterProject, {required bool releaseMode}) generateTooling,
     String? outputDirectoryPath,
     required String buildNumber,
+    String? repositoryUrl,
+    String? repositoryUsername,
+    String? repositoryPassword,
   }) async {}
 
   @override

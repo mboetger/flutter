@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:convert';
+
 import 'package:unified_analytics/unified_analytics.dart';
 
 import '../android/android_builder.dart';
@@ -37,6 +39,10 @@ class BuildAarCommand extends BuildSubCommand {
         'release',
         defaultsTo: true,
         help: 'Build a release version of the current project.',
+      )
+      ..addOption(
+        'publish',
+        help: 'Publish the AAR to a maven repository specified by a JSON configuration file.',
       );
     addTreeShakeIconsFlag();
     usesFlavorOption();
@@ -148,6 +154,67 @@ class BuildAarCommand extends BuildSubCommand {
       throwToolExit('Please specify a build mode and try again.');
     }
 
+    String? repositoryUrl;
+    String? repositoryUsername;
+    String? repositoryPassword;
+
+    if (argResults?.wasParsed('publish') ?? false) {
+      final String publishFilePath = stringArg('publish')!;
+      final File publishFile = _fileSystem.file(publishFilePath);
+      if (!publishFile.existsSync()) {
+        throwToolExit('The publish configuration file "$publishFilePath" does not exist.');
+      }
+
+      final String fileContent = publishFile.readAsStringSync();
+      dynamic jsonConfig;
+      try {
+        jsonConfig = json.decode(fileContent);
+      } on FormatException catch (e) {
+        throwToolExit(
+          'The publish configuration file "$publishFilePath" is not a valid JSON file: $e',
+        );
+      }
+
+      if (jsonConfig is! Map<String, dynamic>) {
+        throwToolExit('The publish configuration file "$publishFilePath" must be a JSON object.');
+      }
+
+      final dynamic repoUrlValue = jsonConfig['repoUrl'];
+      if (repoUrlValue == null || repoUrlValue is! String || repoUrlValue.isEmpty) {
+        throwToolExit(
+          'The publish configuration file "$publishFilePath" must contain a non-empty string "repoUrl".',
+        );
+      }
+      repositoryUrl = repoUrlValue;
+
+      final dynamic usernameValue = jsonConfig['username'];
+      if (usernameValue != null) {
+        if (usernameValue is! String || usernameValue.isEmpty) {
+          throwToolExit(
+            'The "username" in the publish configuration file "$publishFilePath" must be a non-empty string.',
+          );
+        }
+        repositoryUsername = usernameValue;
+      }
+
+      final dynamic passwordValue = jsonConfig['password'];
+      if (passwordValue != null) {
+        if (passwordValue is! String || passwordValue.isEmpty) {
+          throwToolExit(
+            'The "password" in the publish configuration file "$publishFilePath" must be a non-empty string.',
+          );
+        }
+        repositoryPassword = passwordValue;
+      }
+
+      if ((repositoryUsername != null && repositoryPassword == null) ||
+          (repositoryUsername == null && repositoryPassword != null)) {
+        throwToolExit(
+          'Both "username" and "password" must be provided in the publish configuration file "$publishFilePath" if either is specified.',
+        );
+      }
+    }
+
     await androidBuilder?.buildAar(
       project: project,
       target: targetFile.path,
@@ -155,6 +222,9 @@ class BuildAarCommand extends BuildSubCommand {
       generateTooling: regeneratePlatformSpecificToolingIfApplicable,
       outputDirectoryPath: stringArg('output'),
       buildNumber: buildNumber,
+      repositoryUrl: repositoryUrl,
+      repositoryUsername: repositoryUsername,
+      repositoryPassword: repositoryPassword,
     );
 
     final bool impellerEnabled = project.android.computeImpellerEnabled();
