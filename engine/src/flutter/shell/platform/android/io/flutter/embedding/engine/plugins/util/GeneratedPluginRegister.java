@@ -7,6 +7,7 @@ package io.flutter.embedding.engine.plugins.util;
 import androidx.annotation.NonNull;
 import io.flutter.Log;
 import io.flutter.embedding.engine.FlutterEngine;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 public class GeneratedPluginRegister {
@@ -78,6 +79,13 @@ public class GeneratedPluginRegister {
       Method registrationMethod =
           generatedPluginRegistrant.getDeclaredMethod("registerWith", FlutterEngine.class);
       registrationMethod.invoke(null, flutterEngine);
+    } catch (InvocationTargetException e) {
+      Log.e(
+          TAG,
+          "Tried to automatically register plugins with FlutterEngine ("
+              + flutterEngine
+              + ") but could not complete. An exception was thrown by an automatically registered plugin.");
+      Log.e(TAG, "Received exception while registering", e.getCause());
     } catch (Exception e) {
       Log.e(
           TAG,
