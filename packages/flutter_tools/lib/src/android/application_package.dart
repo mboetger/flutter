@@ -199,9 +199,94 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
 
     // Starting from AGP version 7.3, the `package` attribute in Manifest.xml
     // can be replaced with the `namespace` attribute under the `android` section in `android/app/build.gradle`.
-    final String? packageId = manifests.first.getAttribute('package') ?? androidProject.namespace;
+    String? packageId = manifests.first.getAttribute('package') ?? androidProject.namespace;
 
-    String? launchActivity;
+    String? launchActivity = _parseLaunchActivity(document, packageId);
+
+    if (launchActivity == null && androidProject.isUsingGradle && buildInfo != null) {
+      final Directory srcDirectory = androidProject.hostAppGradleRoot
+          .childDirectory('app')
+          .childDirectory('src');
+
+      // If the launch activity is not found in the main manifest, it might be defined
+      // in a build-mode or flavor-specific manifest (e.g., src/debug/AndroidManifest.xml).
+      // We search these candidate manifests in order of specificity.
+      final candidatePaths = <String>{};
+      final String modeName = buildInfo.mode.cliName;
+      final String capitalizedModeName = _capitalize(modeName);
+
+      if (buildInfo.flavor != null) {
+        final String flavor = buildInfo.flavor!;
+        final String lowerFlavor = buildInfo.lowerCasedFlavor!;
+        candidatePaths.addAll(<String>[
+          srcDirectory
+              .childDirectory('$flavor$capitalizedModeName')
+              .childFile('AndroidManifest.xml')
+              .path,
+          srcDirectory
+              .childDirectory('$lowerFlavor$capitalizedModeName')
+              .childFile('AndroidManifest.xml')
+              .path,
+          srcDirectory.childDirectory('$flavor$modeName').childFile('AndroidManifest.xml').path,
+          srcDirectory
+              .childDirectory('$lowerFlavor$modeName')
+              .childFile('AndroidManifest.xml')
+              .path,
+          srcDirectory.childDirectory(flavor).childFile('AndroidManifest.xml').path,
+          srcDirectory.childDirectory(lowerFlavor).childFile('AndroidManifest.xml').path,
+        ]);
+      }
+      candidatePaths.add(
+        srcDirectory.childDirectory(modeName).childFile('AndroidManifest.xml').path,
+      );
+
+      for (final path in candidatePaths) {
+        final File candidateFile = fileSystem.file(path);
+        if (candidateFile.existsSync()) {
+          try {
+            final candidateDocument = XmlDocument.parse(candidateFile.readAsStringSync());
+            packageId ??= _parsePackageId(candidateDocument);
+            if (packageId != null) {
+              launchActivity = _parseLaunchActivity(candidateDocument, packageId);
+              if (launchActivity != null) {
+                break;
+              }
+            }
+          } on Exception catch (exception) {
+            logger.printTrace(
+              'Failed to parse candidate manifest ${candidateFile.path}: $exception',
+            );
+          }
+        }
+      }
+    }
+
+    if (packageId == null || launchActivity == null) {
+      logger.printError('package identifier or launch activity not found.');
+      logger.printError('Please check ${manifest.path} for errors.');
+      return null;
+    }
+
+    return AndroidApk(
+      id: packageId,
+      applicationPackage: apkFile,
+      versionCode: null,
+      launchActivity: launchActivity,
+    );
+  }
+
+  static String? _parsePackageId(XmlDocument document) {
+    final Iterable<XmlElement> manifests = document.findElements('manifest');
+    if (manifests.isEmpty) {
+      return null;
+    }
+    return manifests.first.getAttribute('package');
+  }
+
+  static String? _parseLaunchActivity(XmlDocument document, String? packageId) {
+    if (packageId == null) {
+      return null;
+    }
     for (final XmlElement activity in document.findAllElements('activity')) {
       final String? enabled = activity.getAttribute('android:enabled');
       if (enabled != null && enabled == 'false') {
@@ -227,28 +312,22 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
             actionName.isNotEmpty &&
             categoryName.isNotEmpty) {
           final String? activityName = activity.getAttribute('android:name');
-          launchActivity = '$packageId/$activityName';
-          break;
+          return '$packageId/$activityName';
         }
       }
     }
-
-    if (packageId == null || launchActivity == null) {
-      logger.printError('package identifier or launch activity not found.');
-      logger.printError('Please check ${manifest.path} for errors.');
-      return null;
-    }
-
-    return AndroidApk(
-      id: packageId,
-      applicationPackage: apkFile,
-      versionCode: null,
-      launchActivity: launchActivity,
-    );
+    return null;
   }
 
   @override
   String get name => applicationPackage.basename;
+}
+
+String _capitalize(String value) {
+  if (value.isEmpty) {
+    return value;
+  }
+  return '${value[0].toUpperCase()}${value.substring(1)}';
 }
 
 abstract class _Entry {
