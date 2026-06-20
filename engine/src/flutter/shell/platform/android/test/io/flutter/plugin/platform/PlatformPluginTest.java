@@ -34,6 +34,7 @@ import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.Window;
@@ -860,6 +861,7 @@ public class PlatformPluginTest {
   }
 
   @Config(sdk = API_LEVELS.API_29)
+  @SuppressWarnings("deprecation")
   @Test
   public void vibrateHapticFeedbackWhenApiLevelIsLessThan30() {
     View fakeDecorView = mock(View.class);
@@ -867,6 +869,10 @@ public class PlatformPluginTest {
     Activity mockActivity = mock(Activity.class);
     when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
     when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1);
+
     PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
 
     platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
@@ -911,6 +917,7 @@ public class PlatformPluginTest {
   }
 
   @Config(minSdk = API_LEVELS.API_30)
+  @SuppressWarnings("deprecation")
   @Test
   public void vibrateHapticFeedbackWhenApiLevelIsHigherOrEquals30() {
     View fakeDecorView = mock(View.class);
@@ -918,6 +925,10 @@ public class PlatformPluginTest {
     Activity mockActivity = mock(Activity.class);
     when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
     when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1);
+
     PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
 
     platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
@@ -959,5 +970,148 @@ public class PlatformPluginTest {
         PlatformChannel.HapticFeedbackType.ERROR_NOTIFICATION);
     verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.REJECT);
     clearInvocations(fakeDecorView);
+  }
+
+  @Config(sdk = API_LEVELS.API_29)
+  @SuppressWarnings("deprecation")
+  @Test
+  public void vibrateHapticFeedbackSelectionClickDoesNotVibrateWhenHapticsDisabled() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // Set haptic feedback setting to 0 (disabled)
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 0);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.SELECTION_CLICK);
+
+    // This should not be called because haptics are disabled in settings
+    verify(fakeDecorView, never()).performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+  }
+
+  @Config(sdk = API_LEVELS.API_29)
+  @SuppressWarnings("deprecation")
+  @Test
+  public void vibrateHapticFeedbackSelectionClickVibratesWhenHapticsEnabled() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // Set haptic feedback setting to 1 (enabled)
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.SELECTION_CLICK);
+
+    verify(fakeDecorView, times(1)).performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+  }
+
+  @Config(sdk = API_LEVELS.API_30)
+  @SuppressWarnings("deprecation")
+  @Test
+  public void vibrateHapticFeedbackSelectionClickDoesNotVibrateWhenHapticsDisabledAtApi30() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // Set haptic feedback setting to 0 (disabled)
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 0);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.SELECTION_CLICK);
+
+    // This should not be called because haptics are disabled in settings
+    verify(fakeDecorView, never()).performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+  }
+
+  @Config(sdk = API_LEVELS.API_30)
+  @SuppressWarnings("deprecation")
+  @Test
+  public void vibrateHapticFeedbackSuccessNotificationDoesNotVibrateWhenHapticsDisabledAtApi30() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // Set haptic feedback setting to 0 (disabled)
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 0);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.SUCCESS_NOTIFICATION);
+
+    // This should not be called because haptics are disabled in settings
+    verify(fakeDecorView, never()).performHapticFeedback(HapticFeedbackConstants.CONFIRM);
+  }
+
+  @Config(sdk = API_LEVELS.API_30)
+  @SuppressWarnings("deprecation")
+  @Test
+  public void vibrateHapticFeedbackWarningNotificationDoesNotVibrateWhenHapticsDisabledAtApi30() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // Set haptic feedback setting to 0 (disabled)
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 0);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.WARNING_NOTIFICATION);
+
+    // This should not be called because haptics are disabled in settings
+    verify(fakeDecorView, never()).performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+  }
+
+  @Config(sdk = API_LEVELS.API_30)
+  @SuppressWarnings("deprecation")
+  @Test
+  public void vibrateHapticFeedbackErrorNotificationDoesNotVibrateWhenHapticsDisabledAtApi30() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    ContentResolver contentResolver = ctx.getContentResolver();
+    when(mockActivity.getContentResolver()).thenReturn(contentResolver);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    // Set haptic feedback setting to 0 (disabled)
+    Settings.System.putInt(contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 0);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.ERROR_NOTIFICATION);
+
+    // This should not be called because haptics are disabled in settings
+    verify(fakeDecorView, never()).performHapticFeedback(HapticFeedbackConstants.REJECT);
   }
 }

@@ -16,6 +16,7 @@ import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.view.HapticFeedbackConstants;
 import android.view.SoundEffectConstants;
 import android.view.View;
@@ -207,23 +208,39 @@ public class PlatformPlugin {
         view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
         break;
       case SELECTION_CLICK:
-        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+        if (areHapticsEnabled()) {
+          view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+        }
         break;
       case SUCCESS_NOTIFICATION:
-        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30 && areHapticsEnabled()) {
           view.performHapticFeedback(HapticFeedbackConstants.CONFIRM);
         }
         break;
       case WARNING_NOTIFICATION:
-        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30 && areHapticsEnabled()) {
           view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         }
         break;
       case ERROR_NOTIFICATION:
-        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+        if (Build.VERSION.SDK_INT >= API_LEVELS.API_30 && areHapticsEnabled()) {
           view.performHapticFeedback(HapticFeedbackConstants.REJECT);
         }
         break;
+    }
+  }
+
+  private boolean areHapticsEnabled() {
+    try {
+      int setting = Settings.System.getInt(
+          activity.getContentResolver(),
+          Settings.System.HAPTIC_FEEDBACK_ENABLED,
+          1
+      );
+      return setting != 0;
+    } catch (Exception e) {
+      // Default to true on any exception to maintain backward compatibility and avoid crashes.
+      return true;
     }
   }
 
