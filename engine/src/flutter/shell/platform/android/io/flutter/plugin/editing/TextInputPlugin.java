@@ -486,14 +486,39 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
   }
 
   private static boolean composingChanged(
-      TextInputChannel.TextEditState before, TextInputChannel.TextEditState after) {
+      TextInputChannel.TextEditState before, TextInputChannel.TextEditState state) {
+    if (!state.hasComposing()) {
+      // If the new text is shorter than the previous text, a deletion or replacement
+      // occurred (meaning the text was modified), so we must restart the IME.
+      // This also guarantees that stateSuffixStart >= before.composingEnd below.
+      if (state.text.length() < before.text.length()) {
+        return true;
+      }
+
+      // Check that the prefix and the previously composing region are preserved unmodified.
+      for (int i = 0; i < before.composingEnd; i++) {
+        if (before.text.charAt(i) != state.text.charAt(i)) {
+          return true;
+        }
+      }
+
+      // Check that the suffix is preserved unmodified at the end of the new text.
+      final int suffixLength = before.text.length() - before.composingEnd;
+      final int stateSuffixStart = state.text.length() - suffixLength;
+      for (int i = 0; i < suffixLength; i++) {
+        if (before.text.charAt(before.composingEnd + i) != state.text.charAt(stateSuffixStart + i)) {
+          return true;
+        }
+      }
+      return false;
+    }
     final int composingRegionLength = before.composingEnd - before.composingStart;
-    if (composingRegionLength != after.composingEnd - after.composingStart) {
+    if (composingRegionLength != state.composingEnd - state.composingStart) {
       return true;
     }
     for (int index = 0; index < composingRegionLength; index++) {
       if (before.text.charAt(index + before.composingStart)
-          != after.text.charAt(index + after.composingStart)) {
+          != state.text.charAt(index + state.composingStart)) {
         return true;
       }
     }

@@ -3040,6 +3040,60 @@ public class TextInputPluginTest {
     assertEquals(editorInfo.hintLocales, new LocaleList(hintLocales));
   }
 
+  @Test
+  public void testReproIssue95410_imeRestartOnSpace() {
+    InputMethodSubtype inputMethodSubtype = mock(InputMethodSubtype.class);
+    TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
+    testImm.setCurrentInputMethodSubtype(inputMethodSubtype);
+    View testView = new View(ctx);
+    TextInputChannel textInputChannel = spy(new TextInputChannel(mock(DartExecutor.class)));
+    ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+
+    textInputPlugin.setTextInputClient(
+        0,
+        new TextInputChannel.Configuration(
+            false,
+            false,
+            true,
+            true,
+            false,
+            TextInputChannel.TextCapitalization.NONE,
+            new TextInputChannel.InputType(TextInputChannel.TextInputType.TEXT, false, false),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+
+    // Initialize with a composing region.
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("This", 4, 4, 0, 4));
+
+    // Flush any pending restarts from setTextInputClient/setTextInputEditingState.
+    int baselineRestartCount = testImm.getRestartCount(testView);
+
+    // Create the input connection.
+    EditorInfo outAttrs = new EditorInfo();
+    InputConnection inputConnection =
+        textInputPlugin.createInputConnection(testView, mock(KeyboardManager.class), outAttrs);
+
+    // The framework sends back the updated state where composing region is cleared (e.g. [-1, -1]).
+    textInputPlugin.setTextInputEditingState(
+        testView, new TextInputChannel.TextEditState("This ", 5, 5, -1, -1));
+
+    int finalRestartCount = testImm.getRestartCount(testView);
+    assertEquals("IME should not be restarted when composing region is cleared by the framework", baselineRestartCount, finalRestartCount);
+  }
+
+
   interface EventHandler {
     void sendAppPrivateCommand(View view, String action, Bundle data);
   }
