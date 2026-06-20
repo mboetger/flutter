@@ -28,6 +28,8 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.process.ExecOperations
+import org.gradle.api.plugins.ExtraPropertiesExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
@@ -99,6 +101,26 @@ class FlutterPlugin : Plugin<Project> {
         rootProject.allprojects {
             repositories.maven {
                 url = uri(repository!!)
+            }
+        }
+
+        // Align Kotlin JVM target compatibility with Java target compatibility to prevent mismatches.
+        // Use a guard property to ensure this is only registered once per build, avoiding O(N^2) configuration overhead.
+        val extraProperties = rootProject.extensions.findByName("ext") as? ExtraPropertiesExtension
+        if (extraProperties != null && !extraProperties.has("flutterKotlinJvmTargetAligned")) {
+            extraProperties.set("flutterKotlinJvmTargetAligned", true)
+            rootProject.allprojects {
+                val subproject = this
+                subproject.tasks.withType(KotlinCompile::class.java).configureEach {
+                    val androidExtension = subproject.extensions.findByType(BaseExtension::class.java)
+                    if (androidExtension != null) {
+                        val targetCompatibility = androidExtension.compileOptions.targetCompatibility
+                        if (targetCompatibility != null) {
+                            @Suppress("DEPRECATION")
+                            this.kotlinOptions.jvmTarget = targetCompatibility.toString()
+                        }
+                    }
+                }
             }
         }
 
