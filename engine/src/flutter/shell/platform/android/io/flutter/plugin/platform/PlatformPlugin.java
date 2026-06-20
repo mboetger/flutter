@@ -204,7 +204,9 @@ public class PlatformPlugin {
         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         break;
       case HEAVY_IMPACT:
-        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+        if (!view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)) {
+          view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        }
         break;
       case SELECTION_CLICK:
         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);

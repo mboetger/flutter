@@ -15,6 +15,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -867,6 +868,7 @@ public class PlatformPluginTest {
     Activity mockActivity = mock(Activity.class);
     when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
     when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    when(fakeDecorView.performHapticFeedback(anyInt())).thenReturn(true);
     PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
 
     platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
@@ -918,6 +920,7 @@ public class PlatformPluginTest {
     Activity mockActivity = mock(Activity.class);
     when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
     when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    when(fakeDecorView.performHapticFeedback(anyInt())).thenReturn(true);
     PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
 
     platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
@@ -959,5 +962,47 @@ public class PlatformPluginTest {
         PlatformChannel.HapticFeedbackType.ERROR_NOTIFICATION);
     verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.REJECT);
     clearInvocations(fakeDecorView);
+  }
+
+  @Test
+  public void vibrateHapticFeedbackHeavyImpactFallsBackWhenContextClickUnsupported() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+
+    // Stub performHapticFeedback: CONTEXT_CLICK fails (returns false), KEYBOARD_TAP succeeds (returns true)
+    when(fakeDecorView.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)).thenReturn(false);
+    when(fakeDecorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)).thenReturn(true);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.HEAVY_IMPACT);
+
+    // Verify both are called sequentially
+    verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+    verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+  }
+
+  @Test
+  public void vibrateHapticFeedbackHeavyImpactDoesNotTriggerFallbackWhenContextClickSupported() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+
+    // Stub performHapticFeedback: CONTEXT_CLICK succeeds (returns true)
+    when(fakeDecorView.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)).thenReturn(true);
+
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    platformPlugin.mPlatformMessageHandler.vibrateHapticFeedback(
+        PlatformChannel.HapticFeedbackType.HEAVY_IMPACT);
+
+    verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+    verify(fakeDecorView, never()).performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
   }
 }
