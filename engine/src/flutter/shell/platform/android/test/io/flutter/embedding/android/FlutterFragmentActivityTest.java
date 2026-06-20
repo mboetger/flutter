@@ -24,6 +24,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.test.core.app.ActivityScenario;
@@ -38,6 +39,7 @@ import io.flutter.embedding.engine.FlutterJNI;
 import io.flutter.embedding.engine.loader.FlutterLoader;
 import io.flutter.plugins.GeneratedPluginRegistrant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -439,6 +441,37 @@ public class FlutterFragmentActivityTest {
     @Override
     protected FrameLayout provideRootLayout(Context context) {
       return new CustomLayout(context);
+    }
+  }
+
+  @Test
+  public void testOnBackPressedDispatcherCalledOnActivityBackPress() {
+    try (ActivityScenario<FlutterFragmentActivityWithProvidedEngine> scenario =
+        ActivityScenario.launch(FlutterFragmentActivityWithProvidedEngine.class)) {
+      scenario.onActivity(
+          activity -> {
+            final AtomicBoolean customCallbackCalled = new AtomicBoolean(false);
+
+            // Register a custom callback to the activity's OnBackPressedDispatcher.
+            OnBackPressedCallback callback =
+                new OnBackPressedCallback(true) {
+                  @Override
+                  public void handleOnBackPressed() {
+                    customCallbackCalled.set(true);
+                  }
+                };
+            activity.getOnBackPressedDispatcher().addCallback(activity, callback);
+
+            // Trigger the activity's onBackPressed.
+            activity.onBackPressed();
+
+            // We assert that the custom callback registered via the OnBackPressedDispatcher was called.
+            // Under the current implementation where FlutterFragmentActivity overrides onBackPressed()
+            // and bypasses super.onBackPressed(), this assertion will fail.
+            assertTrue(
+                "Expected custom OnBackPressedCallback registered to OnBackPressedDispatcher to be called, but it was bypassed",
+                customCallbackCalled.get());
+          });
     }
   }
 

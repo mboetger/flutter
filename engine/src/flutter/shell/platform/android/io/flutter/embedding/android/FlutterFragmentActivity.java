@@ -632,13 +632,21 @@ public class FlutterFragmentActivity extends FragmentActivity
     super.onNewIntent(intent);
   }
 
-  // Intentionally missing super call to align FlutterFragmentActivity predictive back behavior
-  // with FlutterActivity, with respect to how it responds to the
-  // android:enableOnBackInvokedCallback manifest property.
+  // Suppressing MissingSuperCall because we intentionally bypass super.onBackPressed()
+  // when there are no enabled callbacks in the dispatcher, to preserve the legacy
+  // behavior of forwarding the event directly to the hosted FlutterFragment.
   @Override
   @SuppressWarnings("MissingSuperCall")
   public void onBackPressed() {
-    flutterFragment.onBackPressed();
+    if (getOnBackPressedDispatcher().hasEnabledCallbacks()) {
+      super.onBackPressed();
+    } else {
+      if (flutterFragment != null) {
+        flutterFragment.onBackPressed();
+      } else {
+        super.onBackPressed();
+      }
+    }
   }
 
   @Override
