@@ -92,7 +92,7 @@ class FlutterPlugin : Plugin<Project> {
                 ?: FlutterPluginConstants.DEFAULT_MAVEN_HOST
         val repository: String? =
             if (FlutterPluginUtils.shouldProjectUseLocalEngine(project)) {
-                project.property(PROP_LOCAL_ENGINE_REPO) as String?
+                resolveProperty(PROP_LOCAL_ENGINE_REPO)
             } else {
                 "$hostedRepository/${engineRealm}download.flutter.io"
             }
@@ -229,7 +229,8 @@ class FlutterPlugin : Plugin<Project> {
 
         if (FlutterPluginUtils.shouldProjectUseLocalEngine(project)) {
             // This is required to pass the local engine to flutter build aot.
-            val engineOutPath: String = project.properties["local-engine-out"] as String
+            val engineOutPath: String = resolveProperty("local-engine-out")
+                ?: throw GradleException("local-engine-out must be set when using a local engine")
             val engineOut: File = project.file(engineOutPath)
             if (!engineOut.isDirectory) {
                 throw GradleException("local-engine-out must point to a local engine build")
@@ -237,7 +238,8 @@ class FlutterPlugin : Plugin<Project> {
             localEngine = engineOut.name
             localEngineSrcPath = engineOut.parentFile.parent
 
-            val engineHostOutPath: String = project.properties["local-engine-host-out"] as String
+            val engineHostOutPath: String = resolveProperty("local-engine-host-out")
+                ?: throw GradleException("local-engine-host-out must be set when using a local engine")
             val engineHostOut: File = project.file(engineHostOutPath)
             if (!engineHostOut.isDirectory) {
                 throw GradleException("local-engine-host-out must point to a local engine host build")
@@ -261,16 +263,18 @@ class FlutterPlugin : Plugin<Project> {
     private fun getExecutableNameForPlatform(baseExecutableName: String): String =
         if (OperatingSystem.current().isWindows) "$baseExecutableName.bat" else baseExecutableName
 
-    private fun resolveFlutterSdkProperty(defaultValue: String?): String? {
-        val propertyName = "flutter.sdk"
+    private fun resolveProperty(propertyName: String, defaultValue: String? = null): String? {
         if (localProperties == null) {
-            localProperties =
-                readPropertiesIfExist(File(project!!.projectDir.parentFile, "local.properties"))
+            localProperties = FlutterPluginUtils.getLocalProperties(project!!)
         }
-        return project?.findProperty(propertyName) as? String ?: localProperties!!.getProperty(
+        return (project?.findProperty(propertyName) as? String) ?: localProperties!!.getProperty(
             propertyName,
             defaultValue
         )
+    }
+
+    private fun resolveFlutterSdkProperty(defaultValue: String?): String? {
+        return resolveProperty("flutter.sdk", defaultValue)
     }
 
     private fun addTaskForLockfileGeneration(rootProject: Project) {

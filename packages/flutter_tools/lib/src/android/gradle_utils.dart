@@ -5,7 +5,9 @@
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
 import 'package:unified_analytics/unified_analytics.dart';
+import 'package:xml/xml.dart';
 
+import '../artifacts.dart';
 import '../base/common.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
@@ -1191,6 +1193,47 @@ void updateLocalProperties({
     changeIfNecessary('flutter.versionCode', buildNumber);
   }
 
+  final LocalEngineInfo? localEngineInfo = globals.artifacts?.localEngineInfo;
+  if (localEngineInfo != null) {
+    changeIfNecessary(
+      'local-engine-out',
+      globals.fsUtils.escapePath(localEngineInfo.targetOutPath),
+    );
+    changeIfNecessary(
+      'local-engine-host-out',
+      globals.fsUtils.escapePath(localEngineInfo.hostOutPath),
+    );
+    if (buildInfo != null) {
+      changeIfNecessary('local-engine-build-mode', buildInfo.modeName);
+    }
+    final String targetPlatform = getTargetPlatformByLocalEnginePath(localEngineInfo.targetOutPath);
+    changeIfNecessary('target-platform', targetPlatform);
+
+    final String localEngineRepoPath = globals.fs.path.join(
+      project.directory.path,
+      '.dart_tool',
+      'flutter_tool',
+      'local_engine_repo',
+      localEngineInfo.localTargetName,
+    );
+    changeIfNecessary('local-engine-repo', globals.fsUtils.escapePath(localEngineRepoPath));
+
+    if (buildInfo != null) {
+      createLocalEngineMavenRepo(
+        engineOutPath: localEngineInfo.targetOutPath,
+        localEngineRepoPath: localEngineRepoPath,
+        buildMode: buildInfo.modeName,
+        fileSystem: globals.fs,
+      );
+    }
+  } else {
+    changeIfNecessary('local-engine-out', null);
+    changeIfNecessary('local-engine-host-out', null);
+    changeIfNecessary('local-engine-build-mode', null);
+    changeIfNecessary('target-platform', null);
+    changeIfNecessary('local-engine-repo', null);
+  }
+
   if (changed) {
     settings.writeContents(localProperties);
   }
@@ -1402,3 +1445,130 @@ var _javaAgpCompatList = const <JavaAgpCompat>[
     agpMax: '4.2',
   ),
 ];
+
+void createLocalEngineMavenRepo({
+  required String engineOutPath,
+  required String localEngineRepoPath,
+  required String buildMode,
+  required FileSystem fileSystem,
+}) {
+  final String abi = getAbiByLocalEnginePath(engineOutPath);
+  final String artifactVersion = getLocalArtifactVersion(
+    fileSystem.path.join(engineOutPath, 'flutter_embedding_$buildMode.pom'),
+    fileSystem,
+  );
+
+  final Directory localEngineRepo = fileSystem.directory(localEngineRepoPath);
+  if (!localEngineRepo.existsSync()) {
+    localEngineRepo.createSync(recursive: true);
+  }
+
+  for (final artifact in const <String>['pom', 'jar']) {
+    // The Android embedding artifacts.
+    createSymlink(
+      fileSystem.path.join(engineOutPath, 'flutter_embedding_$buildMode.$artifact'),
+      fileSystem.path.join(
+        localEngineRepo.path,
+        'io',
+        'flutter',
+        'flutter_embedding_$buildMode',
+        artifactVersion,
+        'flutter_embedding_$buildMode-$artifactVersion.$artifact',
+      ),
+      fileSystem,
+    );
+    // The engine artifacts (libflutter.so).
+    createSymlink(
+      fileSystem.path.join(engineOutPath, '${abi}_$buildMode.$artifact'),
+      fileSystem.path.join(
+        localEngineRepo.path,
+        'io',
+        'flutter',
+        '${abi}_$buildMode',
+        artifactVersion,
+        '${abi}_$buildMode-$artifactVersion.$artifact',
+      ),
+      fileSystem,
+    );
+  }
+  for (final artifact in <String>['flutter_embedding_$buildMode', '${abi}_$buildMode']) {
+    createSymlink(
+      fileSystem.path.join(engineOutPath, '$artifact.maven-metadata.xml'),
+      fileSystem.path.join(localEngineRepo.path, 'io', 'flutter', artifact, 'maven-metadata.xml'),
+      fileSystem,
+    );
+  }
+}
+
+void createSymlink(String targetPath, String linkPath, FileSystem fileSystem) {
+  final File targetFile = fileSystem.file(targetPath);
+  if (!targetFile.existsSync()) {
+    throwToolExit("The file $targetPath wasn't found in the local engine out directory.");
+  }
+  final String absoluteTargetPath = targetFile.absolute.path;
+  final File linkFile = fileSystem.file(linkPath);
+  final Link symlink = linkFile.parent.childLink(linkFile.basename);
+
+  // Safely delete any pre-existing file, directory, or symlink (even if broken)
+  if (fileSystem.typeSync(symlink.path, followLinks: false) != FileSystemEntityType.notFound) {
+    try {
+      symlink.deleteSync();
+    } on FileSystemException catch (exception) {
+      throwToolExit(
+        'Failed to delete existing symlink/file at $linkPath before recreating: $exception',
+      );
+    }
+  }
+
+  try {
+    symlink.createSync(absoluteTargetPath, recursive: true);
+  } on FileSystemException catch (exception) {
+    throwToolExit('Failed to create the symlink $linkPath->$targetPath: $exception');
+  }
+}
+
+String getLocalArtifactVersion(String pomPath, FileSystem fileSystem) {
+  final File pomFile = fileSystem.file(pomPath);
+  if (!pomFile.existsSync()) {
+    throwToolExit("The file $pomPath wasn't found in the local engine out directory.");
+  }
+  XmlDocument document;
+  try {
+    document = XmlDocument.parse(pomFile.readAsStringSync());
+  } on XmlException {
+    throwToolExit('Error parsing $pomPath. Please ensure that this is a valid XML document.');
+  } on FileSystemException {
+    throwToolExit(
+      'Error reading $pomPath. Please ensure that you have read permission to this '
+      'file and try again.',
+    );
+  }
+  final Iterable<XmlElement> project = document.findElements('project');
+  assert(project.isNotEmpty);
+  for (final XmlElement versionElement in document.findAllElements('version')) {
+    if (versionElement.parent == project.first) {
+      return versionElement.innerText;
+    }
+  }
+  throwToolExit('Error while parsing the <version> element from $pomPath');
+}
+
+String getAbiByLocalEnginePath(String engineOutPath) {
+  var result = 'armeabi_v7a';
+  if (engineOutPath.contains('x64')) {
+    result = 'x86_64';
+  } else if (engineOutPath.contains('arm64')) {
+    result = 'arm64_v8a';
+  }
+  return result;
+}
+
+String getTargetPlatformByLocalEnginePath(String engineOutPath) {
+  var result = 'android-arm';
+  if (engineOutPath.contains('x64')) {
+    result = 'android-x64';
+  } else if (engineOutPath.contains('arm64')) {
+    result = 'android-arm64';
+  }
+  return result;
+}

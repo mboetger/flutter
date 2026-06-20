@@ -277,8 +277,61 @@ object FlutterPluginUtils {
             ?.toBoolean() ?: false
 
     @JvmStatic
+    @JvmName("getLocalProperties")
+    internal fun getLocalProperties(project: Project): Properties {
+        val rootProject = try {
+            project.rootProject
+        } catch (e: Exception) {
+            null
+        }
+        if (rootProject == null) {
+            return Properties()
+        }
+        val rootLocalPropertiesFile = try {
+            rootProject.file("local.properties")
+        } catch (e: Exception) {
+            null
+        }
+        if (rootLocalPropertiesFile != null && rootLocalPropertiesFile.exists()) {
+            val props = readPropertiesIfExist(rootLocalPropertiesFile)
+            if (props.containsKey(PROP_LOCAL_ENGINE_REPO)) {
+                return props
+            }
+        }
+        val flutterProject = try {
+            rootProject.findProject(":flutter")
+        } catch (e: Exception) {
+            null
+        }
+        if (flutterProject != null) {
+            val flutterLocalPropertiesFile = try {
+                File(flutterProject.projectDir.parentFile, "local.properties")
+            } catch (e: Exception) {
+                null
+            }
+            if (flutterLocalPropertiesFile != null && flutterLocalPropertiesFile.exists()) {
+                val props = readPropertiesIfExist(flutterLocalPropertiesFile)
+                if (props.containsKey(PROP_LOCAL_ENGINE_REPO)) {
+                    return props
+                }
+            }
+        }
+        return if (rootLocalPropertiesFile != null) readPropertiesIfExist(rootLocalPropertiesFile) else Properties()
+    }
+
+    @JvmStatic
     @JvmName("shouldProjectUseLocalEngine")
-    internal fun shouldProjectUseLocalEngine(project: Project): Boolean = project.hasProperty(PROP_LOCAL_ENGINE_REPO)
+    internal fun shouldProjectUseLocalEngine(project: Project): Boolean {
+        val hasProp = try {
+            project.hasProperty(PROP_LOCAL_ENGINE_REPO)
+        } catch (e: Exception) {
+            false
+        }
+        if (hasProp) {
+            return true
+        }
+        return getLocalProperties(project).containsKey(PROP_LOCAL_ENGINE_REPO)
+    }
 
     @JvmStatic
     @JvmName("isProjectVerbose")

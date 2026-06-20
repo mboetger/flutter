@@ -321,7 +321,72 @@ class FlutterPluginUtilsTest {
         assertEquals(true, result)
     }
 
-    // shouldProjectUseLocalEngine skipped as it is a wrapper for a single getter
+    // shouldProjectUseLocalEngine
+    @Test
+    fun `shouldProjectUseLocalEngine returns true when PROP_LOCAL_ENGINE_REPO is in project properties`() {
+        val project = mockk<Project>()
+        every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO) } returns true
+        val result = FlutterPluginUtils.shouldProjectUseLocalEngine(project)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldProjectUseLocalEngine returns true when PROP_LOCAL_ENGINE_REPO is in root local properties`(@TempDir tempDir: Path) {
+        val project = mockk<Project>()
+        val rootProject = mockk<Project>()
+        val localPropertiesFile = tempDir.resolve("local.properties").toFile()
+        localPropertiesFile.writeText("${FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO}=/some/path")
+
+        every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO) } returns false
+        every { project.rootProject } returns rootProject
+        every { rootProject.file("local.properties") } returns localPropertiesFile
+        every { rootProject.findProject(":flutter") } returns null
+
+        val result = FlutterPluginUtils.shouldProjectUseLocalEngine(project)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldProjectUseLocalEngine returns true when PROP_LOCAL_ENGINE_REPO is in flutter subproject parent local properties`(@TempDir tempDir: Path) {
+        val project = mockk<Project>()
+        val rootProject = mockk<Project>()
+        val flutterProject = mockk<Project>()
+        
+        val rootLocalPropertiesFile = tempDir.resolve("root-local.properties").toFile()
+        rootLocalPropertiesFile.writeText("")
+
+        val flutterModuleDir = tempDir.resolve("flutter_module")
+        val flutterAndroidDir = flutterModuleDir.resolve(".android")
+        val flutterSubDir = flutterAndroidDir.resolve("Flutter")
+        flutterSubDir.toFile().mkdirs()
+        val flutterLocalPropertiesFile = flutterAndroidDir.resolve("local.properties").toFile()
+        flutterLocalPropertiesFile.writeText("${FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO}=/some/path")
+
+        every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO) } returns false
+        every { project.rootProject } returns rootProject
+        every { rootProject.file("local.properties") } returns rootLocalPropertiesFile
+        every { rootProject.findProject(":flutter") } returns flutterProject
+        every { flutterProject.projectDir } returns flutterSubDir.toFile()
+
+        val result = FlutterPluginUtils.shouldProjectUseLocalEngine(project)
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `shouldProjectUseLocalEngine returns false when PROP_LOCAL_ENGINE_REPO is not set anywhere`(@TempDir tempDir: Path) {
+        val project = mockk<Project>()
+        val rootProject = mockk<Project>()
+        val localPropertiesFile = tempDir.resolve("local.properties").toFile()
+        localPropertiesFile.writeText("")
+
+        every { project.hasProperty(FlutterPluginUtils.PROP_LOCAL_ENGINE_REPO) } returns false
+        every { project.rootProject } returns rootProject
+        every { rootProject.file("local.properties") } returns localPropertiesFile
+        every { rootProject.findProject(":flutter") } returns null
+
+        val result = FlutterPluginUtils.shouldProjectUseLocalEngine(project)
+        assertEquals(false, result)
+    }
 
     // isProjectVerbose
     @Test
