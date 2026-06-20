@@ -97,8 +97,23 @@ class FlutterPlugin : Plugin<Project> {
                 "$hostedRepository/${engineRealm}download.flutter.io"
             }
         rootProject.allprojects {
-            repositories.maven {
-                url = uri(repository!!)
+            val subproject = this
+            val repositoryUrl = repository!!
+            val targetUriStr = subproject.uri(repositoryUrl).toString().trimEnd('/')
+            val hasRepo = subproject.repositories.any { repo ->
+                repo is org.gradle.api.artifacts.repositories.MavenArtifactRepository &&
+                        repo.url?.let { subproject.uri(it).toString().trimEnd('/') } == targetUriStr
+            }
+            if (!hasRepo) {
+                try {
+                    subproject.repositories.maven {
+                        url = subproject.uri(repositoryUrl)
+                    }
+                } catch (e: Exception) {
+                    // Ignore. This happens when the project is configured with
+                    // dependencyResolutionManagement.repositoriesMode = FAIL_ON_PROJECT_REPOS.
+                    // In this case, the user must declare the repository in settings.gradle.kts.
+                }
             }
         }
 
