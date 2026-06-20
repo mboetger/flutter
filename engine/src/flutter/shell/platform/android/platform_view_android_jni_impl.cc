@@ -1839,7 +1839,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
                       view_id, x, y, width, height, viewWidth, viewHeight,
                       mutatorsStack);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 void PlatformViewAndroidJNIImpl::FlutterViewDisplayOverlaySurface(
@@ -1858,7 +1858,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewDisplayOverlaySurface(
   env->CallVoidMethod(java_object.obj(), g_on_display_overlay_surface_method,
                       surface_id, x, y, width, height);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 void PlatformViewAndroidJNIImpl::FlutterViewBeginFrame() {
@@ -1899,7 +1899,7 @@ PlatformViewAndroidJNIImpl::FlutterViewCreateOverlaySurface() {
   fml::jni::ScopedJavaLocalRef<jobject> overlay(
       env, env->CallObjectMethod(java_object.obj(),
                                  g_create_overlay_surface_method));
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 
   if (overlay.is_null()) {
     return std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(0,
@@ -1929,7 +1929,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewDestroyOverlaySurfaces() {
 
   env->CallVoidMethod(java_object.obj(), g_destroy_overlay_surfaces_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 std::unique_ptr<std::vector<std::string>>
@@ -2061,10 +2061,10 @@ ASurfaceTransaction* PlatformViewAndroidJNIImpl::createTransaction() {
   fml::jni::ScopedJavaLocalRef<jobject> transaction(
       env,
       env->CallObjectMethod(java_object.obj(), g_create_transaction_method));
+  fml::jni::CheckException(env);
   if (transaction.is_null()) {
     return nullptr;
   }
-  FML_CHECK(fml::jni::CheckException(env));
 
   return impeller::android::GetProcTable().ASurfaceTransaction_fromJava(
       env, transaction.obj());
@@ -2080,7 +2080,7 @@ void PlatformViewAndroidJNIImpl::swapTransaction() {
 
   env->CallVoidMethod(java_object.obj(), g_swap_transaction_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 void PlatformViewAndroidJNIImpl::applyTransaction() {
@@ -2093,7 +2093,7 @@ void PlatformViewAndroidJNIImpl::applyTransaction() {
 
   env->CallVoidMethod(java_object.obj(), g_apply_transaction_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
@@ -2108,7 +2108,7 @@ PlatformViewAndroidJNIImpl::createOverlaySurface2() {
   fml::jni::ScopedJavaLocalRef<jobject> overlay(
       env, env->CallObjectMethod(java_object.obj(),
                                  g_create_overlay_surface2_method));
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 
   if (overlay.is_null()) {
     return std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(0,
@@ -2138,7 +2138,7 @@ void PlatformViewAndroidJNIImpl::destroyOverlaySurface2() {
 
   env->CallVoidMethod(java_object.obj(), g_destroy_overlay_surface2_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 namespace {
@@ -2352,7 +2352,7 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
                       view_id, x, y, width, height, viewWidth, viewHeight,
                       mutatorsStack);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 void PlatformViewAndroidJNIImpl::hidePlatformView2(int32_t view_id) {
@@ -2375,7 +2375,7 @@ void PlatformViewAndroidJNIImpl::onEndFrame2() {
 
   env->CallVoidMethod(java_object.obj(), g_on_end_frame2_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 void PlatformViewAndroidJNIImpl::showOverlaySurface2() {
@@ -2387,7 +2387,7 @@ void PlatformViewAndroidJNIImpl::showOverlaySurface2() {
   }
 
   env->CallVoidMethod(java_object.obj(), g_show_overlay_surface2_method);
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 void PlatformViewAndroidJNIImpl::hideOverlaySurface2() {
@@ -2399,7 +2399,7 @@ void PlatformViewAndroidJNIImpl::hideOverlaySurface2() {
   }
 
   env->CallVoidMethod(java_object.obj(), g_hide_overlay_surface2_method);
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 void PlatformViewAndroidJNIImpl::MaybeResizeSurfaceView(int32_t width,
@@ -2413,7 +2413,7 @@ void PlatformViewAndroidJNIImpl::MaybeResizeSurfaceView(int32_t width,
 
   env->CallVoidMethod(java_object.obj(), g_maybe_resize_surface_view, width,
                       height);
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::CheckException(env);
 }
 
 }  // namespace flutter

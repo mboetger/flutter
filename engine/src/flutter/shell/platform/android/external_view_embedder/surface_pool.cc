@@ -47,6 +47,12 @@ std::shared_ptr<OverlayLayer> SurfacePool::GetLayer(
             ? jni_facade->createOverlaySurface2()
             : jni_facade->FlutterViewCreateOverlaySurface();
 
+    // While any Java-side exception during overlay creation has been safely
+    // logged and cleared, a null window at this point represents an
+    // unrecoverable rendering state (we cannot configure OpenGL, Vulkan, or
+    // Software surface without a window). Therefore, we trigger a controlled
+    // C++ crash here rather than letting it crash unpredictably due to a null
+    // pointer dereference later.
     FML_CHECK(java_metadata->window);
     android_surface->SetNativeWindow(java_metadata->window, jni_facade);
     android_surface->SetupImpellerSurface();
