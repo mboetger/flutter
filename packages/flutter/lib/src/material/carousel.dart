@@ -932,6 +932,9 @@ class _RenderSliverFixedExtentCarousel extends RenderSliverFixedExtentBoxAdaptor
     )
     double itemExtent,
   ) {
+    if (!scrollOffset.isFinite) {
+      return -1;
+    }
     if (maxExtent > 0.0) {
       final double actual = scrollOffset / maxExtent - 1;
       final int round = actual.round();
@@ -948,6 +951,18 @@ class _RenderSliverFixedExtentCarousel extends RenderSliverFixedExtentBoxAdaptor
 
   @override
   ItemExtentBuilder? get itemExtentBuilder => _buildItemExtent;
+
+  @override
+  void performLayout() {
+    assert(
+      constraints.viewportMainAxisExtent.isFinite,
+      'CarouselView was given an infinite viewportMainAxisExtent.\n'
+      'This typically happens when it is placed inside an unbounded parent, such as a Column '
+      'without Expanded/Flexible, or a CustomScrollView with shrinkWrap: true inside another scrollable. '
+      'To resolve this, ensure the parent widget provides bounded constraints along the main axis.',
+    );
+    super.performLayout();
+  }
 }
 
 /// A sliver that arranges its box children in a linear array, constraining them
@@ -1077,9 +1092,9 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
   // The given `index` is compared with `_firstVisibleItemIndex` to know how
   // many items are placed before the current one in the view.
   double _buildItemExtent(int index, SliverLayoutDimensions currentLayoutDimensions) {
-    // If constraints.viewportMainAxisExtent is 0, firstChildExtent will be 0 and cause division error.
-    if (constraints.viewportMainAxisExtent == 0) {
-      return 0;
+    // Fall back to 0.0 if layout is unbounded in release mode, or if main axis extent is 0.
+    if (constraints.viewportMainAxisExtent == 0.0 || !constraints.viewportMainAxisExtent.isFinite) {
+      return 0.0;
     }
 
     double extent;
@@ -1101,7 +1116,10 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
 
       final int prevWeight = weights[currIndexOnWeightList - 1];
       final double finalIncrease = (prevWeight - currWeight) / weights.max;
-      extent = extent + finalIncrease * progress * maxChildExtent;
+      final double progressMaxChildExtent = maxChildExtent.isInfinite
+          ? 0.0
+          : progress * maxChildExtent;
+      extent = extent + finalIncrease * progressMaxChildExtent;
     }
     // Calculate the extents of items located beyond the range defined by the
     // weights array relative to the first visible item. During scrolling transition,
@@ -1110,6 +1128,9 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
     // the remaining space.
     else if (index > _firstVisibleItemIndex &&
         index - _firstVisibleItemIndex + 1 > weights.length) {
+      if (constraints.remainingPaintExtent.isInfinite || _distanceToLeadingEdge.isInfinite) {
+        return effectiveShrinkExtent;
+      }
       double visibleItemsTotalExtent = _distanceToLeadingEdge;
       for (int i = _firstVisibleItemIndex + 1; i < index; i++) {
         visibleItemsTotalExtent += _buildItemExtent(i, currentLayoutDimensions);
@@ -1143,8 +1164,8 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
   // (with weight 7), we leave some space before item 0 assuming there is another
   // item -1 as the first visible item.
   int get _firstVisibleItemIndex {
-    // If constraints.viewportMainAxisExtent is 0, firstChildExtent will be 0 and cause division error.
-    if (constraints.viewportMainAxisExtent == 0.0) {
+    // If constraints.viewportMainAxisExtent is 0 or infinite, return 0.
+    if (constraints.viewportMainAxisExtent == 0.0 || !constraints.viewportMainAxisExtent.isFinite) {
       return 0;
     }
     var smallerWeightCount = 0;
@@ -1170,9 +1191,9 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
   // item. It informs them how much the first item has moved off-screen,
   // enabling them to adjust their sizes (grow or shrink) accordingly.
   double get _firstVisibleItemOffscreenExtent {
-    // If constraints.viewportMainAxisExtent is 0, firstChildExtent will be 0 and cause division error.
-    if (constraints.viewportMainAxisExtent == 0.0) {
-      return 0;
+    // If constraints.viewportMainAxisExtent is 0 or infinite, return 0.0.
+    if (constraints.viewportMainAxisExtent == 0.0 || !constraints.viewportMainAxisExtent.isFinite) {
+      return 0.0;
     }
     int index;
     final double actual = constraints.scrollOffset / firstChildExtent;
@@ -1182,7 +1203,8 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
     } else {
       index = actual.floor();
     }
-    return constraints.scrollOffset - index * firstChildExtent;
+    final double indexTimesExtent = index == 0 ? 0.0 : index * firstChildExtent;
+    return constraints.scrollOffset - indexTimesExtent;
   }
 
   // Given the off-screen extent for the first visible item, we can know the
@@ -1202,6 +1224,9 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
     double itemExtent,
     int index,
   ) {
+    if (!constraints.viewportMainAxisExtent.isFinite) {
+      return 0.0;
+    }
     if (index == _firstVisibleItemIndex) {
       if (_distanceToLeadingEdge <= effectiveShrinkExtent) {
         return constraints.scrollOffset - effectiveShrinkExtent + _distanceToLeadingEdge;
@@ -1236,6 +1261,12 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
     )
     double itemExtent,
   ) {
+    if (!scrollOffset.isFinite) {
+      return -1;
+    }
+    if (!constraints.viewportMainAxisExtent.isFinite) {
+      return _firstVisibleItemIndex + 1;
+    }
     final int? childCount = childManager.estimatedChildCount;
 
     // For infinite scrolling, calculate how many items fit in the viewport
@@ -1296,13 +1327,19 @@ class _RenderSliverWeightedCarousel extends RenderSliverFixedExtentBoxAdaptor {
   // TODO(quncCccccc): add the calculation for the extra scroll offset on the super class to simplify the implementation here.
   @override
   void performLayout() {
+    final SliverConstraints constraints = this.constraints;
+    assert(
+      constraints.viewportMainAxisExtent.isFinite,
+      'CarouselView was given an infinite viewportMainAxisExtent.\n'
+      'This typically happens when it is placed inside an unbounded parent, such as a Column '
+      'without Expanded/Flexible, or a CustomScrollView with shrinkWrap: true inside another scrollable. '
+      'To resolve this, ensure the parent widget provides bounded constraints along the main axis.',
+    );
     assert(
       (itemExtent != null && itemExtentBuilder == null) ||
           (itemExtent == null && itemExtentBuilder != null),
     );
     assert(itemExtentBuilder != null || (itemExtent!.isFinite && itemExtent! >= 0));
-
-    final SliverConstraints constraints = this.constraints;
     childManager.didStartLayout();
     childManager.setDidUnderflow(false);
 

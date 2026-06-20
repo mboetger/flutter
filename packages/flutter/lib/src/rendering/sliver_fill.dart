@@ -42,7 +42,22 @@ class RenderSliverFillViewport extends RenderSliverFixedExtentBoxAdaptor {
        _allowImplicitScrolling = allowImplicitScrolling;
 
   @override
-  double get itemExtent => constraints.viewportMainAxisExtent * viewportFraction;
+  double get itemExtent {
+    final double extent = constraints.viewportMainAxisExtent * viewportFraction;
+    return extent.isFinite ? extent : 0.0;
+  }
+
+  @override
+  void performLayout() {
+    assert(
+      constraints.viewportMainAxisExtent.isFinite,
+      'SliverFillViewport (commonly used by PageView) was given an infinite viewportMainAxisExtent.\n'
+      'This typically happens when it is placed inside an unbounded parent, such as a Column '
+      'without Expanded/Flexible, or a CustomScrollView with shrinkWrap: true inside another scrollable. '
+      'To resolve this, ensure the parent widget provides bounded constraints along the main axis.',
+    );
+    super.performLayout();
+  }
 
   /// The fraction of the viewport that each child should fill in the main axis.
   ///

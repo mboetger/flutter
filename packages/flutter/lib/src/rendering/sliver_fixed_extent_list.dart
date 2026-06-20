@@ -75,7 +75,7 @@ abstract class RenderSliverFixedExtentBoxAdaptor extends RenderSliverMultiBoxAda
   ) {
     if (itemExtentBuilder == null) {
       itemExtent = this.itemExtent!;
-      return itemExtent * index;
+      return index == 0 ? 0.0 : itemExtent * index;
     } else {
       var offset = 0.0;
       double? itemExtent;
@@ -113,6 +113,9 @@ abstract class RenderSliverFixedExtentBoxAdaptor extends RenderSliverMultiBoxAda
   ) {
     if (itemExtentBuilder == null) {
       itemExtent = this.itemExtent!;
+      if (itemExtent.isInfinite) {
+        return 0;
+      }
       if (itemExtent > 0.0) {
         final double actual = scrollOffset / itemExtent;
         final int round = actual.round();
@@ -146,6 +149,9 @@ abstract class RenderSliverFixedExtentBoxAdaptor extends RenderSliverMultiBoxAda
   ) {
     if (itemExtentBuilder == null) {
       itemExtent = this.itemExtent!;
+      if (itemExtent.isInfinite) {
+        return 0;
+      }
       if (itemExtent > 0.0) {
         final double actual = scrollOffset / itemExtent - 1;
         final int round = actual.round();
@@ -223,7 +229,7 @@ abstract class RenderSliverFixedExtentBoxAdaptor extends RenderSliverMultiBoxAda
   ) {
     if (itemExtentBuilder == null) {
       itemExtent = this.itemExtent!;
-      return childManager.childCount * itemExtent;
+      return childManager.childCount == 0 ? 0.0 : childManager.childCount * itemExtent;
     } else {
       var offset = 0.0;
       double? itemExtent;
@@ -328,7 +334,11 @@ abstract class RenderSliverFixedExtentBoxAdaptor extends RenderSliverMultiBoxAda
       (itemExtent != null && itemExtentBuilder == null) ||
           (itemExtent == null && itemExtentBuilder != null),
     );
-    assert(itemExtentBuilder != null || (itemExtent!.isFinite && itemExtent! >= 0));
+    assert(
+      itemExtentBuilder != null ||
+          itemExtent!.isInfinite ||
+          (itemExtent!.isFinite && itemExtent! >= 0),
+    );
 
     final SliverConstraints constraints = this.constraints;
     childManager.didStartLayout();
