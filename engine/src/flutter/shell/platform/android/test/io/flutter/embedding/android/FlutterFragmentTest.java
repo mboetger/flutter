@@ -75,7 +75,7 @@ public class FlutterFragmentTest {
     assertNull(fragment.getCachedEngineId());
     assertTrue(fragment.shouldDestroyEngineWithHost());
     assertEquals(RenderMode.surface, fragment.getRenderMode());
-    assertEquals(TransparencyMode.transparent, fragment.getTransparencyMode());
+    assertEquals(TransparencyMode.opaque, fragment.getTransparencyMode());
     assertFalse(fragment.shouldDelayFirstAndroidViewDraw());
   }
 

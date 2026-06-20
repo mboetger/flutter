@@ -258,7 +258,7 @@ public class FlutterFragment extends Fragment
     private String appBundlePath = null;
     private FlutterShellArgs shellArgs = null;
     private RenderMode renderMode = RenderMode.surface;
-    private TransparencyMode transparencyMode = TransparencyMode.transparent;
+    private TransparencyMode transparencyMode = TransparencyMode.opaque;
     private boolean shouldAttachEngineToActivity = true;
     private boolean shouldAutomaticallyHandleOnBackPressed = false;
     private boolean shouldDelayFirstAndroidViewDraw = false;
@@ -467,7 +467,7 @@ public class FlutterFragment extends Fragment
           renderMode != null ? renderMode.name() : RenderMode.surface.name());
       args.putString(
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
-          transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
+          transparencyMode != null ? transparencyMode.name() : TransparencyMode.opaque.name());
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
       args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
       args.putBoolean(
@@ -556,7 +556,7 @@ public class FlutterFragment extends Fragment
     private boolean destroyEngineWithFragment = false;
     private boolean handleDeeplinking = false;
     private RenderMode renderMode = RenderMode.surface;
-    private TransparencyMode transparencyMode = TransparencyMode.transparent;
+    private TransparencyMode transparencyMode = TransparencyMode.opaque;
     private boolean shouldAttachEngineToActivity = true;
     private boolean shouldAutomaticallyHandleOnBackPressed = false;
     private boolean shouldDelayFirstAndroidViewDraw = false;
@@ -714,7 +714,7 @@ public class FlutterFragment extends Fragment
           renderMode != null ? renderMode.name() : RenderMode.surface.name());
       args.putString(
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
-          transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
+          transparencyMode != null ? transparencyMode.name() : TransparencyMode.opaque.name());
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
       args.putBoolean(
           ARG_SHOULD_AUTOMATICALLY_HANDLE_ON_BACK_PRESSED, shouldAutomaticallyHandleOnBackPressed);
@@ -802,7 +802,7 @@ public class FlutterFragment extends Fragment
     private @NonNull String initialRoute = "/";
     private @NonNull boolean handleDeeplinking = false;
     private @NonNull RenderMode renderMode = RenderMode.surface;
-    private @NonNull TransparencyMode transparencyMode = TransparencyMode.transparent;
+    private @NonNull TransparencyMode transparencyMode = TransparencyMode.opaque;
     private boolean shouldAttachEngineToActivity = true;
     private boolean shouldAutomaticallyHandleOnBackPressed = false;
     private boolean shouldDelayFirstAndroidViewDraw = false;
@@ -966,7 +966,7 @@ public class FlutterFragment extends Fragment
           renderMode != null ? renderMode.name() : RenderMode.surface.name());
       args.putString(
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
-          transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
+          transparencyMode != null ? transparencyMode.name() : TransparencyMode.opaque.name());
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
       args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
       args.putBoolean(
@@ -1499,7 +1499,7 @@ public class FlutterFragment extends Fragment
    * Returns the desired {@link TransparencyMode} for the {@link
    * io.flutter.embedding.android.FlutterView} displayed in this {@code FlutterFragment}.
    *
-   * <p>Defaults to {@link TransparencyMode#transparent}.
+   * <p>Defaults to {@link TransparencyMode#opaque}.
    *
    * <p>Used by this {@code FlutterFragment}'s {@link FlutterActivityAndFragmentDelegate.Host}
    */
@@ -1508,7 +1508,7 @@ public class FlutterFragment extends Fragment
   public TransparencyMode getTransparencyMode() {
     String transparencyModeName =
         getArguments()
-            .getString(ARG_FLUTTERVIEW_TRANSPARENCY_MODE, TransparencyMode.transparent.name());
+            .getString(ARG_FLUTTERVIEW_TRANSPARENCY_MODE, TransparencyMode.opaque.name());
     return TransparencyMode.valueOf(transparencyModeName);
   }
 
