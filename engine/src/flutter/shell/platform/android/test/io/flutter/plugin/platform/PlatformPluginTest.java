@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 import android.app.Activity;
 import android.content.ClipData;
+import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -959,5 +960,77 @@ public class PlatformPluginTest {
         PlatformChannel.HapticFeedbackType.ERROR_NOTIFICATION);
     verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.REJECT);
     clearInvocations(fakeDecorView);
+  }
+
+  @Test
+  @Config(sdk = 33)
+  public void platformPlugin_setClipboardDataWithSensitiveSetsSensitiveExtra() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+    setUpForTextClipboardTests(mockActivity);
+
+    // Call setClipboardData with the sensitive flag set to true.
+    // Note: This will not compile initially because setClipboardData only accepts a String.
+    platformPlugin.mPlatformMessageHandler.setClipboardData("sensitive content", true);
+
+    ArgumentCaptor<ClipData> clipDataCaptor = ArgumentCaptor.forClass(ClipData.class);
+    verify(clipboardManager).setPrimaryClip(clipDataCaptor.capture());
+
+    ClipData clip = clipDataCaptor.getValue();
+    assertNotNull(clip);
+    assertEquals("sensitive content", clip.getItemAt(0).getText().toString());
+    assertNotNull(clip.getDescription().getExtras());
+    assertTrue(clip.getDescription().getExtras().getBoolean(ClipDescription.EXTRA_IS_SENSITIVE));
+  }
+
+  @Test
+  @Config(sdk = 33)
+  public void platformPlugin_setClipboardDataWithSensitiveFalseDoesNotSetExtra() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+    setUpForTextClipboardTests(mockActivity);
+
+    // Call setClipboardData with the sensitive flag set to false.
+    platformPlugin.mPlatformMessageHandler.setClipboardData("normal content", false);
+
+    ArgumentCaptor<ClipData> clipDataCaptor = ArgumentCaptor.forClass(ClipData.class);
+    verify(clipboardManager).setPrimaryClip(clipDataCaptor.capture());
+
+    ClipData clip = clipDataCaptor.getValue();
+    assertNotNull(clip);
+    assertEquals("normal content", clip.getItemAt(0).getText().toString());
+    if (clip.getDescription().getExtras() != null) {
+      assertFalse(clip.getDescription().getExtras().getBoolean(ClipDescription.EXTRA_IS_SENSITIVE));
+    }
+  }
+
+  @Test
+  @Config(sdk = 32)
+  public void platformPlugin_setClipboardDataWithSensitiveOnOlderSdkDoesNotCrash() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+    setUpForTextClipboardTests(mockActivity);
+
+    // On older SDKs (API <= 32), calling setClipboardData with true should not crash.
+    platformPlugin.mPlatformMessageHandler.setClipboardData("sensitive content", true);
+
+    ArgumentCaptor<ClipData> clipDataCaptor = ArgumentCaptor.forClass(ClipData.class);
+    verify(clipboardManager).setPrimaryClip(clipDataCaptor.capture());
+
+    ClipData clip = clipDataCaptor.getValue();
+    assertNotNull(clip);
+    assertEquals("sensitive content", clip.getItemAt(0).getText().toString());
   }
 }

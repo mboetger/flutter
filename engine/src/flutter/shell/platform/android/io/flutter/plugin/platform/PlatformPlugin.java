@@ -143,7 +143,12 @@ public class PlatformPlugin {
 
         @Override
         public void setClipboardData(@NonNull String text) {
-          PlatformPlugin.this.setClipboardData(text);
+          PlatformPlugin.this.setClipboardData(text, false);
+        }
+
+        @Override
+        public void setClipboardData(@NonNull String text, boolean isSensitive) {
+          PlatformPlugin.this.setClipboardData(text, isSensitive);
         }
 
         @Override
@@ -690,10 +695,16 @@ public class PlatformPlugin {
     return null;
   }
 
-  private void setClipboardData(String text) {
+  private void setClipboardData(String text, boolean isSensitive) {
     ClipboardManager clipboard =
         (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
     ClipData clip = ClipData.newPlainText("text label?", text);
+    if (isSensitive && Build.VERSION.SDK_INT >= API_LEVELS.API_33) {
+      ClipDescription description = clip.getDescription();
+      android.os.PersistableBundle bundle = new android.os.PersistableBundle();
+      bundle.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true);
+      description.setExtras(bundle);
+    }
     clipboard.setPrimaryClip(clip);
   }
 

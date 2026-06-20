@@ -46,6 +46,46 @@ void main() {
   test('Clipboard.setData sets text', () async {
     await Clipboard.setData(const ClipboardData(text: 'Hello world'));
 
-    expect(mockClipboard.clipboardData, <String, dynamic>{'text': 'Hello world'});
+    expect(mockClipboard.clipboardData, <String, dynamic>{
+      'text': 'Hello world',
+      'isSensitive': false,
+    });
+  });
+
+  test('ClipboardData defaults isSensitive to false', () async {
+    const data = ClipboardData(text: 'normal text');
+    expect(data.isSensitive, isFalse);
+
+    await Clipboard.setData(data);
+
+    expect(mockClipboard.clipboardData, isA<Map<String, dynamic>>());
+    final sentData = mockClipboard.clipboardData as Map<String, dynamic>;
+    expect(sentData['text'], 'normal text');
+    expect(sentData['isSensitive'], isFalse);
+  });
+
+  test('ClipboardData supports isSensitive: false explicitly', () async {
+    // ignore: avoid_redundant_argument_values
+    const data = ClipboardData(text: 'normal text', isSensitive: false);
+    expect(data.isSensitive, isFalse);
+
+    await Clipboard.setData(data);
+
+    expect(mockClipboard.clipboardData, isA<Map<String, dynamic>>());
+    final sentData = mockClipboard.clipboardData as Map<String, dynamic>;
+    expect(sentData['text'], 'normal text');
+    expect(sentData['isSensitive'], isFalse);
+  });
+
+  test('ClipboardData supports isSensitive: true explicitly and propagates it', () async {
+    const data = ClipboardData(text: 'sensitive text', isSensitive: true);
+    expect(data.isSensitive, isTrue);
+
+    await Clipboard.setData(data);
+
+    expect(mockClipboard.clipboardData, isA<Map<String, dynamic>>());
+    final sentData = mockClipboard.clipboardData as Map<String, dynamic>;
+    expect(sentData['text'], 'sensitive text');
+    expect(sentData['isSensitive'], isTrue);
   });
 }

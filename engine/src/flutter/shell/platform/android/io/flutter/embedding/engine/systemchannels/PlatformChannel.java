@@ -174,8 +174,10 @@ public class PlatformChannel {
                 }
               case "Clipboard.setData":
                 {
-                  String clipboardContent = ((JSONObject) arguments).getString("text");
-                  platformMessageHandler.setClipboardData(clipboardContent);
+                  JSONObject clipboardData = (JSONObject) arguments;
+                  String clipboardContent = clipboardData.getString("text");
+                  boolean isSensitive = clipboardData.optBoolean("isSensitive", false);
+                  platformMessageHandler.setClipboardData(clipboardContent, isSensitive);
                   result.success(null);
                   break;
                 }
@@ -546,8 +548,21 @@ public class PlatformChannel {
     /**
      * The Flutter application would like to set the current data in the clipboard to the given
      * {@code text}.
+     *
+     * @deprecated Use {@link #setClipboardData(String, boolean)} instead.
      */
-    void setClipboardData(@NonNull String text);
+    @Deprecated
+    default void setClipboardData(@NonNull String text) {
+      setClipboardData(text, false);
+    }
+
+    /**
+     * The Flutter application would like to set the current data in the clipboard to the given
+     * {@code text}, and specify if the content is sensitive.
+     */
+    default void setClipboardData(@NonNull String text, boolean isSensitive) {
+      setClipboardData(text);
+    }
 
     /**
      * The Flutter application would like to know if the clipboard currently contains a string that

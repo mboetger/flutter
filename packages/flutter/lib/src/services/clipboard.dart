@@ -13,13 +13,19 @@ import 'system_channels.dart';
 @immutable
 class ClipboardData {
   /// Creates data for the system clipboard.
-  const ClipboardData({required String this.text});
+  const ClipboardData({required String this.text, this.isSensitive = false});
 
   /// Plain text variant of this clipboard data.
   // This is nullable as other clipboard data variants, like images, may be
   // added in the future. Currently, plain text is the only supported variant
   // and this is guaranteed to be non-null.
   final String? text;
+
+  /// Whether the clipboard data contains sensitive content (e.g. passwords, credit card numbers).
+  ///
+  /// On Android 13+ (API 33+), setting this to true will prevent the content from appearing
+  /// in the system's clipboard preview/notification.
+  final bool isSensitive;
 }
 
 /// Utility methods for interacting with the system's clipboard.
@@ -35,6 +41,7 @@ abstract final class Clipboard {
   static Future<void> setData(ClipboardData data) async {
     await SystemChannels.platform.invokeMethod<void>('Clipboard.setData', <String, dynamic>{
       'text': data.text,
+      'isSensitive': data.isSensitive,
     });
   }
 

@@ -69,4 +69,49 @@ public class PlatformChannelTest {
     assertEquals(valueCapture.getValue(), expectedContent);
     verify(mockResult).success(null);
   }
+
+  @Test
+  public void platformChannel_setClipboardDataWithSensitive() throws JSONException {
+    FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
+    DartExecutor dartExecutor = new DartExecutor(mockFlutterJNI, mock(AssetManager.class));
+    PlatformChannel fakePlatformChannel = new PlatformChannel(dartExecutor);
+    PlatformChannel.PlatformMessageHandler mockMessageHandler =
+        mock(PlatformChannel.PlatformMessageHandler.class);
+    fakePlatformChannel.setPlatformMessageHandler(mockMessageHandler);
+
+    JSONObject arguments = new JSONObject();
+    arguments.put("text", "sensitive content");
+    arguments.put("isSensitive", true);
+
+    MethodCall methodCall = new MethodCall("Clipboard.setData", arguments);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+    fakePlatformChannel.parsingMethodCallHandler.onMethodCall(methodCall, mockResult);
+
+    // Verify that the platform message handler was called with the sensitive flag.
+    // Note: This will not compile initially because setClipboardData only accepts a String text.
+    verify(mockMessageHandler).setClipboardData("sensitive content", true);
+    verify(mockResult).success(null);
+  }
+
+  @Test
+  public void platformChannel_setClipboardDataWithoutSensitiveDefaultsToFalse() throws JSONException {
+    FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
+    DartExecutor dartExecutor = new DartExecutor(mockFlutterJNI, mock(AssetManager.class));
+    PlatformChannel fakePlatformChannel = new PlatformChannel(dartExecutor);
+    PlatformChannel.PlatformMessageHandler mockMessageHandler =
+        mock(PlatformChannel.PlatformMessageHandler.class);
+    fakePlatformChannel.setPlatformMessageHandler(mockMessageHandler);
+
+    JSONObject arguments = new JSONObject();
+    arguments.put("text", "normal content");
+    // Omit isSensitive to simulate backward compatibility.
+
+    MethodCall methodCall = new MethodCall("Clipboard.setData", arguments);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+    fakePlatformChannel.parsingMethodCallHandler.onMethodCall(methodCall, mockResult);
+
+    // Verify that the platform message handler was called with false when isSensitive is omitted.
+    verify(mockMessageHandler).setClipboardData("normal content", false);
+    verify(mockResult).success(null);
+  }
 }
