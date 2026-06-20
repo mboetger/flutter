@@ -8,13 +8,14 @@
 
 print_usage () {
   echo "Usage:"
-  echo "  ./create_cipd_packages.sh <VERSION_TAG> [PATH_TO_SDK_DIR]"
+  echo "  ./create_cipd_packages.sh [--dry-run] <VERSION_TAG> [PATH_TO_SDK_DIR]"
   echo "    Downloads, packages, and uploads Android SDK packages where:"
+  echo "      - --dry-run is an optional flag to run the packaging process without actually uploading to CIPD."
   echo "      - VERSION_TAG is the tag of the cipd packages, e.g. 28r6 or 31v1. Must contain"
   echo "                    only lowercase letters and numbers."
   echo "      - PATH_TO_SDK_DIR is the path to the sdk folder. If omitted, this defaults to"
   echo "                      your ANDROID_SDK_ROOT environment variable."
-  echo "  ./create_cipd_packages.sh list"
+  echo "  ./create_cipd_packages.sh [--dry-run] list"
   echo "    Lists the available packages for use in 'packages.txt'"
   echo ""
   echo "This script downloads the packages specified in packages.txt and uploads"
@@ -30,6 +31,12 @@ print_usage () {
   echo "This script expects the cmdline-tools to be installed in your specified PATH_TO_SDK_DIR"
   echo "and should only be run on linux or macos hosts."
 }
+
+dry_run=false
+if [[ $1 == "--dry-run" ]]; then
+  dry_run=true
+  shift
+fi
 
 first_argument=$1
 # Validate version or argument is provided.
@@ -141,15 +148,28 @@ for platform in "${platforms[@]}"; do
       cipd_name="mac-$arch"
     fi
 
-    echo "Uploading $upload_dir as $cipd_name to CIPD"
-    cipd create -in $upload_dir -name "flutter/android/sdk/all/$cipd_name" -install-mode copy -tag version:$first_argument -ref $first_argument
+    if [[ $dry_run == "true" ]]; then
+      echo "[Dry Run] Would upload $upload_dir as 'flutter/android/sdk/all/$cipd_name' to CIPD with tag 'version:$first_argument' and ref '$first_argument'"
+    else
+      echo "Uploading $upload_dir as $cipd_name to CIPD"
+      cipd create -in $upload_dir -name "flutter/android/sdk/all/$cipd_name" -install-mode copy -tag version:$first_argument -ref $first_argument
+    fi
   done
 
-  rm -rf $sdk_root
-  rm -rf $upload_dir
+  rm -rf "$sdk_root"
+  if [[ $dry_run == "true" ]]; then
+    echo "[Dry Run] Prepared bundle for $platform: $upload_dir"
+  else
+    rm -rf "$upload_dir"
+  fi
 
   # This variable changes the behvaior of sdkmanager.
   # Unset to clean up after script.
   unset REPO_OS_OVERRIDE
 done
-rm -rf $temp_dir
+
+if [[ $dry_run == "true" ]]; then
+  echo "[Dry Run] All bundles prepared in: $temp_dir"
+else
+  rm -rf "$temp_dir"
+fi
