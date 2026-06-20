@@ -38,6 +38,12 @@ class TestWidgetInspectorService extends Object with WidgetInspectorService {
     selection.addListener(() => selectionChangedCallback?.call());
   }
 
+  /// Mock value for extensionStreamHasListener.
+  bool mockExtensionStreamHasListener = false;
+
+  @override
+  bool get extensionStreamHasListener => mockExtensionStreamHasListener;
+
   final Map<String, ServiceExtensionCallback> extensions = .new();
 
   final Map<DispatchedEventKey, List<Map<Object, Object?>>> eventsDispatched =
