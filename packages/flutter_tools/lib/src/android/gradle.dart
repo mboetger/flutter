@@ -139,17 +139,20 @@ String getAarTaskFor(BuildInfo buildInfo) {
 /// Returns the output APK file names for a given [AndroidBuildInfo].
 ///
 /// For example, when [AndroidBuildInfo.splitPerAbi] is `true`, multiple APKs are created.
-Iterable<String> _apkFilesFor(AndroidBuildInfo androidBuildInfo) {
+Iterable<String> _apkFilesFor(
+  AndroidBuildInfo androidBuildInfo, [
+  String archivesBaseName = 'app',
+]) {
   final String buildType = camelCase(androidBuildInfo.buildInfo.modeName);
   final String productFlavor = androidBuildInfo.buildInfo.lowerCasedFlavor ?? '';
   final flavorString = productFlavor.isEmpty ? '' : '-$productFlavor';
   if (androidBuildInfo.splitPerAbi) {
     return androidBuildInfo.targetArchs.map<String>((AndroidArch arch) {
       final String abi = arch.archName;
-      return 'app$flavorString-$abi-$buildType.apk';
+      return '$archivesBaseName$flavorString-$abi-$buildType.apk';
     });
   }
-  return <String>['app$flavorString-$buildType.apk'];
+  return <String>['$archivesBaseName$flavorString-$buildType.apk'];
 }
 
 // The maximum time to wait before the tool retries a Gradle build.
@@ -623,7 +626,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     // Gradle produced APKs.
     final Iterable<String> apkFilesPaths = project.isModule
         ? findApkFilesModule(project, androidBuildInfo, _logger, _analytics)
-        : listApkPaths(androidBuildInfo);
+        : listApkPaths(androidBuildInfo, project.android.archivesBaseName);
     final Directory apkDirectory = getApkDirectory(project);
 
     // Generate sha1 for every generated APKs.
@@ -1107,7 +1110,10 @@ Iterable<String> findApkFilesModule(
   Logger logger,
   Analytics analytics,
 ) {
-  final Iterable<String> apkFileNames = _apkFilesFor(androidBuildInfo);
+  final Iterable<String> apkFileNames = _apkFilesFor(
+    androidBuildInfo,
+    project.android.archivesBaseName,
+  );
   final Directory apkDirectory = getApkDirectory(project);
   final Iterable<File> apks = apkFileNames.expand<File>((String apkFileName) {
     File apkFile = apkDirectory.childFile(apkFileName);
@@ -1146,7 +1152,10 @@ Iterable<String> findApkFilesModule(
 /// The flutter.gradle plugin will copy APK outputs into:
 /// `$buildDir/app/outputs/flutter-apk/app-<abi>-<flavor-flag>-<build-mode-flag>.apk`
 @visibleForTesting
-Iterable<String> listApkPaths(AndroidBuildInfo androidBuildInfo) {
+Iterable<String> listApkPaths(
+  AndroidBuildInfo androidBuildInfo, [
+  String archivesBaseName = 'app',
+]) {
   final String buildType = camelCase(androidBuildInfo.buildInfo.modeName);
   final apkPartialName = <String>[
     if (androidBuildInfo.buildInfo.flavor?.isNotEmpty ?? false)
@@ -1156,11 +1165,11 @@ Iterable<String> listApkPaths(AndroidBuildInfo androidBuildInfo) {
   if (androidBuildInfo.splitPerAbi) {
     return <String>[
       for (final AndroidArch androidArch in androidBuildInfo.targetArchs)
-        <String>['app', androidArch.archName, ...apkPartialName].join('-'),
+        <String>[archivesBaseName, androidArch.archName, ...apkPartialName].join('-'),
     ];
   }
   return <String>[
-    <String>['app', ...apkPartialName].join('-'),
+    <String>[archivesBaseName, ...apkPartialName].join('-'),
   ];
 }
 
@@ -1186,7 +1195,12 @@ File findBundleFile(
     },
   );
 
+  final String archivesBaseName = project.android.archivesBaseName;
+
   for (final bundleFile in allBundleFiles) {
+    if (!bundleFile.basename.startsWith(archivesBaseName)) {
+      continue;
+    }
     // Use lowercase bundle parent directory name to handle varying cases from Android Gradle Plugin
     final String bundleParentDir = bundleFile.parent.basename.toLowerCase();
 

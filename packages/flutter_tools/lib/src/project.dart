@@ -567,6 +567,21 @@ class AndroidProject extends FlutterProjectPlatform {
   /// Regex is used in both Groovy and Kotlin Gradle files.
   static final _groupPattern = RegExp('^\\s*group\\s*=?\\s*[\'"](.*)[\'"]\\s*\$');
 
+  // Matches: base.archivesName.set("name") or archivesName.set("name")
+  static final RegExp _archivesNameSetPattern = RegExp(
+    r'''^\s*(?:base\.)?archivesName\.set\(\s*['"]([^'"]+)['"]\s*\)''',
+  );
+
+  // Matches: base.archivesName = "name" or archivesName = "name"
+  static final RegExp _archivesNamePattern = RegExp(
+    r'''^\s*(?:base\.)?archivesName\s*=?\s*['"]([^'"]+)['"]''',
+  );
+
+  // Matches: project.archivesBaseName = "name" or archivesBaseName = "name"
+  static final RegExp _archivesBaseNamePattern = RegExp(
+    r'''^\s*(?:project\.)?archivesBaseName\s*=?\s*['"]([^'"]+)['"]''',
+  );
+
   /// The Gradle root directory of the Android host app. This is the directory
   /// containing the `app/` subdirectory and the `settings.gradle` file that
   /// includes it in the overall Gradle project.
@@ -890,6 +905,42 @@ See the link below for more information:
 
   String? get applicationId {
     return firstMatchInFile(appGradleFile, _applicationIdPattern)?.group(1);
+  }
+
+  /// The archives base name configured in the project, defaulting to 'app'.
+  String get archivesBaseName {
+    if (!isUsingGradle || !appGradleFile.existsSync()) {
+      return 'app';
+    }
+    try {
+      final List<String> lines = appGradleFile.readAsLinesSync();
+      for (final line in lines) {
+        final Match? setMatch = _archivesNameSetPattern.firstMatch(line);
+        if (setMatch != null) {
+          final String val = setMatch.group(1)!.trim();
+          if (val.isNotEmpty) {
+            return val;
+          }
+        }
+        final Match? modernMatch = _archivesNamePattern.firstMatch(line);
+        if (modernMatch != null) {
+          final String val = modernMatch.group(1)!.trim();
+          if (val.isNotEmpty) {
+            return val;
+          }
+        }
+        final Match? legacyMatch = _archivesBaseNamePattern.firstMatch(line);
+        if (legacyMatch != null) {
+          final String val = legacyMatch.group(1)!.trim();
+          if (val.isNotEmpty) {
+            return val;
+          }
+        }
+      }
+    } on Exception {
+      // Fallback gracefully
+    }
+    return 'app';
   }
 
   /// Get the namespace for newer Android projects,
