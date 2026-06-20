@@ -193,6 +193,36 @@ void main() {
       expect(_checkLibIsInApk(projectDir, 'lib/x86/libflutter.so', productFlavor: 'arm64'), false);
     },
   );
+
+  testWithoutContext(
+    'release build fails if it contains unsupported ABIs (when filtering is disabled)',
+    () async {
+      final Directory projectDir = createProjectWithThirdpartyLib(tempDir);
+
+      // Run release build with disable-abi-filtering=true, so that the x86 library
+      // is not filtered out by the default Flutter Gradle plugin filtering.
+      final ProcessResult result = processManager.runSync(<String>[
+        flutterBin,
+        'build',
+        'apk',
+        '--release',
+        '-P',
+        'disable-abi-filtering=true',
+      ], workingDirectory: projectDir.path);
+
+      // We expect the build to FAIL because the x86 ABI is not supported by Flutter in release mode.
+      expect(
+        result.exitCode,
+        isNot(0),
+        reason: 'The build should have failed due to unsupported x86 ABI.',
+      );
+      expect(
+        result.stderr.toString() + result.stdout.toString(),
+        contains('unsupported ABI'),
+        reason: 'The error message should warn about unsupported ABIs.',
+      );
+    },
+  );
 }
 
 Directory createProjectWithThirdpartyLib(Directory workingDir) {

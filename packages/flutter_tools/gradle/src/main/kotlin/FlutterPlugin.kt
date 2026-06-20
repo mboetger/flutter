@@ -15,6 +15,7 @@ import com.android.build.gradle.tasks.ProcessAndroidResources
 import com.flutter.gradle.FlutterPluginConstants.PLATFORM_ABI_LIST
 import com.flutter.gradle.FlutterPluginUtils.readPropertiesIfExist
 import com.flutter.gradle.plugins.PluginHandler
+import com.flutter.gradle.tasks.CheckUnsupportedAbisTask
 import com.flutter.gradle.tasks.FlutterTask
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
@@ -325,6 +326,51 @@ class FlutterPlugin : Plugin<Project> {
                 projectToAddTasksTo.extensions.findByName("android") as AbstractAppExtension
             android.applicationVariants.configureEach {
                 val variant = this
+                val variantBuildMode: String = FlutterPluginUtils.buildModeFor(variant.buildType)
+                if (variantBuildMode == "release" || variantBuildMode == "profile") {
+                    val checkAbisTaskName = "check${FlutterPluginUtils.capitalize(variant.name)}UnsupportedAbis"
+                    val mergeTaskName = "merge${FlutterPluginUtils.capitalize(variant.name)}NativeLibs"
+                    val mergeTaskProvider = projectToAddTasksTo.tasks.named(mergeTaskName)
+                    
+                    val checkAbisTaskProvider = projectToAddTasksTo.tasks.register(checkAbisTaskName, CheckUnsupportedAbisTask::class.java) {
+                        this.buildMode.set(variantBuildMode)
+                        
+                        // Use task outputs directly to avoid hardcoded AGP internal paths.
+                        // This makes the task wiring resilient to changes in AGP's internal directory structure.
+                        this.mergedNativeLibsFiles.from(mergeTaskProvider.map { it.outputs.files })
+                        
+                        val packageTaskProvider = variant.packageApplicationProvider
+                        // Using reflection to retrieve abiFilters because the return type of getAbiFilters
+                        // changed from Collection<String> to SetProperty<String> in newer AGP versions,
+                        // and we must maintain compatibility with both.
+                        // We evaluate the reflection inside the flatMap transformation to avoid capturing
+                        // the Task instance in any execution-time lambdas, which would break Configuration Cache.
+                        this.abiFilters.set(packageTaskProvider.flatMap { packageTask ->
+                            val prop = try {
+                                packageTask.javaClass.getMethod("getAbiFilters").invoke(packageTask)
+                            } catch (e: Exception) {
+                                null
+                            }
+                            if (prop is org.gradle.api.provider.Provider<*>) {
+                                @Suppress("UNCHECKED_CAST")
+                                (prop as org.gradle.api.provider.Provider<out Collection<*>>).map { collection ->
+                                    collection.map { it.toString() }.toSet()
+                                }
+                            } else if (prop is Collection<*>) {
+                                val set = prop.map { it.toString() }.toSet()
+                                projectToAddTasksTo.provider { set }
+                            } else {
+                                projectToAddTasksTo.provider { emptySet<String>() }
+                            }
+                        })
+                    }
+
+                    // Establish a clean, standard dependency chain: merge -> check -> package
+                    variant.packageApplicationProvider.configure {
+                        dependsOn(checkAbisTaskProvider)
+                    }
+                }
+
                 val assembleTask = variant.assembleProvider.get()
                 if (!FlutterPluginUtils.shouldConfigureFlutterTask(
                         projectToAddTasksTo,
