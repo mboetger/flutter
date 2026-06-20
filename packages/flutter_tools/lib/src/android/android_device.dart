@@ -33,6 +33,8 @@ import 'gradle_utils.dart' as gradle_utils;
 /// Whether the [AndroidDevice] is believed to be a physical device or an emulator.
 enum HardwareType { emulator, physical }
 
+enum _InstallResult { success, failure, failureUpdateIncompatible }
+
 /// Map to help our `isLocalEmulator` detection.
 ///
 /// See [AndroidDevice] for more explanation of why this is needed.
@@ -408,31 +410,57 @@ class AndroidDevice extends Device {
       return false;
     }
     _logger.printTrace('Installing APK.');
-    if (await _installApp(app, userIdentifier: userIdentifier)) {
+    final _InstallResult installResult = await _installApp(app, userIdentifier: userIdentifier);
+    if (installResult == _InstallResult.success) {
       return true;
     }
     _logger.printTrace('Warning: Failed to install APK.');
-    if (!await isAppInstalled(app, userIdentifier: userIdentifier)) {
+
+    final bool isInstalled = await isAppInstalled(app, userIdentifier: userIdentifier);
+
+    if (installResult == _InstallResult.failureUpdateIncompatible && !isInstalled) {
+      final userPhrase = userIdentifier == null ? 'the current user' : 'user $userIdentifier';
+      _logger.printError(
+        'Installing APK failed because the app is not installed for $userPhrase, '
+        'but is installed for another user with an incompatible signature.\n'
+        'Please uninstall the app for all users (e.g. using "adb uninstall ${app.id}") and try again.',
+      );
       return false;
     }
+
+    if (!isInstalled) {
+      return false;
+    }
+
     _logger.printStatus('Uninstalling old version...');
     if (!await uninstallApp(app, userIdentifier: userIdentifier)) {
       _logger.printError('Error: Uninstalling old version failed.');
       return false;
     }
-    if (!await _installApp(app, userIdentifier: userIdentifier)) {
-      _logger.printError('Error: Failed to install APK again.');
+    final _InstallResult secondInstallResult = await _installApp(
+      app,
+      userIdentifier: userIdentifier,
+    );
+    if (secondInstallResult != _InstallResult.success) {
+      if (secondInstallResult == _InstallResult.failureUpdateIncompatible) {
+        _logger.printError(
+          'Installing APK failed because the app is still installed for another user with an incompatible signature.\n'
+          'Please uninstall the app for all users (e.g. using "adb uninstall ${app.id}") and try again.',
+        );
+      } else {
+        _logger.printError('Error: Failed to install APK again.');
+      }
       return false;
     }
     return true;
   }
 
-  Future<bool> _installApp(AndroidApk app, {String? userIdentifier}) async {
+  Future<_InstallResult> _installApp(AndroidApk app, {String? userIdentifier}) async {
     if (!app.applicationPackage.existsSync()) {
       _logger.printError(
         '"${_fileSystem.path.relative(app.applicationPackage.path)}" does not exist.',
       );
-      return false;
+      return _InstallResult.failure;
     }
 
     final Status status = _logger.startProgress(
@@ -452,20 +480,33 @@ class AndroidDevice extends Device {
     // Parsing the output to check for failures.
     final failureExp = RegExp(r'^Failure.*$', multiLine: true);
     final String? failure = failureExp.stringMatch(installResult.stdout);
+
+    final bool isUpdateIncompatible =
+        installResult.stdout.contains('INSTALL_FAILED_UPDATE_INCOMPATIBLE') ||
+        installResult.stderr.contains('INSTALL_FAILED_UPDATE_INCOMPATIBLE');
+
     if (failure != null) {
+      if (isUpdateIncompatible) {
+        _logger.printTrace('Package install error: $failure');
+        return _InstallResult.failureUpdateIncompatible;
+      }
       _logger.printError('Package install error: $failure');
-      return false;
+      return _InstallResult.failure;
     }
     if (installResult.exitCode != 0) {
       if (installResult.stderr.contains('Bad user number')) {
         _logger.printError(
           'Error: User "$userIdentifier" not found. Run "adb shell pm list users" to see list of available identifiers.',
         );
+      } else if (isUpdateIncompatible) {
+        _logger.printTrace('Error: ADB exited with exit code ${installResult.exitCode}');
+        _logger.printTrace('$installResult');
+        return _InstallResult.failureUpdateIncompatible;
       } else {
         _logger.printError('Error: ADB exited with exit code ${installResult.exitCode}');
         _logger.printError('$installResult');
       }
-      return false;
+      return _InstallResult.failure;
     }
     try {
       await runAdbCheckedAsync(<String>[
@@ -478,9 +519,9 @@ class AndroidDevice extends Device {
       ]);
     } on ProcessException catch (error) {
       _logger.printError('adb shell failed to write the SHA hash: $error.');
-      return false;
+      return _InstallResult.failure;
     }
-    return true;
+    return _InstallResult.success;
   }
 
   @override
