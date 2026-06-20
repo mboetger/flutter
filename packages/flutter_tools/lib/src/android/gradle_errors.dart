@@ -109,7 +109,6 @@ final permissionDeniedErrorHandler = GradleHandledError(
 
 /// Gradle crashes for several known reasons when downloading that are not
 /// actionable by Flutter.
-@visibleForTesting
 final networkErrorHandler = GradleHandledError(
   test: _lineMatcher(const <String>[
     "> Could not get resource 'http",
@@ -474,7 +473,6 @@ final incompatibleJavaAndAgpVersionsHandler = GradleHandledError(
 );
 
 /// Handles SSL exceptions: https://github.com/flutter/flutter/issues/104628
-@visibleForTesting
 final sslExceptionHandler = GradleHandledError(
   test: _lineMatcher(const <String>[
     'javax.net.ssl.SSLException: Tag mismatch!',
@@ -522,7 +520,6 @@ final incompatibleJavaAndGradleVersionsHandler = GradleHandledError(
   eventLabel: 'incompatible-java-gradle-version',
 );
 
-@visibleForTesting
 final remoteTerminatedHandshakeHandler = GradleHandledError(
   test: (String line) => line.contains('Remote host terminated the handshake'),
   handler:

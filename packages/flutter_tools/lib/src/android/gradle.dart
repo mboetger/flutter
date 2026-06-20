@@ -304,19 +304,21 @@ class AndroidGradleBuilder implements AndroidBuilder {
       );
     }
 
+    final bufferedLines = <String>[];
     GradleHandledError? detectedGradleError;
     String? detectedGradleErrorLine;
     String? consumeLog(String line) {
       if (outputParser != null) {
         outputParser(line);
       }
+      bufferedLines.add(line);
+
       // The log lines that trigger incompatibleKotlinVersionHandler don't
       // always indicate an error, and there are times that that handler
       // covers up a more important error handler. Uniquely set it to be
       // the lowest priority handler by allowing it to be overridden.
       if (detectedGradleError != null && detectedGradleError != incompatibleKotlinVersionHandler) {
-        // Pipe stdout/stderr from Gradle.
-        return line;
+        return _logger.isVerbose ? line : null;
       }
       for (final gradleError in localGradleErrors) {
         if (gradleError.test(line)) {
@@ -326,8 +328,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
           break;
         }
       }
-      // Pipe stdout/stderr from Gradle.
-      return line;
+      return _logger.isVerbose ? line : null;
     }
 
     final Status status = _logger.startProgress("Running Gradle task '$taskName'...");
@@ -363,13 +364,48 @@ class AndroidGradleBuilder implements AndroidBuilder {
         _analytics.send(
           Event.flutterBuildInfo(label: 'gradle-unknown-failure', buildType: 'gradle'),
         );
+        if (!_logger.isVerbose) {
+          for (final line in bufferedLines) {
+            _logger.printError(line, wrap: false);
+          }
+        }
         return exitCode;
       }
-      final GradleBuildStatus status = await detectedGradleError!.handler(
-        line: detectedGradleErrorLine!,
-        project: project,
-        usesAndroidX: usesAndroidX,
-      );
+
+      final bool isNetworkError =
+          detectedGradleError == networkErrorHandler ||
+          detectedGradleError == sslExceptionHandler ||
+          detectedGradleError == remoteTerminatedHandshakeHandler;
+
+      final GradleBuildStatus status;
+      if (isNetworkError) {
+        final _NetworkErrorDetails details = _parseNetworkErrorDetails(bufferedLines);
+        if (details.host != null) {
+          _logger.printStatus(
+            'There are network issues attempting to contact ${details.host}, please stand by...',
+          );
+        } else {
+          _logger.printStatus(
+            'Gradle threw an error while downloading artifacts from the network.',
+          );
+        }
+
+        if (maxRetries != null && retry >= maxRetries) {
+          if (details.url != null) {
+            _logger.printError('Could not obtain the following resource:\n${details.url}');
+          }
+          if (details.rawResponse != null) {
+            _logger.printError('The server responded with "${details.rawResponse}"');
+          }
+        }
+        status = GradleBuildStatus.retry;
+      } else {
+        status = await detectedGradleError!.handler(
+          line: detectedGradleErrorLine!,
+          project: project,
+          usesAndroidX: usesAndroidX,
+        );
+      }
 
       if (maxRetries == null || retry < maxRetries) {
         switch (status) {
@@ -1367,4 +1403,65 @@ String _getTargetPlatformByLocalEnginePath(String engineOutPath) {
     result = 'android-arm64';
   }
   return result;
+}
+
+class _NetworkErrorDetails {
+  const _NetworkErrorDetails({this.url, this.host, this.rawResponse});
+  final String? url;
+  final String? host;
+  final String? rawResponse;
+}
+
+_NetworkErrorDetails _parseNetworkErrorDetails(List<String> lines) {
+  String? url;
+  String? host;
+  String? rawResponse;
+
+  final urlRegex = RegExp(r"Could not (?:get|HEAD|GET)(?:\s+resource)?\s+'([^']+)'");
+
+  for (final line in lines) {
+    if (url == null) {
+      if (urlRegex.firstMatch(line) case final RegExpMatch match) {
+        url = match.group(1);
+        if (url != null) {
+          host = Uri.tryParse(url)?.host;
+        }
+      }
+    }
+
+    if (rawResponse == null) {
+      if (line.contains('Read timed out')) {
+        rawResponse = 'Read timed out';
+      } else if (line.contains('Connection timed out')) {
+        rawResponse = 'Connection timed out';
+      } else if (line.contains('Connection reset')) {
+        rawResponse = 'Connection reset';
+      } else if (line.contains('Remote host closed connection during handshake') ||
+          line.contains('Remote host terminated the handshake')) {
+        rawResponse = 'Remote host closed connection during handshake';
+      } else if (line.contains('Server returned HTTP response code:')) {
+        final codeRegex = RegExp(r'Server returned HTTP response code:\s*(\d+)');
+        if (codeRegex.firstMatch(line) case final RegExpMatch match) {
+          rawResponse = 'Server returned HTTP response code: ${match.group(1)}';
+        } else {
+          rawResponse = 'Server returned HTTP response';
+        }
+      } else if (line.contains('Received status code')) {
+        final statusRegExp = RegExp(r'Received status code\s*(\d+)\s*from server:\s*(.+)');
+        if (statusRegExp.firstMatch(line) case final RegExpMatch match) {
+          rawResponse = '${match.group(1)} ${match.group(2)}';
+        } else {
+          rawResponse = 'Received status code';
+        }
+      } else if (line.contains('Unable to tunnel through proxy')) {
+        rawResponse = 'Unable to tunnel through proxy';
+      } else if (line.contains('Tag mismatch!')) {
+        rawResponse = 'SSL tag mismatch';
+      } else if (line.contains('error in opening zip file')) {
+        rawResponse = 'Error in opening zip file';
+      }
+    }
+  }
+
+  return _NetworkErrorDetails(url: url, host: host, rawResponse: rawResponse);
 }
