@@ -6,6 +6,8 @@ package dev.flutter.plugins.integration_test;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.app.Instrumentation;
+import android.app.UiAutomation;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
@@ -72,11 +74,13 @@ class FlutterDeviceScreenshot {
    * @return true if the app is running with instrumentation.
    */
   static boolean hasInstrumentation() {
-    // TODO(egarciad): InstrumentationRegistry requires the uiautomator dependency.
-    // However, Flutter adds test dependencies to release builds.
-    // As a result, disable screenshots with instrumentation until the issue is fixed.
-    // https://github.com/flutter/flutter/issues/56591
-    return false;
+    try {
+      Class<?> registryClass = Class.forName("androidx.test.platform.app.InstrumentationRegistry");
+      Object instrumentation = registryClass.getMethod("getInstrumentation").invoke(null);
+      return instrumentation != null;
+    } catch (Exception | LinkageError e) {
+      return false;
+    }
   }
 
   /**
@@ -85,7 +89,34 @@ class FlutterDeviceScreenshot {
    * @return byte array containing the screenshot.
    */
   static byte[] captureWithUiAutomation() throws IOException {
-    return new byte[0];
+    try {
+      Class<?> registryClass = Class.forName("androidx.test.platform.app.InstrumentationRegistry");
+      Instrumentation instrumentation = (Instrumentation) registryClass.getMethod("getInstrumentation").invoke(null);
+      if (instrumentation == null) {
+        throw new IOException("Instrumentation is null");
+      }
+      UiAutomation uiAutomation = instrumentation.getUiAutomation();
+      if (uiAutomation == null) {
+        throw new IOException("UiAutomation is null");
+      }
+      Bitmap bitmap = uiAutomation.takeScreenshot();
+      if (bitmap == null) {
+        throw new IOException("takeScreenshot returned null");
+      }
+      ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+      try {
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)) {
+          throw new IOException("Failed to compress screenshot bitmap to PNG");
+        }
+        return outputStream.toByteArray();
+      } finally {
+        bitmap.recycle();
+      }
+    } catch (IOException e) {
+      throw e;
+    } catch (Exception | LinkageError e) {
+      throw new IOException("Failed to capture screenshot with UiAutomation", e);
+    }
   }
 
   // Whether the flutter surface is already converted to an image.
