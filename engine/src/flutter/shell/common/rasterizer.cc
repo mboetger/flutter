@@ -5,6 +5,7 @@
 #include "flutter/shell/common/rasterizer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -675,13 +676,24 @@ std::unique_ptr<FrameItem> Rasterizer::DrawToSurfacesUnsafe(
   }
 
   std::optional<fml::TimePoint> presentation_time = std::nullopt;
-  // TODO (https://github.com/flutter/flutter/issues/105596): this can be in
-  // the past and might need to get snapped to future as this frame could
-  // have been resubmitted. `presentation_time` on SubmitInfo is not set
-  // in this case.
   {
-    const auto vsync_target_time = frame_timings_recorder.GetVsyncTargetTime();
-    if (vsync_target_time > fml::TimePoint::Now()) {
+    auto vsync_target_time = frame_timings_recorder.GetVsyncTargetTime();
+    // Only snap and set presentation_time if a valid vsync target time was recorded.
+    if (vsync_target_time != fml::TimePoint()) {
+      const auto now = fml::TimePoint::Now();
+      if (vsync_target_time <= now) {
+        auto frame_budget = delegate_.GetFrameBudget();
+        if (frame_budget.count() <= 0.0) {
+          frame_budget = fml::kDefaultFrameBudget;
+        }
+        const auto time_passed = now - vsync_target_time;
+        const double frame_budget_millis = frame_budget.count();
+        const double missed_frames =
+            std::floor(time_passed.ToMillisecondsF() / frame_budget_millis);
+        const auto snapped_delay = fml::TimeDelta::FromMillisecondsF(
+            (missed_frames + 1) * frame_budget_millis);
+        vsync_target_time = vsync_target_time + snapped_delay;
+      }
       presentation_time = vsync_target_time;
     }
   }

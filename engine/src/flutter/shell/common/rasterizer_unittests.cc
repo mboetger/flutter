@@ -1408,4 +1408,136 @@ TEST(RasterizerTest, presentationTimeNotSetWhenVsyncTargetInPast) {
 #endif  // false
 }
 
+TEST(RasterizerTest, VsyncPastResubmittedFrameSnapsToFutureVsync) {
+  std::string test_name =
+      ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  ThreadHost thread_host("io.flutter.test." + test_name + ".",
+                         ThreadHost::Type::kPlatform |
+                             ThreadHost::Type::kRaster | ThreadHost::Type::kIo |
+                             ThreadHost::Type::kUi);
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  TaskRunners task_runners("test",
+                           fml::MessageLoop::GetCurrent().GetTaskRunner(),
+                           fml::MessageLoop::GetCurrent().GetTaskRunner(),
+                           thread_host.ui_thread->GetTaskRunner(),
+                           thread_host.io_thread->GetTaskRunner());
+
+  NiceMock<MockDelegate> delegate;
+  Settings settings;
+  ON_CALL(delegate, GetSettings()).WillByDefault(ReturnRef(settings));
+  EXPECT_CALL(delegate, GetTaskRunners())
+      .WillRepeatedly(ReturnRef(task_runners));
+
+  int rasterized_count = 0;
+  EXPECT_CALL(delegate, OnFrameRasterized(_))
+      .Times(2)
+      .WillRepeatedly([&](const FrameTiming& timing) {
+        rasterized_count++;
+        if (rasterized_count == 2) {
+          fml::MessageLoop::GetCurrent().Terminate();
+        }
+      });
+
+  auto rasterizer = std::make_unique<Rasterizer>(delegate);
+  auto surface = std::make_unique<NiceMock<MockSurface>>();
+
+  std::shared_ptr<NiceMock<MockExternalViewEmbedder>> external_view_embedder =
+      std::make_shared<NiceMock<MockExternalViewEmbedder>>();
+  rasterizer->SetExternalViewEmbedder(external_view_embedder);
+
+  SurfaceFrame::FramebufferInfo framebuffer_info;
+  framebuffer_info.supports_readback = true;
+
+  auto surface_frame1 = std::make_unique<SurfaceFrame>(
+      /*surface=*/
+      nullptr, framebuffer_info,
+      /*encode_callback=*/[](const SurfaceFrame&, DlCanvas*) { return true; },
+      /*submit_callback=*/[](const SurfaceFrame&) { return true; },
+      /*frame_size=*/DlISize(800, 600));
+
+  std::optional<fml::TimePoint> submitted_presentation_time = std::nullopt;
+  auto surface_frame2 = std::make_unique<SurfaceFrame>(
+      /*surface=*/
+      nullptr, framebuffer_info,
+      /*encode_callback=*/[](const SurfaceFrame&, DlCanvas*) { return true; },
+      /*submit_callback=*/[&](const SurfaceFrame& frame) {
+        submitted_presentation_time = frame.submit_info().presentation_time;
+        return true;
+      },
+      /*frame_size=*/DlISize(800, 600));
+
+  EXPECT_CALL(*surface, AllowsDrawingWhenGpuDisabled())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(*surface, AcquireFrame(DlISize()))
+      .WillOnce(Return(ByMove(std::move(surface_frame1))))
+      .WillOnce(Return(ByMove(std::move(surface_frame2))));
+  EXPECT_CALL(*surface, MakeRenderContextCurrent())
+      .WillOnce(Return(ByMove(std::make_unique<GLContextDefaultResult>(true))));
+  EXPECT_CALL(*external_view_embedder, SupportsDynamicThreadMerging)
+      .WillRepeatedly(Return(true));
+
+  EXPECT_CALL(*external_view_embedder, BeginFrame(/*context=*/nullptr,
+                                                  /*raster_thread_merger=*/_))
+      .Times(2);
+  EXPECT_CALL(*external_view_embedder, PrepareFlutterView(
+                                           /*frame_size=*/DlISize(),
+                                           /*device_pixel_ratio=*/2.0))
+      .Times(2);
+
+  EXPECT_CALL(*external_view_embedder, PostPrerollAction(_))
+      .WillOnce(Return(PostPrerollResult::kResubmitFrame))
+      .WillOnce(Return(PostPrerollResult::kSuccess));
+
+  EXPECT_CALL(*external_view_embedder, SubmitFlutterView(/*flutter_view_id=*/kImplicitViewId, _, _, _))
+      .Times(2)
+      .WillRepeatedly([](int64_t, GrDirectContext*, const std::shared_ptr<impeller::AiksContext>&, std::unique_ptr<SurfaceFrame> frame) {
+        frame->Submit();
+      });
+
+  EXPECT_CALL(*external_view_embedder, EndFrame(/*should_resubmit_frame=*/true,
+                                                /*raster_thread_merger=*/_))
+      .Times(1);
+  EXPECT_CALL(*external_view_embedder, EndFrame(/*should_resubmit_frame=*/false,
+                                                /*raster_thread_merger=*/_))
+      .Times(1);
+
+  rasterizer->Setup(std::move(surface));
+
+  auto pipeline = std::make_shared<FramePipeline>(/*depth=*/10);
+  auto layer_tree = std::make_unique<LayerTree>(/*root_layer=*/nullptr,
+                                                /*frame_size=*/DlISize());
+
+  // Set up vsync target time in the past (e.g. 10ms ago)
+  auto now = fml::TimePoint::Now();
+  auto vsync_start = now - fml::TimeDelta::FromMilliseconds(20);
+  auto vsync_target = now - fml::TimeDelta::FromMilliseconds(10);
+  auto recorder = std::make_unique<FrameTimingsRecorder>();
+  recorder->RecordVsync(vsync_start, vsync_target);
+  recorder->RecordBuildStart(vsync_start);
+  recorder->RecordBuildEnd(vsync_start);
+
+  auto layer_tree_item = std::make_unique<FrameItem>(
+      SingleLayerTreeList(kImplicitViewId, std::move(layer_tree),
+                          kDevicePixelRatio),
+      std::move(recorder));
+
+  PipelineProduceResult result =
+      pipeline->Produce().Complete(std::move(layer_tree_item));
+  EXPECT_TRUE(result.success);
+  ON_CALL(delegate, ShouldDiscardLayerTree).WillByDefault(Return(false));
+
+  rasterizer->Draw(pipeline);
+  fml::MessageLoop::GetCurrent().Run();
+
+  // On the current codebase, the presentation time is NOT set because vsync_target is in the past,
+  // so `submitted_presentation_time` remains std::nullopt.
+  // We want to assert that the rasterizer snapped it to a future vsync target time.
+  // Therefore, this assertion should FAIL on the current codebase, confirming successful reproduction.
+  EXPECT_TRUE(submitted_presentation_time.has_value());
+  if (submitted_presentation_time.has_value()) {
+    EXPECT_GT(*submitted_presentation_time, now);
+  }
+}
+
 }  // namespace flutter
+
