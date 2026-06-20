@@ -3310,6 +3310,7 @@ class EditableTextState extends State<EditableText>
     clipboardStatus.addListener(_onChangedClipboardStatus);
     widget.controller.addListener(_didChangeTextEditingValue);
     widget.focusNode.addListener(_handleFocusChanged);
+    FocusManager.instance.addLateKeyEventHandler(_handleLateKeyEvent);
     _cursorVisibilityNotifier.value = widget.showCursor;
     _spellCheckConfiguration = _inferSpellCheckConfiguration(
       widget.spellCheckConfiguration,
@@ -3619,6 +3620,7 @@ class EditableTextState extends State<EditableText>
     _selectionOverlay?.dispose();
     _selectionOverlay = null;
     widget.focusNode.removeListener(_handleFocusChanged);
+    FocusManager.instance.removeLateKeyEventHandler(_handleLateKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
     _liveTextInputStatus?.removeListener(_onChangedLiveTextInputStatus);
     _liveTextInputStatus?.dispose();
@@ -4958,6 +4960,61 @@ class EditableTextState extends State<EditableText>
       });
     }
     updateKeepAlive();
+  }
+
+  KeyEventResult _handleLateKeyEvent(KeyEvent event) {
+    if (!mounted || !_hasFocus) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event is KeyUpEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    // Check key compatibility first to avoid unnecessary tree walks.
+    final LogicalKeyboardKey key = event.logicalKey;
+    final isBackspace = key == LogicalKeyboardKey.backspace;
+    final isDelete = key == LogicalKeyboardKey.delete;
+    if (!isBackspace && !isDelete) {
+      return KeyEventResult.ignored;
+    }
+
+    final BuildContext? descendantContext = _editableKey.currentContext;
+    if (descendantContext == null) {
+      return KeyEventResult.ignored;
+    }
+
+    // This late key event handler acts as a fallback for when WidgetsApp or
+    // DefaultTextEditingShortcuts is not in the widget tree (meaning the default
+    // text editing shortcuts were not registered).
+    // If a developer has defined a custom shortcut for this key in the ancestor tree,
+    // we must respect it and not trigger our fallback behavior.
+    var hasShortcut = false;
+    descendantContext.visitAncestorElements((Element element) {
+      final Widget widget = element.widget;
+      if (widget is Shortcuts) {
+        for (final ShortcutActivator activator in widget.shortcuts.keys) {
+          if (activator.accepts(event, HardwareKeyboard.instance)) {
+            hasShortcut = true;
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+
+    if (hasShortcut) {
+      return KeyEventResult.ignored;
+    }
+
+    final intent = DeleteCharacterIntent(forward: isDelete);
+    final VoidCallback? handler = Actions.handler<DeleteCharacterIntent>(descendantContext, intent);
+    if (handler != null) {
+      handler();
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
   }
 
   TextSelection? _adjustedSelectionWhenFocused() {
