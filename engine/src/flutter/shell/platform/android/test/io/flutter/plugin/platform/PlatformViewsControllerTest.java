@@ -1439,6 +1439,9 @@ public class PlatformViewsControllerTest {
     platformViewsController.onBeginFrame();
     platformViewsController.onEndFrame();
 
+    // Simulate the next frame rendered on the resumed surface.
+    jni.onFirstFrame();
+
     shadowOf(getMainLooper()).idle();
     verify(overlayImageView, times(1)).detachFromRenderer();
   }

@@ -202,6 +202,8 @@ void PlatformViewAndroid::NotifyCreated(
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
     fml::RefPtr<AndroidNativeWindow> native_window) {
   if (android_surface_) {
+    InstallFirstFrameCallback();
+
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),

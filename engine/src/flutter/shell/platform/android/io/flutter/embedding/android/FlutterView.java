@@ -1423,10 +1423,14 @@ public class FlutterView extends FrameLayout
 
     // Install a Flutter UI listener to wait until the first frame is rendered
     // in the new surface to call the `onDone` callback.
+    final boolean[] isSynchronousCall = {true};
     renderer.addIsDisplayingFlutterUiListener(
         new FlutterUiDisplayListener() {
           @Override
           public void onFlutterUiDisplayed() {
+            if (isSynchronousCall[0]) {
+              return;
+            }
             renderer.removeIsDisplayingFlutterUiListener(this);
             onDone.run();
             if (!(renderSurface instanceof FlutterImageView) && flutterImageView != null) {
@@ -1440,6 +1444,7 @@ public class FlutterView extends FrameLayout
             // no-op
           }
         });
+    isSynchronousCall[0] = false;
   }
 
   public void attachOverlaySurfaceToRender(@NonNull FlutterImageView view) {
