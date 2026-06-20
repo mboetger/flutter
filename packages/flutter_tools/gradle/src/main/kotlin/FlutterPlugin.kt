@@ -420,12 +420,14 @@ class FlutterPlugin : Plugin<Project> {
             val androidLibraryExtension =
                 projectToAddTasksTo.extensions.findByType(LibraryExtension::class.java)
             check(androidLibraryExtension != null)
+            val libraryBuildTypeNames = androidLibraryExtension.buildTypes.names
+            val androidAppExtension =
+                appProject.extensions.findByName("android") as? AbstractAppExtension
+            check(androidAppExtension != null)
+
             androidLibraryExtension.libraryVariants.all libraryVariantAll@{
                 val libraryVariant = this
                 var copyFlutterAssetsTask: Task? = null
-                val androidAppExtension =
-                    appProject.extensions.findByName("android") as? AbstractAppExtension
-                check(androidAppExtension != null)
                 androidAppExtension.applicationVariants.all applicationVariantAll@{
                     val appProjectVariant = this
                     val appAssembleTask: Task = appProjectVariant.assembleProvider.get()
@@ -446,15 +448,27 @@ class FlutterPlugin : Plugin<Project> {
                     // | ----------------- | ----------------------------- |
                     //
                     // This mapping is based on the following rules:
-                    // 1. If the host app build variant name is `profile` then the equivalent
-                    //    Flutter variant is `profile`.
-                    // 2. If the host app build variant is debuggable
-                    //    (e.g. `buildType.debuggable = true`), then the equivalent Flutter
-                    //    variant is `debug`.
-                    // 3. Otherwise, the equivalent Flutter variant is `release`.
-                    val variantBuildMode: String =
-                        FlutterPluginUtils.buildModeFor(libraryVariant.buildType)
-                    if (FlutterPluginUtils.buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
+                    // 1. If the library project has a build type with the exact same name as the host app variant's
+                    //    build type, they match if they have the same name.
+                    // 2. Otherwise, if the host app variant's build type has a matching fallback that exists in the
+                    //    library project, they match if the library variant's build type is the first existing fallback.
+                    // 3. Otherwise, they match if their build modes are compatible (fallback behavior).
+                    val appBuildTypeName = appProjectVariant.buildType.name
+                    val appBuildType = androidAppExtension.buildTypes.findByName(appBuildTypeName)
+                    val appMatchingFallbacks = appBuildType?.matchingFallbacks ?: emptyList()
+
+                    val isMatch = if (libraryBuildTypeNames.contains(appBuildTypeName)) {
+                        libraryVariant.buildType.name == appBuildTypeName
+                    } else if (appMatchingFallbacks.any { libraryBuildTypeNames.contains(it) }) {
+                        val firstExistingFallback = appMatchingFallbacks.first { libraryBuildTypeNames.contains(it) }
+                        libraryVariant.buildType.name == firstExistingFallback
+                    } else {
+                        val variantBuildMode: String =
+                            FlutterPluginUtils.buildModeFor(libraryVariant.buildType)
+                        FlutterPluginUtils.buildModeFor(appProjectVariant.buildType) == variantBuildMode
+                    }
+
+                    if (!isMatch) {
                         return@applicationVariantAll
                     }
                     copyFlutterAssetsTask = copyFlutterAssetsTask ?: addFlutterDeps(
