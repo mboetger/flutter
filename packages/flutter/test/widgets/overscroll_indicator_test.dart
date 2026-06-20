@@ -551,12 +551,12 @@ void main() {
     // Reverse scroll (30 pixels), and the offset < notification.paintOffset.
     await tester.dragFrom(const Offset(200.0, 200.0), const Offset(0.0, -30.0));
     await tester.pump();
-    // The OverscrollIndicator should move with the CustomScrollView.
+    // The OverscrollIndicator should remain pinned at the paintOffset.
     expect(
       painter,
       paints
         ..save()
-        ..translate(y: 50.0 - 30.0)
+        ..translate(y: 50.0)
         ..scale()
         ..circle(),
     );
@@ -568,7 +568,7 @@ void main() {
       painter,
       paints
         ..save()
-        ..translate(y: 50.0 - 50.0)
+        ..translate(y: 50.0)
         ..scale()
         ..circle(),
     );
@@ -581,7 +581,7 @@ void main() {
       painter,
       paints
         ..save()
-        ..translate(y: 50.0 - 50.0)
+        ..translate(y: 50.0)
         ..scale()
         ..circle(),
     );
@@ -603,13 +603,13 @@ void main() {
     // Reverse scroll (30 pixels), and the offset < notification.paintOffset.
     await tester.dragFrom(const Offset(200.0, 200.0), const Offset(0.0, 30.0));
     await tester.pump();
-    // The OverscrollIndicator should move with the CustomScrollView.
+    // The OverscrollIndicator should remain pinned at the paintOffset.
     expect(
       painter,
       paints
         ..scale(y: -1.0)
         ..save()
-        ..translate(y: 50.0 - 30.0)
+        ..translate(y: 50.0)
         ..scale()
         ..circle(),
     );
@@ -622,7 +622,7 @@ void main() {
       paints
         ..scale(y: -1.0)
         ..save()
-        ..translate(y: 50.0 - 50.0)
+        ..translate(y: 50.0)
         ..scale()
         ..circle(),
     );
@@ -636,7 +636,7 @@ void main() {
       paints
         ..scale(y: -1.0)
         ..save()
-        ..translate(y: 50.0 - 50.0)
+        ..translate(y: 50.0)
         ..scale()
         ..circle(),
     );
@@ -674,12 +674,12 @@ void main() {
       // Reverse scroll direction.
       await tester.dragFrom(const Offset(200.0, 200.0), const Offset(0.0, -30.0));
       await tester.pump();
-      // The OverscrollIndicator should move with the CustomScrollView.
+      // The OverscrollIndicator should remain pinned at the paintOffset.
       expect(
         painter,
         paints
           ..save()
-          ..translate(y: 50.0 - 30.0)
+          ..translate(y: 50.0)
           ..scale()
           ..circle(),
       );
@@ -719,13 +719,13 @@ void main() {
       // Reverse scroll direction.
       await tester.dragFrom(const Offset(200.0, 200.0), const Offset(0.0, 30.0));
       await tester.pump();
-      // The OverscrollIndicator should move with the CustomScrollView.
+      // The OverscrollIndicator should remain pinned at the paintOffset.
       expect(
         painter,
         paints
           ..scale(y: -1.0)
           ..save()
-          ..translate(y: 50.0 - 30.0)
+          ..translate(y: 50.0)
           ..scale()
           ..circle(),
       );

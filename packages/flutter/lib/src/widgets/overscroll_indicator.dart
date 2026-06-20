@@ -223,13 +223,13 @@ class _GlowingOverscrollIndicatorState extends State<GlowingOverscrollIndicator>
     // before glow disappears, so the current pixels is -190.0,
     // in this case, we should move the glow up 10.0 pixels and should not
     // overflow the scrollable widget's edge. https://github.com/flutter/flutter/issues/64149.
-    _leadingController!._paintOffsetScrollPixels = -math.min(
-      notification.metrics.pixels - notification.metrics.minScrollExtent,
-      _leadingController!._paintOffset,
+    _leadingController!._paintOffsetScrollPixels = math.max(
+      notification.metrics.minScrollExtent - notification.metrics.pixels,
+      0.0,
     );
-    _trailingController!._paintOffsetScrollPixels = -math.min(
-      notification.metrics.maxScrollExtent - notification.metrics.pixels,
-      _trailingController!._paintOffset,
+    _trailingController!._paintOffsetScrollPixels = math.max(
+      notification.metrics.pixels - notification.metrics.maxScrollExtent,
+      0.0,
     );
 
     if (notification is OverscrollNotification) {
