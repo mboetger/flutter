@@ -11,6 +11,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.LocaleList;
+import android.app.LocaleManager;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
@@ -52,6 +53,39 @@ public class LocalizationPlugin {
           }
 
           return stringToReturn;
+        }
+
+        @Override
+        public void setApplicationLocales(@NonNull List<Locale> locales) {
+          if (Build.VERSION.SDK_INT >= API_LEVELS.API_33) {
+            LocaleManager localeManager =
+                (LocaleManager) context.getSystemService(Context.LOCALE_SERVICE);
+            if (localeManager != null) {
+              if (locales.isEmpty()) {
+                localeManager.setApplicationLocales(LocaleList.getEmptyLocaleList());
+              } else {
+                localeManager.setApplicationLocales(
+                    new LocaleList(locales.toArray(new Locale[0])));
+              }
+            }
+          }
+        }
+
+        @NonNull
+        @Override
+        public List<Locale> getApplicationLocales() {
+          List<Locale> locales = new ArrayList<>();
+          if (Build.VERSION.SDK_INT >= API_LEVELS.API_33) {
+            LocaleManager localeManager =
+                (LocaleManager) context.getSystemService(Context.LOCALE_SERVICE);
+            if (localeManager != null) {
+              LocaleList localeList = localeManager.getApplicationLocales();
+              for (int i = 0; i < localeList.size(); i++) {
+                locales.add(localeList.get(i));
+              }
+            }
+          }
+          return locales;
         }
       };
 

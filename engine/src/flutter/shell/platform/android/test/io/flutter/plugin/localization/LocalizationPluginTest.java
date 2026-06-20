@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.annotation.TargetApi;
+import android.app.LocaleManager;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -19,6 +20,8 @@ import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.systemchannels.LocalizationChannel;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -370,4 +373,112 @@ public class LocalizationPluginTest {
 
     verify(mockResult).success(null);
   }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_33)
+  public void setApplicationLocales_success() throws JSONException {
+    Context context = mock(Context.class);
+    DartExecutor dartExecutor = mock(DartExecutor.class);
+    LocalizationChannel localizationChannel = new LocalizationChannel(dartExecutor);
+    LocalizationPlugin plugin = new LocalizationPlugin(context, localizationChannel);
+
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+    LocaleManager localeManager = mock(LocaleManager.class);
+
+    when(context.getSystemService(Context.LOCALE_SERVICE)).thenReturn(localeManager);
+
+    List<String> locales = new ArrayList<>();
+    locales.add("es-MX");
+
+    localizationChannel.handler.onMethodCall(
+        new MethodCall("Localization.setApplicationLocales", locales), mockResult);
+
+    verify(localeManager).setApplicationLocales(
+        new LocaleList(new Locale[] { new Locale.Builder().setLanguage("es").setRegion("MX").build() })
+    );
+    verify(mockResult).success(null);
+  }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_33)
+  public void setApplicationLocales_clear() throws JSONException {
+    Context context = mock(Context.class);
+    DartExecutor dartExecutor = mock(DartExecutor.class);
+    LocalizationChannel localizationChannel = new LocalizationChannel(dartExecutor);
+    LocalizationPlugin plugin = new LocalizationPlugin(context, localizationChannel);
+
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+    LocaleManager localeManager = mock(LocaleManager.class);
+
+    when(context.getSystemService(Context.LOCALE_SERVICE)).thenReturn(localeManager);
+
+    List<String> locales = new ArrayList<>();
+
+    localizationChannel.handler.onMethodCall(
+        new MethodCall("Localization.setApplicationLocales", locales), mockResult);
+
+    verify(localeManager).setApplicationLocales(LocaleList.getEmptyLocaleList());
+    verify(mockResult).success(null);
+  }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_32)
+  public void setApplicationLocales_preAPI33_isNoOp() throws JSONException {
+    Context context = mock(Context.class);
+    DartExecutor dartExecutor = mock(DartExecutor.class);
+    LocalizationChannel localizationChannel = new LocalizationChannel(dartExecutor);
+    LocalizationPlugin plugin = new LocalizationPlugin(context, localizationChannel);
+
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    List<String> locales = new ArrayList<>();
+    locales.add("es-MX");
+
+    localizationChannel.handler.onMethodCall(
+        new MethodCall("Localization.setApplicationLocales", locales), mockResult);
+
+    verify(mockResult).success(null);
+  }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_33)
+  public void getApplicationLocales_success() throws JSONException {
+    Context context = mock(Context.class);
+    DartExecutor dartExecutor = mock(DartExecutor.class);
+    LocalizationChannel localizationChannel = new LocalizationChannel(dartExecutor);
+    LocalizationPlugin plugin = new LocalizationPlugin(context, localizationChannel);
+
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+    LocaleManager localeManager = mock(LocaleManager.class);
+
+    when(context.getSystemService(Context.LOCALE_SERVICE)).thenReturn(localeManager);
+    when(localeManager.getApplicationLocales()).thenReturn(
+        new LocaleList(new Locale[] { new Locale.Builder().setLanguage("es").setRegion("MX").build() })
+    );
+
+    localizationChannel.handler.onMethodCall(
+        new MethodCall("Localization.getApplicationLocales", null), mockResult);
+
+    List<String> expectedLocales = new ArrayList<>();
+    expectedLocales.add("es-MX");
+
+    verify(mockResult).success(expectedLocales);
+  }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_32)
+  public void getApplicationLocales_preAPI33_returnsEmptyList() throws JSONException {
+    Context context = mock(Context.class);
+    DartExecutor dartExecutor = mock(DartExecutor.class);
+    LocalizationChannel localizationChannel = new LocalizationChannel(dartExecutor);
+    LocalizationPlugin plugin = new LocalizationPlugin(context, localizationChannel);
+
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    localizationChannel.handler.onMethodCall(
+        new MethodCall("Localization.getApplicationLocales", null), mockResult);
+
+    verify(mockResult).success(new ArrayList<String>());
+  }
 }
+

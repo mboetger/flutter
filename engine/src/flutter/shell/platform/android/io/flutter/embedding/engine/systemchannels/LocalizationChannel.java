@@ -15,6 +15,7 @@ import io.flutter.plugin.common.MethodChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -50,6 +51,41 @@ public class LocalizationChannel {
               } catch (JSONException exception) {
                 result.error("error", exception.getMessage(), null);
               }
+              break;
+            case "Localization.setApplicationLocales":
+              try {
+                Object args = call.arguments();
+                List<Locale> locales = new ArrayList<>();
+                if (args instanceof JSONArray) {
+                  JSONArray localesJson = (JSONArray) args;
+                  for (int i = 0; i < localesJson.length(); i++) {
+                    locales.add(
+                        io.flutter.plugin.localization.LocalizationPlugin.localeFromString(
+                            localesJson.getString(i)));
+                  }
+                } else if (args instanceof List) {
+                  List<?> localesList = (List<?>) args;
+                  for (Object localeObj : localesList) {
+                    if (localeObj instanceof String) {
+                      locales.add(
+                          io.flutter.plugin.localization.LocalizationPlugin.localeFromString(
+                              (String) localeObj));
+                    }
+                  }
+                }
+                localizationMessageHandler.setApplicationLocales(locales);
+                result.success(null);
+              } catch (JSONException exception) {
+                result.error("error", exception.getMessage(), null);
+              }
+              break;
+            case "Localization.getApplicationLocales":
+              List<Locale> applicationLocales = localizationMessageHandler.getApplicationLocales();
+              List<String> localeTags = new ArrayList<>();
+              for (Locale locale : applicationLocales) {
+                localeTags.add(locale.toLanguageTag());
+              }
+              result.success(localeTags);
               break;
             default:
               result.notImplemented();
@@ -110,5 +146,12 @@ public class LocalizationChannel {
      */
     @NonNull
     String getStringResource(@NonNull String key, @NonNull String locale);
+
+    /** The Flutter application would like to set the application-specific locales. */
+    void setApplicationLocales(@NonNull List<Locale> locales);
+
+    /** The Flutter application would like to obtain the application-specific locales. */
+    @NonNull
+    List<Locale> getApplicationLocales();
   }
 }
