@@ -166,7 +166,11 @@ public class FlutterJNI {
       Log.w(TAG, "FlutterJNI.prefetchDefaultFontManager called more than once");
     }
 
-    FlutterJNI.nativePrefetchDefaultFontManager();
+    try {
+      FlutterJNI.nativePrefetchDefaultFontManager();
+    } catch (UnsatisfiedLinkError e) {
+      Log.w(TAG, "Failed to prefetch default font manager: nativePrefetchDefaultFontManager method not found in the loaded native library.", e);
+    }
     FlutterJNI.prefetchDefaultFontManagerCalled = true;
   }
 
@@ -291,7 +295,11 @@ public class FlutterJNI {
     if (!FlutterJNI.loadLibraryCalled) {
       return;
     }
-    nativeUpdateRefreshRate(refreshRateFPS);
+    try {
+      nativeUpdateRefreshRate(refreshRateFPS);
+    } catch (UnsatisfiedLinkError e) {
+      Log.w(TAG, "Failed to update refresh rate: nativeUpdateRefreshRate method not found in the loaded native library.", e);
+    }
   }
 
   private native void nativeUpdateRefreshRate(float refreshRateFPS);
