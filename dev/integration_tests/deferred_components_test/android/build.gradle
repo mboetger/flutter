@@ -38,8 +38,9 @@ rootProject.layout.buildDirectory.value(rootProject.layout.buildDirectory.dir(".
 
 subprojects {
     project.layout.buildDirectory.value(rootProject.layout.buildDirectory.dir(project.name).get())
+}
+subprojects {
     project.evaluationDependsOn(':app')
-
     dependencyLocking {
         ignoredDependencies.add('io.flutter:*')
         lockFile = file("${rootProject.projectDir}/project-${project.name}.lockfile")
