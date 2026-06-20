@@ -58,7 +58,7 @@ mixin ServicesBinding on BindingBase, SchedulerBinding {
     SystemChannels.accessibility.setMessageHandler(
       (dynamic message) => _handleAccessibilityMessage(message as Object),
     );
-    SystemChannels.lifecycle.setMessageHandler(_handleLifecycleMessage);
+    SystemChannels.lifecycle.setFrameworkHandler(_handleLifecycleMessage);
     SystemChannels.platform.setMethodCallHandler(_handlePlatformMessage);
     platformDispatcher.onViewFocusChange = handleViewFocusChanged;
     TextInput.ensureInitialized();
@@ -277,6 +277,16 @@ mixin ServicesBinding on BindingBase, SchedulerBinding {
   @mustCallSuper
   void evict(String asset) {
     rootBundle.evict(asset);
+  }
+
+  @override
+  @mustCallSuper
+  @visibleForTesting
+  void resetInternalState() {
+    // ignore: invalid_use_of_visible_for_testing_member
+    super.resetInternalState();
+    // ignore: invalid_use_of_visible_for_testing_member
+    SystemChannels.lifecycle.resetDeveloperHandler();
   }
 
   // App life cycle

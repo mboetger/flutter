@@ -24,6 +24,8 @@ library;
 
 import 'dart:ui';
 
+import 'package:meta/meta.dart';
+
 import 'message_codecs.dart';
 import 'platform_channel.dart';
 
@@ -382,10 +384,7 @@ abstract final class SystemChannels {
   ///
   ///  * [WidgetsBindingObserver.didChangeAppLifecycleState], which triggers
   ///    whenever a message is received on this channel.
-  static const BasicMessageChannel<String?> lifecycle = BasicMessageChannel<String?>(
-    'flutter/lifecycle',
-    StringCodec(),
-  );
+  static const LifecycleMessageChannel lifecycle = LifecycleMessageChannel._();
 
   /// A JSON [BasicMessageChannel] for system events.
   ///
@@ -614,4 +613,83 @@ abstract final class SystemChannels {
   ///  * `isSupported`: Returns whether or not setting content sensitivity levels is supported on the
   ///     device.
   static const MethodChannel sensitiveContent = OptionalMethodChannel('flutter/sensitivecontent');
+}
+
+/// A specialized [BasicMessageChannel] for lifecycle events that allows
+/// both the framework and the developer to register handlers.
+class LifecycleMessageChannel extends BasicMessageChannel<String?> {
+  const LifecycleMessageChannel._() : super('flutter/lifecycle', const StringCodec());
+
+  static Future<String?> Function(String? message)? _frameworkHandler;
+  static Future<String?> Function(String? message)? _developerHandler;
+
+  @override
+  void setMessageHandler(Future<String?> Function(String? message)? handler) {
+    _developerHandler = handler;
+    _updateHandler();
+  }
+
+  /// Sets the framework's internal lifecycle message handler.
+  ///
+  /// This handler is not cleared when [setMessageHandler] is called.
+  @internal
+  void setFrameworkHandler(Future<String?> Function(String? message)? handler) {
+    _frameworkHandler = handler;
+    _updateHandler();
+  }
+
+  /// Resets the developer-facing message handler to null.
+  ///
+  /// This is intended to be used by the testing framework to ensure test isolation.
+  @visibleForTesting
+  void resetDeveloperHandler() {
+    _developerHandler = null;
+    _updateHandler();
+  }
+
+  void _updateHandler() {
+    if (_frameworkHandler == null && _developerHandler == null) {
+      binaryMessenger.setMessageHandler(name, null);
+    } else {
+      binaryMessenger.setMessageHandler(name, _handleMessage);
+    }
+  }
+
+  Future<ByteData?> _handleMessage(ByteData? message) async {
+    final String? decoded = codec.decodeMessage(message);
+    // Snapshot handlers to local variables to prevent asynchronous race conditions.
+    final Future<String?> Function(String? message)? frameworkHandler = _frameworkHandler;
+    final Future<String?> Function(String? message)? developerHandler = _developerHandler;
+
+    if (frameworkHandler == null && developerHandler == null) {
+      return null;
+    }
+
+    String? frameworkResult;
+    if (frameworkHandler != null) {
+      if (developerHandler == null) {
+        return codec.encodeMessage(await frameworkHandler(decoded));
+      }
+
+      // Both are non-null. Ensure developer handler runs even if framework throws.
+      var frameworkCompleted = false;
+      try {
+        frameworkResult = await frameworkHandler(decoded);
+        frameworkCompleted = true;
+      } finally {
+        if (!frameworkCompleted) {
+          await developerHandler(decoded);
+        }
+      }
+    }
+
+    // Run developer handler if framework completed successfully (or was null).
+    if (developerHandler != null) {
+      final String? developerResult = await developerHandler(decoded);
+      // Prioritize the developer's return value if non-null, as per the specification.
+      return codec.encodeMessage(developerResult ?? frameworkResult);
+    }
+
+    return codec.encodeMessage(frameworkResult);
+  }
 }
