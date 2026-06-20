@@ -29,6 +29,24 @@ public interface BroadcastReceiverControlSurface {
    * BroadcastReceiver} and all {@link BroadcastReceiverAware} plugins are given access to the
    * {@link BroadcastReceiver}.
    */
+  void attachToBroadcastReceiver(@NonNull BroadcastReceiver broadcastReceiver);
+
+  /**
+   * Call this method from the {@link BroadcastReceiver} that is running the {@link
+   * io.flutter.embedding.engine.FlutterEngine} that is associated with this {@code
+   * BroadcastReceiverControlSurface}.
+   *
+   * <p>Once a {@link BroadcastReceiver} is created, and its associated {@link
+   * io.flutter.embedding.engine.FlutterEngine} is executing Dart code, the {@link
+   * BroadcastReceiver} should invoke this method. At that point the {@link
+   * io.flutter.embedding.engine.FlutterEngine} is considered "attached" to the {@link
+   * BroadcastReceiver} and all {@link BroadcastReceiverAware} plugins are given access to the
+   * {@link BroadcastReceiver}.
+   *
+   * @deprecated Use {@link #attachToBroadcastReceiver(BroadcastReceiver)} instead. The {@link
+   *     Lifecycle} parameter is not used.
+   */
+  @Deprecated
   void attachToBroadcastReceiver(
       @NonNull BroadcastReceiver broadcastReceiver, @NonNull Lifecycle lifecycle);
 

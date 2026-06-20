@@ -578,8 +578,7 @@ import java.util.Set;
   }
 
   @Override
-  public void attachToBroadcastReceiver(
-      @NonNull BroadcastReceiver broadcastReceiver, @NonNull Lifecycle lifecycle) {
+  public void attachToBroadcastReceiver(@NonNull BroadcastReceiver broadcastReceiver) {
     try (TraceSection e =
         TraceSection.scoped("FlutterEngineConnectionRegistry#attachToBroadcastReceiver")) {
       // If we were already attached to an Android component, detach from it.
@@ -597,6 +596,13 @@ import java.util.Set;
         broadcastReceiverAware.onAttachedToBroadcastReceiver(broadcastReceiverPluginBinding);
       }
     }
+  }
+
+  @Override
+  @Deprecated
+  public void attachToBroadcastReceiver(
+      @NonNull BroadcastReceiver broadcastReceiver, @NonNull Lifecycle lifecycle) {
+    attachToBroadcastReceiver(broadcastReceiver);
   }
 
   @Override
