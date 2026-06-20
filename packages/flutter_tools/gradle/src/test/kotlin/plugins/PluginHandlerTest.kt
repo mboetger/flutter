@@ -24,6 +24,7 @@ import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.logging.Logger
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -32,8 +33,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import io.mockk.unmockkAll
 
 class PluginHandlerTest {
+    @AfterEach
+    fun tearDown() {
+        unmockkAll()
+    }
+
     // getPluginListWithoutDevDependencies
     @Test
     fun `getPluginListWithoutDevDependencies removes dev dependencies from list`() {
@@ -159,7 +166,7 @@ class PluginHandlerTest {
     fun `configurePlugins adds plugin project and configures its dependencies`(
         @TempDir tempDir: Path
     ) {
-        val project = mockk<Project>()
+        val project = mockk<Project>(relaxed = true)
 
         // configuration for configureLegacyPluginEachProjects
         val projectDir = tempDir.resolve("my-plugin")
@@ -170,8 +177,8 @@ class PluginHandlerTest {
         val mockLogger = mockk<Logger>()
         every { project.logger } returns mockLogger
 
-        val pluginProject = mockk<Project>()
-        val pluginDependencyProject = mockk<Project>()
+        val pluginProject = mockk<Project>(relaxed = true)
+        val pluginDependencyProject = mockk<Project>(relaxed = true)
         val mockBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>()
         every { pluginProject.hasProperty("local-engine-repo") } returns false
         every { pluginProject.hasProperty("android") } returns true
@@ -353,17 +360,37 @@ class PluginHandlerTest {
         every { project.extensions.findByType(BaseExtension::class.java)!!.buildTypes } returns mockProjectBuildTypes
         every { pluginProject.extensions.findByType(BaseExtension::class.java)!!.buildTypes } returns mockPluginProjectBuildTypes
         every { mockPluginProjectBuildTypes.addAll(any()) } returns true
-        every { mockProjectBuildTypes.iterator() } returns mutableListOf<com.android.build.gradle.internal.dsl.BuildType>().iterator()
 
-        // Mock FlutterPluginUtils calls that our logic depends on
+        // Mock the iterator to return at least one build type "debug" so addEmbeddingDependencyToPlugin is called
+        val testBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>()
+        every { testBuildType.name } returns "debug"
+        every { testBuildType.isDebuggable } returns true
+        every { testBuildType.isMinifyEnabled } returns false
+        every { mockProjectBuildTypes.iterator() } answers { mutableListOf(testBuildType).iterator() }
+
         mockkObject(FlutterPluginUtils)
         every { FlutterPluginUtils.getLegacyAndroidExtension(project) } returns project.extensions.findByType(BaseExtension::class.java)!!
         every { FlutterPluginUtils.getLegacyAndroidExtension(pluginProject) } returns
             pluginProject.extensions.findByType(BaseExtension::class.java)!!
 
-        // For app plugins, the old addAll behavior should be used
-        // This is tested implicitly by verifying the absence of individual create calls
-        // Verify no individual create calls were made (app behavior uses addAll)
+        val captureActionSlot = slot<Action<Project>>()
+        val capturePluginActionSlot = mutableListOf<Action<Project>>()
+        every { project.afterEvaluate(any<Action<Project>>()) } returns Unit
+        every { pluginProject.afterEvaluate(any<Action<Project>>()) } returns Unit
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(
+            engineVersionValue = EXAMPLE_ENGINE_VERSION
+        )
+
+        // Capture and execute afterEvaluate actions to simulate Gradle lifecycle
+        verify { project.afterEvaluate(capture(captureActionSlot)) }
+        verify { pluginProject.afterEvaluate(capture(capturePluginActionSlot)) }
+        captureActionSlot.captured.execute(project)
+        capturePluginActionSlot[0].execute(pluginProject)
+
+        // Verify that addAll is called exactly once, and create is never called
+        verify(exactly = 1) { mockPluginProjectBuildTypes.addAll(any()) }
         verify(exactly = 0) {
             mockPluginProjectBuildTypes.create(
                 any<String>(),
@@ -406,18 +433,118 @@ class PluginHandlerTest {
         every { testBuildType.name } returns "debug"
         every { testBuildType.isDebuggable } returns true
         every { testBuildType.isMinifyEnabled } returns false
-        every { mockProjectBuildTypes.iterator() } returns mutableListOf(testBuildType).iterator()
+        every { mockProjectBuildTypes.iterator() } answers { mutableListOf(testBuildType).iterator() }
 
-        // Mock FlutterPluginUtils calls that our logic depends on
         mockkObject(FlutterPluginUtils)
         every { FlutterPluginUtils.getLegacyAndroidExtension(project) } returns project.extensions.findByType(BaseExtension::class.java)!!
         every { FlutterPluginUtils.getLegacyAndroidExtension(pluginProject) } returns
             pluginProject.extensions.findByType(BaseExtension::class.java)!!
 
-        // For library plugins, individual build type creation should happen
-        // This is tested by verifying that create is called for the build type
-        // Verify that individual create was called (library behavior)
+        val captureActionSlot = slot<Action<Project>>()
+        val capturePluginActionSlot = mutableListOf<Action<Project>>()
+        every { project.afterEvaluate(any<Action<Project>>()) } returns Unit
+        every { pluginProject.afterEvaluate(any<Action<Project>>()) } returns Unit
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(
+            engineVersionValue = EXAMPLE_ENGINE_VERSION
+        )
+
+        // Capture and execute afterEvaluate actions to simulate Gradle lifecycle
+        verify { project.afterEvaluate(capture(captureActionSlot)) }
+        verify { pluginProject.afterEvaluate(capture(capturePluginActionSlot)) }
+        captureActionSlot.captured.execute(project)
+        capturePluginActionSlot[0].execute(pluginProject)
+
+        // Verify that individual create is called, and addAll is never called
+        verify(exactly = 1) {
+            mockPluginProjectBuildTypes.create(
+                "debug",
+                any<Action<com.android.build.gradle.internal.dsl.BuildType>>()
+            )
+        }
         verify(exactly = 0) { mockPluginProjectBuildTypes.addAll(any()) }
+    }
+
+    @Test
+    fun `configurePlugins creates build types for library plugins even if supportsBuildMode is false`(
+        @TempDir tempDir: Path
+    ) {
+        val project = mockk<Project>()
+        val pluginProject = mockk<Project>()
+
+        // Setup minimal mocks
+        setupBasicMocks(project, pluginProject, mockk(), tempDir)
+        setupPluginMocks(project)
+
+        // Mock isBuiltAsApp to return false (library plugin)
+        mockkObject(FlutterPluginUtils)
+        every { FlutterPluginUtils.isBuiltAsApp(pluginProject) } returns false
+
+        // Configure pluginProject properties to make supportsBuildMode return false for "profile" mode
+        every { pluginProject.hasProperty("local-engine-repo") } returns true
+        every { pluginProject.hasProperty("local-engine-build-mode") } returns true
+        every { pluginProject.property("local-engine-build-mode") } returns "debug"
+
+        val mockProjectBuildTypes = mockk<NamedDomainObjectContainer<com.android.build.gradle.internal.dsl.BuildType>>()
+        val mockPluginProjectBuildTypes = mockk<NamedDomainObjectContainer<com.android.build.gradle.internal.dsl.BuildType>>()
+        val mockCreatedBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>(relaxed = true)
+
+        every { project.extensions.findByType(BaseExtension::class.java)!!.buildTypes } returns mockProjectBuildTypes
+        every { pluginProject.extensions.findByType(BaseExtension::class.java)!!.buildTypes } returns mockPluginProjectBuildTypes
+        
+        // We want to test that when the main project has "profile" build type,
+        // and supportsBuildMode(pluginProject, "profile") is false:
+        // The "profile" build type is STILL created on the plugin.
+        every { mockPluginProjectBuildTypes.findByName("profile") } returns null
+        every {
+            mockPluginProjectBuildTypes.create(
+                "profile",
+                any<Action<com.android.build.gradle.internal.dsl.BuildType>>()
+            )
+        } returns mockCreatedBuildType
+
+        // Mock the iterator for forEach to return "profile" build type
+        val testBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>()
+        every { testBuildType.name } returns "profile"
+        every { testBuildType.isDebuggable } returns false
+        every { testBuildType.isMinifyEnabled } returns false
+        every { mockProjectBuildTypes.iterator() } answers { mutableListOf(testBuildType).iterator() }
+
+        every { FlutterPluginUtils.getLegacyAndroidExtension(project) } returns project.extensions.findByType(BaseExtension::class.java)!!
+        every { FlutterPluginUtils.getLegacyAndroidExtension(pluginProject) } returns
+            pluginProject.extensions.findByType(BaseExtension::class.java)!!
+
+        val captureActionSlot = slot<Action<Project>>()
+        val capturePluginActionSlot = mutableListOf<Action<Project>>()
+        every { project.afterEvaluate(any<Action<Project>>()) } returns Unit
+        every { pluginProject.afterEvaluate(any<Action<Project>>()) } returns Unit
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(
+            engineVersionValue = EXAMPLE_ENGINE_VERSION
+        )
+
+        // Capture and execute afterEvaluate actions to simulate Gradle lifecycle
+        verify { project.afterEvaluate(capture(captureActionSlot)) }
+        verify { pluginProject.afterEvaluate(capture(capturePluginActionSlot)) }
+        captureActionSlot.captured.execute(project)
+        capturePluginActionSlot[0].execute(pluginProject)
+
+        // Verify that individual create was called for "profile" even though supportsBuildMode is false
+        verify(exactly = 1) {
+            mockPluginProjectBuildTypes.create(
+                "profile",
+                any<Action<com.android.build.gradle.internal.dsl.BuildType>>()
+            )
+        }
+        // Verify that the embedding dependency was NOT added for "profile" (since supportsBuildMode is false)
+        verify(exactly = 0) {
+            pluginProject.dependencies.add(
+                "profileApi",
+                any()
+            )
+        }
     }
 
     private fun setupBasicMocks(
@@ -436,6 +563,8 @@ class PluginHandlerTest {
         every { project.logger } returns mockLogger
 
         // Plugin project setup
+        every { project.getName() } returns "app"
+        every { pluginProject.getName() } returns (cameraDependency["name"] as? String ?: "plugin")
         every { pluginProject.hasProperty("local-engine-repo") } returns false
         every { pluginProject.hasProperty("android") } returns true
         val mockPluginContainer = mockk<org.gradle.api.plugins.PluginContainer>()

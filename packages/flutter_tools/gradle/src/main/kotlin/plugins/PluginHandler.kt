@@ -147,15 +147,6 @@ class PluginHandler(
             buildType: BuildType,
             engineVersion: String
         ) {
-            val flutterBuildMode: String = buildModeFor(buildType)
-            // TODO(gmackall): this should be safe to remove, as the minimum required AGP is well above
-            //                 3.5. We should try to remove it.
-            // In AGP 3.5, the embedding must be added as an API implementation,
-            // so java8 features are desugared against the runtime classpath.
-            // For more, see https://github.com/flutter/flutter/issues/40126
-            if (!supportsBuildMode(pluginProject, flutterBuildMode)) {
-                return
-            }
             if (!pluginProject.hasProperty("android")) {
                 return
             }
@@ -179,6 +170,16 @@ class PluginHandler(
                         }
                     }
                 }
+            }
+
+            val flutterBuildMode: String = buildModeFor(buildType)
+            // TODO(gmackall): this should be safe to remove, as the minimum required AGP is well above
+            //                 3.5. We should try to remove it.
+            // In AGP 3.5, the embedding must be added as an API implementation,
+            // so java8 features are desugared against the runtime classpath.
+            // For more, see https://github.com/flutter/flutter/issues/40126
+            if (!supportsBuildMode(pluginProject, flutterBuildMode)) {
+                return
             }
 
             // The embedding is API dependency of the plugin, so the AGP is able to desugar
