@@ -1900,6 +1900,46 @@ public class PlatformViewsControllerTest {
     assertTrue(flutterView.indexOfChild(overlayView) == -1);
   }
 
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void onDisplayPlatformView_doesNotThrow_ifViewHasBeenDisposed() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    platformViewsController.setSoftwareRendering(true);
+
+    int platformViewId = 100;
+    PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    PlatformView platformView = mock(PlatformView.class);
+    View androidView = mock(View.class);
+    when(platformView.getView()).thenReturn(androidView);
+    when(viewFactory.create(any(), eq(platformViewId), any())).thenReturn(platformView);
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    FlutterView flutterView = mock(FlutterView.class);
+    attachToFlutterView(jni, platformViewsController, flutterView);
+
+    // 1. Create the platform view.
+    createPlatformView(
+        jni, platformViewsController, platformViewId, "testType", /* hybrid=*/ false);
+
+    // 2. Dispose the platform view.
+    disposePlatformView(jni, platformViewsController, platformViewId);
+
+    // 3. Call onDisplayPlatformView for the disposed view.
+    // Under the current codebase (with Jonah Williams' workaround), this should not throw and should return early.
+    platformViewsController.onBeginFrame();
+    platformViewsController.onDisplayPlatformView(
+        platformViewId,
+        /* x=*/ 0,
+        /* y=*/ 0,
+        /* width=*/ 10,
+        /* height=*/ 10,
+        /* viewWidth=*/ 10,
+        /* viewHeight=*/ 10,
+        /* mutatorsStack=*/ new FlutterMutatorsStack());
+  }
+
   private static ByteBuffer encodeMethodCall(MethodCall call) {
     final ByteBuffer buffer = StandardMethodCodec.INSTANCE.encodeMethodCall(call);
     buffer.rewind();

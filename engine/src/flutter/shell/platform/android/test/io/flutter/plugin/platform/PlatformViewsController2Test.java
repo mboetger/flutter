@@ -32,6 +32,7 @@ import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterJNI;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.mutatorsstack.FlutterMutatorView;
+import io.flutter.embedding.engine.mutatorsstack.FlutterMutatorsStack;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.embedding.engine.systemchannels.AccessibilityChannel;
 import io.flutter.embedding.engine.systemchannels.MouseCursorChannel;
@@ -551,6 +552,80 @@ public class PlatformViewsController2Test {
 
     verify(mockAttachedSurfaceControl, times(1))
         .applyTransactionOnDraw(any(SurfaceControl.Transaction.class));
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void onDisplayPlatformView_doesNotThrow_ifViewHasBeenDisposed() {
+    PlatformViewRegistryImpl registryImpl = new PlatformViewRegistryImpl();
+    PlatformViewsController2 platformViewsController2 = new PlatformViewsController2();
+    platformViewsController2.setRegistry(registryImpl);
+    FlutterJNI jni = new FlutterJNI();
+    attach(jni, platformViewsController2);
+    PlatformViewRegistry registry = platformViewsController2.getRegistry();
+
+    registry.registerViewFactory(
+        CountingPlatformView.VIEW_TYPE_ID,
+        new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+          @Override
+          public PlatformView create(Context context, int viewId, Object args) {
+            return new CountingPlatformView(context);
+          }
+        });
+
+    int viewId = 0;
+    final PlatformViewCreationRequest request =
+        PlatformViewCreationRequest.createHCPPRequest(
+            viewId, CountingPlatformView.VIEW_TYPE_ID, View.LAYOUT_DIRECTION_LTR, null);
+    PlatformView pView = platformViewsController2.createFlutterPlatformView(request);
+    assertTrue(pView instanceof CountingPlatformView);
+
+    platformViewsController2.disposePlatformView(viewId);
+
+    // Call onDisplayPlatformView for the disposed view.
+    // Under the current codebase, this should not throw and should return early.
+    platformViewsController2.onDisplayPlatformView(
+        viewId,
+        /* x=*/ 0,
+        /* y=*/ 0,
+        /* width=*/ 10,
+        /* height=*/ 10,
+        /* viewWidth=*/ 10,
+        /* viewHeight=*/ 10,
+        /* mutatorsStack=*/ new FlutterMutatorsStack());
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void hidePlatformView_doesNotThrow_ifViewHasBeenDisposed() {
+    PlatformViewRegistryImpl registryImpl = new PlatformViewRegistryImpl();
+    PlatformViewsController2 platformViewsController2 = new PlatformViewsController2();
+    platformViewsController2.setRegistry(registryImpl);
+    FlutterJNI jni = new FlutterJNI();
+    attach(jni, platformViewsController2);
+    PlatformViewRegistry registry = platformViewsController2.getRegistry();
+
+    registry.registerViewFactory(
+        CountingPlatformView.VIEW_TYPE_ID,
+        new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+          @Override
+          public PlatformView create(Context context, int viewId, Object args) {
+            return new CountingPlatformView(context);
+          }
+        });
+
+    int viewId = 0;
+    final PlatformViewCreationRequest request =
+        PlatformViewCreationRequest.createHCPPRequest(
+            viewId, CountingPlatformView.VIEW_TYPE_ID, View.LAYOUT_DIRECTION_LTR, null);
+    PlatformView pView = platformViewsController2.createFlutterPlatformView(request);
+    assertTrue(pView instanceof CountingPlatformView);
+
+    platformViewsController2.disposePlatformView(viewId);
+
+    // Call hidePlatformView for the disposed view.
+    // Under the current codebase, this should not throw and should return early.
+    platformViewsController2.hidePlatformView(viewId);
   }
 
   private static ByteBuffer encodeMethodCall(MethodCall call) {
