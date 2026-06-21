@@ -61,10 +61,12 @@ void main() {
     final String projectBuildGradle = projectGradleFile.readAsStringSync();
 
     // Bump down plugin example app ndkVersion to 21.1.6352462.
-    final String newProjectGradleFile = projectBuildGradle.replaceAll(
-      androidNdkVersionRegExp,
-      'ndkVersion = "21.1.6352462"',
-    );
+    final String newProjectGradleFile = projectBuildGradle.contains('ndkVersion =')
+        ? projectBuildGradle.replaceAll(androidNdkVersionRegExp, 'ndkVersion = "21.1.6352462"')
+        : projectBuildGradle.replaceFirst(
+            'compileSdk = flutter.compileSdkVersion',
+            'compileSdk = flutter.compileSdkVersion\n    ndkVersion = "21.1.6352462"',
+          );
     expect(newProjectGradleFile, contains('21.1.6352462'));
     projectGradleFile.writeAsStringSync(newProjectGradleFile);
 

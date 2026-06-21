@@ -28,7 +28,6 @@ plugins {
 android {
     namespace = "com.example.splitperabi"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
