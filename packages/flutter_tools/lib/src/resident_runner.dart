@@ -250,20 +250,26 @@ class FlutterDevice {
         // shuts down, including after an error. If `done` completes before `connectToVmService`,
         // something went wrong that caused DDS to shutdown early.
         try {
-          service = await Future.any<dynamic>(<Future<dynamic>>[
-            connectToVmService(
-              debuggingOptions.enableDds ? (device!.dds.uri ?? vmServiceUri!) : vmServiceUri!,
-              reloadSources: reloadSources,
-              restart: restart,
-              compileExpression: compileExpression,
-              flutterProject: FlutterProject.current(),
-              printStructuredErrorLogMethod: printStructuredErrorLogMethod,
-              device: device,
-              logger: globals.logger,
-            ),
-            if (!existingDds)
-              device!.dds.done.whenComplete(() => throw Exception('DDS shut down too early')),
-          ]) as FlutterVmService?;
+          service =
+              await Future.any<dynamic>(<Future<dynamic>>[
+                    connectToVmService(
+                      debuggingOptions.enableDds
+                          ? (device!.dds.uri ?? vmServiceUri!)
+                          : vmServiceUri!,
+                      reloadSources: reloadSources,
+                      restart: restart,
+                      compileExpression: compileExpression,
+                      flutterProject: FlutterProject.current(),
+                      printStructuredErrorLogMethod: printStructuredErrorLogMethod,
+                      device: device,
+                      logger: globals.logger,
+                    ),
+                    if (!existingDds)
+                      device!.dds.done.whenComplete(
+                        () => throw Exception('DDS shut down too early'),
+                      ),
+                  ])
+                  as FlutterVmService?;
         } on Exception catch (exception) {
           globals.printTrace('Fail to connect to service protocol: $vmServiceUri: $exception');
           if (!completer.isCompleted && !_isListeningForVmServiceUri!) {
@@ -1265,25 +1271,32 @@ abstract class ResidentRunner extends ResidentHandlers {
     }
     _finished = Completer<int>();
     // Listen for service protocol connection to close.
-    for (final FlutterDevice? device in flutterDevices) {
-      await device!.connect(
-        debuggingOptions: debuggingOptions,
-        reloadSources: reloadSources,
-        restart: restart,
-        compileExpression: compileExpression,
-        hostVmServicePort: debuggingOptions.hostVmServicePort,
-        printStructuredErrorLogMethod: printStructuredErrorLog,
-      );
-      await device.vmService!.getFlutterViews();
+    try {
+      for (final FlutterDevice? device in flutterDevices) {
+        await device!.connect(
+          debuggingOptions: debuggingOptions,
+          reloadSources: reloadSources,
+          restart: restart,
+          compileExpression: compileExpression,
+          hostVmServicePort: debuggingOptions.hostVmServicePort,
+          printStructuredErrorLogMethod: printStructuredErrorLog,
+        );
+        await device.vmService!.getFlutterViews();
 
-      // This hooks up callbacks for when the connection stops in the future.
-      // We don't want to wait for them. We don't handle errors in those callbacks'
-      // futures either because they just print to logger and is not critical.
-      unawaited(
-        device.vmService!.service.onDone
-            .then<void>(_serviceProtocolDone, onError: _serviceProtocolError)
-            .whenComplete(_serviceDisconnected),
-      );
+        // This hooks up callbacks for when the connection stops in the future.
+        // We don't want to wait for them. We don't handle errors in those callbacks'
+        // futures either because they just print to logger and is not critical.
+        unawaited(
+          device.vmService!.service.onDone
+              .then<void>(_serviceProtocolDone, onError: _serviceProtocolError)
+              .whenComplete(_serviceDisconnected),
+        );
+      }
+    } catch (error) {
+      if (_isConnectionError(error)) {
+        throw ServiceProtocolConnectionException('Device is offline or disconnected.');
+      }
+      rethrow;
     }
   }
 
@@ -2058,4 +2071,21 @@ class DevToolsServerAddress {
   Uri? get uri {
     return Uri(scheme: 'http', host: host, port: port);
   }
+}
+
+bool _isConnectionError(Object error) {
+  if (error is io.SocketException || error is io.HttpException || error is io.WebSocketException) {
+    return true;
+  }
+  if (error is vm_service.RPCError && error.isConnectionDisposedException) {
+    return true;
+  }
+  final errorMessage = error.toString();
+  return errorMessage.contains('HttpException') ||
+      errorMessage.contains('SocketException') ||
+      errorMessage.contains('WebSocketException') ||
+      errorMessage.contains('Connection closed before full header was received') ||
+      errorMessage.contains('Connection refused') ||
+      errorMessage.contains('Connection reset by peer') ||
+      errorMessage.contains('failed to connect to');
 }
