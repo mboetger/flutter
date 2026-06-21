@@ -626,6 +626,10 @@ void main() {
     'Finds app bundle when archiveName / archiveBaseName is not standard "app"',
     () {
       final FlutterProject project = generateFakeAppBundle('debug', 'foo-debug.aab', fileSystem);
+      project.android.hostAppGradleFile.createSync(recursive: true);
+      project.android.appGradleFile.createSync(recursive: true);
+      project.android.appGradleFile.writeAsStringSync("archivesBaseName = 'foo'");
+
       final File bundle = findBundleFile(
         project,
         const BuildInfo(
@@ -639,6 +643,31 @@ void main() {
       );
 
       expect(bundle, isNotNull);
+      expect(bundle.path, '/build/app/outputs/bundle/debug/foo-debug.aab');
+    },
+  );
+
+  testWithoutContext(
+    'findBundleFile ignores stale default aab when archivesBaseName is customized',
+    () {
+      final FlutterProject project = generateFakeAppBundle('debug', 'foo-debug.aab', fileSystem);
+      // Also write a stale app-debug.aab in the same directory
+      getBundleDirectory(project).childDirectory('debug').childFile('app-debug.aab').createSync();
+
+      // Customize archivesBaseName in build.gradle
+      project.android.hostAppGradleFile.createSync(recursive: true);
+      project.android.appGradleFile.createSync(recursive: true);
+      project.android.appGradleFile.writeAsStringSync("archivesBaseName = 'foo'");
+
+      final File bundle = findBundleFile(
+        project,
+        BuildInfo.debug,
+        BufferLogger.test(),
+        fakeAnalytics,
+      );
+
+      expect(bundle, isNotNull);
+      // Should pick foo-debug.aab, not the stale app-debug.aab
       expect(bundle.path, '/build/app/outputs/bundle/debug/foo-debug.aab');
     },
   );

@@ -567,6 +567,16 @@ class AndroidProject extends FlutterProjectPlatform {
   /// Regex is used in both Groovy and Kotlin Gradle files.
   static final _groupPattern = RegExp('^\\s*group\\s*=?\\s*[\'"](.*)[\'"]\\s*\$');
 
+  static final _archivesBaseNamePatterns = <RegExp>[
+    RegExp(r'''^\s*(?:project\.)?archivesBaseName\s*=\s*['"]([^'"]+)['"]'''),
+    RegExp(
+      r'''^\s*(?:project\.)?ext\.set\(\s*['"]archivesBaseName['"]\s*,\s*['"]([^'"]+)['"]\s*\)''',
+    ),
+    RegExp(r'''^\s*setProperty\(\s*['"]archivesBaseName['"]\s*,\s*['"]([^'"]+)['"]\s*\)'''),
+    RegExp(r'''^\s*(?:base\.)?archivesName\.set\(\s*['"]([^'"]+)['"]\s*\)'''),
+    RegExp(r'''^\s*(?:base\.)?archivesName\s*=\s*['"]([^'"]+)['"]'''),
+  ];
+
   /// The Gradle root directory of the Android host app. This is the directory
   /// containing the `app/` subdirectory and the `settings.gradle` file that
   /// includes it in the overall Gradle project.
@@ -890,6 +900,37 @@ See the link below for more information:
 
   String? get applicationId {
     return firstMatchInFile(appGradleFile, _applicationIdPattern)?.group(1);
+  }
+
+  /// The archives base name configured in the project, defaulting to 'app'.
+  String get archivesBaseName {
+    if (!isUsingGradle || !appGradleFile.existsSync()) {
+      return 'app';
+    }
+    try {
+      final List<String> lines = appGradleFile.readAsLinesSync();
+      for (final line in lines) {
+        for (final RegExp pattern in _archivesBaseNamePatterns) {
+          final Match? match = pattern.firstMatch(line);
+          if (match != null) {
+            final String value = match.group(1)!.trim();
+            if (value.isNotEmpty) {
+              if (value.contains(r'$')) {
+                globals.logger.printWarning(
+                  'The Flutter tool detected a dynamic archivesBaseName ("$value") in ${appGradleFile.path}.\n'
+                  'Static analysis cannot resolve Gradle variables. If the build fails to locate the output artifact, '
+                  'please consider using a static string for archivesBaseName or base.archivesName.',
+                );
+              }
+              return value;
+            }
+          }
+        }
+      }
+    } on Exception {
+      // Fallback gracefully
+    }
+    return 'app';
   }
 
   /// Get the namespace for newer Android projects,

@@ -116,12 +116,13 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
   }) async {
     final File apkFile;
     final String filename;
+    final String baseName = androidProject.archivesBaseName;
     if (buildInfo == null) {
-      filename = 'app.apk';
+      filename = '$baseName.apk';
     } else if (buildInfo.flavor == null) {
-      filename = 'app-${buildInfo.mode.cliName}.apk';
+      filename = '$baseName-${buildInfo.mode.cliName}.apk';
     } else {
-      filename = 'app-${buildInfo.lowerCasedFlavor}-${buildInfo.mode.cliName}.apk';
+      filename = '$baseName-${buildInfo.lowerCasedFlavor}-${buildInfo.mode.cliName}.apk';
     }
 
     if (androidProject.isUsingGradle && androidProject.isSupportedVersion) {

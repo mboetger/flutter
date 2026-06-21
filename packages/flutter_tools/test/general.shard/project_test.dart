@@ -1811,6 +1811,68 @@ android {
           expect(project.android.hostAppGradleFile.path, expected.path);
         },
       );
+
+      _testInMemory(
+        'Project.android.archivesBaseName parses archivesBaseName / base.archivesName patterns correctly',
+        () async {
+          final Directory tempDir = globals.fs.systemTempDirectory.createTempSync(
+            'flutter_project_archives_base_name',
+          );
+          tempDir.childDirectory('android').childFile('build.gradle').createSync(recursive: true);
+          final Directory androidDir = tempDir.childDirectory('android').childDirectory('app')
+            ..createSync(recursive: true);
+          final File appGradle = androidDir.childFile('build.gradle')..createSync();
+          final FlutterProject project = FlutterProject.fromDirectory(tempDir);
+
+          // 1. Default fallback
+          expect(project.android.archivesBaseName, 'app');
+
+          // 2. Groovy: archivesBaseName = 'custom_name'
+          appGradle.writeAsStringSync("archivesBaseName = 'groovy-flat'");
+          expect(project.android.archivesBaseName, 'groovy-flat');
+
+          // 3. Groovy legacy: project.ext.set("archivesBaseName", "custom_name")
+          appGradle.writeAsStringSync('project.ext.set("archivesBaseName", "groovy-ext")');
+          expect(project.android.archivesBaseName, 'groovy-ext');
+
+          // 4. Groovy setProperty: setProperty("archivesBaseName", "custom_name")
+          appGradle.writeAsStringSync('setProperty("archivesBaseName", "groovy-set-property")');
+          expect(project.android.archivesBaseName, 'groovy-set-property');
+
+          // 5. Kotlin DSL: base.archivesName.set("custom_name")
+          appGradle.writeAsStringSync('base.archivesName.set("kotlin-set")');
+          expect(project.android.archivesBaseName, 'kotlin-set');
+
+          // 6. Kotlin DSL / Groovy: base.archivesName = "custom_name"
+          appGradle.writeAsStringSync('base.archivesName = "kotlin-flat"');
+          expect(project.android.archivesBaseName, 'kotlin-flat');
+        },
+      );
+
+      _testInMemory(
+        'Project.android.archivesBaseName prints warning when dynamic variables are detected',
+        () async {
+          final Directory tempDir = globals.fs.systemTempDirectory.createTempSync(
+            'flutter_project_archives_base_name_warning',
+          );
+          tempDir.childDirectory('android').childFile('build.gradle').createSync(recursive: true);
+          final Directory androidDir = tempDir.childDirectory('android').childDirectory('app')
+            ..createSync(recursive: true);
+          final File appGradle = androidDir.childFile('build.gradle')..createSync();
+          final FlutterProject project = FlutterProject.fromDirectory(tempDir);
+
+          final bufferLogger = globals.logger as BufferLogger;
+          bufferLogger.clear();
+
+          appGradle.writeAsStringSync(r'archivesBaseName = "${projectName}-$versionName"');
+          expect(project.android.archivesBaseName, r'${projectName}-$versionName');
+
+          expect(
+            bufferLogger.warningText,
+            contains('The Flutter tool detected a dynamic archivesBaseName'),
+          );
+        },
+      );
       _testInMemory(
         'Project.android.settingsGradleFile resolves to android/settings.gradle',
         () async {

@@ -156,6 +156,21 @@ void main() {
       expect(apks, <String>['app-debug.apk']);
     });
 
+    testWithoutContext('Finds APK with custom archivesBaseName', () {
+      final Iterable<String> apks = listApkPaths(
+        const AndroidBuildInfo(
+          BuildInfo(
+            BuildMode.release,
+            '',
+            treeShakeIcons: false,
+            packageConfigPath: '.dart_tool/package_config.json',
+          ),
+        ),
+        'custom_name',
+      );
+      expect(apks, <String>['custom_name-release.apk']);
+    });
+
     testWithoutContext('Finds APK with flavor in debug', () {
       final Iterable<String> apks = listApkPaths(
         const AndroidBuildInfo(

@@ -370,7 +370,7 @@ class FlutterPlugin : Plugin<Project> {
                         val outputDirectory: Directory =
                             packageApplicationProvider.outputDirectory.get()
                         val outputDirectoryStr: String = outputDirectory.toString()
-                        var filename = "app"
+                        var filename = getArchivesBaseName(projectToAddTasksTo)
 
                         // TODO(gmackall): Migrate to AGPs variant api.
                         //    https://github.com/flutter/flutter/issues/166550
@@ -488,6 +488,30 @@ class FlutterPlugin : Plugin<Project> {
             this.pluginHandler = PluginHandler(project)
         }
         return this.pluginHandler!!
+    }
+
+    private fun getArchivesBaseName(project: Project): String {
+        if (project.hasProperty("archivesBaseName")) {
+            val propertyValue = project.property("archivesBaseName")
+            if (propertyValue is String && propertyValue.isNotEmpty()) {
+                return propertyValue
+            }
+        }
+        try {
+            val baseExtension = project.extensions.findByName("base")
+            if (baseExtension != null) {
+                val getArchivesName = baseExtension.javaClass.getMethod("getArchivesName")
+                val archivesNameProperty = getArchivesName.invoke(baseExtension)
+                val get = archivesNameProperty.javaClass.getMethod("get")
+                val value = get.invoke(archivesNameProperty)
+                if (value is String && value.isNotEmpty()) {
+                    return value
+                }
+            }
+        } catch (t: Throwable) {
+            // Fallback gracefully on any reflection/linkage error
+        }
+        return "app"
     }
 
     companion object {
