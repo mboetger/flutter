@@ -1019,8 +1019,13 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   private static PlatformViewRenderTarget makePlatformViewRenderTarget(
       TextureRegistry textureRegistry) {
     if (enableSurfaceProducerRenderTarget && Build.VERSION.SDK_INT >= API_LEVELS.API_29) {
+      // Android 14 (API 34) has a specific platform bug where the surface needs to be
+      // reset when the app goes into the background to prevent rendering freezes.
+      // However, applying this workaround on Android 11-13 (APIs 30-33) causes the
+      // video surface to temporarily hide/blank when the app resumes (see #161030).
+      // Therefore, we restrict resetInBackground strictly to API 34.
       TextureRegistry.SurfaceLifecycle lifecycle =
-          Build.VERSION.SDK_INT <= API_LEVELS.API_34
+          Build.VERSION.SDK_INT == API_LEVELS.API_34
               ? TextureRegistry.SurfaceLifecycle.resetInBackground
               : TextureRegistry.SurfaceLifecycle.manual;
       final TextureRegistry.SurfaceProducer textureEntry =

@@ -152,9 +152,8 @@ public class PlatformViewsControllerTest {
   @Test
   @Config(
       shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class},
-      minSdk = 29,
-      maxSdk = 34)
-  public void itPassesSurfaceLifecycleResetInBackgroundLeqApi34() {
+      sdk = 34)
+  public void itPassesSurfaceLifecycleResetInBackgroundApi34() {
     PlatformViewsController platformViewsController = new PlatformViewsController();
     FlutterJNI jni = new FlutterJNI();
     platformViewsController.setFlutterJNI(jni);
@@ -191,6 +190,48 @@ public class PlatformViewsControllerTest {
     verify(platformViewsController.textureRegistry, times(1))
         .createSurfaceProducer(TextureRegistry.SurfaceLifecycle.resetInBackground);
   }
+
+  @Test
+  @Config(
+      shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class},
+      sdk = 30)
+  public void itPassesSurfaceLifecycleManualOnApi30() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+    // Get the platform view registry.
+    PlatformViewRegistry registry = platformViewsController.getRegistry();
+
+    // Register a factory for our platform view.
+    registry.registerViewFactory(
+        CountingPlatformView.VIEW_TYPE_ID,
+        new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+          @Override
+          public PlatformView create(Context context, int viewId, Object args) {
+            return new CountingPlatformView(context);
+          }
+        });
+
+    // Create the platform view.
+    int viewId = 0;
+    final PlatformViewCreationRequest request =
+        new PlatformViewCreationRequest(
+            viewId,
+            CountingPlatformView.VIEW_TYPE_ID,
+            0,
+            0,
+            128,
+            128,
+            View.LAYOUT_DIRECTION_LTR,
+            null);
+    PlatformView pView = platformViewsController.createPlatformView(request, true);
+    assertTrue(pView instanceof CountingPlatformView);
+    platformViewsController.configureForTextureLayerComposition(pView, request);
+    verify(platformViewsController.textureRegistry, times(1))
+        .createSurfaceProducer(TextureRegistry.SurfaceLifecycle.manual);
+  }
+
 
   @Test
   @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
