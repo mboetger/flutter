@@ -442,27 +442,29 @@ class AndroidGradleBuilder implements AndroidBuilder {
     int retry = 0,
     @visibleForTesting int? maxRetries,
   }) async {
-    if (!project.android.isSupportedVersion) {
+    if (!(project.isPlugin && configOnly) && !project.android.isSupportedVersion) {
       _exitWithUnsupportedProjectMessage(_logger.terminal, _analytics);
     }
 
-    final migrators = <ProjectMigrator>[
-      TopLevelGradleBuildFileMigration(project.android, _logger),
-      AndroidStudioJavaGradleConflictMigration(
-        _logger,
-        project: project.android,
-        androidStudio: _androidStudio,
-        java: globals.java,
-      ),
-      MinSdkVersionMigration(project.android, _logger),
-      MultidexRemovalMigration(project.android, _logger),
-      CmakeAndroid16kPagesMigration(project.android, _logger),
-      DisableBuiltInKotlinMigration(project.android, _logger),
-      DisableNewDslMigration(project.android, _logger),
-    ];
+    if (!project.isPlugin) {
+      final migrators = <ProjectMigrator>[
+        TopLevelGradleBuildFileMigration(project.android, _logger),
+        AndroidStudioJavaGradleConflictMigration(
+          _logger,
+          project: project.android,
+          androidStudio: _androidStudio,
+          java: globals.java,
+        ),
+        MinSdkVersionMigration(project.android, _logger),
+        MultidexRemovalMigration(project.android, _logger),
+        CmakeAndroid16kPagesMigration(project.android, _logger),
+        DisableBuiltInKotlinMigration(project.android, _logger),
+        DisableNewDslMigration(project.android, _logger),
+      ];
 
-    final migration = ProjectMigration(migrators);
-    await migration.run();
+      final migration = ProjectMigration(migrators);
+      await migration.run();
+    }
 
     // The default Gradle script reads the version name and number
     // from the local.properties file.
@@ -472,17 +474,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
 
     final String gradleExecutablePath = _gradleUtils.getExecutable(project);
 
-    // All automatically created files should exist.
-    if (configOnly) {
-      return;
-    }
-
-    // Assembly work starts here.
     final BuildInfo buildInfo = androidBuildInfo.buildInfo;
-    final String assembleTask = isBuildingBundle
-        ? getBundleTaskFor(buildInfo)
-        : getAssembleTaskFor(buildInfo);
-
     if (_logger.isVerbose) {
       options.add('--full-stacktrace');
       options.add('--info');
@@ -493,6 +485,29 @@ class AndroidGradleBuilder implements AndroidBuilder {
     if (!buildInfo.androidGradleDaemon) {
       options.add('--no-daemon');
     }
+
+    // All automatically created files should exist.
+    if (configOnly) {
+      final int exitCode = await _runGradleTask(
+        'dependencies',
+        options: options,
+        project: project,
+        localGradleErrors: localGradleErrors,
+        gradleExecutablePath: gradleExecutablePath,
+      );
+      if (exitCode != 0) {
+        throwToolExit(
+          'Gradle task dependencies failed with exit code $exitCode',
+          exitCode: exitCode,
+        );
+      }
+      return;
+    }
+
+    // Assembly work starts here.
+    final String assembleTask = isBuildingBundle
+        ? getBundleTaskFor(buildInfo)
+        : getAssembleTaskFor(buildInfo);
     if (buildInfo.androidSkipBuildDependencyValidation) {
       options.add('-PskipDependencyChecks=true');
     }
