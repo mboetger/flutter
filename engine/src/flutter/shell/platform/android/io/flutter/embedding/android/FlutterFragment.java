@@ -1129,6 +1129,9 @@ public class FlutterFragment extends Fragment
   @Override
   public void onStart() {
     super.onStart();
+    if (delegate != null && !delegate.isAttached()) {
+      delegate.onAttach(getContext());
+    }
     if (stillAttachedForEvent("onStart")) {
       delegate.onStart();
     }
@@ -1252,6 +1255,9 @@ public class FlutterFragment extends Fragment
    */
   @ActivityCallThrough
   public void onNewIntent(@NonNull Intent intent) {
+    if (delegate != null && !delegate.isAttached()) {
+      delegate.onAttach(getContext());
+    }
     if (stillAttachedForEvent("onNewIntent")) {
       delegate.onNewIntent(intent);
     }

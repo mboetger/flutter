@@ -827,6 +827,9 @@ public class FlutterActivity extends Activity
   protected void onStart() {
     super.onStart();
     lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_START);
+    if (delegate != null && !delegate.isAttached()) {
+      delegate.onAttach(this);
+    }
     if (stillAttachedForEvent("onStart")) {
       delegate.onStart();
     }
@@ -931,6 +934,9 @@ public class FlutterActivity extends Activity
   protected void onNewIntent(@NonNull Intent intent) {
     // TODO(mattcarroll): change G3 lint rule that forces us to call super
     super.onNewIntent(intent);
+    if (delegate != null && !delegate.isAttached()) {
+      delegate.onAttach(this);
+    }
     if (stillAttachedForEvent("onNewIntent")) {
       delegate.onNewIntent(intent);
     }

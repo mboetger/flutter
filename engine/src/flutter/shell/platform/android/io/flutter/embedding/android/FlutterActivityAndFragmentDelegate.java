@@ -226,6 +226,15 @@ import java.util.Set;
     sensitiveContentPlugin = host.provideSensitiveContentPlugin(hostActivity, flutterEngine);
 
     host.configureFlutterEngine(flutterEngine);
+
+    if (flutterView != null) {
+      flutterView.addOnFirstFrameRenderedListener(flutterUiDisplayListener);
+      if (host.attachToEngineAutomatically()) {
+        Log.v(TAG, "Attaching FlutterEngine to FlutterView.");
+        flutterView.attachToFlutterEngine(flutterEngine);
+      }
+    }
+
     isAttached = true;
   }
 
