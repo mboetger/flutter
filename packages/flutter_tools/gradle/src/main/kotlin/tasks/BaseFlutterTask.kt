@@ -5,6 +5,10 @@
 package com.flutter.gradle.tasks
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
@@ -18,114 +22,114 @@ import java.io.File
  * Base implementation of a Gradle task. Gradle tasks can not be instantiated for testing,
  * so this class delegates all logic to [BaseFlutterTaskHelper].
  */
-open class BaseFlutterTask : DefaultTask() {
-    @Internal
-    var flutterRoot: File? = null
+abstract class BaseFlutterTask : DefaultTask() {
+    @get:Internal
+    abstract val flutterRoot: DirectoryProperty
 
-    @Internal
-    var flutterExecutable: File? = null
+    @get:Internal
+    abstract val flutterExecutable: RegularFileProperty
 
-    @Input
-    var buildMode: String? = null
+    @get:Input
+    abstract val buildMode: Property<String>
 
-    @Input
-    var minSdkVersion: Int? = null
+    @get:Input
+    abstract val minSdkVersion: Property<Int>
 
-    @Optional
-    @Input
-    var localEngine: String? = null
+    @get:Optional
+    @get:Input
+    abstract val localEngine: Property<String>
 
-    @Optional
-    @Input
-    var localEngineHost: String? = null
+    @get:Optional
+    @get:Input
+    abstract val localEngineHost: Property<String>
 
-    @Optional
-    @Input
-    var localEngineSrcPath: String? = null
+    @get:Optional
+    @get:Input
+    abstract val localEngineSrcPath: Property<String>
 
-    @Input
-    var targetPath: String? = null
+    @get:Input
+    abstract val targetPath: Property<String>
 
-    @Optional
-    @Input
-    var verbose: Boolean? = null
+    @get:Optional
+    @get:Input
+    abstract val verbose: Property<Boolean>
 
-    @Optional
-    @Input
-    var fileSystemRoots: Array<String>? = null
+    @get:Optional
+    @get:Input
+    abstract val fileSystemRoots: ListProperty<String>
 
-    @Optional
-    @Input
-    var fileSystemScheme: String? = null
+    @get:Optional
+    @get:Input
+    abstract val fileSystemScheme: Property<String>
 
-    @Input
-    var trackWidgetCreation: Boolean? = null
+    @get:Input
+    abstract val trackWidgetCreation: Property<Boolean>
 
-    @Optional
-    @Input
-    var targetPlatformValues: List<String>? = null
+    @get:Optional
+    @get:Input
+    abstract val targetPlatformValues: ListProperty<String>
 
-    @Internal
-    var sourceDir: File? = null
+    @get:Internal
+    abstract val sourceDir: DirectoryProperty
 
-    @Internal
-    var intermediateDir: File? = null
+    @get:Internal
+    abstract val intermediateDir: DirectoryProperty
 
-    @Optional
-    @Input
-    var frontendServerStarterPath: String? = null
+    @get:Optional
+    @get:Input
+    abstract val frontendServerStarterPath: Property<String>
 
-    @Optional
-    @Input
-    var extraFrontEndOptions: String? = null
+    @get:Optional
+    @get:Input
+    abstract val extraFrontEndOptions: Property<String>
 
-    @Optional
-    @Input
-    var extraGenSnapshotOptions: String? = null
+    @get:Optional
+    @get:Input
+    abstract val extraGenSnapshotOptions: Property<String>
 
-    @Optional
-    @Input
-    var splitDebugInfo: String? = null
+    @get:Optional
+    @get:Input
+    abstract val splitDebugInfo: Property<String>
 
-    @Optional
-    @Input
-    var treeShakeIcons: Boolean? = null
+    @get:Optional
+    @get:Input
+    abstract val treeShakeIcons: Property<Boolean>
 
-    @Optional
-    @Input
-    var dartObfuscation: Boolean? = null
+    @get:Optional
+    @get:Input
+    abstract val dartObfuscation: Property<Boolean>
 
-    @Optional
-    @Input
-    var dartDefines: String? = null
+    @get:Optional
+    @get:Input
+    abstract val dartDefines: Property<String>
 
-    @Optional
-    @Input
-    var bundleSkSLPath: String? = null
+    @get:Optional
+    @get:Input
+    abstract val bundleSkSLPath: Property<String>
 
-    @Optional
-    @Input
-    var codeSizeDirectory: String? = null
+    @get:Optional
+    @get:Input
+    abstract val codeSizeDirectory: Property<String>
 
-    @Optional
-    @Input
-    var performanceMeasurementFile: String? = null
+    @get:Optional
+    @get:Input
+    abstract val performanceMeasurementFile: Property<String>
 
-    @Optional
-    @Input
-    var deferredComponents: Boolean? = null
+    @get:Optional
+    @get:Input
+    abstract val deferredComponents: Property<Boolean>
 
-    @Optional
-    @Input
-    var validateDeferredComponents: Boolean? = null
+    @get:Optional
+    @get:Input
+    abstract val validateDeferredComponents: Property<Boolean>
 
-    @Optional
-    @Input
-    var skipDependencyChecks: Boolean? = null
+    @get:Optional
+    @get:Input
+    abstract val skipDependencyChecks: Property<Boolean>
 
-    @Optional
-    @Input
-    var flavor: String? = null
+    @get:Optional
+    @get:Input
+    abstract val flavor: Property<String>
 
     /**
      * Gets the dependency file(s) by calling [com.flutter.gradle.tasks.BaseFlutterTaskHelper.getDependenciesFiles].

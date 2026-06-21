@@ -679,36 +679,35 @@ class FlutterPlugin : Plugin<Project> {
             // `this` (`verbose this.isVerbose()`).
             val compileTaskProvider: TaskProvider<FlutterTask> =
                 project.tasks.register(taskName, FlutterTask::class.java) {
-                    flutterRoot = flutterPlugin.flutterRoot
-                    flutterExecutable = flutterPlugin.flutterExecutable
-                    buildMode = variantBuildMode
-                    minSdkVersion = variant.mergedFlavor.minSdkVersion!!.apiLevel
-                    localEngine = flutterPlugin.localEngine
-                    localEngineHost = flutterPlugin.localEngineHost
-                    localEngineSrcPath = flutterPlugin.localEngineSrcPath
-                    targetPath = FlutterPluginUtils.getFlutterTarget(project)
-                    verbose = FlutterPluginUtils.isProjectVerbose(project)
-                    fileSystemRoots = fileSystemRootsValue
-                    fileSystemScheme = fileSystemSchemeValue
-                    trackWidgetCreation = trackWidgetCreationValue
-                    targetPlatformValues = targetPlatforms
-                    sourceDir = FlutterPluginUtils.getFlutterSourceDirectory(project)
-                    intermediateDir =
-                        project.file(
-                            project.layout.buildDirectory.dir("${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${variant.name}/")
-                        )
-                    frontendServerStarterPath = frontendServerStarterPathValue
-                    extraFrontEndOptions = extraFrontEndOptionsValue
-                    extraGenSnapshotOptions = extraGenSnapshotOptionsValue
-                    splitDebugInfo = splitDebugInfoValue
-                    treeShakeIcons = treeShakeIconsOptionsValue
-                    dartObfuscation = dartObfuscationValue
-                    dartDefines = dartDefinesValue
-                    performanceMeasurementFile = performanceMeasurementFileValue
-                    codeSizeDirectory = codeSizeDirectoryValue
-                    deferredComponents = deferredComponentsValue
-                    validateDeferredComponents = validateDeferredComponentsValue
-                    flavor = flavorValue
+                    flutterRoot.set(flutterPlugin.flutterRoot)
+                    flutterExecutable.set(flutterPlugin.flutterExecutable)
+                    buildMode.set(variantBuildMode)
+                    minSdkVersion.set(variant.mergedFlavor.minSdkVersion!!.apiLevel)
+                    localEngine.set(flutterPlugin.localEngine)
+                    localEngineHost.set(flutterPlugin.localEngineHost)
+                    localEngineSrcPath.set(flutterPlugin.localEngineSrcPath)
+                    targetPath.set(FlutterPluginUtils.getFlutterTarget(project))
+                    verbose.set(FlutterPluginUtils.isProjectVerbose(project))
+                    fileSystemRoots.set(fileSystemRootsValue?.toList())
+                    fileSystemScheme.set(fileSystemSchemeValue)
+                    trackWidgetCreation.set(trackWidgetCreationValue)
+                    targetPlatformValues.set(targetPlatforms)
+                    sourceDir.set(FlutterPluginUtils.getFlutterSourceDirectory(project))
+                    intermediateDir.set(
+                        project.layout.buildDirectory.dir("${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${variant.name}/")
+                    )
+                    frontendServerStarterPath.set(frontendServerStarterPathValue)
+                    extraFrontEndOptions.set(extraFrontEndOptionsValue)
+                    extraGenSnapshotOptions.set(extraGenSnapshotOptionsValue)
+                    splitDebugInfo.set(splitDebugInfoValue)
+                    treeShakeIcons.set(treeShakeIconsOptionsValue)
+                    dartObfuscation.set(dartObfuscationValue)
+                    dartDefines.set(dartDefinesValue)
+                    performanceMeasurementFile.set(performanceMeasurementFileValue)
+                    codeSizeDirectory.set(codeSizeDirectoryValue)
+                    deferredComponents.set(deferredComponentsValue)
+                    validateDeferredComponents.set(validateDeferredComponentsValue)
+                    flavor.set(flavorValue)
                 }
             val flutterCompileTask: FlutterTask = compileTaskProvider.get()
             val jniLibsDir =
@@ -724,15 +723,15 @@ class FlutterPlugin : Plugin<Project> {
                     into(jniLibsDir)
                     targetPlatforms.forEach { targetPlatform ->
                         val abi: String? = FlutterPluginConstants.PLATFORM_ARCH_MAP[targetPlatform]
-                        from("${flutterCompileTask.intermediateDir}/$abi") {
+                        from(flutterCompileTask.intermediateDir.dir(abi ?: "null")) {
                             include("*.so")
                             rename { filename: String -> "lib$filename" }
                             into(abi ?: "null")
                         }
                         // Copy the native assets created by build.dart and placed in build/native_assets by flutter assemble.
                         val nativeAssetsDir =
-                            "${flutterCompileTask.intermediateDir}/native_assets/jniLibs/lib"
-                        from("$nativeAssetsDir/$abi") {
+                            flutterCompileTask.intermediateDir.dir("native_assets/jniLibs/lib/${abi ?: "null"}")
+                        from(nativeAssetsDir) {
                             include("*.so")
                             into(abi ?: "null")
                         }

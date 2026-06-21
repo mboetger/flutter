@@ -17,7 +17,7 @@ import java.io.File
 object FlutterTaskHelper {
     const val FLUTTER_ASSETS_INCLUDE_DIRECTORY = "flutter_assets/**"
 
-    internal fun getOutputDirectory(flutterTask: FlutterTask): File? = flutterTask.intermediateDir
+    internal fun getOutputDirectory(flutterTask: FlutterTask): File? = flutterTask.intermediateDir.orNull?.asFile
 
     internal fun getAssetsDirectory(flutterTask: FlutterTask): String = "${flutterTask.outputDirectory}${File.separator}flutter_assets"
 
@@ -26,7 +26,7 @@ object FlutterTaskHelper {
         flutterTask: FlutterTask
     ): CopySpec =
         project.copySpec {
-            from("${flutterTask.intermediateDir}")
+            from(flutterTask.intermediateDir)
             include(FLUTTER_ASSETS_INCLUDE_DIRECTORY) // the working dir and its files
         }
 
@@ -35,9 +35,10 @@ object FlutterTaskHelper {
         flutterTask: FlutterTask
     ): CopySpec =
         project.copySpec {
-            from("${flutterTask.intermediateDir}")
-            if (flutterTask.buildMode == "release" || flutterTask.buildMode == "profile") {
-                flutterTask.targetPlatformValues!!.forEach { targetArch ->
+            from(flutterTask.intermediateDir)
+            val buildMode = flutterTask.buildMode.orNull
+            if (buildMode == "release" || buildMode == "profile") {
+                flutterTask.targetPlatformValues.orNull?.forEach { targetArch ->
                     include("${FlutterPluginConstants.PLATFORM_ARCH_MAP[targetArch]}${File.separator}app.so")
                 }
             }
@@ -64,6 +65,7 @@ object FlutterTaskHelper {
         return project.files()
     }
 
+    @Suppress("DEPRECATION")
     internal fun getSourceFiles(
         project: Project,
         flutterTask: FlutterTask
@@ -75,6 +77,7 @@ object FlutterTaskHelper {
         return sources + project.files("pubspec.yaml")
     }
 
+    @Suppress("DEPRECATION")
     internal fun getOutputFiles(
         project: Project,
         flutterTask: FlutterTask
