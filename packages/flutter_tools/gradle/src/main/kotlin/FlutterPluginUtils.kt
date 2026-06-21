@@ -895,4 +895,30 @@ object FlutterPluginUtils {
                 ).toTransform(SingleArtifact.MERGED_MANIFEST) // (3) Indicate the artifact and operation type.
         }
     }
+
+    /**
+     * Adds the SDK manifest fragment to the variant's manifests.
+     *
+     * This allows the Flutter SDK to supply manifest elements (such as default permissions
+     * or features) that are automatically merged into the application's final manifest
+     * at build time.
+     */
+    @JvmStatic
+    @JvmName("addSdkManifestFragment")
+    internal fun addSdkManifestFragment(project: Project, flutterRoot: File) {
+        val sdkManifestFile = File(flutterRoot, "packages/flutter_tools/gradle/AndroidManifest.xml")
+        if (!sdkManifestFile.exists()) {
+            return
+        }
+        val androidComponents = project.extensions.findByType(AndroidComponentsExtension::class.java) ?: return
+        androidComponents.onVariants { variant ->
+            val pathString = try {
+                project.projectDir.toPath().relativize(sdkManifestFile.toPath()).toString()
+            } catch (e: IllegalArgumentException) {
+                sdkManifestFile.absolutePath
+            }
+            variant.sources.manifests.addStaticManifestFile(pathString)
+        }
+    }
 }
+

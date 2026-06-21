@@ -247,6 +247,7 @@ class FlutterPlugin : Plugin<Project> {
         FlutterPluginUtils.getLegacyAndroidExtension(project).buildTypes.all {
             addFlutterDependencies(this)
         }
+        FlutterPluginUtils.addSdkManifestFragment(project, flutterRoot!!)
     }
 
     private fun addFlutterDependencies(buildType: com.android.builder.model.BuildType) {
