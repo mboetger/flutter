@@ -314,6 +314,11 @@ class FlutterPlugin : Plugin<Project> {
                     "${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${sourceSet.name}/jniLibs"
                 )
             sourceSet.jniLibs.srcDir(jniLibsDir.get().asFile)
+            val assetsDir =
+                projectToAddTasksTo.layout.buildDirectory.dir(
+                    "${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${sourceSet.name}/assets"
+                )
+            sourceSet.assets.srcDir(assetsDir.get().asFile)
         }
 
         val flutterPlugin = this
@@ -762,22 +767,27 @@ class FlutterPlugin : Plugin<Project> {
                         dependsOn(packageAssets)
                         dependsOn(cleanPackageAssets)
                         into(packageAssets!!.outputs)
+                    } else {
+                        val assetsDir =
+                            project.layout.buildDirectory.dir(
+                                "${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${variant.name}/assets"
+                            )
+                        into(assetsDir)
                     }
-                    val mergeAssets =
-                        try {
-                            variant.mergeAssetsProvider.get()
-                        } catch (e: IllegalStateException) {
-                            // TODO(gmackall): Migrate to AGPs variant api.
-                            //    https://github.com/flutter/flutter/issues/166550
-                            @Suppress("DEPRECATION")
-                            variant.mergeAssets
-                        }
-                    dependsOn(mergeAssets)
-                    dependsOn("clean${FlutterPluginUtils.capitalize(mergeAssets.name)}")
-                    mergeAssets.mustRunAfter("clean${FlutterPluginUtils.capitalize(mergeAssets.name)}")
-                    into(mergeAssets.outputDir)
                 }
             val copyFlutterAssetsTask: Task = copyFlutterAssetsTaskProvider.get()
+
+            // Correctly configure the dependency on mergeAssets outside the copy task configuration block.
+            // This preserves task configuration avoidance and ensures the dependency is always registered.
+            try {
+                variant.mergeAssetsProvider.configure {
+                    dependsOn(copyFlutterAssetsTaskProvider)
+                }
+            } catch (e: IllegalStateException) {
+                // Fallback for older AGP versions where mergeAssetsProvider might not be available
+                @Suppress("DEPRECATION")
+                variant.mergeAssets.dependsOn(copyFlutterAssetsTaskProvider)
+            }
             if (!isUsedAsSubproject) {
                 // TODO(gmackall): Migrate to AGPs variant api.
                 //    https://github.com/flutter/flutter/issues/166550

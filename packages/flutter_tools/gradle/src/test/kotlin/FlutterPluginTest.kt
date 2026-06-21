@@ -71,6 +71,7 @@ class FlutterPluginTest {
         every { project.projectDir } returns projectDir.toFile()
         every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
         every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.file("local.properties") } returns projectDir.resolve("local.properties").toFile()
         val flutterExtension = FlutterExtension()
         every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
         every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
@@ -166,6 +167,7 @@ class FlutterPluginTest {
         every { project.projectDir } returns projectDir.toFile()
         every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
         every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        every { project.file("local.properties") } returns projectDir.resolve("local.properties").toFile()
         val flutterExtension = FlutterExtension()
         every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
         every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
