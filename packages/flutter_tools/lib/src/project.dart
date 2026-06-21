@@ -961,6 +961,111 @@ See the link below for more information:
     globals.gradleUtils?.injectGradleWrapperIfNeeded(ephemeralDirectory);
   }
 
+  /// Overwrites the Gradle, Android Gradle Plugin, and Kotlin Gradle Plugin versions in the Android project.
+  ///
+  /// This is intended for use in integration tests to change the versions of a project created by `flutter create`.
+  @visibleForTesting
+  Future<void> overwriteVersionAndTemplateValues({
+    String? gradleVersion,
+    String? agpVersion,
+    String? kotlinVersion,
+  }) {
+    if (!hostAppGradleRoot.existsSync()) {
+      return Future<void>.value();
+    }
+
+    if (gradleVersion != null && gradleWrapperPropertiesFile.existsSync()) {
+      final String content = gradleWrapperPropertiesFile.readAsStringSync();
+      final gradleVersionRegex = RegExp(r'gradle-([a-zA-Z0-9.-]+)-(all|bin)\.zip');
+      final String newContent = content.replaceAllMapped(gradleVersionRegex, (Match match) {
+        return 'gradle-$gradleVersion-${match.group(2)}.zip';
+      });
+      if (newContent != content) {
+        gradleWrapperPropertiesFile.writeAsStringSync(newContent);
+      }
+    }
+
+    if (agpVersion == null && kotlinVersion == null) {
+      return Future<void>.value();
+    }
+
+    for (final File file in _allGradleFiles) {
+      final String originalContent = file.readAsStringSync();
+      var content = originalContent;
+
+      if (agpVersion != null) {
+        // 1. Declarative plugin style: id("com.android.application") version "x.y.z"
+        content = content.replaceAllMapped(
+          RegExp(
+            r'(id\(?\s*[\x27\x22]com\.android\.(?:application|library|test)[\x27\x22]\s*\)?\s*version\s*[\x27\x22])[^\x27\x22]+([\x27\x22])',
+          ),
+          (Match m) => '${m.group(1)}$agpVersion${m.group(2)}',
+        );
+        // 2. Imperative plugin style: classpath 'com.android.tools.build:gradle:x.y.z'
+        content = content.replaceAllMapped(
+          RegExp(
+            r'(classpath\(?\s*[\x27\x22]com\.android\.tools\.build:gradle:)[^\x27\x22]+([\x27\x22]\s*\)?)',
+          ),
+          (Match m) => '${m.group(1)}$agpVersion${m.group(2)}',
+        );
+      }
+
+      if (kotlinVersion != null) {
+        // 1. Declarative plugin style: id("org.jetbrains.kotlin.android") version "x.y.z"
+        content = content.replaceAllMapped(
+          RegExp(
+            r'(id\(?\s*[\x27\x22](?:org\.jetbrains\.kotlin\.android|kotlin-android)[\x27\x22]\s*\)?\s*version\s*[\x27\x22])[^\x27\x22]+([\x27\x22])',
+          ),
+          (Match m) => '${m.group(1)}$kotlinVersion${m.group(2)}',
+        );
+        // 2. Variable definition style: ext.kotlin_version = 'x.y.z' or kotlin_version = 'x.y.z'
+        content = content.replaceAllMapped(
+          RegExp(r'((?:ext\.)?kotlin_?[vV]ersion\s*=\s*[\x27\x22])[^\x27\x22]+([\x27\x22])'),
+          (Match m) => '${m.group(1)}$kotlinVersion${m.group(2)}',
+        );
+        // 3. Hardcoded classpath style: classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:x.y.z"
+        content = content.replaceAllMapped(
+          RegExp(
+            r'(classpath\(?\s*[\x27\x22]org\.jetbrains\.kotlin:kotlin-gradle-plugin:)[^\x27\x22]+([\x27\x22]\s*\)?)',
+          ),
+          (Match m) => '${m.group(1)}$kotlinVersion${m.group(2)}',
+        );
+      }
+
+      if (content != originalContent) {
+        file.writeAsStringSync(content);
+      }
+    }
+
+    return Future<void>.value();
+  }
+
+  Iterable<File> get _allGradleFiles {
+    if (!hostAppGradleRoot.existsSync()) {
+      return const <File>[];
+    }
+    return _findGradleFiles(hostAppGradleRoot);
+  }
+
+  List<File> _findGradleFiles(Directory directory) {
+    final gradleFiles = <File>[];
+    for (final FileSystemEntity entity in directory.listSync()) {
+      final String basename = directory.fileSystem.path.basename(entity.path);
+      if (entity is Directory) {
+        // Prune ephemeral, cache, and build directories during traversal
+        if (basename == '.gradle' || basename == '.kotlin' || basename == 'build') {
+          continue;
+        }
+        gradleFiles.addAll(_findGradleFiles(entity));
+      } else if (entity is File) {
+        if (basename.endsWith('.gradle') || basename.endsWith('.gradle.kts')) {
+          gradleFiles.add(entity);
+        }
+      }
+    }
+    return gradleFiles;
+  }
+
   Future<void> _overwriteFromTemplate(String path, Directory target) async {
     final Template template = await Template.fromName(
       path,
