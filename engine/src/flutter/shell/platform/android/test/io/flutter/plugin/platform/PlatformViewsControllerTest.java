@@ -1967,6 +1967,26 @@ public class PlatformViewsControllerTest {
         /*messageData=*/ 0);
   }
 
+  private static void offset(
+      FlutterJNI jni,
+      PlatformViewsController platformViewsController,
+      int platformViewId,
+      double top,
+      double left) {
+    final Map<String, Object> args = new HashMap<>();
+    args.put("id", platformViewId);
+    args.put("top", top);
+    args.put("left", left);
+
+    final MethodCall platformOffsetMethodCall = new MethodCall("offset", args);
+
+    jni.handlePlatformMessage(
+        "flutter/platform_views",
+        encodeMethodCall(platformOffsetMethodCall),
+        /*replyId=*/ 0,
+        /*messageData=*/ 0);
+  }
+
   private static void disposePlatformView(
       FlutterJNI jni, PlatformViewsController platformViewsController, int platformViewId) {
 
@@ -2136,6 +2156,154 @@ public class PlatformViewsControllerTest {
     flutterView.attachToFlutterEngine(engine);
     platformViewsController.attachToView(flutterView);
     platformViewsControllerDelegator.attach(context, registry, executor);
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void resizePlatformViewWithNullLayoutParamsDoesNotThrow() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    platformViewsController.setSoftwareRendering(true);
+
+    int platformViewId = 0;
+    assertNull(platformViewsController.getPlatformViewById(platformViewId));
+
+    PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    PlatformView platformView = mock(PlatformView.class);
+    final View androidView = mock(View.class);
+    when(platformView.getView()).thenReturn(androidView);
+    when(viewFactory.create(any(), eq(platformViewId), any())).thenReturn(platformView);
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    final FlutterView flutterView = attach(jni, platformViewsController);
+
+    // Simulate create call from the framework.
+    createPlatformView(
+        jni, platformViewsController, platformViewId, "testType", /* hybrid=*/ false);
+
+    reset(androidView);
+    when(androidView.getLayoutParams()).thenReturn(new FrameLayout.LayoutParams(0, 0));
+
+    // Find the PlatformViewWrapper that was added to the flutterView.
+    PlatformViewWrapper viewWrapper = null;
+    for (int i = 0; i < flutterView.getChildCount(); i++) {
+      View child = flutterView.getChildAt(i);
+      if (child instanceof PlatformViewWrapper) {
+        viewWrapper = (PlatformViewWrapper) child;
+        break;
+      }
+    }
+    assertNotNull(viewWrapper);
+
+    // Explicitly set the internal mLayoutParams of the viewWrapper to null using reflection.
+    // We must use reflection because calling viewWrapper.setLayoutParams(null) will throw
+    // a NullPointerException immediately on that line, both in PlatformViewWrapper's custom
+    // implementation and in Android's underlying View.setLayoutParams.
+    try {
+      java.lang.reflect.Field layoutParamsField = View.class.getDeclaredField("mLayoutParams");
+      layoutParamsField.setAccessible(true);
+      layoutParamsField.set(viewWrapper, null);
+    } catch (Exception e) {
+      fail("Failed to set layoutParams to null via reflection: " + e.getMessage());
+    }
+
+    // Simulate a resize call from the framework.
+    // Before the fix, this will either crash (in production) or leave the layout parameters null (in Robolectric).
+    // After the fix, it should handle the null layout parameters gracefully and ensure they are non-null.
+    resize(jni, platformViewsController, platformViewId, 10.0, 20.0);
+
+    // Verify that the layout parameters are NOT null after resize.
+    assertNotNull("Layout parameters should not be null after resize", viewWrapper.getLayoutParams());
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void resizePlatformViewWithNullEmbeddedViewLayoutParamsDoesNotThrow() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    platformViewsController.setSoftwareRendering(true);
+
+    int platformViewId = 0;
+    assertNull(platformViewsController.getPlatformViewById(platformViewId));
+
+    PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    PlatformView platformView = mock(PlatformView.class);
+    final View androidView = mock(View.class);
+    when(platformView.getView()).thenReturn(androidView);
+    when(viewFactory.create(any(), eq(platformViewId), any())).thenReturn(platformView);
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    final FlutterView flutterView = attach(jni, platformViewsController);
+
+    // Simulate create call from the framework.
+    createPlatformView(
+        jni, platformViewsController, platformViewId, "testType", /* hybrid=*/ false);
+
+    // Make the embedded view return null layout params.
+    reset(androidView);
+    when(androidView.getLayoutParams()).thenReturn(null);
+
+    // Simulate a resize call from the framework.
+    // This should handle the null layout parameters of the embedded view gracefully.
+    resize(jni, platformViewsController, platformViewId, 10.0, 20.0);
+
+    // Verify that setLayoutParams was called with non-null LayoutParams on the mock view.
+    verify(androidView).setLayoutParams(any(android.view.ViewGroup.LayoutParams.class));
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void offsetPlatformViewWithNullLayoutParamsDoesNotThrow() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    platformViewsController.setSoftwareRendering(true);
+
+    int platformViewId = 0;
+    assertNull(platformViewsController.getPlatformViewById(platformViewId));
+
+    PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    PlatformView platformView = mock(PlatformView.class);
+    final View androidView = mock(View.class);
+    when(platformView.getView()).thenReturn(androidView);
+    when(viewFactory.create(any(), eq(platformViewId), any())).thenReturn(platformView);
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    final FlutterView flutterView = attach(jni, platformViewsController);
+
+    // Simulate create call from the framework.
+    createPlatformView(
+        jni, platformViewsController, platformViewId, "testType", /* hybrid=*/ false);
+
+    // Find the PlatformViewWrapper that was added to the flutterView.
+    PlatformViewWrapper viewWrapper = null;
+    for (int i = 0; i < flutterView.getChildCount(); i++) {
+      View child = flutterView.getChildAt(i);
+      if (child instanceof PlatformViewWrapper) {
+        viewWrapper = (PlatformViewWrapper) child;
+        break;
+      }
+    }
+    assertNotNull(viewWrapper);
+
+    // Explicitly set the internal mLayoutParams of the viewWrapper to null using reflection.
+    try {
+      java.lang.reflect.Field layoutParamsField = View.class.getDeclaredField("mLayoutParams");
+      layoutParamsField.setAccessible(true);
+      layoutParamsField.set(viewWrapper, null);
+    } catch (Exception e) {
+      fail("Failed to set layoutParams to null via reflection: " + e.getMessage());
+    }
+
+    // Simulate an offset call from the framework.
+    // Before the fix, this would throw an NPE.
+    // After the fix, it should handle the null layout parameters gracefully.
+    offset(jni, platformViewsController, platformViewId, 10.0, 20.0);
+
+    // Verify that the layout parameters are NOT null after offset.
+    assertNotNull("Layout parameters should not be null after offset", viewWrapper.getLayoutParams());
   }
 
   /**

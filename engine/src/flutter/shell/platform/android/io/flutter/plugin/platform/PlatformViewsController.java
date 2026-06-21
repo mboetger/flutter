@@ -328,8 +328,15 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
           }
           final int physicalTop = toPhysicalPixels(top);
           final int physicalLeft = toPhysicalPixels(left);
-          final FrameLayout.LayoutParams layoutParams =
-              (FrameLayout.LayoutParams) viewWrapper.getLayoutParams();
+          ViewGroup.LayoutParams genericLayoutParams = viewWrapper.getLayoutParams();
+          FrameLayout.LayoutParams layoutParams;
+          if (genericLayoutParams instanceof FrameLayout.LayoutParams) {
+            layoutParams = (FrameLayout.LayoutParams) genericLayoutParams;
+          } else {
+            int width = genericLayoutParams != null ? genericLayoutParams.width : viewWrapper.getWidth();
+            int height = genericLayoutParams != null ? genericLayoutParams.height : viewWrapper.getHeight();
+            layoutParams = new FrameLayout.LayoutParams(width, height);
+          }
           layoutParams.topMargin = physicalTop;
           layoutParams.leftMargin = physicalLeft;
           layoutParams.gravity = Gravity.LEFT | Gravity.TOP;
@@ -388,9 +395,13 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             viewWrapper.resizeRenderTarget(physicalWidth, physicalHeight);
           }
 
-          final ViewGroup.LayoutParams viewWrapperLayoutParams = viewWrapper.getLayoutParams();
-          viewWrapperLayoutParams.width = physicalWidth;
-          viewWrapperLayoutParams.height = physicalHeight;
+          ViewGroup.LayoutParams viewWrapperLayoutParams = viewWrapper.getLayoutParams();
+          if (viewWrapperLayoutParams == null) {
+            viewWrapperLayoutParams = new FrameLayout.LayoutParams(physicalWidth, physicalHeight);
+          } else {
+            viewWrapperLayoutParams.width = physicalWidth;
+            viewWrapperLayoutParams.height = physicalHeight;
+          }
           if (viewWrapperLayoutParams instanceof FrameLayout.LayoutParams) {
             ((FrameLayout.LayoutParams) viewWrapperLayoutParams).gravity =
                 Gravity.LEFT | Gravity.TOP;
@@ -399,9 +410,13 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
 
           final View embeddedView = platformView.getView();
           if (embeddedView != null) {
-            final ViewGroup.LayoutParams embeddedViewLayoutParams = embeddedView.getLayoutParams();
-            embeddedViewLayoutParams.width = physicalWidth;
-            embeddedViewLayoutParams.height = physicalHeight;
+            ViewGroup.LayoutParams embeddedViewLayoutParams = embeddedView.getLayoutParams();
+            if (embeddedViewLayoutParams == null) {
+              embeddedViewLayoutParams = new FrameLayout.LayoutParams(physicalWidth, physicalHeight);
+            } else {
+              embeddedViewLayoutParams.width = physicalWidth;
+              embeddedViewLayoutParams.height = physicalHeight;
+            }
             embeddedView.setLayoutParams(embeddedViewLayoutParams);
           }
           onComplete.run(
