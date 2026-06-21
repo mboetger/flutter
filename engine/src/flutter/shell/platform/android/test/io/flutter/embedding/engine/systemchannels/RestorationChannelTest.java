@@ -113,4 +113,16 @@ public class RestorationChannelTest {
     argumentCaptor.getValue().onMethodCall(new MethodCall("put", data), result);
     assertEquals(restorationChannel.getRestorationData(), data);
   }
+
+  @Test
+  public void itCanDynamicallyChangeWaitForRestorationData() {
+    MethodChannel rawChannel = mock(MethodChannel.class);
+    RestorationChannel restorationChannel =
+        new RestorationChannel(rawChannel, /*waitForRestorationData=*/ false);
+
+    org.junit.Assert.assertFalse(restorationChannel.waitForRestorationData);
+
+    restorationChannel.setWaitForRestorationData(true);
+    org.junit.Assert.assertTrue(restorationChannel.waitForRestorationData);
+  }
 }

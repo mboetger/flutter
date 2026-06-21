@@ -61,7 +61,15 @@ public class RestorationChannel {
    * itself to default values until the restoration data has been made available. Setting this flag
    * to true avoids that extra work.
    */
-  public final boolean waitForRestorationData;
+  public boolean waitForRestorationData;
+
+  /**
+   * Sets whether the channel delays responding to the framework's initial request for restoration
+   * data.
+   */
+  public void setWaitForRestorationData(boolean waitForRestorationData) {
+    this.waitForRestorationData = waitForRestorationData;
+  }
 
   // Holds the most current restoration data which may have been provided by the engine
   // via "setRestorationData" or by the framework via the method channel. This is the data the

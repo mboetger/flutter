@@ -296,6 +296,10 @@ import java.util.Set;
                 + cachedEngineId
                 + "'");
       }
+      // Dynamically update the engine's restoration channel to wait for restoration data
+      // if the host activity/fragment intends to restore and save state. This is crucial
+      // for pre-warmed or cached engines that were initialized prior to the activity launch.
+      flutterEngine.getRestorationChannel().setWaitForRestorationData(host.shouldRestoreAndSaveState());
       return;
     }
 
@@ -303,6 +307,10 @@ import java.util.Set;
     flutterEngine = host.provideFlutterEngine(host.getContext());
     if (flutterEngine != null) {
       isFlutterEngineFromHost = true;
+      // Dynamically update the engine's restoration channel to wait for restoration data
+      // if the host activity/fragment intends to restore and save state. This is crucial
+      // for pre-warmed or custom engines that were initialized prior to the activity launch.
+      flutterEngine.getRestorationChannel().setWaitForRestorationData(host.shouldRestoreAndSaveState());
       return;
     }
 
@@ -321,7 +329,9 @@ import java.util.Set;
 
       flutterEngine =
           flutterEngineGroup.createAndRunEngine(
-              addEntrypointOptions(new FlutterEngineGroup.Options(host.getContext())));
+              addEntrypointOptions(
+                  new FlutterEngineGroup.Options(host.getContext())
+                      .setWaitForRestorationData(host.shouldRestoreAndSaveState())));
       isFlutterEngineFromHost = false;
       return;
     }
