@@ -750,10 +750,14 @@ public class FlutterView extends FrameLayout
 
     if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
       Insets uiInsets = insets.getInsets(android.view.WindowInsets.Type.systemBars());
-      viewportMetrics.viewPaddingTop = uiInsets.top;
-      viewportMetrics.viewPaddingRight = uiInsets.right;
-      viewportMetrics.viewPaddingBottom = uiInsets.bottom;
-      viewportMetrics.viewPaddingLeft = uiInsets.left;
+      // Some Android 14 implementations (e.g., desktop/freeform windowing modes)
+      // buggy-ly omit the caption bar from the standard systemBars() insets.
+      // To work around this, we query both and take their element-wise maximum.
+      Insets captionBarInsets = insets.getInsets(android.view.WindowInsets.Type.captionBar());
+      viewportMetrics.viewPaddingTop = Math.max(uiInsets.top, captionBarInsets.top);
+      viewportMetrics.viewPaddingRight = Math.max(uiInsets.right, captionBarInsets.right);
+      viewportMetrics.viewPaddingBottom = Math.max(uiInsets.bottom, captionBarInsets.bottom);
+      viewportMetrics.viewPaddingLeft = Math.max(uiInsets.left, captionBarInsets.left);
 
       Insets imeInsets = insets.getInsets(android.view.WindowInsets.Type.ime());
       viewportMetrics.viewInsetTop = imeInsets.top;

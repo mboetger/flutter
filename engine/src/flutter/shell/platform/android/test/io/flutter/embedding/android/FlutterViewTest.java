@@ -426,6 +426,36 @@ public class FlutterViewTest {
     validateViewportMetricPadding(viewportMetricsCaptor, 0, 200, 0, 0);
   }
 
+  @Test
+  @TargetApi(34)
+  @Config(sdk = API_LEVELS.API_34)
+  public void reproduceCaptionBarOverlapOnAndroid14() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+
+    // Mock WindowInsets to genuinely simulate the bug condition on Android 14:
+    // systemBars() top inset is 24 (status bar only), but captionBar() is 60.
+    WindowInsets windowInsets = mock(WindowInsets.class);
+    // Stub all other getInsets calls to return Insets.NONE to avoid NullPointerExceptions.
+    when(windowInsets.getInsets(anyInt())).thenReturn(Insets.NONE);
+    when(windowInsets.getInsets(android.view.WindowInsets.Type.systemBars()))
+        .thenReturn(Insets.of(0, 24, 0, 0));
+    when(windowInsets.getInsets(android.view.WindowInsets.Type.captionBar()))
+        .thenReturn(Insets.of(0, 60, 0, 0));
+
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+    // Assert it is 60 (the max of systemBars and captionBar top paddings).
+    validateViewportMetricPadding(viewportMetricsCaptor, 0, 60, 0, 0);
+  }
+
   @SuppressWarnings("deprecation")
   // getSystemUiVisibility
   // This test uses the pre-API 30 Algorithm for window insets.
