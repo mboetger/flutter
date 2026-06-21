@@ -1997,6 +1997,8 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
    *   <li>Clears {@link #flutterSemanticsTree}, the Android cache of Flutter's semantics tree
    *   <li>Releases focus on any active {@link #accessibilityFocusedSemanticsNode}
    *   <li>Clears any hovered {@code SemanticsNode}
+   *   <li>Clears the {@link AccessibilityViewEmbedder} cache and resets virtual node ID generation
+   *   <li>Resets focus-tracking fields for embedded platform views
    *   <li>Sends a {@link AccessibilityEvent#TYPE_WINDOW_CONTENT_CHANGED} event
    * </ul>
    */
@@ -2009,6 +2011,11 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     }
     accessibilityFocusedSemanticsNode = null;
     hoveredObject = null;
+    // Clear stale focus tracking fields and the embedder cache to prevent focus
+    // mismatch when semantics are reset (e.g., when TalkBack is toggled off and on).
+    embeddedAccessibilityFocusedNodeId = null;
+    embeddedInputFocusedNodeId = null;
+    accessibilityViewEmbedder.clear();
     sendWindowContentChangeEvent(0, AccessibilityEvent.CONTENT_CHANGE_TYPE_SUBTREE);
   }
 

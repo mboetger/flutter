@@ -48,6 +48,7 @@ import android.view.ViewParent;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import io.flutter.embedding.engine.FlutterJNI;
@@ -3621,4 +3622,79 @@ public class AccessibilityBridgeTest {
       }
     }
   }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void testResetClearsAccessibilityViewEmbedderCache() {
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    when(mockManager.isEnabled()).thenReturn(true);
+
+    PlatformViewsAccessibilityDelegate mockDelegate = mock(PlatformViewsAccessibilityDelegate.class);
+    when(mockDelegate.usesVirtualDisplay(0)).thenReturn(true);
+
+    View mockEmbeddedView = mock(View.class);
+    when(mockDelegate.getPlatformViewById(0)).thenReturn(mockEmbeddedView);
+
+    AccessibilityNodeProvider mockEmbeddedProvider = mock(AccessibilityNodeProvider.class);
+    when(mockEmbeddedView.getAccessibilityNodeProvider()).thenReturn(mockEmbeddedProvider);
+
+    AccessibilityNodeInfo rootNodeInfo = AccessibilityNodeInfo.obtain(mockEmbeddedView);
+    rootNodeInfo.setSource(mockEmbeddedView, 0);
+    rootNodeInfo.addChild(mockEmbeddedView, 1);
+    when(mockEmbeddedView.createAccessibilityNodeInfo()).thenReturn(rootNodeInfo);
+
+    AccessibilityNodeInfo childNodeInfo = AccessibilityNodeInfo.obtain(mockEmbeddedView);
+    childNodeInfo.setSource(mockEmbeddedView, 1);
+    childNodeInfo.setParent(mockEmbeddedView, 0);
+    when(mockEmbeddedProvider.createAccessibilityNodeInfo(1)).thenReturn(childNodeInfo);
+
+    AccessibilityViewEmbedder accessibilityViewEmbedder = new AccessibilityViewEmbedder(mockRootView, 65536);
+
+    AccessibilityBridge accessibilityBridge = setUpBridge(
+        mockRootView,
+        null,
+        mockManager,
+        null,
+        accessibilityViewEmbedder,
+        mockDelegate
+    );
+
+    TestSemanticsNode rootNode = new TestSemanticsNode();
+    rootNode.id = 0;
+
+    TestSemanticsNode semanticsNode = new TestSemanticsNode();
+    semanticsNode.id = 10;
+    semanticsNode.platformViewId = 0;
+    rootNode.addChild(semanticsNode);
+
+    rootNode.toUpdate().sendUpdateToBridge(accessibilityBridge);
+
+    AccessibilityNodeInfo bridgeRootNode = accessibilityBridge.createAccessibilityNodeInfo(10);
+    assertNotNull(bridgeRootNode);
+
+    AccessibilityNodeInfo bridgeChildNode = accessibilityBridge.createAccessibilityNodeInfo(65536);
+    assertNotNull(bridgeChildNode);
+
+    accessibilityBridge.reset();
+
+    AccessibilityNodeInfo bridgeChildNodeAfterReset = accessibilityBridge.createAccessibilityNodeInfo(65536);
+    assertNull("The child node mapping should be cleared after reset", bridgeChildNodeAfterReset);
+
+    // Verify nextFlutterId is reset to firstVirtualNodeId (65536)
+    rootNode.toUpdate().sendUpdateToBridge(accessibilityBridge);
+    AccessibilityNodeInfo bridgeRootNode2 = accessibilityBridge.createAccessibilityNodeInfo(10);
+    assertNotNull(bridgeRootNode2);
+
+    AccessibilityNodeInfo bridgeChildNode2 = accessibilityBridge.createAccessibilityNodeInfo(65536);
+    assertNotNull("The child node should be re-mapped to 65536 after reset", bridgeChildNode2);
+  }
 }
+

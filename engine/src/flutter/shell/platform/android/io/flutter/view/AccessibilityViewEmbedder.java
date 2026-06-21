@@ -66,15 +66,28 @@ class AccessibilityViewEmbedder {
   // system.
   private final Map<View, Rect> embeddedViewToDisplayBounds;
 
+  private final int firstVirtualNodeId;
+
   private int nextFlutterId;
 
   AccessibilityViewEmbedder(@NonNull View rootAccessibiiltyView, int firstVirtualNodeId) {
     reflectionAccessors = new ReflectionAccessors();
     flutterIdToOrigin = new SparseArray<>();
     this.rootAccessibilityView = rootAccessibiiltyView;
+    this.firstVirtualNodeId = firstVirtualNodeId;
     nextFlutterId = firstVirtualNodeId;
     originToFlutterId = new HashMap<>();
     embeddedViewToDisplayBounds = new HashMap<>();
+  }
+
+  /**
+   * Clears the embedded view caches and resets the next virtual ID.
+   */
+  public void clear() {
+    flutterIdToOrigin.clear();
+    originToFlutterId.clear();
+    embeddedViewToDisplayBounds.clear();
+    nextFlutterId = firstVirtualNodeId;
   }
 
   /**
