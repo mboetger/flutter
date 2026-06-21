@@ -2,47 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// This file is included from `<module>/.android/include_flutter.groovy`,
-// so it can be versioned with the Flutter SDK.
-
-import java.nio.file.Paths
-
+// This file is kept for backward compatibility with old templates.
+// It delegates to the new Kotlin settings plugin.
 File pathToThisDirectory = buildscript.sourceFile.parentFile
-apply from: Paths.get(pathToThisDirectory.absolutePath, "src", "main", "scripts", "native_plugin_loader.gradle.kts")
-
-def moduleProjectRoot = project(':flutter').projectDir.parentFile.parentFile
-
-List<Map<String, Object>> nativePlugins = nativePluginLoader.getPlugins(moduleProjectRoot)
-nativePlugins.each { androidPlugin ->
-    def pluginDirectory = new File(androidPlugin.path as String, 'android')
-    assert pluginDirectory.exists()
-    include ":${androidPlugin.name}"
-    project(":${androidPlugin.name}").projectDir = pluginDirectory
+if (binding.variables.containsKey("mainModuleName")) {
+    ext.mainModuleName = binding.variables["mainModuleName"]
 }
-
-String flutterModulePath = project(':flutter').projectDir.parentFile.getAbsolutePath()
-gradle.getGradle().projectsLoaded { g ->
-    g.rootProject.beforeEvaluate { p ->
-        p.subprojects { subproject ->
-            if (nativePlugins.name.contains(subproject.name)) {
-                File androidPluginBuildOutputDir = new File(flutterModulePath + File.separator
-                        + "plugins_build_output" + File.separator + subproject.name)
-                if (!androidPluginBuildOutputDir.exists()) {
-                    androidPluginBuildOutputDir.mkdirs()
-                }
-                subproject.layout.buildDirectory.fileValue(androidPluginBuildOutputDir)
-            }
-        }
-        def _mainModuleName = binding.variables['mainModuleName']
-        if (_mainModuleName != null && !_mainModuleName.empty) {
-            p.ext.mainModuleName = _mainModuleName
-        }
-    }
-    g.rootProject.afterEvaluate { p ->
-        p.subprojects { sp ->
-            if (sp.name != 'flutter') {
-                sp.evaluationDependsOn(':flutter')
-            }
-        }
-    }
+pluginManagement {
+    includeBuild(pathToThisDirectory.absolutePath)
 }
+apply plugin: 'dev.flutter.flutter-module-plugin-loader'
