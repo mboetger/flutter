@@ -6,8 +6,38 @@
 // so it can be versioned with the Flutter SDK.
 
 import java.nio.file.Paths
-
 File pathToThisDirectory = buildscript.sourceFile.parentFile
+
+// Check if dependencyResolutionManagement is supported by the current Gradle version.
+def drm = null
+if (settings.hasProperty("dependencyResolutionManagement")) {
+    drm = settings.dependencyResolutionManagement
+}
+if (drm != null) {
+    // Read the enum value as a string to avoid compile-time dependency on RepositoriesMode class.
+    def repositoriesMode = drm.repositoriesMode.getOrNull()?.toString()
+    if (repositoriesMode == 'PREFER_SETTINGS' || repositoriesMode == 'FAIL_ON_PROJECT_REPOS') {
+        def hostedRepository = System.getenv("FLUTTER_STORAGE_BASE_URL") ?: "https://storage.googleapis.com"
+        def engineRealmFile = new File(pathToThisDirectory.parentFile.parentFile, "bin/cache/engine.realm")
+        def engineRealm = ""
+        if (engineRealmFile.exists()) {
+            def realm = engineRealmFile.text.trim()
+            if (!realm.empty) {
+                engineRealm = "${realm}/"
+            }
+        }
+        def localEngineRepo = providers.gradleProperty("local-engine-repo").getOrNull()
+        def repositoryUrl = localEngineRepo ?: "${hostedRepository}/${engineRealm}download.flutter.io"
+
+        drm.repositories {
+            maven {
+                url = uri(repositoryUrl)
+            }
+        }
+        gradle.ext.flutterRepositoriesAddedToSettings = true
+    }
+}
+
 apply from: Paths.get(pathToThisDirectory.absolutePath, "src", "main", "scripts", "native_plugin_loader.gradle.kts")
 
 def moduleProjectRoot = project(':flutter').projectDir.parentFile.parentFile

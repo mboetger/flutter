@@ -28,6 +28,7 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.process.ExecOperations
+import org.jetbrains.kotlin.gradle.plugin.extraProperties
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
@@ -42,7 +43,6 @@ class FlutterPlugin : Plugin<Project> {
     private var localEngineSrcPath: String? = null
     private var localProperties: Properties? = null
     private var engineVersion: String? = null
-    private var engineRealm: String? = null
     private var pluginHandler: PluginHandler? = null
 
     override fun apply(project: Project) {
@@ -76,29 +76,21 @@ class FlutterPlugin : Plugin<Project> {
                 "1.0.0-$engineStampContent"
             }
 
-        engineRealm =
-            Paths
-                .get(flutterRoot!!.absolutePath, "bin", "cache", "engine.realm")
-                .toFile()
-                .readText()
-                .trim()
-        if (engineRealm!!.isNotEmpty()) {
-            engineRealm += "/"
-        }
+        // If repositories were centrally managed and already added in the Settings phase
+        // (due to PREFER_SETTINGS or FAIL_ON_PROJECT_REPOS being configured), we skip adding
+        // the project-level Maven repository to prevent Gradle warnings or build failures.
+        // For backwards compatibility and projects not using settings-level repositories,
+        // we fallback to declaring the repository at the project level.
+        val repositoriesAddedToSettings =
+            project.gradle.extraProperties.has("flutterRepositoriesAddedToSettings") &&
+            project.gradle.extraProperties.get("flutterRepositoriesAddedToSettings") as Boolean
 
-        // Configure the Maven repository.
-        val hostedRepository: String =
-            System.getenv(FlutterPluginConstants.FLUTTER_STORAGE_BASE_URL)
-                ?: FlutterPluginConstants.DEFAULT_MAVEN_HOST
-        val repository: String? =
-            if (FlutterPluginUtils.shouldProjectUseLocalEngine(project)) {
-                project.property(PROP_LOCAL_ENGINE_REPO) as String?
-            } else {
-                "$hostedRepository/${engineRealm}download.flutter.io"
-            }
-        rootProject.allprojects {
-            repositories.maven {
-                url = uri(repository!!)
+        if (!repositoriesAddedToSettings) {
+            val repository = FlutterPluginUtils.getFlutterMavenRepositoryUrl(project.providers, flutterRoot!!)
+            rootProject.allprojects {
+                repositories.maven {
+                    url = uri(repository)
+                }
             }
         }
 

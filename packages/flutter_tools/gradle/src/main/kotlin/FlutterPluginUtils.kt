@@ -21,6 +21,7 @@ import org.gradle.api.Task
 import org.gradle.api.UnknownTaskException
 import org.gradle.api.logging.Logger
 import org.gradle.kotlin.dsl.register
+import org.gradle.api.provider.ProviderFactory
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.Properties
@@ -118,6 +119,28 @@ object FlutterPluginUtils {
     internal val kgpRegexGroovy =
         """(?m)^[ \t]*apply[ \t]+plugin[ \t]*:[ \t]*(['"])(?:kotlin-android|org\.jetbrains\.kotlin\.android)\1|(?m)^[ \t]*plugins[ \t]*\{[^{}]*?(?<=[\n{])[ \t]*(?:id|alias)(?:[ \t]*\(\s*|[ \t]+)(['"](?:kotlin-android|org\.jetbrains\.kotlin\.android)['"]|libs\.plugins\.(?:android|kotlin)\.android)(?:\s*\))?(?=[ \t]*(\n|${'$'}|\}))"""
             .toRegex()
+
+    @JvmStatic
+    fun getEngineRealm(flutterRoot: File): String {
+        val engineRealmFile = flutterRoot.resolve("bin/cache/engine.realm")
+        return if (engineRealmFile.exists()) engineRealmFile.readText().trim() else ""
+    }
+
+    @JvmStatic
+    fun getFlutterMavenRepositoryUrl(providers: ProviderFactory, flutterRoot: File): String {
+        val localEngineRepo = providers.gradleProperty(PROP_LOCAL_ENGINE_REPO).orNull
+        if (localEngineRepo != null) {
+            return localEngineRepo
+        }
+        var engineRealm = getEngineRealm(flutterRoot)
+        if (engineRealm.isNotEmpty()) {
+            engineRealm += "/"
+        }
+        val hostedRepository = System.getenv(FlutterPluginConstants.FLUTTER_STORAGE_BASE_URL)
+            ?: FlutterPluginConstants.DEFAULT_MAVEN_HOST
+        return "$hostedRepository/${engineRealm}download.flutter.io"
+    }
+
     // ----------------- Methods for string manipulation and comparison. -----------------
 
     @JvmStatic

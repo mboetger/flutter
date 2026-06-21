@@ -6,6 +6,7 @@ package com.flutter.gradle
 
 import org.gradle.api.Plugin
 import org.gradle.api.initialization.Settings
+import org.gradle.api.initialization.resolve.RepositoriesMode
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
 import java.io.File
 import java.nio.file.Paths
@@ -37,6 +38,11 @@ class FlutterAppPluginLoaderPlugin : Plugin<Settings> {
             ) { "flutter.sdk not set in local.properties" }
         }
 
+        val gradleVersion = getGradleVersion(settings)
+        if (gradleVersion >= Version(6, 8, 0)) {
+            ModernGradleSettingsHelper.configureRepository(settings)
+        }
+
         settings.apply {
             from(
                 Paths.get(
@@ -63,5 +69,28 @@ class FlutterAppPluginLoaderPlugin : Plugin<Settings> {
                 settings.include(":$pluginName")
                 settings.project(":$pluginName").projectDir = pluginDirectory
             }
+    }
+
+    private fun getGradleVersion(settings: Settings): Version {
+        val untrimmedGradleVersion: String = settings.gradle.gradleVersion
+        return Version.fromString(untrimmedGradleVersion.substringBefore('-'))
+    }
+}
+
+/**
+ * Isolated helper to prevent [NoClassDefFoundError] on Gradle versions older than 6.8.
+ * This class is only loaded by the JVM when the Gradle version is verified to be 6.8+.
+ */
+internal object ModernGradleSettingsHelper {
+    fun configureRepository(settings: Settings) {
+        val repositoriesMode = settings.dependencyResolutionManagement.repositoriesMode.orNull
+        if (repositoriesMode == RepositoriesMode.PREFER_SETTINGS || repositoriesMode == RepositoriesMode.FAIL_ON_PROJECT_REPOS) {
+            val flutterSdkPath = settings.extraProperties.get("flutterSdkPath") as String
+            val repositoryUrl = FlutterPluginUtils.getFlutterMavenRepositoryUrl(settings.providers, File(flutterSdkPath))
+            settings.dependencyResolutionManagement.repositories.maven {
+                url = java.net.URI.create(repositoryUrl)
+            }
+            settings.gradle.extraProperties.set("flutterRepositoriesAddedToSettings", true)
+        }
     }
 }
