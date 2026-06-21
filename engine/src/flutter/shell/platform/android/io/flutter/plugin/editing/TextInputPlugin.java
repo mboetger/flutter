@@ -234,6 +234,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
    */
   @SuppressLint("NewApi")
   public void destroy() {
+    updateAutofillHints(null);
     platformViewsController.detachTextInputPlugin();
     platformViewsController2.detachTextInputPlugin();
     textInputChannel.setTextInputMethodHandler(null);
@@ -459,6 +460,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
         new ListenableEditingState(
             configuration.autofill != null ? configuration.autofill.editState : null, mView);
     updateAutofillConfigurationIfNeeded(configuration);
+    updateAutofillHints(configuration);
 
     // setTextInputClient will be followed by a call to setTextInputEditingState.
     // Do a restartInput at that time.
@@ -469,6 +471,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
   }
 
   private void setPlatformViewTextInputClient(int platformViewId, boolean usesVirtualDisplay) {
+    updateAutofillHints(null);
     if (usesVirtualDisplay) {
       // We need to make sure that the Flutter view is focused so that no imm operations get short
       // circuited.
@@ -594,6 +597,7 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
     notifyViewExited();
     configuration = null;
     updateAutofillConfigurationIfNeeded(null);
+    updateAutofillHints(null);
     inputTarget = new InputTarget(InputTarget.Type.NO_TARGET, 0);
     unlockPlatformViewInputConnection();
     lastClientRect = null;
@@ -786,6 +790,25 @@ public class TextInputPlugin implements ListenableEditingState.EditingStateWatch
               autofill.uniqueIdentifier.hashCode(),
               AutofillValue.forText(autofill.editState.text));
         }
+      }
+    }
+  }
+
+  // Mirrors the active text input client's autofill hints onto the parent View (mView).
+  //
+  // Android 15 (API 35) introduced the `autoSensitive` mode, which automatically
+  // obscures the screen during projection based on a heuristic of the view's autofill
+  // hints. Since Flutter draws on a single native parent view and manages text fields
+  // as virtual view structures, Android's heuristic does not inspect the virtual
+  // structures for screen projection protection. Mirroring the active client's hints
+  // onto the parent View allows the OS-level heuristic to correctly detect and
+  // obscure sensitive content (e.g., password fields) during screen sharing.
+  private void updateAutofillHints(@Nullable TextInputChannel.Configuration configuration) {
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_26) {
+      if (configuration != null && configuration.autofill != null && configuration.autofill.hints != null) {
+        mView.setAutofillHints(configuration.autofill.hints);
+      } else {
+        mView.setAutofillHints((String[]) null);
       }
     }
   }
