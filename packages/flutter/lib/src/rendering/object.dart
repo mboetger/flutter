@@ -23,8 +23,10 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 import 'binding.dart';
+import 'box.dart';
 import 'debug.dart';
 import 'layer.dart';
+import 'view.dart';
 
 export 'package:flutter/foundation.dart'
     show
@@ -43,6 +45,18 @@ export 'package:flutter/foundation.dart'
         StringProperty;
 export 'package:flutter/gestures.dart' show HitTestEntry, HitTestResult;
 export 'package:flutter/painting.dart';
+
+/// Whether a frame has been drawn in the current test.
+///
+/// Only used in widget tests to prevent flushing stale semantics of the
+/// previous test when semantics is enabled at the start of a new test.
+bool debugHasDrawnFrameInTest = false;
+
+/// Whether to disable synchronous semantics flush when semantics is enabled.
+///
+/// This is set to true in widget tests to prevent flushing stale semantics
+/// from a previous test before the first frame of the new test has been drawn.
+bool debugSemanticsDisableSynchronousFlush = false;
 
 /// Base class for data associated with a [RenderObject] by its parent.
 ///
@@ -1024,6 +1038,11 @@ base class PipelineOwner with DiagnosticableTreeMixin {
   /// through the rendering pipeline.
   PipelineOwner({
     this.onNeedVisualUpdate,
+    @Deprecated(
+      'This callback is no longer needed and is a no-op, as semantics '
+      'initialization is now handled automatically. '
+      'This feature was deprecated after v3.27.0-1.0.pre.',
+    )
     this.onSemanticsOwnerCreated,
     this.onSemanticsUpdate,
     this.onSemanticsOwnerDisposed,
@@ -1048,6 +1067,11 @@ base class PipelineOwner with DiagnosticableTreeMixin {
   ///
   /// Typical implementations will schedule the creation of the initial
   /// semantics tree.
+  @Deprecated(
+    'This callback is no longer needed and is a no-op, as semantics '
+    'initialization is now handled automatically. '
+    'This feature was deprecated after v3.27.0-1.0.pre.',
+  )
   final VoidCallback? onSemanticsOwnerCreated;
 
   /// Called whenever this pipeline owner's semantics owner emits a [SemanticsUpdate].
@@ -1401,6 +1425,19 @@ base class PipelineOwner with DiagnosticableTreeMixin {
           'Attempted to enable semantics without configuring an onSemanticsUpdate callback.',
         );
         _semanticsOwner = SemanticsOwner(onSemanticsUpdate: onSemanticsUpdate!);
+        final RenderObject? root = rootNode;
+        if (root != null) {
+          root.scheduleInitialSemantics();
+          if (root is RenderObjectWithChildMixin<RenderBox> &&
+              (root.child?.hasSize ?? false) &&
+              _nodesNeedingLayout.isEmpty &&
+              _nodesNeedingCompositingBitsUpdate.isEmpty &&
+              _nodesNeedingPaint.isEmpty) {
+            if (!debugSemanticsDisableSynchronousFlush || debugHasDrawnFrameInTest) {
+              flushSemantics();
+            }
+          }
+        }
         onSemanticsOwnerCreated?.call();
       }
     } else if (_semanticsOwner != null) {

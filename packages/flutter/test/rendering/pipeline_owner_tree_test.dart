@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// ignore_for_file: deprecated_member_use
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -222,9 +224,6 @@ void main() {
       },
     );
     final root = PipelineOwner(
-      onSemanticsOwnerCreated: () {
-        rootRenderObject.scheduleInitialSemantics();
-      },
       onSemanticsUpdate: (SemanticsUpdate update) {},
     );
     root.rootNode = rootRenderObject;
@@ -235,9 +234,6 @@ void main() {
       },
     );
     final child = PipelineOwner(
-      onSemanticsOwnerCreated: () {
-        childRenderObject.scheduleInitialSemantics();
-      },
       onSemanticsUpdate: (SemanticsUpdate update) {},
     );
     child.rootNode = childRenderObject;
@@ -259,9 +255,6 @@ void main() {
 
     final rootRenderObject = TestRenderObject();
     final root = PipelineOwner(
-      onSemanticsOwnerCreated: () {
-        rootRenderObject.scheduleInitialSemantics();
-      },
       onSemanticsUpdate: (SemanticsUpdate update) {},
     );
     root.rootNode = rootRenderObject;
@@ -274,9 +267,6 @@ void main() {
       },
     );
     final child = PipelineOwner(
-      onSemanticsOwnerCreated: () {
-        childRenderObject.scheduleInitialSemantics();
-      },
       onSemanticsUpdate: (SemanticsUpdate update) {},
     );
     child.rootNode = childRenderObject;

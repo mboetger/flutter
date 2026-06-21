@@ -1293,6 +1293,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
     if (isWindowingEnabled && registerTestWindowingOwner) {
       windowingOwner = _TestWindowingOwner(platformDispatcher: platformDispatcher);
     }
+    debugSemanticsDisableSynchronousFlush = true;
   }
 
   @override
@@ -2166,6 +2167,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
     assert(ServicesBinding.instance == WidgetsBinding.instance);
     // ignore: invalid_use_of_visible_for_testing_member
     ServicesBinding.instance.resetInternalState();
+    debugHasDrawnFrameInTest = false;
   }
 }
 
@@ -2427,6 +2429,7 @@ class AutomatedTestWidgetsFlutterBinding extends TestWidgetsFlutterBinding {
   @override
   void drawFrame() {
     assert(inTest);
+    debugHasDrawnFrameInTest = true;
     try {
       debugBuildingDirtyElements = true;
       buildOwner!.buildScope(rootElement!);

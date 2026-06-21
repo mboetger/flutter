@@ -261,9 +261,6 @@ mixin RendererBinding
     'This feature was deprecated after v3.10.0-12.0.pre.',
   )
   late final PipelineOwner pipelineOwner = PipelineOwner(
-    onSemanticsOwnerCreated: () {
-      (pipelineOwner.rootNode as RenderView?)?.scheduleInitialSemantics();
-    },
     onSemanticsUpdate: (ui.SemanticsUpdate update) {
       (pipelineOwner.rootNode as RenderView?)?.updateSemantics(update);
     },
@@ -689,6 +686,7 @@ mixin RendererBinding
   // When editing the above, also update widgets/binding.dart's copy.
   @protected
   void drawFrame() {
+    debugHasDrawnFrameInTest = true;
     rootPipelineOwner.flushLayout();
     rootPipelineOwner.flushCompositingBits();
     rootPipelineOwner.flushPaint();

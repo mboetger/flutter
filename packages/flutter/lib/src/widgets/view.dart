@@ -450,17 +450,12 @@ class _RawViewElement extends RenderTreeRootElement {
   _RawViewElement(super.widget);
 
   late final PipelineOwner _pipelineOwner = PipelineOwner(
-    onSemanticsOwnerCreated: _handleSemanticsOwnerCreated,
     onSemanticsUpdate: _handleSemanticsUpdate,
     onSemanticsOwnerDisposed: _handleSemanticsOwnerDisposed,
   );
 
   PipelineOwner get _effectivePipelineOwner =>
       (widget as _RawViewInternal)._deprecatedPipelineOwner ?? _pipelineOwner;
-
-  void _handleSemanticsOwnerCreated() {
-    (_effectivePipelineOwner.rootNode as RenderView?)?.scheduleInitialSemantics();
-  }
 
   void _handleSemanticsOwnerDisposed() {
     (_effectivePipelineOwner.rootNode as RenderView?)?.clearSemantics();
