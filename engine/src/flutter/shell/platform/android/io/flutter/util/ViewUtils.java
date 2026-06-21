@@ -20,19 +20,27 @@ public final class ViewUtils {
     void updateDisplayMetrics(float width, float height, float density);
   }
 
+  public static void calculateMaximumDisplayMetrics(
+      @Nullable Context context, @NonNull DisplayUpdater updater) {
+    Activity activity = getActivity(context);
+    if (activity != null) {
+      calculateMaximumDisplayMetrics(
+          context, updater, context.getResources().getDisplayMetrics().density);
+    }
+  }
+
   /**
    * Calculates the maximum display metrics for the given context, and pushes the metric data to the
    * updater.
    */
   public static void calculateMaximumDisplayMetrics(
-      @Nullable Context context, @NonNull DisplayUpdater updater) {
+      @Nullable Context context, @NonNull DisplayUpdater updater, float density) {
     Activity activity = getActivity(context);
     if (activity != null) {
       WindowMetrics metrics =
           WindowMetricsCalculator.getOrCreate().computeMaximumWindowMetrics(activity);
       float width = metrics.getBounds().width();
       float height = metrics.getBounds().height();
-      float density = context.getResources().getDisplayMetrics().density;
       updater.updateDisplayMetrics(width, height, density);
     }
   }

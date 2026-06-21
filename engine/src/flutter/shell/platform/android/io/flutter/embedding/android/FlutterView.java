@@ -20,6 +20,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
 import android.util.SparseArray;
 import android.view.Display;
 import android.view.DisplayCutout;
@@ -490,7 +491,11 @@ public class FlutterView extends FrameLayout
       localizationPlugin.sendLocalesToFlutter(newConfig);
       sendUserSettingsToFlutter();
 
-      ViewUtils.calculateMaximumDisplayMetrics(getContext(), flutterEngine);
+      float density =
+          newConfig.densityDpi > 0
+              ? (float) newConfig.densityDpi / DisplayMetrics.DENSITY_DEFAULT
+              : getContext().getResources().getDisplayMetrics().density;
+      ViewUtils.calculateMaximumDisplayMetrics(getContext(), flutterEngine, density);
     }
   }
 
