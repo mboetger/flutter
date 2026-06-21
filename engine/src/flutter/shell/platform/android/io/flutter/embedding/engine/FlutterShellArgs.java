@@ -95,53 +95,73 @@ public class FlutterShellArgs {
     // there are many security-sensitive args in the binary.
     ArrayList<String> args = new ArrayList<>();
 
-    if (intent.getBooleanExtra(ARG_KEY_TRACE_STARTUP, false)) {
-      args.add(ARG_TRACE_STARTUP);
+    boolean isLaunchedFromHistory =
+        (intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0;
+
+    // Group 1: Early debug/VM-service flags
+    if (!isLaunchedFromHistory) {
+      if (intent.getBooleanExtra(ARG_KEY_TRACE_STARTUP, false)) {
+        args.add(ARG_TRACE_STARTUP);
+      }
+      if (intent.getBooleanExtra(ARG_KEY_START_PAUSED, false)) {
+        args.add(ARG_START_PAUSED);
+      }
+      int vmServicePort = intent.getIntExtra(ARG_KEY_VM_SERVICE_PORT, 0);
+      if (vmServicePort > 0) {
+        args.add(ARG_VM_SERVICE_PORT + vmServicePort);
+      }
+      if (intent.getBooleanExtra(ARG_KEY_DISABLE_SERVICE_AUTH_CODES, false)) {
+        args.add(ARG_DISABLE_SERVICE_AUTH_CODES);
+      }
+      if (intent.getBooleanExtra(ARG_KEY_ENDLESS_TRACE_BUFFER, false)) {
+        args.add(ARG_ENDLESS_TRACE_BUFFER);
+      }
     }
-    if (intent.getBooleanExtra(ARG_KEY_START_PAUSED, false)) {
-      args.add(ARG_START_PAUSED);
-    }
-    int vmServicePort = intent.getIntExtra(ARG_KEY_VM_SERVICE_PORT, 0);
-    if (vmServicePort > 0) {
-      args.add(ARG_VM_SERVICE_PORT + vmServicePort);
-    }
-    if (intent.getBooleanExtra(ARG_KEY_DISABLE_SERVICE_AUTH_CODES, false)) {
-      args.add(ARG_DISABLE_SERVICE_AUTH_CODES);
-    }
-    if (intent.getBooleanExtra(ARG_KEY_ENDLESS_TRACE_BUFFER, false)) {
-      args.add(ARG_ENDLESS_TRACE_BUFFER);
-    }
+
+    // Non-debug: Use test fonts
     if (intent.getBooleanExtra(ARG_KEY_USE_TEST_FONTS, false)) {
       args.add(ARG_USE_TEST_FONTS);
     }
-    if (intent.getBooleanExtra(ARG_KEY_ENABLE_DART_PROFILING, false)) {
-      args.add(ARG_ENABLE_DART_PROFILING);
+
+    // Group 2: Profiling flags
+    if (!isLaunchedFromHistory) {
+      if (intent.getBooleanExtra(ARG_KEY_ENABLE_DART_PROFILING, false)) {
+        args.add(ARG_ENABLE_DART_PROFILING);
+      }
+      if (intent.getBooleanExtra(ARG_KEY_PROFILE_STARTUP, false)) {
+        args.add(ARG_PROFILE_STARTUP);
+      }
     }
-    if (intent.getBooleanExtra(ARG_KEY_PROFILE_STARTUP, false)) {
-      args.add(ARG_PROFILE_STARTUP);
-    }
+
+    // Non-debug: Rendering configurations
     if (intent.getBooleanExtra(ARG_KEY_ENABLE_SOFTWARE_RENDERING, false)) {
       args.add(ARG_ENABLE_SOFTWARE_RENDERING);
     }
     if (intent.getBooleanExtra(ARG_KEY_SKIA_DETERMINISTIC_RENDERING, false)) {
       args.add(ARG_SKIA_DETERMINISTIC_RENDERING);
     }
-    if (intent.getBooleanExtra(ARG_KEY_TRACE_SKIA, false)) {
-      args.add(ARG_TRACE_SKIA);
+
+    // Group 3: Skia and system tracing flags
+    if (!isLaunchedFromHistory) {
+      if (intent.getBooleanExtra(ARG_KEY_TRACE_SKIA, false)) {
+        args.add(ARG_TRACE_SKIA);
+      }
+      String traceSkiaAllowlist = intent.getStringExtra(ARG_KEY_TRACE_SKIA_ALLOWLIST);
+      if (traceSkiaAllowlist != null) {
+        args.add(ARG_TRACE_SKIA_ALLOWLIST + traceSkiaAllowlist);
+      }
+      if (intent.getBooleanExtra(ARG_KEY_TRACE_SYSTRACE, false)) {
+        args.add(ARG_TRACE_SYSTRACE);
+      }
+      if (intent.hasExtra(ARG_KEY_TRACE_TO_FILE)) {
+        args.add(ARG_TRACE_TO_FILE + "=" + intent.getStringExtra(ARG_KEY_TRACE_TO_FILE));
+      }
+      if (intent.hasExtra(ARG_KEY_PROFILE_MICROTASKS)) {
+        args.add(ARG_PROFILE_MICROTASKS);
+      }
     }
-    String traceSkiaAllowlist = intent.getStringExtra(ARG_KEY_TRACE_SKIA_ALLOWLIST);
-    if (traceSkiaAllowlist != null) {
-      args.add(ARG_TRACE_SKIA_ALLOWLIST + traceSkiaAllowlist);
-    }
-    if (intent.getBooleanExtra(ARG_KEY_TRACE_SYSTRACE, false)) {
-      args.add(ARG_TRACE_SYSTRACE);
-    }
-    if (intent.hasExtra(ARG_KEY_TRACE_TO_FILE)) {
-      args.add(ARG_TRACE_TO_FILE + "=" + intent.getStringExtra(ARG_KEY_TRACE_TO_FILE));
-    }
-    if (intent.hasExtra(ARG_KEY_PROFILE_MICROTASKS)) {
-      args.add(ARG_PROFILE_MICROTASKS);
-    }
+
+    // Non-debug: Impeller, GPU, Vulkan, and Surface control
     if (intent.hasExtra(ARG_KEY_TOGGLE_IMPELLER)) {
       if (intent.getBooleanExtra(ARG_KEY_TOGGLE_IMPELLER, false)) {
         args.add(ARG_ENABLE_IMPELLER);
@@ -172,17 +192,22 @@ public class FlutterShellArgs {
     if (intent.getBooleanExtra(ARG_KEY_PURGE_PERSISTENT_CACHE, false)) {
       args.add(ARG_PURGE_PERSISTENT_CACHE);
     }
-    if (intent.getBooleanExtra(ARG_KEY_VERBOSE_LOGGING, false)) {
+
+    // Group 4: Verbose logging
+    if (!isLaunchedFromHistory && intent.getBooleanExtra(ARG_KEY_VERBOSE_LOGGING, false)) {
       args.add(ARG_VERBOSE_LOGGING);
     }
+
+    // Non-debug: Test flag
     if (intent.getBooleanExtra(ARG_KEY_TEST_FLAG, false)) {
       args.add(ARG_TEST_FLAG);
     }
 
+    // Group 5: Dart VM flags (observe, etc.)
     // NOTE: all flags provided with this argument are subject to filtering
     // based on a list of allowed flags in shell/common/switches.cc. If any
     // flag provided is not allowed, the process will immediately terminate.
-    if (intent.hasExtra(ARG_KEY_DART_FLAGS)) {
+    if (!isLaunchedFromHistory && intent.hasExtra(ARG_KEY_DART_FLAGS)) {
       args.add(ARG_DART_FLAGS + "=" + intent.getStringExtra(ARG_KEY_DART_FLAGS));
     }
 

@@ -5,6 +5,7 @@
 package test.io.flutter.embedding.engine;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Intent;
@@ -59,4 +60,35 @@ public class FlutterShellArgsTest {
 
     assertEquals(0, argValues.size());
   }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  public void itDoesNotPropagateDebugFlagsWhenLaunchedFromHistory() {
+    Intent intent = new Intent();
+    intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY);
+
+    // Debug / VM service-related flags that MUST be ignored
+    intent.putExtra(FlutterShellArgs.ARG_KEY_START_PAUSED, true);
+    intent.putExtra(FlutterShellArgs.ARG_KEY_VM_SERVICE_PORT, 50224);
+    intent.putExtra(FlutterShellArgs.ARG_KEY_ENABLE_DART_PROFILING, true);
+    intent.putExtra(FlutterShellArgs.ARG_KEY_DISABLE_SERVICE_AUTH_CODES, true);
+    intent.putExtra(FlutterShellArgs.ARG_KEY_DART_FLAGS, "--observe");
+
+    // Non-debug configuration flags that MUST still be propagated
+    intent.putExtra(FlutterShellArgs.ARG_KEY_ENABLE_FLUTTER_GPU, true);
+
+    FlutterShellArgs args = FlutterShellArgs.fromIntent(intent);
+    HashSet<String> argValues = new HashSet<String>(Arrays.asList(args.toArray()));
+
+    // Verify debug/debugger-related flags are excluded
+    assertFalse("Should not contain --start-paused", argValues.contains(FlutterShellArgs.ARG_START_PAUSED));
+    assertFalse("Should not contain --vm-service-port", argValues.contains(FlutterShellArgs.ARG_VM_SERVICE_PORT + "50224"));
+    assertFalse("Should not contain --enable-dart-profiling", argValues.contains(FlutterShellArgs.ARG_ENABLE_DART_PROFILING));
+    assertFalse("Should not contain --disable-service-auth-codes", argValues.contains(FlutterShellArgs.ARG_DISABLE_SERVICE_AUTH_CODES));
+    assertFalse("Should not contain --dart-flags=--observe", argValues.contains(FlutterShellArgs.ARG_DART_FLAGS + "=--observe"));
+
+    // Verify non-debug configuration flags are still preserved
+    assertTrue("Should contain --enable-flutter-gpu", argValues.contains(FlutterShellArgs.ARG_ENABLE_FLUTTER_GPU));
+  }
 }
+
