@@ -170,8 +170,7 @@ public class FlutterFragmentActivity extends FragmentActivity
       Intent intent =
           new Intent(context, activityClass)
               .putExtra(EXTRA_INITIAL_ROUTE, initialRoute)
-              .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode)
-              .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, true);
+              .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode);
       if (dartEntrypointArgs != null) {
         intent.putExtra(EXTRA_DART_ENTRYPOINT_ARGS, new ArrayList(dartEntrypointArgs));
       }
@@ -364,8 +363,7 @@ public class FlutterFragmentActivity extends FragmentActivity
           .putExtra(EXTRA_DART_ENTRYPOINT, dartEntrypoint)
           .putExtra(EXTRA_INITIAL_ROUTE, initialRoute)
           .putExtra(EXTRA_CACHED_ENGINE_GROUP_ID, cachedEngineGroupId)
-          .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode)
-          .putExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, true);
+          .putExtra(EXTRA_BACKGROUND_MODE, backgroundMode);
     }
   }
 

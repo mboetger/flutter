@@ -469,7 +469,6 @@ public class FlutterFragment extends Fragment
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
           transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
-      args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
       args.putBoolean(
           ARG_SHOULD_AUTOMATICALLY_HANDLE_ON_BACK_PRESSED, shouldAutomaticallyHandleOnBackPressed);
       args.putBoolean(ARG_SHOULD_DELAY_FIRST_ANDROID_VIEW_DRAW, shouldDelayFirstAndroidViewDraw);
@@ -968,7 +967,6 @@ public class FlutterFragment extends Fragment
           ARG_FLUTTERVIEW_TRANSPARENCY_MODE,
           transparencyMode != null ? transparencyMode.name() : TransparencyMode.transparent.name());
       args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
-      args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
       args.putBoolean(
           ARG_SHOULD_AUTOMATICALLY_HANDLE_ON_BACK_PRESSED, shouldAutomaticallyHandleOnBackPressed);
       args.putBoolean(ARG_SHOULD_DELAY_FIRST_ANDROID_VIEW_DRAW, shouldDelayFirstAndroidViewDraw);

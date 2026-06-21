@@ -7,6 +7,8 @@
     <activity android:name="io.flutter.embedding.android.FlutterFragmentActivity" />
 
     <activity android:name="io.flutter.embedding.android.FlutterFragmentActivityTest$FlutterFragmentActivityWithProvidedEngine" />
+    <activity android:name="io.flutter.embedding.android.FlutterFragmentReproduceTest$MyFlutterActivity" />
+    <activity android:name="io.flutter.embedding.android.FlutterFragmentReproduceTest$MyFlutterFragmentActivity" />
     
     <activity android:name="androidx.fragment.app.FragmentActivity" />
 
