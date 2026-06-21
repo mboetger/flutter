@@ -70,6 +70,19 @@ public class FlutterFragmentActivity extends FragmentActivity
   public static final int FRAGMENT_CONTAINER_ID = View.generateViewId();
 
   /**
+   * Returns the ID of the container that will host the {@link FlutterFragment}.
+   *
+   * <p>Subclasses can override this method to provide a custom container ID, which is useful when
+   * the subclass provides a custom content view via {@link #setContentView} that contains a
+   * designated container for the {@link FlutterFragment}.
+   *
+   * <p>Defaults to {@link #FRAGMENT_CONTAINER_ID}.
+   */
+  protected int getFragmentContainerId() {
+    return FRAGMENT_CONTAINER_ID;
+  }
+
+  /**
    * Creates an {@link Intent} that launches a {@code FlutterFragmentActivity}, which executes a
    * {@code main()} Dart entrypoint, and displays the "/" route as Flutter's initial route.
    */
@@ -387,6 +400,53 @@ public class FlutterFragmentActivity extends FragmentActivity
     ensureFlutterFragmentCreated();
   }
 
+  @Override
+  public void setContentView(int layoutResID) {
+    super.setContentView(layoutResID);
+    ensureProjectedFragmentContainer();
+  }
+
+  @Override
+  public void setContentView(@NonNull View view) {
+    super.setContentView(view);
+    ensureProjectedFragmentContainer();
+  }
+
+  @Override
+  public void setContentView(@NonNull View view, @Nullable ViewGroup.LayoutParams params) {
+    super.setContentView(view, params);
+    ensureProjectedFragmentContainer();
+  }
+
+  private void ensureProjectedFragmentContainer() {
+    final int containerId = getFragmentContainerId();
+    View container = findViewById(containerId);
+    if (container == null) {
+      // The container was not found in the newly set content view.
+      // Find the root of the inflated content view.
+      ViewGroup contentParent = findViewById(android.R.id.content);
+      if (contentParent != null && contentParent.getChildCount() > 0) {
+        View rootView = contentParent.getChildAt(0);
+        if (rootView.getId() == View.NO_ID) {
+          rootView.setId(containerId);
+        } else {
+          // Robust Fallback: The root view already has a pre-existing ID.
+          // To avoid overwriting it (which could break findViewById/ViewBinding),
+          // we wrap it in a new FrameLayout container that holds the containerId.
+          ViewGroup.LayoutParams originalParams = rootView.getLayoutParams();
+          contentParent.removeView(rootView);
+          FrameLayout newContainer = new FrameLayout(this);
+          newContainer.setId(containerId);
+          newContainer.setLayoutParams(
+              new ViewGroup.LayoutParams(
+                  ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+          newContainer.addView(rootView, originalParams);
+          contentParent.addView(newContainer);
+        }
+      }
+    }
+  }
+
   /**
    * Switches themes for this {@code Activity} from the theme used to launch this {@code Activity}
    * to a "normal theme" that is intended for regular {@code Activity} operation.
@@ -460,7 +520,7 @@ public class FlutterFragmentActivity extends FragmentActivity
   @NonNull
   private View createFragmentContainer() {
     FrameLayout container = provideRootLayout(this);
-    container.setId(FRAGMENT_CONTAINER_ID);
+    container.setId(getFragmentContainerId());
     container.setLayoutParams(
         new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -500,7 +560,7 @@ public class FlutterFragmentActivity extends FragmentActivity
       FragmentManager fragmentManager = getSupportFragmentManager();
       fragmentManager
           .beginTransaction()
-          .add(FRAGMENT_CONTAINER_ID, flutterFragment, TAG_FLUTTER_FRAGMENT)
+          .add(getFragmentContainerId(), flutterFragment, TAG_FLUTTER_FRAGMENT)
           .commit();
     }
   }

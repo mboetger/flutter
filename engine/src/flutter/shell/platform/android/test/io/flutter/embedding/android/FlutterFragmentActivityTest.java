@@ -375,6 +375,47 @@ public class FlutterFragmentActivityTest {
     flutterActivityScenario.close();
   }
 
+  @Test
+  public void setContentViewAfterSuperOnCreateDoesNotCrash() {
+    try (ActivityScenario<FlutterFragmentActivityWithCustomContentView> scenario =
+        ActivityScenario.launch(FlutterFragmentActivityWithCustomContentView.class)) {
+      scenario.onActivity(
+          activity -> {
+            int containerId = activity.getFragmentContainerId();
+            View container = activity.findViewById(containerId);
+
+            // Verify that the container exists, is our custom FrameLayout,
+            // and has been assigned the correct container ID.
+            assertNotNull(container);
+            assertTrue(container instanceof FrameLayout);
+            assertEquals(containerId, container.getId());
+          });
+    }
+  }
+
+  @Test
+  public void setContentViewWithCustomIdAfterSuperOnCreateDoesNotCrash() {
+    try (ActivityScenario<FlutterFragmentActivityWithCustomContentViewAndId> scenario =
+        ActivityScenario.launch(FlutterFragmentActivityWithCustomContentViewAndId.class)) {
+      scenario.onActivity(
+          activity -> {
+            int containerId = activity.getFragmentContainerId();
+            View container = activity.findViewById(containerId);
+
+            // Verify that the container wrapper exists and has the correct container ID.
+            assertNotNull(container);
+            assertTrue(container instanceof FrameLayout);
+            assertEquals(containerId, container.getId());
+
+            // Verify that the wrapper contains our original custom layout, preserving its original ID.
+            ViewGroup wrapper = (ViewGroup) container;
+            View customLayout = activity.findViewById(12345);
+            assertNotNull(customLayout);
+            assertEquals(wrapper, customLayout.getParent());
+          });
+    }
+  }
+
   static class FlutterFragmentActivityWithProvidedEngine extends FlutterFragmentActivity {
     int numberOfEnginesCreated = 0;
 
@@ -439,6 +480,26 @@ public class FlutterFragmentActivityTest {
     @Override
     protected FrameLayout provideRootLayout(Context context) {
       return new CustomLayout(context);
+    }
+  }
+
+  public static class FlutterFragmentActivityWithCustomContentView
+      extends FlutterFragmentActivityWithProvidedEngine {
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+      super.onCreate(savedInstanceState);
+      setContentView(new FrameLayout(this));
+    }
+  }
+
+  public static class FlutterFragmentActivityWithCustomContentViewAndId
+      extends FlutterFragmentActivityWithProvidedEngine {
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+      super.onCreate(savedInstanceState);
+      FrameLayout customLayout = new FrameLayout(this);
+      customLayout.setId(12345); // Simulate a pre-existing ID from XML
+      setContentView(customLayout);
     }
   }
 
