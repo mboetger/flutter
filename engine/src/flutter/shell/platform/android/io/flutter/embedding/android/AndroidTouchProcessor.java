@@ -15,6 +15,7 @@ import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
@@ -185,7 +186,11 @@ public class AndroidTouchProcessor {
 
     if (updateForSinglePointer) {
       // ACTION_DOWN and ACTION_POINTER_DOWN always apply to a single pointer only.
-      addPointerForIndex(event, event.getActionIndex(), pointerChange, 0, transformMatrix, packet);
+      PointerData data =
+          collectPointerData(event, event.getActionIndex(), pointerChange, 0, transformMatrix, null);
+      if (data != null) {
+        writePointerDataToPacket(data, packet);
+      }
     } else if (updateForMultiplePointers) {
       // ACTION_UP and ACTION_POINTER_UP may contain position updates for other pointers.
       // We are converting these updates to move events here in order to preserve this data.
@@ -193,13 +198,26 @@ public class AndroidTouchProcessor {
       // the original Android event later, should it need to forward it to a PlatformView.
       for (int p = 0; p < originalPointerCount; p++) {
         if (p != event.getActionIndex() && event.getToolType(p) == MotionEvent.TOOL_TYPE_FINGER) {
-          addPointerForIndex(
-              event, p, PointerChange.MOVE, POINTER_DATA_FLAG_BATCHED, transformMatrix, packet);
+          PointerData data =
+              collectPointerData(
+                  event,
+                  p,
+                  PointerChange.MOVE,
+                  POINTER_DATA_FLAG_BATCHED,
+                  transformMatrix,
+                  null);
+          if (data != null) {
+            writePointerDataToPacket(data, packet);
+          }
         }
       }
       // It's important that we're sending the UP event last. This allows PlatformView
       // to correctly batch everything back into the original Android event if needed.
-      addPointerForIndex(event, event.getActionIndex(), pointerChange, 0, transformMatrix, packet);
+      PointerData data =
+          collectPointerData(event, event.getActionIndex(), pointerChange, 0, transformMatrix, null);
+      if (data != null) {
+        writePointerDataToPacket(data, packet);
+      }
 
       if (shouldRemovePointer) {
         // Synthesizes remove events immediately after the UP event so that the touches
@@ -210,18 +228,26 @@ public class AndroidTouchProcessor {
         // not applicable to touch screens, as hovering is not possible.
         // (Flutter will automatically synthesize an add event before the pointer makes its next
         // contact.)
-        addPointerForIndex(
-            event, event.getActionIndex(), PointerChange.REMOVE, 0, transformMatrix, packet);
+        PointerData removeData =
+            collectPointerData(
+                event, event.getActionIndex(), PointerChange.REMOVE, 0, transformMatrix, null);
+        if (removeData != null) {
+          writePointerDataToPacket(removeData, packet);
+        }
       }
     } else {
       // ACTION_MOVE may not actually mean all pointers have moved
       // but it's the responsibility of a later part of the system to
       // ignore 0-deltas if desired.
       for (int p = 0; p < originalPointerCount; p++) {
-        int pointerData =
+        int pointerDataValue =
             POINTER_DATA_FLAG_MULTIPLE
                 | (originalPointerCount << POINTER_DATA_MULTIPLE_POINTER_COUNT_SHIFT);
-        addPointerForIndex(event, p, pointerChange, pointerData, transformMatrix, packet);
+        PointerData data =
+            collectPointerData(event, p, pointerChange, pointerDataValue, transformMatrix, null);
+        if (data != null) {
+          writePointerDataToPacket(data, packet);
+        }
       }
     }
 
@@ -265,27 +291,17 @@ public class AndroidTouchProcessor {
     packet.order(ByteOrder.LITTLE_ENDIAN);
 
     // ACTION_HOVER_MOVE always applies to a single pointer only.
-    addPointerForIndex(
-        event, event.getActionIndex(), pointerChange, 0, IDENTITY_TRANSFORM, packet, context);
+    PointerData data =
+        collectPointerData(
+            event, event.getActionIndex(), pointerChange, 0, IDENTITY_TRANSFORM, context);
+    if (data != null) {
+      writePointerDataToPacket(data, packet);
+    }
     if (packet.position() % (POINTER_DATA_FIELD_COUNT * BYTES_PER_FIELD) != 0) {
       throw new AssertionError("Packet position is not on field boundary.");
     }
     renderer.dispatchPointerDataPacket(packet, packet.position());
     return true;
-  }
-
-  /// Calls addPointerForIndex with null for context.
-  ///
-  /// Without context the scroll wheel will not mimic android's scroll speed.
-  private void addPointerForIndex(
-      MotionEvent event,
-      int pointerIndex,
-      int pointerChange,
-      int pointerData,
-      Matrix transformMatrix,
-      ByteBuffer packet) {
-    addPointerForIndex(
-        event, pointerIndex, pointerChange, pointerData, transformMatrix, packet, null);
   }
 
   // Some screen mirroring tools will occasionally report the same ID as having different associated
@@ -300,18 +316,16 @@ public class AndroidTouchProcessor {
         | (event.getToolType(pointerIndex) & TOOL_TYPE_MASK);
   }
 
-  // TODO: consider creating a PointerPacket class instead of using a procedure that
-  // mutates inputs. https://github.com/flutter/flutter/issues/132853
-  private void addPointerForIndex(
+  @Nullable
+  PointerData collectPointerData(
       MotionEvent event,
       int pointerIndex,
       int pointerChange,
-      int pointerData,
+      int pointerDataValue,
       Matrix transformMatrix,
-      ByteBuffer packet,
-      Context context) {
+      @Nullable Context context) {
     if (pointerChange == -1) {
-      return;
+      return null;
     }
     // TODO(dkwingsmt): Use the correct source view ID once Android supports
     // multiple views.
@@ -351,7 +365,7 @@ public class AndroidTouchProcessor {
     if (isTrackpadPan) {
       panZoomType = getPointerChangeForPanZoom(pointerChange);
       if (panZoomType == -1) {
-        return;
+        return null;
       }
     }
 
@@ -368,40 +382,36 @@ public class AndroidTouchProcessor {
 
     long timeStamp = event.getEventTime() * 1000; // Convert from milliseconds to microseconds.
 
-    packet.putLong(motionEventId); // motionEventId
-    packet.putLong(timeStamp); // time_stamp
+    PointerData pointerData = new PointerData();
+    pointerData.motionEventId = motionEventId;
+    pointerData.timeStamp = timeStamp;
     if (isTrackpadPan) {
-      packet.putLong(panZoomType); // change
-      packet.putLong(PointerDeviceKind.TRACKPAD); // kind
+      pointerData.change = panZoomType;
+      pointerData.kind = PointerDeviceKind.TRACKPAD;
     } else {
-      packet.putLong(pointerChange); // change
-      packet.putLong(pointerKind); // kind
+      pointerData.change = pointerChange;
+      pointerData.kind = pointerKind;
     }
-    packet.putLong(signalKind); // signal_kind
-    packet.putLong(pointerId); // device
-    packet.putLong(0); // pointer_identifier, will be generated in pointer_data_packet_converter.cc.
+    pointerData.signalKind = signalKind;
+    pointerData.device = pointerId;
+    pointerData.pointerIdentifier = 0;
 
     if (isTrackpadPan) {
       float[] panStart = ongoingPans.get(pointerId);
-      packet.putDouble(panStart[0]); // physical_x
-      packet.putDouble(panStart[1]); // physical_y
+      pointerData.physicalX = panStart[0];
+      pointerData.physicalY = panStart[1];
     } else {
-      packet.putDouble(viewToScreenCoords[0]); // physical_x
-      packet.putDouble(viewToScreenCoords[1]); // physical_y
+      pointerData.physicalX = viewToScreenCoords[0];
+      pointerData.physicalY = viewToScreenCoords[1];
     }
 
-    packet.putDouble(
-        0.0); // physical_delta_x, will be generated in pointer_data_packet_converter.cc.
-    packet.putDouble(
-        0.0); // physical_delta_y, will be generated in pointer_data_packet_converter.cc.
+    pointerData.physicalDeltaX = 0.0;
+    pointerData.physicalDeltaY = 0.0;
+    pointerData.buttons = buttons;
+    pointerData.obscured = 0;
+    pointerData.synthesized = 0;
+    pointerData.pressure = event.getPressure(pointerIndex);
 
-    packet.putLong(buttons); // buttons
-
-    packet.putLong(0); // obscured
-
-    packet.putLong(0); // synthesized
-
-    packet.putDouble(event.getPressure(pointerIndex)); // pressure
     double pressureMin = 0.0;
     double pressureMax = 1.0;
     if (event.getDevice() != null) {
@@ -412,37 +422,32 @@ public class AndroidTouchProcessor {
         pressureMax = pressureRange.getMax();
       }
     }
-    packet.putDouble(pressureMin); // pressure_min
-    packet.putDouble(pressureMax); // pressure_max
+    pointerData.pressureMin = pressureMin;
+    pointerData.pressureMax = pressureMax;
 
     if (pointerKind == PointerDeviceKind.STYLUS) {
-      packet.putDouble(event.getAxisValue(MotionEvent.AXIS_DISTANCE, pointerIndex)); // distance
-      packet.putDouble(0.0); // distance_max
+      pointerData.distance = event.getAxisValue(MotionEvent.AXIS_DISTANCE, pointerIndex);
+      pointerData.distanceMax = 0.0;
     } else {
-      packet.putDouble(0.0); // distance
-      packet.putDouble(0.0); // distance_max
+      pointerData.distance = 0.0;
+      pointerData.distanceMax = 0.0;
     }
 
-    packet.putDouble(event.getSize(pointerIndex)); // size
-
-    packet.putDouble(event.getToolMajor(pointerIndex)); // radius_major
-    packet.putDouble(event.getToolMinor(pointerIndex)); // radius_minor
-
-    packet.putDouble(0.0); // radius_min
-    packet.putDouble(0.0); // radius_max
-
-    packet.putDouble(event.getAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex)); // orientation
+    pointerData.size = event.getSize(pointerIndex);
+    pointerData.radiusMajor = event.getToolMajor(pointerIndex);
+    pointerData.radiusMinor = event.getToolMinor(pointerIndex);
+    pointerData.radiusMin = 0.0;
+    pointerData.radiusMax = 0.0;
+    pointerData.orientation = event.getAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex);
 
     if (pointerKind == PointerDeviceKind.STYLUS) {
-      packet.putDouble(event.getAxisValue(MotionEvent.AXIS_TILT, pointerIndex)); // tilt
+      pointerData.tilt = event.getAxisValue(MotionEvent.AXIS_TILT, pointerIndex);
     } else {
-      packet.putDouble(0.0); // tilt
+      pointerData.tilt = 0.0;
     }
 
-    packet.putLong(pointerData); // platformData
+    pointerData.platformData = pointerDataValue;
 
-    // See android scrollview for inspiration.
-    // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/java/android/widget/ScrollView.java?q=function:onGenericMotionEvent%20filepath:widget%2FScrollView.java&ss=android%2Fplatform%2Fsuperproject%2Fmain
     if (signalKind == PointerSignalKind.SCROLL) {
       double horizontalScaleFactor = DEFAULT_HORIZONTAL_SCROLL_FACTOR;
       double verticalScaleFactor = DEFAULT_VERTICAL_SCROLL_FACTOR;
@@ -450,36 +455,112 @@ public class AndroidTouchProcessor {
         horizontalScaleFactor = getHorizontalScrollFactor(context);
         verticalScaleFactor = getVerticalScrollFactor(context);
       }
-      // We flip the sign of the scroll value below because it aligns the pixel value with the
-      // scroll direction in native android.
-      final double horizontalScrollPixels =
+      pointerData.scrollDeltaX =
           horizontalScaleFactor * -event.getAxisValue(MotionEvent.AXIS_HSCROLL, pointerIndex);
-      final double verticalScrollPixels =
+      pointerData.scrollDeltaY =
           verticalScaleFactor * -event.getAxisValue(MotionEvent.AXIS_VSCROLL, pointerIndex);
-      packet.putDouble(horizontalScrollPixels); // scroll_delta_x
-      packet.putDouble(verticalScrollPixels); // scroll_delta_y
     } else {
-      packet.putDouble(0.0); // scroll_delta_x
-      packet.putDouble(0.0); // scroll_delta_y
+      pointerData.scrollDeltaX = 0.0;
+      pointerData.scrollDeltaY = 0.0;
     }
 
     if (isTrackpadPan) {
       float[] panStart = ongoingPans.get(pointerId);
-      packet.putDouble(viewToScreenCoords[0] - panStart[0]);
-      packet.putDouble(viewToScreenCoords[1] - panStart[1]);
+      pointerData.panX = viewToScreenCoords[0] - panStart[0];
+      pointerData.panY = viewToScreenCoords[1] - panStart[1];
     } else {
-      packet.putDouble(0.0); // pan_x
-      packet.putDouble(0.0); // pan_y
+      pointerData.panX = 0.0;
+      pointerData.panY = 0.0;
     }
-    packet.putDouble(0.0); // pan_delta_x
-    packet.putDouble(0.0); // pan_delta_y
-    packet.putDouble(1.0); // scale
-    packet.putDouble(0.0); // rotation
-    packet.putLong(viewId); // view_id
+    pointerData.panDeltaX = 0.0;
+    pointerData.panDeltaY = 0.0;
+    pointerData.scale = 1.0;
+    pointerData.rotation = 0.0;
+    pointerData.viewId = viewId;
 
     if (isTrackpadPan && (panZoomType == PointerChange.PAN_ZOOM_END)) {
       ongoingPans.remove(pointerId);
     }
+
+    return pointerData;
+  }
+
+  static void writePointerDataToPacket(@NonNull PointerData pointerData, @NonNull ByteBuffer packet) {
+    packet.putLong(pointerData.motionEventId);
+    packet.putLong(pointerData.timeStamp);
+    packet.putLong(pointerData.change);
+    packet.putLong(pointerData.kind);
+    packet.putLong(pointerData.signalKind);
+    packet.putLong(pointerData.device);
+    packet.putLong(pointerData.pointerIdentifier);
+    packet.putDouble(pointerData.physicalX);
+    packet.putDouble(pointerData.physicalY);
+    packet.putDouble(pointerData.physicalDeltaX);
+    packet.putDouble(pointerData.physicalDeltaY);
+    packet.putLong(pointerData.buttons);
+    packet.putLong(pointerData.obscured);
+    packet.putLong(pointerData.synthesized);
+    packet.putDouble(pointerData.pressure);
+    packet.putDouble(pointerData.pressureMin);
+    packet.putDouble(pointerData.pressureMax);
+    packet.putDouble(pointerData.distance);
+    packet.putDouble(pointerData.distanceMax);
+    packet.putDouble(pointerData.size);
+    packet.putDouble(pointerData.radiusMajor);
+    packet.putDouble(pointerData.radiusMinor);
+    packet.putDouble(pointerData.radiusMin);
+    packet.putDouble(pointerData.radiusMax);
+    packet.putDouble(pointerData.orientation);
+    packet.putDouble(pointerData.tilt);
+    packet.putLong(pointerData.platformData);
+    packet.putDouble(pointerData.scrollDeltaX);
+    packet.putDouble(pointerData.scrollDeltaY);
+    packet.putDouble(pointerData.panX);
+    packet.putDouble(pointerData.panY);
+    packet.putDouble(pointerData.panDeltaX);
+    packet.putDouble(pointerData.panDeltaY);
+    packet.putDouble(pointerData.scale);
+    packet.putDouble(pointerData.rotation);
+    packet.putLong(pointerData.viewId);
+  }
+
+  static class PointerData {
+    long motionEventId;
+    long timeStamp;
+    long change;
+    long kind;
+    long signalKind;
+    long device;
+    long pointerIdentifier;
+    double physicalX;
+    double physicalY;
+    double physicalDeltaX;
+    double physicalDeltaY;
+    long buttons;
+    long obscured;
+    long synthesized;
+    double pressure;
+    double pressureMin;
+    double pressureMax;
+    double distance;
+    double distanceMax;
+    double size;
+    double radiusMajor;
+    double radiusMinor;
+    double radiusMin;
+    double radiusMax;
+    double orientation;
+    double tilt;
+    long platformData;
+    double scrollDeltaX;
+    double scrollDeltaY;
+    double panX;
+    double panY;
+    double panDeltaX;
+    double panDeltaY;
+    double scale;
+    double rotation;
+    long viewId;
   }
 
   private float getHorizontalScrollFactor(@NonNull Context context) {

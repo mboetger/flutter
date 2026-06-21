@@ -8,6 +8,7 @@ import static io.flutter.Build.API_LEVELS;
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.graphics.Matrix;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
@@ -784,5 +786,347 @@ public class AndroidTouchProcessorTest {
     assertEquals(0.0, readPointerPhysicalX(packet));
     assertEquals(0.0, readPointerPhysicalY(packet));
     inOrder.verifyNoMoreInteractions();
+  }
+
+  @Test
+  public void invertedStylusTouch() {
+    MotionEventMocker mocker =
+        new MotionEventMocker(0, InputDevice.SOURCE_STYLUS, MotionEvent.TOOL_TYPE_ERASER);
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_DOWN, 0.0f, 0.0f, 0));
+    verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+    assertEquals(AndroidTouchProcessor.PointerChange.DOWN, readPointerChange(packet));
+    assertEquals(AndroidTouchProcessor.PointerDeviceKind.INVERTED_STYLUS, readPointerDeviceKind(packet));
+  }
+
+  @Test
+  public void touchCancel() {
+    MotionEventMocker mocker =
+        new MotionEventMocker(0, InputDevice.SOURCE_TOUCHSCREEN, MotionEvent.TOOL_TYPE_FINGER);
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_CANCEL, 0.0f, 0.0f, 0));
+    verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+    assertEquals(AndroidTouchProcessor.PointerChange.CANCEL, readPointerChange(packet));
+  }
+
+  @Test
+  public void trackpadCancel() {
+    MotionEventMocker mocker =
+        new MotionEventMocker(1, InputDevice.SOURCE_MOUSE, MotionEvent.TOOL_TYPE_MOUSE);
+    // Start trackpad pan
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_DOWN, 0.0f, 0.0f, 0));
+    InOrder inOrder = inOrder(mockRenderer);
+    inOrder
+        .verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+    assertEquals(AndroidTouchProcessor.PointerChange.PAN_ZOOM_START, readPointerChange(packet));
+
+    // Cancel trackpad pan
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_CANCEL, 0.0f, 0.0f, 0));
+    inOrder
+        .verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    packet = packetCaptor.getValue();
+    assertEquals(AndroidTouchProcessor.PointerChange.PAN_ZOOM_END, readPointerChange(packet));
+  }
+
+  @Test
+  public void multiTouchUpFinger() {
+    MotionEvent event = mock(MotionEvent.class);
+    when(event.getDevice()).thenReturn(null);
+    when(event.getSource()).thenReturn(InputDevice.SOURCE_TOUCHSCREEN);
+    when(event.getEventTime()).thenReturn(eventTimeMilliseconds);
+    when(event.getPointerCount()).thenReturn(2);
+    // Action is ACTION_POINTER_UP for the second pointer (index 1)
+    when(event.getActionMasked()).thenReturn(MotionEvent.ACTION_POINTER_UP);
+    when(event.getActionIndex()).thenReturn(1);
+    when(event.getButtonState()).thenReturn(0);
+
+    // Pointer 0: finger at (10.0, 20.0)
+    when(event.getPointerId(0)).thenReturn(10);
+    when(event.getX(0)).thenReturn(10.0f);
+    when(event.getY(0)).thenReturn(20.0f);
+    when(event.getToolType(0)).thenReturn(MotionEvent.TOOL_TYPE_FINGER);
+
+    // Pointer 1: finger at (30.0, 40.0)
+    when(event.getPointerId(1)).thenReturn(11);
+    when(event.getX(1)).thenReturn(30.0f);
+    when(event.getY(1)).thenReturn(40.0f);
+    when(event.getToolType(1)).thenReturn(MotionEvent.TOOL_TYPE_FINGER);
+
+    when(event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)).thenReturn(true);
+    when(event.getPressure(0)).thenReturn(0.5f);
+    when(event.getPressure(1)).thenReturn(0.6f);
+
+    touchProcessor.onTouchEvent(event);
+
+    verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+
+    // Expected pointers in packet:
+    // 1. Pointer 0: PointerChange.MOVE (batched)
+    // 2. Pointer 1: PointerChange.UP
+    // 3. Pointer 1: PointerChange.REMOVE (synthesized)
+    // Total 3 pointer data packages in the packet!
+    assertEquals(
+        AndroidTouchProcessor.BYTES_PER_FIELD * AndroidTouchProcessor.POINTER_DATA_FIELD_COUNT * 3,
+        packet.capacity());
+
+    // Check Pointer 0 ( batched MOVE )
+    assertEquals(AndroidTouchProcessor.PointerChange.MOVE, readPointerChangeForPointer(packet, 0));
+    assertEquals(10.0, readPointerPhysicalXForPointer(packet, 0));
+    assertEquals(20.0, readPointerPhysicalYForPointer(packet, 0));
+
+    // Check Pointer 1 ( UP )
+    assertEquals(AndroidTouchProcessor.PointerChange.UP, readPointerChangeForPointer(packet, 1));
+    assertEquals(30.0, readPointerPhysicalXForPointer(packet, 1));
+    assertEquals(40.0, readPointerPhysicalYForPointer(packet, 1));
+
+    // Check Pointer 2 ( synthesized REMOVE for Pointer 1 )
+    assertEquals(AndroidTouchProcessor.PointerChange.REMOVE, readPointerChangeForPointer(packet, 2));
+    assertEquals(30.0, readPointerPhysicalXForPointer(packet, 2));
+    assertEquals(40.0, readPointerPhysicalYForPointer(packet, 2));
+  }
+
+  @Test
+  public void multiTouchMoveFlag() {
+    MotionEvent event = mock(MotionEvent.class);
+    when(event.getDevice()).thenReturn(null);
+    when(event.getSource()).thenReturn(InputDevice.SOURCE_TOUCHSCREEN);
+    when(event.getEventTime()).thenReturn(eventTimeMilliseconds);
+    when(event.getPointerCount()).thenReturn(2);
+    when(event.getActionMasked()).thenReturn(MotionEvent.ACTION_MOVE);
+    when(event.getActionIndex()).thenReturn(0);
+    when(event.getButtonState()).thenReturn(0);
+
+    // Pointer 0: finger at (10.0, 20.0)
+    when(event.getPointerId(0)).thenReturn(10);
+    when(event.getX(0)).thenReturn(10.0f);
+    when(event.getY(0)).thenReturn(20.0f);
+    when(event.getToolType(0)).thenReturn(MotionEvent.TOOL_TYPE_FINGER);
+
+    // Pointer 1: finger at (30.0, 40.0)
+    when(event.getPointerId(1)).thenReturn(11);
+    when(event.getX(1)).thenReturn(30.0f);
+    when(event.getY(1)).thenReturn(40.0f);
+    when(event.getToolType(1)).thenReturn(MotionEvent.TOOL_TYPE_FINGER);
+
+    when(event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)).thenReturn(true);
+    when(event.getPressure(0)).thenReturn(0.5f);
+    when(event.getPressure(1)).thenReturn(0.6f);
+
+    touchProcessor.onTouchEvent(event);
+
+    verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+
+    // Expected pointers in packet:
+    // 1. Pointer 0: PointerChange.MOVE, flag = POINTER_DATA_FLAG_MULTIPLE | (2 << 8) = 514
+    // 2. Pointer 1: PointerChange.MOVE, flag = POINTER_DATA_FLAG_MULTIPLE | (2 << 8) = 514
+    assertEquals(
+        AndroidTouchProcessor.BYTES_PER_FIELD * AndroidTouchProcessor.POINTER_DATA_FIELD_COUNT * 2,
+        packet.capacity());
+
+    // Check Pointer 0
+    assertEquals(AndroidTouchProcessor.PointerChange.MOVE, readPointerChangeForPointer(packet, 0));
+    assertEquals(10.0, readPointerPhysicalXForPointer(packet, 0));
+    assertEquals(20.0, readPointerPhysicalYForPointer(packet, 0));
+    long flag0 = packet.getLong(26 * AndroidTouchProcessor.BYTES_PER_FIELD);
+    assertEquals(514L, flag0);
+
+    // Check Pointer 1
+    assertEquals(AndroidTouchProcessor.PointerChange.MOVE, readPointerChangeForPointer(packet, 1));
+    assertEquals(30.0, readPointerPhysicalXForPointer(packet, 1));
+    assertEquals(40.0, readPointerPhysicalYForPointer(packet, 1));
+    long flag1 = packet.getLong(
+        26 * AndroidTouchProcessor.BYTES_PER_FIELD
+        + AndroidTouchProcessor.BYTES_PER_FIELD * AndroidTouchProcessor.POINTER_DATA_FIELD_COUNT);
+    assertEquals(514L, flag1);
+  }
+
+  @Test
+  public void customTransformMatrix() {
+    MotionEventMocker mocker =
+        new MotionEventMocker(0, InputDevice.SOURCE_TOUCHSCREEN, MotionEvent.TOOL_TYPE_FINGER);
+    Matrix matrix = new Matrix();
+    matrix.setScale(2.0f, 3.0f);
+    matrix.postTranslate(5.0f, 10.0f);
+
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_DOWN, 10.0f, 20.0f, 0), matrix);
+
+    verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+
+    assertEquals(AndroidTouchProcessor.PointerChange.DOWN, readPointerChange(packet));
+    assertEquals(25.0, readPointerPhysicalX(packet));
+    assertEquals(70.0, readPointerPhysicalY(packet));
+  }
+
+  @Test
+  public void trackMotionEvents() {
+    AndroidTouchProcessor trackingTouchProcessor = new AndroidTouchProcessor(mockRenderer, true);
+    
+    MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[1];
+    properties[0] = new MotionEvent.PointerProperties();
+    properties[0].id = 0;
+    properties[0].toolType = MotionEvent.TOOL_TYPE_FINGER;
+
+    MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[1];
+    coords[0] = new MotionEvent.PointerCoords();
+    coords[0].x = 0.0f;
+    coords[0].y = 0.0f;
+    coords[0].pressure = pressure;
+    coords[0].size = 0.0f;
+
+    MotionEvent event = MotionEvent.obtain(
+        0, // downTime
+        eventTimeMilliseconds, // eventTime
+        MotionEvent.ACTION_DOWN, // action
+        1, // pointerCount
+        properties, // pointerProperties
+        coords, // pointerCoords
+        0, // metaState
+        0, // buttonState
+        1.0f, // xPrecision
+        1.0f, // yPrecision
+        0, // deviceId
+        0, // edgeFlags
+        InputDevice.SOURCE_TOUCHSCREEN, // source
+        0 // flags
+    );
+
+    trackingTouchProcessor.onTouchEvent(event);
+
+    verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+
+    long motionEventId = packet.getLong(0 * AndroidTouchProcessor.BYTES_PER_FIELD);
+    assertNotEquals(0L, motionEventId);
+
+    MotionEventTracker tracker = MotionEventTracker.getInstance();
+    MotionEventTracker.MotionEventId eventId = MotionEventTracker.MotionEventId.from(motionEventId);
+    MotionEvent poppedEvent = tracker.pop(eventId);
+    assertTrue(poppedEvent != null);
+    
+    poppedEvent.recycle();
+    event.recycle();
+  }
+
+  @Test
+  public void pointerDataSerialization_writesCorrectOffsetsAndTypes() {
+    AndroidTouchProcessor.PointerData data = new AndroidTouchProcessor.PointerData();
+    data.motionEventId = 101L;
+    data.timeStamp = 102L;
+    data.change = 103L;
+    data.kind = 104L;
+    data.signalKind = 105L;
+    data.device = 106L;
+    data.pointerIdentifier = 107L;
+    data.physicalX = 108.5;
+    data.physicalY = 109.5;
+    data.physicalDeltaX = 110.5;
+    data.physicalDeltaY = 111.5;
+    data.buttons = 112L;
+    data.obscured = 113L;
+    data.synthesized = 114L;
+    data.pressure = 115.5;
+    data.pressureMin = 116.5;
+    data.pressureMax = 117.5;
+    data.distance = 118.5;
+    data.distanceMax = 119.5;
+    data.size = 120.5;
+    data.radiusMajor = 121.5;
+    data.radiusMinor = 122.5;
+    data.radiusMin = 123.5;
+    data.radiusMax = 124.5;
+    data.orientation = 125.5;
+    data.tilt = 126.5;
+    data.platformData = 127L;
+    data.scrollDeltaX = 128.5;
+    data.scrollDeltaY = 129.5;
+    data.panX = 130.5;
+    data.panY = 131.5;
+    data.panDeltaX = 132.5;
+    data.panDeltaY = 133.5;
+    data.scale = 134.5;
+    data.rotation = 135.5;
+    data.viewId = 136L;
+
+    ByteBuffer packet = ByteBuffer.allocateDirect(AndroidTouchProcessor.POINTER_DATA_FIELD_COUNT * AndroidTouchProcessor.BYTES_PER_FIELD);
+    packet.order(java.nio.ByteOrder.LITTLE_ENDIAN);
+
+    AndroidTouchProcessor.writePointerDataToPacket(data, packet);
+
+    int expectedSize = AndroidTouchProcessor.POINTER_DATA_FIELD_COUNT * AndroidTouchProcessor.BYTES_PER_FIELD;
+    assertEquals(expectedSize, packet.position());
+
+    assertEquals(101L, packet.getLong(0 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(102L, packet.getLong(1 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(103L, packet.getLong(2 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(104L, packet.getLong(3 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(105L, packet.getLong(4 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(106L, packet.getLong(5 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(107L, packet.getLong(6 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(108.5, packet.getDouble(7 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(109.5, packet.getDouble(8 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(110.5, packet.getDouble(9 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(111.5, packet.getDouble(10 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(112L, packet.getLong(11 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(113L, packet.getLong(12 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(114L, packet.getLong(13 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(115.5, packet.getDouble(14 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(116.5, packet.getDouble(15 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(117.5, packet.getDouble(16 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(118.5, packet.getDouble(17 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(119.5, packet.getDouble(18 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(120.5, packet.getDouble(19 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(121.5, packet.getDouble(20 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(122.5, packet.getDouble(21 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(123.5, packet.getDouble(22 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(124.5, packet.getDouble(23 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(125.5, packet.getDouble(24 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(126.5, packet.getDouble(25 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(127L, packet.getLong(26 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(128.5, packet.getDouble(27 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(129.5, packet.getDouble(28 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(130.5, packet.getDouble(29 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(131.5, packet.getDouble(30 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(132.5, packet.getDouble(31 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(133.5, packet.getDouble(32 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(134.5, packet.getDouble(33 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(135.5, packet.getDouble(34 * AndroidTouchProcessor.BYTES_PER_FIELD));
+    assertEquals(136L, packet.getLong(35 * AndroidTouchProcessor.BYTES_PER_FIELD));
+  }
+
+  @Test
+  public void collectPointerData_correctlyMapsFields() {
+    MotionEventMocker mocker =
+        new MotionEventMocker(2, InputDevice.SOURCE_TOUCHSCREEN, MotionEvent.TOOL_TYPE_FINGER);
+    MotionEvent event = mocker.mockEvent(MotionEvent.ACTION_DOWN, 15.0f, 25.0f, 0);
+
+    AndroidTouchProcessor.PointerData data =
+        touchProcessor.collectPointerData(
+            event,
+            0,
+            AndroidTouchProcessor.PointerChange.DOWN,
+            123,
+            new Matrix(),
+            null);
+
+    assertNotNull(data);
+    assertEquals(AndroidTouchProcessor.PointerChange.DOWN, data.change);
+    assertEquals(AndroidTouchProcessor.PointerDeviceKind.TOUCH, data.kind);
+    assertEquals(15.0, data.physicalX);
+    assertEquals(25.0, data.physicalY);
+    assertEquals(123L, data.platformData);
+    assertEquals(0L, data.buttons);
+    assertEquals((double) pressure, data.pressure, 1e-6);
   }
 }
