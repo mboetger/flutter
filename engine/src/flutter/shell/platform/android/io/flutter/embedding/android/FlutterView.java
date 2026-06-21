@@ -842,7 +842,7 @@ public class FlutterView extends FrameLayout
     // bounding Rects instead of an Insets object, which is a newer API method, as compared to the
     // existing Insets-based method calls above.
     if (Build.VERSION.SDK_INT >= API_LEVELS.API_35) {
-      delegate.growViewportMetricsToCaptionBar(getContext(), viewportMetrics);
+      delegate.growViewportMetricsToCaptionBar(this, viewportMetrics);
     }
 
     if (Build.VERSION.SDK_INT >= API_LEVELS.API_31) {

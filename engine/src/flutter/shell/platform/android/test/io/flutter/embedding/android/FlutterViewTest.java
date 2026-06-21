@@ -1496,4 +1496,94 @@ public class FlutterViewTest {
     flutterView.autofill(values);
     // No exception should be thrown
   }
+
+  @Test
+  @TargetApi(35)
+  @Config(sdk = API_LEVELS.API_35)
+  public void reportSystemInsetWhenInFreeformModeWithIncorrectCaptionBarBounds() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+
+    // Initially, top padding is 0.
+    assertEquals(0, viewportMetricsCaptor.getValue().viewPaddingTop);
+    clearInvocations(flutterRenderer);
+
+    // Use a spy to ensure the real growViewportMetricsToCaptionBar logic is executed,
+    // while stubbing getCaptionBarInsets to return the incorrect caption bar bounding rect.
+    // In freeform mode, this rect covers the entire window or has huge Y coordinates in screen space (e.g. bottom = 2211).
+    FlutterViewDelegate delegateSpy = spy(new FlutterViewDelegate());
+    flutterView.setDelegate(delegateSpy);
+    List<Rect> boundingRects = Collections.singletonList(new Rect(180, 291, 1380, 2211));
+    doReturn(boundingRects).when(delegateSpy).getCaptionBarInsets(any());
+
+    // Simulate standard window insets (e.g., status bar top inset is 100 physical pixels).
+    WindowInsets windowInsets =
+        new WindowInsets.Builder()
+            .setInsets(android.view.WindowInsets.Type.statusBars(), Insets.of(0, 100, 0, 0))
+            .build();
+
+    // Apply the window insets.
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    // Verify the viewport metrics sent to the engine.
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+
+    // The top padding should remain the correct status bar inset (100) or at least
+    // not be set to the huge rect.bottom (2211) from the incorrect caption bar bounding rect.
+    // If the bug is present, viewPaddingTop will be Math.max(100, 2211) = 2211, and this assertion will fail.
+    assertEquals(100, viewportMetricsCaptor.getValue().viewPaddingTop);
+  }
+
+  @Test
+  public void calculateLocalPaddingTop_handlesCorrectPlatformFreeform() {
+    // Standard device: window is at Y=291, view is at Y=291 (viewYInWindow = 0).
+    // Platform returns correct window-relative rect [0, 0, 1200, 100].
+    Rect rect = new Rect(0, 0, 1200, 100);
+    int localPadding = FlutterViewDelegate.calculateLocalPaddingTop(rect, 291, 291, 450.0);
+    assertEquals(100, localPadding);
+  }
+
+  @Test
+  public void calculateLocalPaddingTop_handlesBuggyPlatformFreeform() {
+    // Buggy device: window is at Y=291, view is at Y=291 (viewYInWindow = 0).
+    // Platform returns screen-relative rect [180, 291, 1380, 391] (height 100).
+    Rect rect = new Rect(180, 291, 1380, 391);
+    int localPadding = FlutterViewDelegate.calculateLocalPaddingTop(rect, 291, 291, 450.0);
+    assertEquals(100, localPadding);
+  }
+
+  @Test
+  public void calculateLocalPaddingTop_handlesShiftedViewCorrectPlatform() {
+    // Standard device: window is at Y=291, view is shifted down to Y=491 (viewYInWindow = 200).
+    // Platform returns correct window-relative rect [0, 0, 1200, 100] (above the view).
+    Rect rect = new Rect(0, 0, 1200, 100);
+    int localPadding = FlutterViewDelegate.calculateLocalPaddingTop(rect, 491, 291, 450.0);
+    assertEquals(0, localPadding);
+  }
+
+  @Test
+  public void calculateLocalPaddingTop_handlesShiftedViewBuggyPlatform() {
+    // Buggy device: window is at Y=291, view is shifted down to Y=491 (viewYInWindow = 200).
+    // Platform returns screen-relative rect [180, 291, 1380, 391] (height 100, above the view).
+    Rect rect = new Rect(180, 291, 1380, 391);
+    int localPadding = FlutterViewDelegate.calculateLocalPaddingTop(rect, 491, 291, 450.0);
+    assertEquals(0, localPadding);
+  }
+
+  @Test
+  public void calculateLocalPaddingTop_ignoresCorruptedRect() {
+    // Buggy device: window is at Y=291, view is at Y=291.
+    // Platform returns incorrect/corrupted rect covering the entire window/screen [180, 291, 1380, 2211] (height 1920).
+    Rect rect = new Rect(180, 291, 1380, 2211);
+    int localPadding = FlutterViewDelegate.calculateLocalPaddingTop(rect, 291, 291, 450.0);
+    assertEquals(0, localPadding);
+  }
 }
+
