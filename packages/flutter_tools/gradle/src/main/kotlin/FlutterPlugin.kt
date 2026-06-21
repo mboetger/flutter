@@ -97,8 +97,15 @@ class FlutterPlugin : Plugin<Project> {
                 "$hostedRepository/${engineRealm}download.flutter.io"
             }
         rootProject.allprojects {
-            repositories.maven {
-                url = uri(repository!!)
+            repositories.exclusiveContent {
+                forRepository {
+                    repositories.maven {
+                        url = uri(repository!!)
+                    }
+                }
+                filter {
+                    includeGroup("io.flutter")
+                }
             }
         }
 

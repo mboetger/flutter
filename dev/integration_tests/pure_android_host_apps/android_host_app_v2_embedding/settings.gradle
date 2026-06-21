@@ -9,9 +9,6 @@ dependencyResolutionManagement {
         mavenCentral()
         def flutterStorageUrl = System.getenv("FLUTTER_STORAGE_BASE_URL") ?: "https://storage.googleapis.com"
         maven {
-            url = uri("$flutterStorageUrl/download.flutter.io")
-        }
-        maven {
             url = uri("../hello/build/host/outputs/repo")
         }
         // BEGIN ci only configuration for getting engine artifacts in pre-submit environments
@@ -33,12 +30,23 @@ dependencyResolutionManagement {
         if (engineRealm) { // In Groovy, a non-empty string is true
             engineRealm += "/"
         }
-
-        maven {
-            url = uri("${flutterStorageUrl}/${engineRealm}download.flutter.io")
-        }
-
         // END ci only configuration for getting engine artifacts in pre-submit environments
+
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url = uri("$flutterStorageUrl/download.flutter.io")
+                }
+            }
+            forRepository {
+                maven {
+                    url = uri("${flutterStorageUrl}/${engineRealm}download.flutter.io")
+                }
+            }
+            filter {
+                includeGroup "io.flutter"
+            }
+        }
     }
 }
 

@@ -50,8 +50,15 @@ if (engineRealm.isNotEmpty()) {
 repositories {
     google()
     mavenCentral()
-    maven {
-        url = uri("$storageUrl/${engineRealm}download.flutter.io")
+    exclusiveContent {
+        forRepository {
+            maven {
+                url = uri("$storageUrl/${engineRealm}download.flutter.io")
+            }
+        }
+        filter {
+            includeGroup("io.flutter")
+        }
     }
 }
 

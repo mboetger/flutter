@@ -53,8 +53,15 @@ void configureProject(Project project, String outputDir) {
     // This is a Flutter plugin project. Plugin projects don't apply the Flutter Gradle plugin,
     // as a result, add the dependency on the embedding.
     project.repositories {
-        maven {
-            url "$storageUrl/${engineRealm}download.flutter.io"
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url "$storageUrl/${engineRealm}download.flutter.io"
+                }
+            }
+            filter {
+                includeGroup "io.flutter"
+            }
         }
     }
     String engineVersion = Paths.get(getFlutterRoot(project), "bin", "cache", "engine.stamp")

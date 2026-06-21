@@ -1014,8 +1014,15 @@ void printHowToConsumeAar({
         maven {
             url '${repoDirectory.path}'
         }
-        maven {
-            url "\$storageUrl/download.flutter.io"
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url "\$storageUrl/download.flutter.io"
+                }
+            }
+            filter {
+                includeGroup "io.flutter"
+            }
         }
       }
 
