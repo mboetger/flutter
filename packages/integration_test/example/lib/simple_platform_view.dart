@@ -14,8 +14,7 @@ class SimplePlatformView extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        // TODO(cbracken): Implement. https://github.com/flutter/flutter/issues/164130
-        return Container();
+        return const AndroidView(viewType: 'simple-platform-view');
       case TargetPlatform.iOS:
         return const UiKitView(viewType: 'simple-platform-view');
       case TargetPlatform.fuchsia:
