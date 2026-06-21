@@ -2649,6 +2649,84 @@ Future<void> lintKotlinFiles(String workingDirectory) async {
         'Alternatively, if you use Android Studio, follow the docs at docs/platforms/android/Kotlin-android-studio-formatting.md to enable auto formatting.';
     foundError(<String>[errorMessage]);
   }
+
+  await _runKtfmt(workingDirectory);
+}
+
+Future<List<File>> _findKotlinFiles(String workingDirectory) async {
+  final bool isGit =
+      Directory(path.join(workingDirectory, '.git')).existsSync() ||
+      (await _evalCommand(
+            'git',
+            <String>['rev-parse', '--is-inside-work-tree'],
+            workingDirectory: workingDirectory,
+            runSilently: true,
+            allowNonZeroExit: true,
+          )).exitCode ==
+          0;
+
+  if (isGit) {
+    final List<File> files = await _gitFiles(workingDirectory);
+    return files.where((File f) {
+      final String ext = path.extension(f.path);
+      return ext == '.kt' || ext == '.kts';
+    }).toList();
+  }
+
+  // Fallback to manual recursive traversal for non-git directories (used in tests)
+  final files = <File>[];
+  void recurse(Directory dir) {
+    for (final FileSystemEntity entity in dir.listSync(followLinks: false)) {
+      if (entity is Directory) {
+        final String name = path.basename(entity.path);
+        if (name == '.git' ||
+            name == '.gradle' ||
+            name == '.dart_tool' ||
+            name == 'build' ||
+            name == 'cache') {
+          continue;
+        }
+        recurse(entity);
+      } else if (entity is File) {
+        final String ext = path.extension(entity.path);
+        if (ext == '.kt' || ext == '.kts') {
+          files.add(entity);
+        }
+      }
+    }
+  }
+
+  recurse(Directory(workingDirectory));
+  return files;
+}
+
+Future<void> _runKtfmt(String workingDirectory) async {
+  final List<File> kotlinFiles = await _findKotlinFiles(workingDirectory);
+  if (kotlinFiles.isEmpty) {
+    return;
+  }
+
+  final List<String> filePaths = kotlinFiles
+      .map((File f) => path.relative(f.path, from: workingDirectory))
+      .toList();
+
+  final EvalResult formatResult = await _evalCommand(
+    'ktfmt',
+    <String>['--dry-run', '--set-exit-if-changed', ...filePaths],
+    workingDirectory: workingDirectory,
+    allowNonZeroExit: true,
+  );
+
+  if (formatResult.exitCode == EvalResult.kNotFoundExitCode) {
+    foundError(<String>['Failed to find ktfmt on PATH. Kotlin formatting check failed.']);
+  } else if (formatResult.exitCode != 0) {
+    final errorMessage =
+        'Found formatting violations in Kotlin files:\n${formatResult.stdout}\n\n'
+        'To format these files locally, run:\n'
+        '  ktfmt <file_paths>\n'
+        'Alternatively, use the ktfmt plugin in Android Studio/IntelliJ.';
+    foundError(<String>[errorMessage]);
+  }
 }
 
 const List<String> _kIgnoreList = <String>['Runner.rc.tmpl', 'flutter_window.cpp'];

@@ -398,6 +398,34 @@ void main() {
     );
   });
 
+  test('analyze.dart - Kotlin files are checked with ktfmt', () async {
+    final Directory tempDir = Directory.systemTemp.createTempSync('ktfmt_reproduce_test');
+    try {
+      final kotlinFile = File(path.join(tempDir.path, 'IncorrectlyFormatted.kt'));
+      // This is incorrectly formatted according to ktfmt (uses 4-space indent instead of 2-space)
+      kotlinFile.writeAsStringSync('''
+fun main() {
+    println("Hello World")
+}
+''');
+
+      final String result = await capture(
+        () => lintKotlinFiles(tempDir.path),
+        shouldHaveErrors: true,
+      );
+
+      if (result.contains('Failed to find ktlint on PATH') ||
+          result.contains('Failed to find ktfmt on PATH')) {
+        print('Skipping ktfmt check because ktlint or ktfmt is not installed on the system PATH.');
+        return;
+      }
+
+      expect(result, contains('ktfmt'));
+    } finally {
+      tryToDelete(tempDir);
+    }
+  });
+
   test('analyze.dart - help flag', () async {
     final String result = await capture(() async {
       await run(<String>['-h']);
