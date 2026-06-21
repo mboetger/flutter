@@ -832,17 +832,12 @@ public class TextInputChannel {
             "invalid composing range: (" + composingStart + ", " + composingEnd + ")");
       }
 
-      if (composingEnd > text.length()) {
-        throw new IndexOutOfBoundsException("invalid composing start: " + composingStart);
-      }
-
-      if (selectionStart > text.length()) {
-        throw new IndexOutOfBoundsException("invalid selection start: " + selectionStart);
-      }
-
-      if (selectionEnd > text.length()) {
-        throw new IndexOutOfBoundsException("invalid selection end: " + selectionEnd);
-      }
+      // Clamping out-of-bounds indices to the text length rather than throwing
+      // prevents crashes caused by race conditions between the framework and the IME.
+      selectionStart = Math.min(selectionStart, text.length());
+      selectionEnd = Math.min(selectionEnd, text.length());
+      composingStart = Math.min(composingStart, text.length());
+      composingEnd = Math.min(composingEnd, text.length());
 
       this.text = text;
       this.selectionStart = selectionStart;

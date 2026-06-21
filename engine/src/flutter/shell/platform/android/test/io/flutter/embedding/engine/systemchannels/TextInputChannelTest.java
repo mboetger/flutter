@@ -20,6 +20,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.robolectric.annotation.Config;
 
 @Config(shadows = {})
@@ -64,4 +65,171 @@ public class TextInputChannelTest {
     assertEquals(configuration.hintLocales[0], hintLocales[0]);
     assertEquals(configuration.hintLocales[1], hintLocales[1]);
   }
+
+  @Test
+  public void setEditingState_clampsSelectionStartOutOfBounds() throws JSONException {
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    TextInputChannel.TextInputMethodHandler mockHandler = mock(TextInputChannel.TextInputMethodHandler.class);
+    textInputChannel.setTextInputMethodHandler(mockHandler);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    JSONObject editingState = new JSONObject();
+    editingState.put("text", "hello"); // length is 5
+    editingState.put("selectionBase", 6); // selection start out of bounds (6 > 5)
+    editingState.put("selectionExtent", 5);
+    editingState.put("composingBase", -1);
+    editingState.put("composingExtent", -1);
+
+    MethodCall call = new MethodCall("TextInput.setEditingState", editingState);
+
+    // Under buggy code, this will throw IndexOutOfBoundsException and fail the test.
+    // Under fixed code, this will succeed and clamp the selection start.
+    textInputChannel.parsingMethodHandler.onMethodCall(call, mockResult);
+
+    // Verify that the platform channel call returned successfully.
+    verify(mockResult).success(null);
+
+    // Verify that the handler was invoked with the safely clamped editing state.
+    ArgumentCaptor<TextInputChannel.TextEditState> stateCaptor =
+        ArgumentCaptor.forClass(TextInputChannel.TextEditState.class);
+    verify(mockHandler).setEditingState(stateCaptor.capture());
+
+    TextInputChannel.TextEditState capturedState = stateCaptor.getValue();
+    assertEquals("hello", capturedState.text);
+    assertEquals(5, capturedState.selectionStart); // Clamped from 6 to 5
+    assertEquals(5, capturedState.selectionEnd);
+  }
+
+  @Test
+  public void setEditingState_clampsSelectionEndOutOfBounds() throws JSONException {
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    TextInputChannel.TextInputMethodHandler mockHandler = mock(TextInputChannel.TextInputMethodHandler.class);
+    textInputChannel.setTextInputMethodHandler(mockHandler);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    JSONObject editingState = new JSONObject();
+    editingState.put("text", "hello"); // length is 5
+    editingState.put("selectionBase", 5);
+    editingState.put("selectionExtent", 6); // selection end out of bounds (6 > 5)
+    editingState.put("composingBase", -1);
+    editingState.put("composingExtent", -1);
+
+    MethodCall call = new MethodCall("TextInput.setEditingState", editingState);
+
+    textInputChannel.parsingMethodHandler.onMethodCall(call, mockResult);
+
+    verify(mockResult).success(null);
+
+    ArgumentCaptor<TextInputChannel.TextEditState> stateCaptor =
+        ArgumentCaptor.forClass(TextInputChannel.TextEditState.class);
+    verify(mockHandler).setEditingState(stateCaptor.capture());
+
+    TextInputChannel.TextEditState capturedState = stateCaptor.getValue();
+    assertEquals("hello", capturedState.text);
+    assertEquals(5, capturedState.selectionStart);
+    assertEquals(5, capturedState.selectionEnd); // Clamped from 6 to 5
+  }
+
+  @Test
+  public void setEditingState_clampsComposingEndOutOfBounds() throws JSONException {
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    TextInputChannel.TextInputMethodHandler mockHandler = mock(TextInputChannel.TextInputMethodHandler.class);
+    textInputChannel.setTextInputMethodHandler(mockHandler);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    JSONObject editingState = new JSONObject();
+    editingState.put("text", "hello"); // length is 5
+    editingState.put("selectionBase", 5);
+    editingState.put("selectionExtent", 5);
+    editingState.put("composingBase", 0);
+    editingState.put("composingExtent", 6); // composing end out of bounds (6 > 5)
+
+    MethodCall call = new MethodCall("TextInput.setEditingState", editingState);
+
+    textInputChannel.parsingMethodHandler.onMethodCall(call, mockResult);
+
+    verify(mockResult).success(null);
+
+    ArgumentCaptor<TextInputChannel.TextEditState> stateCaptor =
+        ArgumentCaptor.forClass(TextInputChannel.TextEditState.class);
+    verify(mockHandler).setEditingState(stateCaptor.capture());
+
+    TextInputChannel.TextEditState capturedState = stateCaptor.getValue();
+    assertEquals("hello", capturedState.text);
+    assertEquals(0, capturedState.composingStart);
+    assertEquals(5, capturedState.composingEnd); // Clamped from 6 to 5
+  }
+
+  @Test(expected = IndexOutOfBoundsException.class)
+  public void setEditingState_throwsOnReversedComposingRangeOutOfBounds() throws JSONException {
+    JSONObject editingState = new JSONObject();
+    editingState.put("text", "hello"); // length is 5
+    editingState.put("selectionBase", 5);
+    editingState.put("selectionExtent", 5);
+    editingState.put("composingBase", 6); // composing start out of bounds (6 > 5)
+    editingState.put("composingExtent", 5); // composing end is 5
+
+    TextInputChannel.TextEditState.fromJson(editingState);
+  }
+
+  @Test
+  public void setEditingState_clampsComposingStartAndEndOutOfBounds() throws JSONException {
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    TextInputChannel.TextInputMethodHandler mockHandler = mock(TextInputChannel.TextInputMethodHandler.class);
+    textInputChannel.setTextInputMethodHandler(mockHandler);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    JSONObject editingState = new JSONObject();
+    editingState.put("text", "hello"); // length is 5
+    editingState.put("selectionBase", 5);
+    editingState.put("selectionExtent", 5);
+    editingState.put("composingBase", 6); // composing start out of bounds (6 > 5)
+    editingState.put("composingExtent", 7); // composing end out of bounds (7 > 5)
+
+    MethodCall call = new MethodCall("TextInput.setEditingState", editingState);
+
+    textInputChannel.parsingMethodHandler.onMethodCall(call, mockResult);
+
+    verify(mockResult).success(null);
+
+    ArgumentCaptor<TextInputChannel.TextEditState> stateCaptor =
+        ArgumentCaptor.forClass(TextInputChannel.TextEditState.class);
+    verify(mockHandler).setEditingState(stateCaptor.capture());
+
+    TextInputChannel.TextEditState capturedState = stateCaptor.getValue();
+    assertEquals("hello", capturedState.text);
+    assertEquals(5, capturedState.composingStart); // Clamped from 6 to 5
+    assertEquals(5, capturedState.composingEnd); // Clamped from 7 to 5
+  }
+
+  @Test
+  public void setEditingState_clampsSelectionStartAndEndOutOfBounds() throws JSONException {
+    TextInputChannel textInputChannel = new TextInputChannel(mock(DartExecutor.class));
+    TextInputChannel.TextInputMethodHandler mockHandler = mock(TextInputChannel.TextInputMethodHandler.class);
+    textInputChannel.setTextInputMethodHandler(mockHandler);
+    MethodChannel.Result mockResult = mock(MethodChannel.Result.class);
+
+    JSONObject editingState = new JSONObject();
+    editingState.put("text", "hello"); // length is 5
+    editingState.put("selectionBase", 6); // selection start out of bounds (6 > 5)
+    editingState.put("selectionExtent", 7); // selection end out of bounds (7 > 5)
+    editingState.put("composingBase", -1);
+    editingState.put("composingExtent", -1);
+
+    MethodCall call = new MethodCall("TextInput.setEditingState", editingState);
+
+    textInputChannel.parsingMethodHandler.onMethodCall(call, mockResult);
+
+    verify(mockResult).success(null);
+
+    ArgumentCaptor<TextInputChannel.TextEditState> stateCaptor =
+        ArgumentCaptor.forClass(TextInputChannel.TextEditState.class);
+    verify(mockHandler).setEditingState(stateCaptor.capture());
+
+    TextInputChannel.TextEditState capturedState = stateCaptor.getValue();
+    assertEquals("hello", capturedState.text);
+    assertEquals(5, capturedState.selectionStart); // Clamped from 6 to 5
+    assertEquals(5, capturedState.selectionEnd); // Clamped from 7 to 5
+  }
 }
+
