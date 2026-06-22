@@ -17,6 +17,7 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.os.Build;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.view.Surface;
 import androidx.annotation.Keep;
@@ -470,7 +471,9 @@ public class FlutterRenderer implements TextureRegistry {
 
     private final long id;
 
-    private boolean released;
+    private volatile boolean released;
+    @VisibleForTesting volatile HandlerThread handlerThread;
+    @VisibleForTesting volatile Handler backgroundHandler;
     // Will be true in tests and on Android API < 33.
     private boolean ignoringFence = false;
 
@@ -522,7 +525,7 @@ public class FlutterRenderer implements TextureRegistry {
     private class PerImageReader {
       public final ImageReader reader;
       private final ArrayDeque<PerImage> imageQueue = new ArrayDeque<>();
-      private boolean closed = false;
+      private volatile boolean closed = false;
 
       public PerImageReader(ImageReader reader) {
         this.reader = reader;
@@ -541,10 +544,10 @@ public class FlutterRenderer implements TextureRegistry {
                 image.close();
                 return;
               }
-              onImage(r, image);
+              onImage(PerImageReader.this, image);
             };
         reader.setOnImageAvailableListener(
-            onImageAvailableListener, new Handler(Looper.getMainLooper()));
+            onImageAvailableListener, backgroundHandler);
       }
 
       PerImage queueImage(Image image) {
@@ -631,10 +634,13 @@ public class FlutterRenderer implements TextureRegistry {
       }
     }
 
-    void onImage(ImageReader reader, Image image) {
+    void onImage(PerImageReader perReader, Image image) {
       PerImage queuedImage;
       synchronized (lock) {
-        PerImageReader perReader = getOrCreatePerImageReader(reader);
+        if (released || perReader.closed) {
+          image.close();
+          return;
+        }
         queuedImage = perReader.queueImage(image);
       }
       if (queuedImage == null) {
@@ -647,7 +653,7 @@ public class FlutterRenderer implements TextureRegistry {
           long queueDelta = now - lastQueueTime;
           Log.i(
               TAG,
-              reader.hashCode()
+              perReader.reader.hashCode()
                   + " enqueued image="
                   + queuedImage.image.hashCode()
                   + " queueDelta="
@@ -657,7 +663,12 @@ public class FlutterRenderer implements TextureRegistry {
           lastQueueTime = System.nanoTime();
         }
       }
-      scheduleEngineFrame();
+      handler.post(
+          () -> {
+            if (!released) {
+              scheduleEngineFrame();
+            }
+          });
     }
 
     PerImage dequeueImage() {
@@ -755,10 +766,15 @@ public class FlutterRenderer implements TextureRegistry {
     }
 
     private void releaseInternal() {
-      cleanup();
       released = true;
+      cleanup();
       removeOnTrimMemoryListener(this);
       imageReaderProducers.remove(this);
+      if (handlerThread != null) {
+        handlerThread.quitSafely();
+        handlerThread = null;
+        backgroundHandler = null;
+      }
     }
 
     private void cleanup() {
@@ -813,6 +829,9 @@ public class FlutterRenderer implements TextureRegistry {
 
     ImageReaderSurfaceProducer(long id) {
       this.id = id;
+      handlerThread = new HandlerThread("ImageReaderSurfaceProducerThread");
+      handlerThread.start();
+      backgroundHandler = new Handler(handlerThread.getLooper());
     }
 
     @Override
@@ -931,8 +950,7 @@ public class FlutterRenderer implements TextureRegistry {
         if (released) {
           return;
         }
-        releaseInternal();
-        handler.post(new TextureFinalizerRunnable(id, flutterJNI));
+        handler.post(this::release);
       } finally {
         super.finalize();
       }

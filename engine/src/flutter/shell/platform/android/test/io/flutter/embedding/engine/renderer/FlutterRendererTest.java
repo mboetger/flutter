@@ -500,6 +500,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // Extract the image and check its size.
     Image image = texture.acquireLatestImage();
@@ -520,6 +521,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // Extract the image and check its size.
     image = texture.acquireLatestImage();
@@ -559,6 +561,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run. The rendered frame will manifest here.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // We acquired the frame produced above.
     assertNotNull(texture.acquireLatestImage());
@@ -587,6 +590,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run, this will produce a single frame.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     assertEquals(1, texture.numImageReaders());
     assertEquals(1, texture.numImages());
@@ -602,6 +606,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     assertEquals(1, texture.numImageReaders());
     assertEquals(2, texture.numImages());
@@ -616,6 +621,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     assertEquals(2, texture.numImageReaders());
     assertEquals(3, texture.numImages());
@@ -673,6 +679,7 @@ public class FlutterRendererTest {
     canvas.drawARGB(255, 255, 0, 0);
     surface.unlockCanvasAndPost(canvas);
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // Acquire first frame.
     Image produced = texture.acquireLatestImage();
@@ -683,6 +690,7 @@ public class FlutterRendererTest {
     canvas.drawARGB(255, 255, 0, 0);
     surface.unlockCanvasAndPost(canvas);
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // 2
     produced = texture.acquireLatestImage();
@@ -692,6 +700,7 @@ public class FlutterRendererTest {
     canvas.drawARGB(255, 255, 0, 0);
     surface.unlockCanvasAndPost(canvas);
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // 3
     produced = texture.acquireLatestImage();
@@ -701,6 +710,7 @@ public class FlutterRendererTest {
     canvas.drawARGB(255, 255, 0, 0);
     surface.unlockCanvasAndPost(canvas);
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // 4
     produced = texture.acquireLatestImage();
@@ -731,6 +741,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run, this will produce a single frame.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     assertEquals(1, texture.numImageReaders());
     assertEquals(1, texture.numImages());
@@ -739,6 +750,7 @@ public class FlutterRendererTest {
     // This should do nothing.
     texture.onTrimMemory(0);
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     assertEquals(1, texture.numImageReaders());
     assertEquals(1, texture.numImages());
@@ -748,6 +760,7 @@ public class FlutterRendererTest {
     // This should result in a trim.
     texture.onTrimMemory(TRIM_MEMORY_BACKGROUND);
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     assertEquals(0, texture.numImageReaders());
     assertEquals(0, texture.numImages());
@@ -766,6 +779,7 @@ public class FlutterRendererTest {
 
     // Let callbacks run, this will produce a single frame.
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     assertEquals(1, texture.numImageReaders());
     assertEquals(1, texture.numImages());
@@ -965,6 +979,7 @@ public class FlutterRendererTest {
       canvas.drawARGB(255, 255, 0, 0);
       surface.unlockCanvasAndPost(canvas);
       shadowOf(Looper.getMainLooper()).idle();
+      shadowOf(texture.handlerThread.getLooper()).idle();
     }
 
     // Each enqueue of an image should result in a call to scheduleEngineFrame.
@@ -973,6 +988,7 @@ public class FlutterRendererTest {
     // Consume the first image.
     Image image = texture.acquireLatestImage();
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // The dequeue should call scheduleEngineFrame because another image
     // remains in the queue.
@@ -981,6 +997,7 @@ public class FlutterRendererTest {
     // Consume the second image.
     image = texture.acquireLatestImage();
     shadowOf(Looper.getMainLooper()).idle();
+    shadowOf(texture.handlerThread.getLooper()).idle();
 
     // The dequeue should not call scheduleEngineFrame because the queue
     // is now empty.
@@ -1074,4 +1091,36 @@ public class FlutterRendererTest {
     assertFalse(imageReaderProducer1.notifiedDestroy);
     assertFalse(imageReaderProducer2.notifiedDestroy);
   }
+
+  @Test
+  public void ImageReaderSurfaceProducerOnImageAvailableListenerRunsOnBackgroundThread() {
+    FlutterRenderer flutterRenderer = spy(engineRule.getFlutterEngine().getRenderer());
+    TextureRegistry.SurfaceProducer producer = flutterRenderer.createSurfaceProducer();
+    try {
+      FlutterRenderer.ImageReaderSurfaceProducer spyImageReaderSurfaceProducer =
+          spy((FlutterRenderer.ImageReaderSurfaceProducer) producer);
+      ImageReader mockImageReader = mock(ImageReader.class);
+      Surface mockSurface = mock(Surface.class);
+
+      when(mockSurface.isValid()).thenReturn(true);
+      when(mockImageReader.getSurface()).thenReturn(mockSurface);
+      when(spyImageReaderSurfaceProducer.createImageReader()).thenReturn(mockImageReader);
+
+      // This will trigger the creation of the PerImageReader, which registers the listener.
+      spyImageReaderSurfaceProducer.getSurface();
+
+      // Verify that setOnImageAvailableListener was called, and capture the Handler.
+      ArgumentCaptor<android.os.Handler> handlerCaptor = ArgumentCaptor.forClass(android.os.Handler.class);
+      verify(mockImageReader).setOnImageAvailableListener(any(), handlerCaptor.capture());
+
+      android.os.Handler handler = handlerCaptor.getValue();
+      assertNotNull(handler);
+      // This assertion should fail on the current code because it uses the main looper.
+      assertNotEquals("The ImageReader listener must not run on the main thread to avoid ANRs",
+                      Looper.getMainLooper(), handler.getLooper());
+    } finally {
+      producer.release();
+    }
+  }
 }
+
