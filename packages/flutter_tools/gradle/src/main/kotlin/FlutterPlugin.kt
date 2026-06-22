@@ -314,6 +314,12 @@ class FlutterPlugin : Plugin<Project> {
                     "${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${sourceSet.name}/jniLibs"
                 )
             sourceSet.jniLibs.srcDir(jniLibsDir.get().asFile)
+
+            val assetsDir =
+                projectToAddTasksTo.layout.buildDirectory.dir(
+                    "${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${sourceSet.name}/assets"
+                )
+            sourceSet.assets.srcDir(assetsDir.get().asFile)
         }
 
         val flutterPlugin = this
@@ -762,23 +768,27 @@ class FlutterPlugin : Plugin<Project> {
                         dependsOn(packageAssets)
                         dependsOn(cleanPackageAssets)
                         into(packageAssets!!.outputs)
+                    } else {
+                        val assetsDir =
+                            project.layout.buildDirectory.dir(
+                                "${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${variant.name}/assets"
+                            )
+                        into(assetsDir)
                     }
-                    val mergeAssets =
-                        try {
-                            variant.mergeAssetsProvider.get()
-                        } catch (e: IllegalStateException) {
-                            // TODO(gmackall): Migrate to AGPs variant api.
-                            //    https://github.com/flutter/flutter/issues/166550
-                            @Suppress("DEPRECATION")
-                            variant.mergeAssets
-                        }
-                    dependsOn(mergeAssets)
-                    dependsOn("clean${FlutterPluginUtils.capitalize(mergeAssets.name)}")
-                    mergeAssets.mustRunAfter("clean${FlutterPluginUtils.capitalize(mergeAssets.name)}")
-                    into(mergeAssets.outputDir)
                 }
             val copyFlutterAssetsTask: Task = copyFlutterAssetsTaskProvider.get()
             if (!isUsedAsSubproject) {
+                val mergeAssets =
+                    try {
+                        variant.mergeAssetsProvider.get()
+                    } catch (e: IllegalStateException) {
+                        // TODO(gmackall): Migrate to AGPs variant api.
+                        //    https://github.com/flutter/flutter/issues/166550
+                        @Suppress("DEPRECATION")
+                        variant.mergeAssets
+                    }
+                mergeAssets.dependsOn(copyFlutterAssetsTaskProvider)
+
                 // TODO(gmackall): Migrate to AGPs variant api.
                 //    https://github.com/flutter/flutter/issues/166550
                 @Suppress("DEPRECATION")
