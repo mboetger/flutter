@@ -87,6 +87,7 @@ public class FlutterLoader {
   @Nullable private Settings settings;
   private long initStartTimestampMillis;
   private FlutterApplicationInfo flutterApplicationInfo;
+  private String flutterAssetsDir;
   private FlutterJNI flutterJNI;
   private ExecutorService executorService;
 
@@ -141,6 +142,9 @@ public class FlutterLoader {
 
       initStartTimestampMillis = SystemClock.uptimeMillis();
       flutterApplicationInfo = ApplicationInfoLoader.load(appContext);
+      flutterAssetsDir = settings.getFlutterAssetsDir() != null
+          ? settings.getFlutterAssetsDir()
+          : flutterApplicationInfo.flutterAssetsDir;
 
       final DisplayManager dm =
           (DisplayManager) appContext.getSystemService(Context.DISPLAY_SERVICE);
@@ -359,6 +363,9 @@ public class FlutterLoader {
             enableSoftwareRendering =
                 applicationMetaData.getBoolean(
                     FlutterEngineFlags.ENABLE_SOFTWARE_RENDERING.metadataKey, false);
+          } else if (flag == FlutterEngineFlags.FLUTTER_ASSETS_DIR
+              || flag == FlutterEngineFlags.DEPRECATED_FLUTTER_ASSETS_DIR) {
+            continue;
           } else if (flag == FlutterEngineFlags.AOT_SHARED_LIBRARY_NAME
               || flag == FlutterEngineFlags.DEPRECATED_AOT_SHARED_LIBRARY_NAME) {
             // Perform security check for path containing application's compiled Dart
@@ -420,6 +427,18 @@ public class FlutterLoader {
                 TAG,
                 "For testing purposes only: test flag specified on the command line was loaded by the FlutterLoader.");
             continue;
+          } else if (flag.equals(FlutterEngineFlags.FLUTTER_ASSETS_DIR)) {
+            String oldAssetsDir = flutterAssetsDir;
+            flutterAssetsDir =
+                arg.substring(FlutterEngineFlags.FLUTTER_ASSETS_DIR.engineArgument.length());
+            if ((BuildConfig.DEBUG || BuildConfig.JIT_RELEASE) && !flutterAssetsDir.equals(oldAssetsDir)) {
+              Log.w(
+                  TAG,
+                  "Changing the assets directory at runtime after startInitialization has run is not"
+                      + " supported in debug/JIT mode because assets have already been extracted. Please"
+                      + " use FlutterLoader.Settings to configure the custom assets directory.");
+            }
+            continue;
           } else if (flag.equals(FlutterEngineFlags.AOT_SHARED_LIBRARY_NAME)
               || flag.equals(FlutterEngineFlags.DEPRECATED_AOT_SHARED_LIBRARY_NAME)) {
             // Perform security check for path containing application's compiled Dart
@@ -448,7 +467,7 @@ public class FlutterLoader {
       String kernelPath = null;
       if (BuildConfig.DEBUG || BuildConfig.JIT_RELEASE) {
         String snapshotAssetPath =
-            result.dataDirPath + File.separator + flutterApplicationInfo.flutterAssetsDir;
+            result.dataDirPath + File.separator + flutterAssetsDir;
         kernelPath = snapshotAssetPath + File.separator + DEFAULT_KERNEL_BLOB;
         shellArgs.add("--" + SNAPSHOT_ASSET_PATH_KEY + "=" + snapshotAssetPath);
         shellArgs.add(
@@ -514,6 +533,8 @@ public class FlutterLoader {
       if (!isLeakVMSet) {
         shellArgs.add(FlutterEngineFlags.LEAK_VM.engineArgument + "true");
       }
+
+      shellArgs.add(FlutterEngineFlags.FLUTTER_ASSETS_DIR.engineArgument + flutterAssetsDir);
 
       long initTimeMillis = SystemClock.uptimeMillis() - initStartTimestampMillis;
 
@@ -701,7 +722,7 @@ public class FlutterLoader {
 
   @NonNull
   public String findAppBundlePath() {
-    return flutterApplicationInfo.flutterAssetsDir;
+    return flutterAssetsDir;
   }
 
   /**
@@ -738,11 +759,12 @@ public class FlutterLoader {
 
   @NonNull
   private String fullAssetPathFrom(@NonNull String filePath) {
-    return flutterApplicationInfo.flutterAssetsDir + File.separator + filePath;
+    return flutterAssetsDir + File.separator + filePath;
   }
 
   public static class Settings {
     private String logTag;
+    private String flutterAssetsDir;
 
     @Nullable
     public String getLogTag() {
@@ -756,6 +778,28 @@ public class FlutterLoader {
      */
     public void setLogTag(String tag) {
       logTag = tag;
+    }
+
+    /**
+     * Gets the custom Flutter assets directory, if set.
+     *
+     * @return The custom assets directory, or null if not set.
+     */
+    @Nullable
+    public String getFlutterAssetsDir() {
+      return flutterAssetsDir;
+    }
+
+    /**
+     * Sets a custom directory for Flutter assets.
+     *
+     * <p>This can be used in add-to-app scenarios to specify a custom asset location
+     * at runtime.
+     *
+     * @param flutterAssetsDir The custom assets directory.
+     */
+    public void setFlutterAssetsDir(@Nullable String flutterAssetsDir) {
+      this.flutterAssetsDir = flutterAssetsDir;
     }
   }
 }

@@ -7,6 +7,7 @@ package io.flutter.embedding.engine.loader;
 import static android.os.Looper.getMainLooper;
 import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
@@ -1445,5 +1446,64 @@ public class FlutterLoaderTest {
               + "' was found in the arguments passed to FlutterJNI.init",
           arguments.contains(expectedArg));
     }
+  }
+
+  @Test
+  public void testFindAppBundlePathReturnsCustomAssetsDirWhenPassedInArgs() {
+    FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
+    FlutterLoader flutterLoader = new FlutterLoader(mockFlutterJNI);
+
+    assertFalse(flutterLoader.initialized());
+    flutterLoader.startInitialization(ctx);
+
+    // We try to pass a custom assets directory via args.
+    String[] args = new String[] {"--flutter-assets-dir=custom_assets_dir"};
+    flutterLoader.ensureInitializationComplete(ctx, args);
+    shadowOf(getMainLooper()).idle();
+
+    // We expect findAppBundlePath() to return the custom assets directory.
+    assertEquals("custom_assets_dir", flutterLoader.findAppBundlePath());
+
+    ArgumentCaptor<String[]> shellArgsCaptor = ArgumentCaptor.forClass(String[].class);
+    verify(mockFlutterJNI, times(1))
+        .init(
+            eq(ctx),
+            shellArgsCaptor.capture(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyLong(),
+            anyInt());
+    List<String> arguments = Arrays.asList(shellArgsCaptor.getValue());
+    assertTrue(arguments.contains("--flutter-assets-dir=custom_assets_dir"));
+  }
+
+  @Test
+  public void testFindAppBundlePathReturnsCustomAssetsDirWhenPassedInSettings() {
+    FlutterJNI mockFlutterJNI = mock(FlutterJNI.class);
+    FlutterLoader flutterLoader = new FlutterLoader(mockFlutterJNI);
+
+    assertFalse(flutterLoader.initialized());
+    FlutterLoader.Settings settings = new FlutterLoader.Settings();
+    settings.setFlutterAssetsDir("custom_assets_dir_from_settings");
+    flutterLoader.startInitialization(ctx, settings);
+
+    flutterLoader.ensureInitializationComplete(ctx, null);
+    shadowOf(getMainLooper()).idle();
+
+    assertEquals("custom_assets_dir_from_settings", flutterLoader.findAppBundlePath());
+
+    ArgumentCaptor<String[]> shellArgsCaptor = ArgumentCaptor.forClass(String[].class);
+    verify(mockFlutterJNI, times(1))
+        .init(
+            eq(ctx),
+            shellArgsCaptor.capture(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyLong(),
+            anyInt());
+    List<String> arguments = Arrays.asList(shellArgsCaptor.getValue());
+    assertTrue(arguments.contains("--flutter-assets-dir=custom_assets_dir_from_settings"));
   }
 }
