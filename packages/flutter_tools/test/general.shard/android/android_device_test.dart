@@ -278,12 +278,7 @@ flutter:
   testWithoutContext('AndroidDevice does not create socket for emulators with no port', () async {
     var socketWasCreated = false;
     final AndroidDevice device = setUpAndroidDevice(
-      processManager: FakeProcessManager.list(<FakeCommand>[
-        const FakeCommand(
-          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
-          stdout: '[ro.hardware]: [goldfish]',
-        ),
-      ]),
+      processManager: FakeProcessManager.empty(),
       androidConsoleSocketFactory: (String host, int port) async {
         socketWasCreated = true;
         throw Exception('Socket was created for emulator without port in ID');
@@ -336,6 +331,77 @@ flutter:
     );
 
     expect(await device.emulatorId, isNull);
+  });
+
+  group('AndroidDevice AVD name resolution', () {
+    testWithoutContext('name returns AVD name after successful emulatorId resolution', () async {
+      final AndroidDevice device = setUpAndroidDevice(
+        id: 'emulator-5554',
+        modelID: 'Android SDK built for x86_64',
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', '-s', 'emulator-5554', 'shell', 'getprop'],
+            stdout: '[ro.hardware]: [goldfish]',
+          ),
+        ]),
+        androidConsoleSocketFactory: (String host, int port) async =>
+            FakeWorkingAndroidConsoleSocket('Nexus_5X_API_25'),
+      );
+
+      expect(device.name, 'Android SDK built for x86_64'); // Initially fallback
+      expect(await device.emulatorId, 'Nexus_5X_API_25');
+      expect(device.name, 'Nexus_5X_API_25'); // Updated after resolution
+    });
+
+    testWithoutContext('name returns modelID if emulatorId resolution fails', () async {
+      final AndroidDevice device = setUpAndroidDevice(
+        id: 'emulator-5554',
+        modelID: 'Android SDK built for x86_64',
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', '-s', 'emulator-5554', 'shell', 'getprop'],
+            stdout: '[ro.hardware]: [goldfish]',
+          ),
+        ]),
+        androidConsoleSocketFactory: (String host, int port) => throw Exception('Socket error'),
+      );
+
+      expect(device.name, 'Android SDK built for x86_64');
+      expect(await device.emulatorId, isNull);
+      expect(device.name, 'Android SDK built for x86_64'); // Still fallback
+    });
+
+    testWithoutContext(
+      'emulatorId caches Future to prevent concurrent duplicate socket connections',
+      () async {
+        var socketCreationCount = 0;
+        final AndroidDevice device = setUpAndroidDevice(
+          id: 'emulator-5554',
+          modelID: 'Android SDK built for x86_64',
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            const FakeCommand(
+              command: <String>['adb', '-s', 'emulator-5554', 'shell', 'getprop'],
+              stdout: '[ro.hardware]: [goldfish]',
+            ),
+          ]),
+          androidConsoleSocketFactory: (String host, int port) async {
+            socketCreationCount++;
+            return FakeWorkingAndroidConsoleSocket('Nexus_5X_API_25');
+          },
+        );
+
+        final futures = <Future<String?>>[
+          device.emulatorId,
+          device.emulatorId,
+          device.emulatorId,
+        ];
+
+        final List<String?> results = await Future.wait(futures);
+
+        expect(results, <String>['Nexus_5X_API_25', 'Nexus_5X_API_25', 'Nexus_5X_API_25']);
+        expect(socketCreationCount, 1);
+      },
+    );
   });
 
   testWithoutContext('AndroidDevice clearLogs does not crash', () async {
@@ -571,6 +637,7 @@ class _MyFakeVmServiceConnectionDisposedCode extends Fake implements VmService {
 
 AndroidDevice setUpAndroidDevice({
   String? id,
+  String modelID = 'TestModel',
   AndroidSdk? androidSdk,
   FileSystem? fileSystem,
   ProcessManager? processManager,
@@ -580,7 +647,7 @@ AndroidDevice setUpAndroidDevice({
   androidSdk ??= FakeAndroidSdk();
   return AndroidDevice(
     id ?? '1234',
-    modelID: 'TestModel',
+    modelID: modelID,
     logger: BufferLogger.test(),
     platform: platform ?? FakePlatform(),
     androidSdk: androidSdk,

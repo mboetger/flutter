@@ -89,6 +89,9 @@ class AndroidDevice extends Device {
   final String modelID;
   final String? deviceCodeName;
 
+  Future<String?>? _emulatorIdFuture;
+  String? _avdName;
+
   @override
   // Wirelessly paired Android devices should have `adb-tls-connect` in the id.
   // Source: https://android.googlesource.com/platform/packages/modules/adb/+/f4ba8d73079b99532069dbe888a58167b8723d6c/adb_mdns.h#30
@@ -147,17 +150,22 @@ class AndroidDevice extends Device {
   /// this name may require connecting to the device and if an error occurs null
   /// will be returned.
   @override
-  Future<String?> get emulatorId async {
-    if (!(await isLocalEmulator)) {
-      return null;
-    }
+  Future<String?> get emulatorId {
+    _emulatorIdFuture ??= _fetchEmulatorId();
+    return _emulatorIdFuture!;
+  }
 
+  Future<String?> _fetchEmulatorId() async {
     // Emulators always have IDs in the format emulator-(port) where port is the
     // Android Console port number.
     final emulatorPortRegex = RegExp(r'emulator-(\d+)');
 
     final Match? portMatch = emulatorPortRegex.firstMatch(id);
     if (portMatch == null || portMatch.groupCount < 1) {
+      return null;
+    }
+
+    if (!(await isLocalEmulator)) {
       return null;
     }
 
@@ -175,7 +183,7 @@ class AndroidDevice extends Device {
           onTimeout: () => throw TimeoutException('Connection timed out'),
         );
 
-        return await console.getAvdName().timeout(
+        _avdName = await console.getAvdName().timeout(
           const Duration(seconds: 2),
           onTimeout: () => throw TimeoutException('"avd name" timed out'),
         );
@@ -184,10 +192,9 @@ class AndroidDevice extends Device {
       }
     } on Exception catch (e) {
       _logger.printTrace('Failed to fetch avd name for emulator at $host:$port: $e');
-      // If we fail to connect to the device, we should not fail so just return
-      // an empty name. This data is best-effort.
-      return null;
     }
+
+    return _avdName;
   }
 
   @override
@@ -372,7 +379,7 @@ class AndroidDevice extends Device {
   }
 
   @override
-  String get name => modelID;
+  String get name => _avdName ?? modelID;
 
   @override
   bool get supportsFlavors => true;

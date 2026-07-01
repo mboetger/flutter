@@ -354,6 +354,37 @@ device4       unknown usb:3-7
       expect(diagnostics[1], contains('device2 is offline'));
     },
   );
+
+  testWithoutContext('AndroidDevices.pollingGetDevices does not query emulator console', () async {
+    var socketWasCreated = false;
+    final androidDevices = AndroidDevices(
+      userMessages: UserMessages(),
+      androidWorkflow: androidWorkflow,
+      androidSdk: FakeAndroidSdk(),
+      logger: BufferLogger.test(),
+      processManager: FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', 'devices', '-l'],
+          stdout: '''
+List of devices attached
+emulator-5612          host features:shell_2
+''',
+        ),
+      ]),
+      platform: FakePlatform(),
+      fileSystem: MemoryFileSystem.test(),
+      androidConsoleSocketFactory: (String host, int port) async {
+        socketWasCreated = true;
+        throw Exception('Socket should not be created during discovery');
+      },
+    );
+
+    final List<Device> devices = await androidDevices.pollingGetDevices();
+
+    expect(devices, hasLength(1));
+    expect(devices.first.id, 'emulator-5612');
+    expect(socketWasCreated, isFalse);
+  });
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {

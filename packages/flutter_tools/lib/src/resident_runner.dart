@@ -374,6 +374,7 @@ class FlutterDevice {
   Future<int> runHot({required HotRunner hotRunner, String? route}) async {
     final prebuiltMode = hotRunner.applicationBinary != null;
     final String modeName = hotRunner.debuggingOptions.buildInfo.mode.friendlyName;
+    await device!.emulatorId; // Ensure AVD name is resolved for the target device
     globals.printStatus(
       'Launching ${getDisplayPath(hotRunner.mainPath, globals.fs)} '
       'on ${device!.displayName} in $modeName mode...',
@@ -451,6 +452,7 @@ class FlutterDevice {
 
     final String modeName = coldRunner.debuggingOptions.buildInfo.mode.friendlyName;
     final prebuiltMode = coldRunner.applicationBinary != null;
+    await device!.emulatorId; // Ensure AVD name is resolved for the target device
     globals.printStatus(
       'Launching ${getDisplayPath(coldRunner.mainPath, globals.fs)} '
       'on ${device!.displayName} in $modeName mode...',

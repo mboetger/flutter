@@ -840,6 +840,9 @@ abstract class Device {
       return const <String>[];
     }
 
+    // Pre-resolve emulator IDs concurrently before accessing displayName/name
+    await Future.wait(<Future<void>>[for (final Device device in devices) device.emulatorId]);
+
     // Extract device information
     final table = <List<String>>[];
     for (final device in devices) {
@@ -878,6 +881,7 @@ abstract class Device {
   /// Convert the Device object to a JSON representation suitable for serialization.
   Future<Map<String, Object>> toJson() async {
     final bool isLocalEmu = await isLocalEmulator;
+    await emulatorId; // Trigger resolution so name is populated
     return <String, Object>{
       'name': name,
       'id': id,
