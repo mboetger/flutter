@@ -1176,6 +1176,7 @@ void Shell::OnPlatformViewDispatchPlatformMessage(
     std::unique_ptr<PlatformMessage> message) {
   FML_DCHECK(is_set_up_);
 #if FLUTTER_RUNTIME_MODE == FLUTTER_RUNTIME_MODE_DEBUG
+#if !FML_OS_ANDROID
   if (!task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread()) {
     std::scoped_lock lock(misbehaving_message_channels_mutex_);
     auto inserted = misbehaving_message_channels_.insert(message->channel());
@@ -1192,6 +1193,7 @@ void Shell::OnPlatformViewDispatchPlatformMessage(
              "information.";
     }
   }
+#endif  // !FML_OS_ANDROID
 #endif  // FLUTTER_RUNTIME_MODE == FLUTTER_RUNTIME_MODE_DEBUG
 
   // The static leak checker gets confused by the use of fml::MakeCopyable.

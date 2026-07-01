@@ -243,7 +243,6 @@ public final class EventChannel {
       final AtomicBoolean hasEnded = new AtomicBoolean(false);
 
       @Override
-      @UiThread
       public void success(Object event) {
         if (hasEnded.get() || activeSink.get() != this) {
           return;
@@ -252,7 +251,6 @@ public final class EventChannel {
       }
 
       @Override
-      @UiThread
       public void error(String errorCode, String errorMessage, Object errorDetails) {
         if (hasEnded.get() || activeSink.get() != this) {
           return;
@@ -262,7 +260,6 @@ public final class EventChannel {
       }
 
       @Override
-      @UiThread
       public void endOfStream() {
         if (hasEnded.getAndSet(true) || activeSink.get() != this) {
           return;

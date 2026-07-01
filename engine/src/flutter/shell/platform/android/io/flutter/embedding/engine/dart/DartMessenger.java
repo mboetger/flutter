@@ -16,9 +16,12 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -52,14 +55,16 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
   @NonNull private final Object handlersLock = new Object();
   @NonNull private final AtomicBoolean enableBufferingIncomingMessages = new AtomicBoolean(false);
 
-  @NonNull private final Map<Integer, BinaryMessenger.BinaryReply> pendingReplies = new HashMap<>();
-  private int nextReplyId = 1;
+  @NonNull
+  private final Map<Integer, BinaryMessenger.BinaryReply> pendingReplies =
+      new ConcurrentHashMap<>();
+  private final AtomicInteger nextReplyId = new AtomicInteger(1);
 
   @NonNull private final DartMessengerTaskQueue platformTaskQueue = new PlatformTaskQueue();
 
   @NonNull
-  private WeakHashMap<TaskQueue, DartMessengerTaskQueue> createdTaskQueues =
-      new WeakHashMap<TaskQueue, DartMessengerTaskQueue>();
+  private final Map<TaskQueue, DartMessengerTaskQueue> createdTaskQueues =
+      Collections.synchronizedMap(new WeakHashMap<TaskQueue, DartMessengerTaskQueue>());
 
   @NonNull private TaskQueueFactory taskQueueFactory;
 
@@ -217,8 +222,9 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
     Log.v(TAG, "Setting handler for channel '" + channel + "'");
 
     List<BufferedMessageInfo> list;
+    final HandlerInfo handlerInfo = new HandlerInfo(handler, dartMessengerTaskQueue);
     synchronized (handlersLock) {
-      messageHandlers.put(channel, new HandlerInfo(handler, dartMessengerTaskQueue));
+      messageHandlers.put(channel, handlerInfo);
       list = bufferedMessages.remove(channel);
       if (list == null) {
         return;
@@ -226,7 +232,7 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
     }
     for (BufferedMessageInfo info : list) {
       dispatchMessageToQueue(
-          channel, messageHandlers.get(channel), info.message, info.replyId, info.messageData);
+          channel, handlerInfo, info.message, info.replyId, info.messageData);
     }
   }
 
@@ -252,7 +258,6 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
   }
 
   @Override
-  @UiThread
   public void send(@NonNull String channel, @NonNull ByteBuffer message) {
     Log.v(TAG, "Sending message over channel '" + channel + "'");
     send(channel, message, null);
@@ -265,7 +270,7 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
       @Nullable BinaryMessenger.BinaryReply callback) {
     try (TraceSection e = TraceSection.scoped("DartMessenger#send on " + channel)) {
       Log.v(TAG, "Sending message with callback over channel '" + channel + "'");
-      int replyId = nextReplyId++;
+      int replyId = nextReplyId.getAndIncrement();
       if (callback != null) {
         pendingReplies.put(replyId, callback);
       }
@@ -329,7 +334,7 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
   @Override
   public void handleMessageFromDart(
       @NonNull String channel, @Nullable ByteBuffer message, int replyId, long messageData) {
-    // Called from any thread.
+     // Called from any thread.
     Log.v(TAG, "Received message from Dart over channel '" + channel + "'");
 
     HandlerInfo handlerInfo;

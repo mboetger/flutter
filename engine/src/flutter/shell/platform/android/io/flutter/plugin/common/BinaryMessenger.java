@@ -15,10 +15,8 @@ import java.nio.ByteBuffer;
  * href="https://api.flutter.dev/flutter/services/BinaryMessages-class.html">BinaryMessages</a> to
  * participate.
  *
- * <p>{@code BinaryMessenger} is expected to be utilized from a single thread throughout the
- * duration of its existence. If created on the main thread, then all invocations should take place
- * on the main thread. If created on a background thread, then all invocations should take place on
- * that background thread.
+ * <p>{@code BinaryMessenger} can be utilized from any thread. Invocations can take place on any
+ * thread, including background threads.
  *
  * @see BasicMessageChannel , which supports message passing with Strings and semi-structured
  *     messages.
@@ -88,7 +86,6 @@ public interface BinaryMessenger {
    * @param message the message payload, a direct-allocated {@link ByteBuffer} with the message
    *     bytes between position zero and current position, or null.
    */
-  @UiThread
   void send(@NonNull String channel, @Nullable ByteBuffer message);
 
   /**
@@ -102,7 +99,6 @@ public interface BinaryMessenger {
    * @param callback a {@link BinaryReply} callback invoked when the Flutter application responds to
    *     the message, possibly null.
    */
-  @UiThread
   void send(@NonNull String channel, @Nullable ByteBuffer message, @Nullable BinaryReply callback);
 
   /**
@@ -118,7 +114,6 @@ public interface BinaryMessenger {
    * @param channel the name {@link String} of the channel.
    * @param handler a {@link BinaryMessageHandler} to be invoked on incoming messages, or null.
    */
-  @UiThread
   void setMessageHandler(@NonNull String channel, @Nullable BinaryMessageHandler handler);
 
   /**
@@ -136,7 +131,6 @@ public interface BinaryMessenger {
    * @param taskQueue a {@link BinaryMessenger.TaskQueue} that specifies what thread will execute
    *     the handler. Specifying null means execute on the platform thread.
    */
-  @UiThread
   default void setMessageHandler(
       @NonNull String channel,
       @Nullable BinaryMessageHandler handler,

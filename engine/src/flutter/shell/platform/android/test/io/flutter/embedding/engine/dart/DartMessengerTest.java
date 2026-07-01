@@ -345,4 +345,57 @@ public class DartMessengerTest {
       assertEquals((int) ints.get(i), (int) (ints.get(i + 1)) - 1);
     }
   }
+
+  @Test
+  public void testConcurrentSendAndReply() throws InterruptedException {
+    final FlutterJNI fakeFlutterJni = mock(FlutterJNI.class);
+    final DartMessenger messenger = new DartMessenger(fakeFlutterJni);
+    final int threadCount = 100;
+    final ExecutorService executor = Executors.newFixedThreadPool(10);
+    final CountDownLatch startLatch = new CountDownLatch(1);
+    final CountDownLatch doneLatch = new CountDownLatch(threadCount);
+    final java.util.Set<Integer> replyIds = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    Mockito.doAnswer(invocation -> {
+      int replyId = invocation.getArgument(1);
+      replyIds.add(replyId);
+      return null;
+    }).when(fakeFlutterJni).dispatchEmptyPlatformMessage(any(), anyInt());
+
+    for (int i = 0; i < threadCount; i++) {
+      executor.execute(() -> {
+        try {
+          startLatch.await();
+          messenger.send("test_channel", null, (reply) -> {});
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } finally {
+          doneLatch.countDown();
+        }
+      });
+    }
+
+    startLatch.countDown();
+    assertTrue(doneLatch.await(5, java.util.concurrent.TimeUnit.SECONDS));
+
+    assertEquals(threadCount, replyIds.size());
+    for (int i = 1; i <= threadCount; i++) {
+      assertTrue(replyIds.contains(i));
+    }
+
+    // Test concurrent replies (removals from pendingReplies)
+    final CountDownLatch replyDoneLatch = new CountDownLatch(threadCount);
+    for (final int replyId : replyIds) {
+      executor.execute(() -> {
+        try {
+          messenger.handlePlatformMessageResponse(replyId, null);
+        } finally {
+          replyDoneLatch.countDown();
+        }
+      });
+    }
+
+    assertTrue(replyDoneLatch.await(5, java.util.concurrent.TimeUnit.SECONDS));
+    executor.shutdown();
+  }
 }

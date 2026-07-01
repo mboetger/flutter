@@ -367,4 +367,73 @@ public class FlutterJNITest {
       this.flags = flags;
     }
   }
+
+  @Test
+  public void testDispatchPlatformMessageConcurrentWithDetach() throws InterruptedException {
+    final java.util.concurrent.CountDownLatch insideLockLatch = new java.util.concurrent.CountDownLatch(1);
+    final java.util.concurrent.CountDownLatch detachTriggerLatch = new java.util.concurrent.CountDownLatch(1);
+    final java.util.concurrent.CountDownLatch threadDoneLatch = new java.util.concurrent.CountDownLatch(1);
+
+    final FlutterJNI flutterJNI = new FlutterJNI() {
+      @Override
+      public long performNativeAttach(FlutterJNI flutterJNI) {
+        return 123L;
+      }
+
+      @Override
+      public boolean isAttached() {
+        insideLockLatch.countDown();
+        try {
+          // Block the background thread while it holds the read lock.
+          detachTriggerLatch.await();
+        } catch (InterruptedException e) {
+          // ignore
+        }
+        return super.isAttached();
+      }
+    };
+
+    flutterJNI.attachToNative();
+
+    Thread backgroundThread = new Thread(() -> {
+      try {
+        flutterJNI.dispatchPlatformMessage("channel", null, 0, 0);
+      } catch (UnsatisfiedLinkError e) {
+        // Expected because native library is not loaded.
+      } finally {
+        threadDoneLatch.countDown();
+      }
+    });
+    backgroundThread.start();
+
+    // Wait until the background thread is inside the read lock.
+    assertTrue(insideLockLatch.await(5, java.util.concurrent.TimeUnit.SECONDS));
+
+    // Spawn a thread to release the background thread after a short delay.
+    // This allows the main thread's detach call (which will block) to eventually proceed.
+    Thread releaserThread = new Thread(() -> {
+      try {
+        java.lang.Thread.sleep(100);
+      } catch (InterruptedException e) {
+        // ignore
+      }
+      detachTriggerLatch.countDown();
+    });
+    releaserThread.start();
+
+    // This call should block until the releaser thread runs and the background thread
+    // releases the read lock.
+    long startTime = System.currentTimeMillis();
+    try {
+      flutterJNI.detachFromNativeAndReleaseResources();
+    } catch (UnsatisfiedLinkError e) {
+      // Expected because native library is not loaded.
+    }
+    long duration = System.currentTimeMillis() - startTime;
+
+    // Verify that it actually blocked (duration should be at least ~100ms).
+    assertTrue("Detach should have blocked while dispatch held the read lock", duration >= 50);
+
+    assertTrue(threadDoneLatch.await(5, java.util.concurrent.TimeUnit.SECONDS));
+  }
 }

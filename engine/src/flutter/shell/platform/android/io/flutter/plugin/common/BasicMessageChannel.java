@@ -100,7 +100,6 @@ public final class BasicMessageChannel<T> {
    * @param message the message, possibly null.
    * @param callback a {@link Reply} callback, possibly null.
    */
-  @UiThread
   public void send(@Nullable T message, @Nullable final Reply<T> callback) {
     messenger.send(
         name,
@@ -119,7 +118,6 @@ public final class BasicMessageChannel<T> {
    *
    * @param handler a {@link MessageHandler}, or null to deregister.
    */
-  @UiThread
   public void setMessageHandler(@Nullable final MessageHandler<T> handler) {
     // We call the 2 parameter variant specifically to avoid breaking changes in
     // mock verify calls.

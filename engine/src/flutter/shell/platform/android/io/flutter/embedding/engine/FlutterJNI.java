@@ -1151,18 +1151,21 @@ public class FlutterJNI {
    * Sends an empty reply (identified by {@code responseId}) from Android to Flutter over the given
    * {@code channel}.
    */
-  @UiThread
   public void dispatchEmptyPlatformMessage(@NonNull String channel, int responseId) {
-    ensureRunningOnMainThread();
-    if (isAttached()) {
-      nativeDispatchEmptyPlatformMessage(nativeShellHolderId, channel, responseId);
-    } else {
-      Log.w(
-          TAG,
-          "Tried to send a platform message to Flutter, but FlutterJNI was detached from native C++. Could not send. Channel: "
-              + channel
-              + ". Response ID: "
-              + responseId);
+    shellHolderLock.readLock().lock();
+    try {
+      if (isAttached()) {
+        nativeDispatchEmptyPlatformMessage(nativeShellHolderId, channel, responseId);
+      } else {
+        Log.w(
+            TAG,
+            "Tried to send a platform message to Flutter, but FlutterJNI was detached from native C++. Could not send. Channel: "
+                + channel
+                + ". Response ID: "
+                + responseId);
+      }
+    } finally {
+      shellHolderLock.readLock().unlock();
     }
   }
 
@@ -1171,19 +1174,22 @@ public class FlutterJNI {
       long nativeShellHolderId, @NonNull String channel, int responseId);
 
   /** Sends a reply {@code message} from Android to Flutter over the given {@code channel}. */
-  @UiThread
   public void dispatchPlatformMessage(
       @NonNull String channel, @Nullable ByteBuffer message, int position, int responseId) {
-    ensureRunningOnMainThread();
-    if (isAttached()) {
-      nativeDispatchPlatformMessage(nativeShellHolderId, channel, message, position, responseId);
-    } else {
-      Log.w(
-          TAG,
-          "Tried to send a platform message to Flutter, but FlutterJNI was detached from native C++. Could not send. Channel: "
-              + channel
-              + ". Response ID: "
-              + responseId);
+    shellHolderLock.readLock().lock();
+    try {
+      if (isAttached()) {
+        nativeDispatchPlatformMessage(nativeShellHolderId, channel, message, position, responseId);
+      } else {
+        Log.w(
+            TAG,
+            "Tried to send a platform message to Flutter, but FlutterJNI was detached from native C++. Could not send. Channel: "
+                + channel
+                + ". Response ID: "
+                + responseId);
+      }
+    } finally {
+      shellHolderLock.readLock().unlock();
     }
   }
 

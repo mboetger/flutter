@@ -97,7 +97,6 @@ public class MethodChannel {
    * @param method the name String of the method.
    * @param arguments the arguments for the invocation, possibly null.
    */
-  @UiThread
   public void invokeMethod(@NonNull String method, @Nullable Object arguments) {
     invokeMethod(method, arguments, null);
   }
@@ -111,7 +110,6 @@ public class MethodChannel {
    * @param arguments the arguments for the invocation, possibly null.
    * @param callback a {@link Result} callback for the invocation result, or null.
    */
-  @UiThread
   public void invokeMethod(
       @NonNull String method, @Nullable Object arguments, @Nullable Result callback) {
     messenger.send(
