@@ -18,6 +18,76 @@ nativePlugins.each { androidPlugin ->
     assert pluginDirectory.exists()
     include ":${androidPlugin.name}"
     project(":${androidPlugin.name}").projectDir = pluginDirectory
+
+    // Also include subprojects of the plugin.
+    def settingsGradle = new File(pluginDirectory, "settings.gradle")
+    def settingsGradleKts = new File(pluginDirectory, "settings.gradle.kts")
+    def subprojects = findSubprojects(settingsGradle) + findSubprojects(settingsGradleKts)
+    subprojects.unique().each { subproject ->
+        def normalizedSubproject = subproject.startsWith(":") ? subproject : ":" + subproject
+        def subprojectPath = normalizedSubproject.substring(1).replace(":", File.separator)
+        def subprojectDir = new File(pluginDirectory, subprojectPath)
+        if (!subprojectDir.exists()) {
+            throw new org.gradle.api.GradleException(
+                "Plugin '${androidPlugin.name}' declares subproject '${normalizedSubproject}', " +
+                "but the directory '${subprojectDir.absolutePath}' does not exist. " +
+                "Note that custom 'projectDir' assignments in the plugin's settings.gradle are not supported."
+            )
+        }
+
+        def existingProject = findProject(normalizedSubproject)
+        if (existingProject != null) {
+            def existingProjectDir = existingProject.projectDir.canonicalFile
+            def newProjectDir = subprojectDir.canonicalFile
+            if (existingProjectDir != newProjectDir) {
+                throw new org.gradle.api.GradleException(
+                    "Plugin '${androidPlugin.name}' is trying to include Gradle subproject '${normalizedSubproject}' mapped to '${newProjectDir}', " +
+                    "but it is already defined by another plugin or the app mapped to '${existingProjectDir}'. " +
+                    "To resolve this, ensure all Gradle subprojects have unique names across all plugins."
+                )
+            }
+        } else {
+            include normalizedSubproject
+            project(normalizedSubproject).projectDir = subprojectDir
+        }
+    }
+}
+
+/**
+ * Finds all subprojects defined in a plugin's settings.gradle or settings.gradle.kts.
+ *
+ * Note: This parser does not support custom `projectDir` assignments for subprojects.
+ * It assumes the subprojects follow the default Gradle directory layout.
+ */
+def findSubprojects(File gradleSettingsFile) {
+    if (!gradleSettingsFile.exists()) {
+        return []
+    }
+    def subprojects = [] as Set
+    def content = gradleSettingsFile.text.replaceAll(/\/\/.*|\/\*(?s).*?\*\//, "")
+
+    // 1. include(...)
+    def includeWithParens = content =~ /(?s)\binclude\s*\(\s*([^)]+)\)/
+    while (includeWithParens.find()) {
+        def arguments = includeWithParens.group(1)
+        def stringMatcher = arguments =~ /['"]([^'"]+)['"]/
+        while (stringMatcher.find()) {
+            def projectPath = stringMatcher.group(1)
+            subprojects.add(projectPath.startsWith(":") ? projectPath : ":" + projectPath)
+        }
+    }
+
+    // 2. include ...
+    def includeWithoutParens = content =~ /\binclude\s+([^;\n]+)/
+    while (includeWithoutParens.find()) {
+        def arguments = includeWithoutParens.group(1)
+        def stringMatcher = arguments =~ /['"]([^'"]+)['"]/
+        while (stringMatcher.find()) {
+            def projectPath = stringMatcher.group(1)
+            subprojects.add(projectPath.startsWith(":") ? projectPath : ":" + projectPath)
+        }
+    }
+    return subprojects.toList()
 }
 
 String flutterModulePath = project(':flutter').projectDir.parentFile.getAbsolutePath()
