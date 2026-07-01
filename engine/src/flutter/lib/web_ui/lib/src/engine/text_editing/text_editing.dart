@@ -1338,6 +1338,8 @@ abstract class DefaultTextEditingStrategy
   EngineFlutterView? _viewForElement(DomElement element) =>
       EnginePlatformDispatcher.instance.viewManager.findViewForElement(element);
 
+  int debugBlurCount = 0;
+
   late InputConfiguration inputConfiguration;
   EditingState? lastEditingState;
 
@@ -1661,6 +1663,7 @@ abstract class DefaultTextEditingStrategy
   }
 
   void handleBlur(DomEvent event) {
+    debugBlurCount++;
     event as DomFocusEvent;
 
     final willGainFocusElement = event.relatedTarget as DomElement?;
@@ -1684,8 +1687,12 @@ abstract class DefaultTextEditingStrategy
       // to user's request to move focus elsewhere, which can be super-annoying
       // UX. We should reevaluate what it is we're trying to do here. Perhaps
       // there's a better way.
-      moveFocusToActiveDomElement();
+      refocusAfterBlur();
     }
+  }
+
+  void refocusAfterBlur() {
+    moveFocusToActiveDomElement();
   }
 
   void handleClipboardEvent(DomEvent event) {
@@ -2055,6 +2062,25 @@ class AndroidTextEditingStrategy extends GloballyPositionedTextEditingStrategy {
 /// impelemented diefferently in Firefox.
 class FirefoxTextEditingStrategy extends GloballyPositionedTextEditingStrategy {
   FirefoxTextEditingStrategy(super.owner);
+
+  Timer? _refocusTimer;
+
+  @override
+  void refocusAfterBlur() {
+    _refocusTimer?.cancel();
+    _refocusTimer = Timer(Duration.zero, () {
+      if (isEnabled && domElement != null) {
+        moveFocusToActiveDomElement();
+      }
+    });
+  }
+
+  @override
+  void disable() {
+    super.disable();
+    _refocusTimer?.cancel();
+    _refocusTimer = null;
+  }
 
   @override
   void initializeTextEditing(

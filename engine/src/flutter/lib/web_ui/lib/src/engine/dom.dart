@@ -1903,6 +1903,8 @@ extension type DomInputEvent._(JSObject _) implements DomUIEvent {
 
 @JS('FocusEvent')
 extension type DomFocusEvent._(JSObject _) implements DomUIEvent {
+  external DomFocusEvent(String type, [JSAny initDict]);
+
   external DomEventTarget? get relatedTarget;
 }
 
@@ -1939,6 +1941,14 @@ DomInputEvent createDomInputEvent(String type, [Map<dynamic, dynamic>? init]) {
     return DomInputEvent(type);
   } else {
     return DomInputEvent(type, init.toJSAnyDeep);
+  }
+}
+
+DomFocusEvent createDomFocusEvent(String type, [Map<dynamic, dynamic>? init]) {
+  if (init == null) {
+    return DomFocusEvent(type);
+  } else {
+    return DomFocusEvent(type, init.toJSAnyDeep);
   }
 }
 
