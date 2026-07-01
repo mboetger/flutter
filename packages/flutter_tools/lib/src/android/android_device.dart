@@ -68,7 +68,9 @@ class AndroidDevice extends Device {
     required AndroidSdk androidSdk,
     required FileSystem fileSystem,
     AndroidConsoleSocketFactory androidConsoleSocketFactory = kAndroidConsoleSocketFactory,
-  }) : _logger = logger,
+    String? deviceState,
+  }) : _deviceState = deviceState,
+       _logger = logger,
        _processManager = processManager,
        _androidSdk = androidSdk,
        _platform = platform,
@@ -77,6 +79,8 @@ class AndroidDevice extends Device {
        _processUtils = ProcessUtils(logger: logger, processManager: processManager),
        super(category: Category.mobile, platformType: PlatformType.android, ephemeral: true);
 
+  final String? _deviceState;
+  String? _detectedClosedDeviceState;
   final Logger _logger;
   final ProcessManager _processManager;
   final AndroidSdk _androidSdk;
@@ -97,6 +101,9 @@ class AndroidDevice extends Device {
       : DeviceConnectionInterface.attached;
 
   late final Future<Map<String, String>> _properties = () async {
+    if (_deviceState != null && _deviceState != 'device') {
+      return <String, String>{};
+    }
     var properties = <String, String>{};
 
     final List<String> propCommand = adbCommandForDevice(<String>['shell', 'getprop']);
@@ -113,8 +120,17 @@ class AndroidDevice extends Device {
       if (result.exitCode == 0 || _allowHeapCorruptionOnWindows(result.exitCode, _platform)) {
         properties = parseAdbDeviceProperties(result.stdout as String);
       } else {
-        _logger.printError('Error ${result.exitCode} retrieving device properties for $name:');
-        _logger.printError(result.stderr as String);
+        final stderr = result.stderr as String;
+        if (stderr.contains('insufficient permissions')) {
+          _detectedClosedDeviceState = 'no permissions';
+          _logger.printTrace('Device has no permissions: $stderr');
+        } else if (stderr.contains('device unauthorized')) {
+          _detectedClosedDeviceState = 'unauthorized';
+          _logger.printTrace('Device is unauthorized: $stderr');
+        } else {
+          _logger.printError('Error ${result.exitCode} retrieving device properties for $name:');
+          _logger.printError(stderr);
+        }
       }
     } on ProcessException catch (error) {
       _logger.printError('Error retrieving device properties for $name: $error');
@@ -234,14 +250,26 @@ class AndroidDevice extends Device {
       case TargetPlatform.web_javascript:
       case TargetPlatform.windows_x64:
       case TargetPlatform.windows_arm64:
-      case TargetPlatform.unsupported:
         throw UnsupportedError('Invalid target platform for Android');
+      case TargetPlatform.unsupported:
+        return false;
     }
   }
 
   @override
-  Future<String> get sdkNameAndVersion async =>
-      'Android ${await _sdkVersion} (API ${await apiVersion})';
+  Future<String> get sdkNameAndVersion async {
+    await _properties;
+    final String? state = _detectedClosedDeviceState ?? _deviceState;
+    if (state == 'unauthorized') {
+      return 'Android unauthorized (API unknown)';
+    }
+    if (state == 'no permissions') {
+      return 'Android no permissions (API unknown)';
+    }
+    final String sdkVersion = await _sdkVersion ?? 'unknown';
+    final String api = await apiVersion ?? 'unknown';
+    return 'Android $sdkVersion (API $api)';
+  }
 
   Future<String?> get _sdkVersion => _getProperty('ro.build.version.release');
 
