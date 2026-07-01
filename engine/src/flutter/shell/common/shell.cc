@@ -1128,6 +1128,26 @@ void Shell::OnPlatformViewScheduleFrame() {
 }
 
 // |PlatformView::Delegate|
+void Shell::OnPlatformViewDrawLastFrame() {
+  FML_DCHECK(is_set_up_);
+  auto task = [rasterizer = weak_rasterizer_]() {
+    if (rasterizer) {
+      auto now = fml::TimePoint::Now();
+      auto recorder = std::make_unique<FrameTimingsRecorder>();
+      recorder->RecordVsync(now, now);
+      recorder->RecordBuildStart(now);
+      recorder->RecordBuildEnd(now);
+      rasterizer->DrawLastLayerTrees(std::move(recorder));
+    }
+  };
+  if (task_runners_.GetRasterTaskRunner()->RunsTasksOnCurrentThread()) {
+    task();
+  } else {
+    task_runners_.GetRasterTaskRunner()->PostTask(task);
+  }
+}
+
+// |PlatformView::Delegate|
 void Shell::OnPlatformViewSetViewportMetrics(int64_t view_id,
                                              const ViewportMetrics& metrics) {
   FML_DCHECK(is_set_up_);

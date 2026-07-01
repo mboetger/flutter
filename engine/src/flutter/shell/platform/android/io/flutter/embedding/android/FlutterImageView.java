@@ -24,6 +24,8 @@ import androidx.annotation.VisibleForTesting;
 import io.flutter.Log;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.embedding.engine.renderer.RenderSurface;
+import android.os.Handler;
+import android.os.Looper;
 import java.nio.ByteBuffer;
 import java.util.Locale;
 
@@ -48,6 +50,7 @@ public class FlutterImageView extends View implements RenderSurface {
   @Nullable private FlutterRenderer flutterRenderer;
 
   private boolean isContentSizingEnabled = false;
+  private boolean autoAcquire = false;
 
   public ImageReader getImageReader() {
     return imageReader;
@@ -172,6 +175,7 @@ public class FlutterImageView extends View implements RenderSurface {
     if (!isAttachedToFlutterRenderer) {
       return;
     }
+    imageReader.setOnImageAvailableListener(null, null);
     setAlpha(0.0f);
     // Drop the latest image as it shouldn't render this image if this view is
     // attached to the renderer again.
@@ -183,6 +187,20 @@ public class FlutterImageView extends View implements RenderSurface {
     closeCurrentImage();
     invalidate();
     isAttachedToFlutterRenderer = false;
+  }
+
+  public void setAutoAcquire(boolean autoAcquire) {
+    this.autoAcquire = autoAcquire;
+    if (autoAcquire) {
+      imageReader.setOnImageAvailableListener(
+          reader -> {
+            acquireLatestImage();
+          },
+          new Handler(Looper.getMainLooper()));
+      acquireLatestImage();
+    } else {
+      imageReader.setOnImageAvailableListener(null, null);
+    }
   }
 
   public void pause() {

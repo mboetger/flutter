@@ -99,6 +99,7 @@ import java.util.Set;
   private boolean isFirstFrameRendered;
   private boolean isAttached;
   private Integer previousVisibility;
+  private boolean isConvertedToImageViewForBackground = false;
   @Nullable private FlutterEngineGroup engineGroup;
 
   @NonNull
@@ -489,6 +490,15 @@ import java.util.Set;
     if (previousVisibility != null) {
       flutterView.setVisibility(previousVisibility);
     }
+    if (isConvertedToImageViewForBackground && flutterView != null) {
+      flutterView.revertImageView(
+          new Runnable() {
+            @Override
+            public void run() {
+              isConvertedToImageViewForBackground = false;
+            }
+          });
+    }
   }
 
   /**
@@ -671,6 +681,17 @@ import java.util.Set;
   void onStop() {
     Log.v(TAG, "onStop()");
     ensureAlive();
+
+    if (host.getRenderMode() == RenderMode.surface && flutterView != null) {
+      if (!flutterView.isUsingImageView()) {
+        flutterView.convertToImageView();
+        FlutterImageView imageView = flutterView.getCurrentImageSurface();
+        if (imageView != null) {
+          imageView.setAutoAcquire(true);
+        }
+        isConvertedToImageViewForBackground = true;
+      }
+    }
 
     if (host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
       flutterEngine.getLifecycleChannel().appIsPaused();

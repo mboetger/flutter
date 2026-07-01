@@ -129,6 +129,7 @@ public class FlutterView extends FrameLayout
   @Nullable private RenderSurface previousRenderSurface;
   private final Set<FlutterUiDisplayListener> flutterUiDisplayListeners = new HashSet<>();
   private boolean isFlutterUiDisplayed;
+  private FlutterUiDisplayListener revertListener;
 
   // Connections to a Flutter execution context.
   @Nullable private FlutterEngine flutterEngine;
@@ -1337,6 +1338,10 @@ public class FlutterView extends FrameLayout
     if (previousRenderSurface != null && renderSurface == flutterImageView) {
       renderSurface = previousRenderSurface;
     }
+    if (revertListener != null) {
+      flutterRenderer.removeIsDisplayingFlutterUiListener(revertListener);
+      revertListener = null;
+    }
     renderSurface.detachFromRenderer();
 
     releaseImageView();
@@ -1368,11 +1373,22 @@ public class FlutterView extends FrameLayout
     return flutterImageView;
   }
 
+  public boolean isUsingImageView() {
+    return renderSurface == flutterImageView;
+  }
+
   /**
    * Converts the current render surface to a {@link FlutterImageView} if it's not one already.
    * Otherwise, it resizes the {@link FlutterImageView} based on the current view size.
    */
   public void convertToImageView() {
+    if (revertListener != null) {
+      if (flutterEngine != null && flutterEngine.getRenderer() != null) {
+        flutterEngine.getRenderer().removeIsDisplayingFlutterUiListener(revertListener);
+      }
+      revertListener = null;
+    }
+
     renderSurface.pause();
 
     if (flutterImageView == null) {
@@ -1396,7 +1412,7 @@ public class FlutterView extends FrameLayout
    * @param onDone a callback called when Flutter UI is rendered on the previous surface. Use this
    *     callback to perform cleanups. For example, destroy overlay surfaces.
    */
-  public void revertImageView(@NonNull Runnable onDone) {
+  public void revertImageView(@NonNull final Runnable onDone) {
     if (flutterImageView == null) {
       Log.v(TAG, "Tried to revert the image view, but no image view is used.");
       return;
@@ -1409,9 +1425,21 @@ public class FlutterView extends FrameLayout
     renderSurface = previousRenderSurface;
     previousRenderSurface = null;
 
-    final FlutterRenderer renderer = flutterEngine.getRenderer();
+    if (flutterEngine == null) {
+      if (revertListener != null) {
+        revertListener = null;
+      }
+      flutterImageView.detachFromRenderer();
+      releaseImageView();
+      onDone.run();
+      return;
+    }
 
-    if (flutterEngine == null || renderer == null) {
+    final FlutterRenderer renderer = flutterEngine.getRenderer();
+    if (renderer == null) {
+      if (revertListener != null) {
+        revertListener = null;
+      }
       flutterImageView.detachFromRenderer();
       releaseImageView();
       onDone.run();
@@ -1421,25 +1449,29 @@ public class FlutterView extends FrameLayout
     // This surface is typically `FlutterSurfaceView` or `FlutterTextureView`.
     renderSurface.resume();
 
-    // Install a Flutter UI listener to wait until the first frame is rendered
-    // in the new surface to call the `onDone` callback.
-    renderer.addIsDisplayingFlutterUiListener(
-        new FlutterUiDisplayListener() {
-          @Override
-          public void onFlutterUiDisplayed() {
-            renderer.removeIsDisplayingFlutterUiListener(this);
-            onDone.run();
-            if (!(renderSurface instanceof FlutterImageView) && flutterImageView != null) {
-              flutterImageView.detachFromRenderer();
-              releaseImageView();
-            }
-          }
+    if (revertListener != null) {
+      renderer.removeIsDisplayingFlutterUiListener(revertListener);
+    }
 
-          @Override
-          public void onFlutterUiNoLongerDisplayed() {
-            // no-op
-          }
-        });
+    revertListener = new FlutterUiDisplayListener() {
+      @Override
+      public void onFlutterUiDisplayed() {
+        renderer.removeIsDisplayingFlutterUiListener(this);
+        revertListener = null;
+        onDone.run();
+        if (!(renderSurface instanceof FlutterImageView) && flutterImageView != null) {
+          flutterImageView.detachFromRenderer();
+          releaseImageView();
+        }
+      }
+
+      @Override
+      public void onFlutterUiNoLongerDisplayed() {
+        // no-op
+      }
+    };
+
+    renderer.addIsDisplayingFlutterUiListener(revertListener);
   }
 
   public void attachOverlaySurfaceToRender(@NonNull FlutterImageView view) {

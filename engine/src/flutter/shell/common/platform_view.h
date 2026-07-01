@@ -87,6 +87,12 @@ class PlatformView {
     ///
     virtual void OnPlatformViewScheduleFrame() = 0;
 
+    //--------------------------------------------------------------------------
+    /// @brief      Notifies the delegate that the platform wants to draw the last
+    ///             rendered layer tree immediately.
+    ///
+    virtual void OnPlatformViewDrawLastFrame() {}
+
     /// @brief  Allocate resources for a new non-implicit view and inform
     ///         Dart about the view, and on success, schedules a new frame.
     ///

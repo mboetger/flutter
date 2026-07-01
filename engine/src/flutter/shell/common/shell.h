@@ -584,6 +584,9 @@ class Shell final : public PlatformView::Delegate,
   void OnPlatformViewScheduleFrame() override;
 
   // |PlatformView::Delegate|
+  void OnPlatformViewDrawLastFrame() override;
+
+  // |PlatformView::Delegate|
   void OnPlatformViewAddView(int64_t view_id,
                              const ViewportMetrics& viewport_metrics,
                              AddViewCallback callback) override;
