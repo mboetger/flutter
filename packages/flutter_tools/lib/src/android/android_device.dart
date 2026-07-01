@@ -259,12 +259,14 @@ class AndroidDevice extends Device {
     List<String> params, {
     String? workingDirectory,
     bool allowReentrantFlutter = false,
+    Duration? timeout,
   }) async {
     return _processUtils.run(
       adbCommandForDevice(params),
       throwOnError: true,
       workingDirectory: workingDirectory,
       allowReentrantFlutter: allowReentrantFlutter,
+      timeout: timeout,
       allowedFailures: (int value) => _allowHeapCorruptionOnWindows(value, _platform),
     );
   }
@@ -388,7 +390,7 @@ class AndroidDevice extends Device {
         'packages',
         if (userIdentifier != null) ...<String>['--user', userIdentifier],
         app.id,
-      ]);
+      ], timeout: const Duration(seconds: 30));
       return LineSplitter.split(listOut.stdout).contains('package:${app.id}');
     } on Exception catch (error) {
       _logger.printTrace('$error');
@@ -408,8 +410,13 @@ class AndroidDevice extends Device {
       return false;
     }
     _logger.printTrace('Installing APK.');
-    if (await _installApp(app, userIdentifier: userIdentifier)) {
-      return true;
+    try {
+      if (await _installApp(app, userIdentifier: userIdentifier)) {
+        return true;
+      }
+    } on Exception catch (error) {
+      _logger.printError('Error: Failed to install APK: $error');
+      return false;
     }
     _logger.printTrace('Warning: Failed to install APK.');
     if (!await isAppInstalled(app, userIdentifier: userIdentifier)) {
@@ -420,8 +427,13 @@ class AndroidDevice extends Device {
       _logger.printError('Error: Uninstalling old version failed.');
       return false;
     }
-    if (!await _installApp(app, userIdentifier: userIdentifier)) {
-      _logger.printError('Error: Failed to install APK again.');
+    try {
+      if (!await _installApp(app, userIdentifier: userIdentifier)) {
+        _logger.printError('Error: Failed to install APK again.');
+        return false;
+      }
+    } on Exception catch (error) {
+      _logger.printError('Error: Failed to install APK again: $error');
       return false;
     }
     return true;
@@ -438,16 +450,21 @@ class AndroidDevice extends Device {
     final Status status = _logger.startProgress(
       'Installing ${_fileSystem.path.relative(app.applicationPackage.path)}...',
     );
-    final RunResult installResult = await _processUtils.run(
-      adbCommandForDevice(<String>[
-        'install',
-        '-t',
-        '-r',
-        if (userIdentifier != null) ...<String>['--user', userIdentifier],
-        app.applicationPackage.path,
-      ]),
-    );
-    status.stop();
+    final RunResult installResult;
+    try {
+      installResult = await _processUtils.run(
+        adbCommandForDevice(<String>[
+          'install',
+          '-t',
+          '-r',
+          if (userIdentifier != null) ...<String>['--user', userIdentifier],
+          app.applicationPackage.path,
+        ]),
+        timeout: const Duration(minutes: 5),
+      );
+    } finally {
+      status.stop();
+    }
     // Some versions of adb exit with exit code 0 even on failure :(
     // Parsing the output to check for failures.
     final failureExp = RegExp(r'^Failure.*$', multiLine: true);
