@@ -1162,6 +1162,16 @@ class _DayPickerState extends State<_DayPicker> {
       }
     }
 
+    // Add padding to ensure dayItems is a multiple of 7.
+    final int totalItems = dayItems.length;
+    final int remainder = totalItems % DateTime.daysPerWeek;
+    if (remainder > 0) {
+      final int padding = DateTime.daysPerWeek - remainder;
+      for (var i = 0; i < padding; i++) {
+        dayItems.add(const SizedBox.shrink());
+      }
+    }
+
     final double monthPickerHorizontalPadding =
         Theme.of(context).useMaterial3 && !isLandscapeOrientation
         ? _monthPickerHorizontalPaddingPortraitM3
@@ -1172,10 +1182,36 @@ class _DayPickerState extends State<_DayPicker> {
         maxScaleFactor: isLandscapeOrientation
             ? _kDayPickerGridLandscapeMaxScaleFactor
             : _kDayPickerGridPortraitMaxScaleFactor,
-        child: GridView.custom(
-          physics: const ClampingScrollPhysics(),
-          gridDelegate: _DayPickerGridDelegate(context),
-          childrenDelegate: SliverChildListDelegate(dayItems, addRepaintBoundaries: false),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double textScaleFactor =
+                MediaQuery.textScalerOf(
+                  context,
+                ).clamp(maxScaleFactor: 3.0).scale(_fontSizeToScale) /
+                _fontSizeToScale;
+            final double dayPickerRowHeight =
+                Theme.of(context).useMaterial3 && orientation == Orientation.portrait
+                ? _dayPickerRowHeightM3
+                : _dayPickerRowHeightM2;
+            final double scaledRowHeight = textScaleFactor > 1.3
+                ? ((textScaleFactor - 1) * 30) + dayPickerRowHeight
+                : dayPickerRowHeight;
+            final double tileHeight = math.min(
+              scaledRowHeight,
+              constraints.maxHeight / (_maxDayPickerRowCount + 1),
+            );
+
+            final rows = <TableRow>[];
+            for (var i = 0; i < dayItems.length; i += DateTime.daysPerWeek) {
+              final List<Widget> rowItems = dayItems
+                  .sublist(i, i + DateTime.daysPerWeek)
+                  .map<Widget>((Widget child) => SizedBox(height: tileHeight, child: child))
+                  .toList();
+              rows.add(TableRow(children: rowItems));
+            }
+
+            return Table(children: rows);
+          },
         ),
       ),
     );
@@ -1322,45 +1358,6 @@ class _DayState extends State<_Day> {
     _statesController.dispose();
     super.dispose();
   }
-}
-
-class _DayPickerGridDelegate extends SliverGridDelegate {
-  const _DayPickerGridDelegate(this.context);
-
-  final BuildContext context;
-
-  @override
-  SliverGridLayout getLayout(SliverConstraints constraints) {
-    final double textScaleFactor =
-        MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 3.0).scale(_fontSizeToScale) /
-        _fontSizeToScale;
-    // Conform to M3 spec in portrait mode (landscape mode is not specified).
-    final Orientation orientation = MediaQuery.orientationOf(context);
-    final double dayPickerRowHeight =
-        Theme.of(context).useMaterial3 && orientation == Orientation.portrait
-        ? _dayPickerRowHeightM3
-        : _dayPickerRowHeightM2;
-    final double scaledRowHeight = textScaleFactor > 1.3
-        ? ((textScaleFactor - 1) * 30) + dayPickerRowHeight
-        : dayPickerRowHeight;
-    const int columnCount = DateTime.daysPerWeek;
-    final double tileWidth = constraints.crossAxisExtent / columnCount;
-    final double tileHeight = math.min(
-      scaledRowHeight,
-      constraints.viewportMainAxisExtent / (_maxDayPickerRowCount + 1),
-    );
-    return SliverGridRegularTileLayout(
-      childCrossAxisExtent: tileWidth,
-      childMainAxisExtent: tileHeight,
-      crossAxisCount: columnCount,
-      crossAxisStride: tileWidth,
-      mainAxisStride: tileHeight,
-      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
-    );
-  }
-
-  @override
-  bool shouldRelayout(_DayPickerGridDelegate oldDelegate) => false;
 }
 
 /// A scrollable grid of years to allow picking a year.
