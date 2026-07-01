@@ -785,4 +785,54 @@ public class AndroidTouchProcessorTest {
     assertEquals(0.0, readPointerPhysicalY(packet));
     inOrder.verifyNoMoreInteractions();
   }
+
+  @Test
+  public void monkeyTestNullMotionRange_reproduce_30617() {
+    // Regression test for https://github.com/flutter/flutter/issues/30617
+    InputDevice mockDevice = mock(InputDevice.class);
+    when(mockDevice.getMotionRange(MotionEvent.AXIS_PRESSURE)).thenReturn(null);
+
+    MotionEventMocker mocker =
+        new MotionEventMocker(0, InputDevice.SOURCE_TOUCHSCREEN, MotionEvent.TOOL_TYPE_FINGER) {
+          @Override
+          MotionEvent mockEvent(
+              int action,
+              float x,
+              float y,
+              int buttonState,
+              float hScroll,
+              float vScroll,
+              float axisDistance,
+              float axisTilt,
+              float size,
+              float toolMajor,
+              float toolMinor) {
+            MotionEvent event =
+                super.mockEvent(
+                    action,
+                    x,
+                    y,
+                    buttonState,
+                    hScroll,
+                    vScroll,
+                    axisDistance,
+                    axisTilt,
+                    size,
+                    toolMajor,
+                    toolMinor);
+            when(event.getDevice()).thenReturn(mockDevice);
+            return event;
+          }
+        };
+
+    // This should not crash with NullPointerException even when getMotionRange returns null.
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_DOWN, 0.0f, 0.0f, 0));
+
+    verify(mockRenderer)
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+    assertEquals(0.0, readPressureMin(packet));
+    assertEquals(1.0, readPressureMax(packet));
+  }
 }
+
