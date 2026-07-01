@@ -116,6 +116,33 @@ public class AccessibilityBridgeTest {
   }
 
   @Test
+  public void itSetsViewIdResourceName() {
+    AccessibilityBridge accessibilityBridge = setUpBridge();
+
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    testSemanticsNode.identifier = "my-custom-identifier";
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+    AccessibilityNodeInfo nodeInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
+
+    assertEquals("my-custom-identifier", nodeInfo.getViewIdResourceName());
+  }
+
+  @Test
+  public void itDefaultsToEmptyStringViewIdResourceName() {
+    AccessibilityBridge accessibilityBridge = setUpBridge();
+
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    // identifier is null by default
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+    AccessibilityNodeInfo nodeInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
+
+    assertEquals("", nodeInfo.getViewIdResourceName());
+  }
+
+
+  @Test
   public void itTakesGlobalCoordinatesOfFlutterViewIntoAccount() {
     AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
     AccessibilityManager mockManager = mock(AccessibilityManager.class);
