@@ -362,7 +362,12 @@ if (enable_unittests) {
       "time/time_delta_unittest.cc",
       "time/time_point_unittest.cc",
       "time/time_unittest.cc",
+      "native_library_reproduce_unittest.cc",
     ]
+
+    if (is_linux || is_android) {
+      ldflags = [ "-Wl,--wrap=dlsym" ]
+    }
 
     if (is_mac || is_ios) {
       cflags_objc = flutter_cflags_objc

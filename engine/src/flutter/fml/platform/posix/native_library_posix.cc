@@ -54,6 +54,19 @@ fml::RefPtr<NativeLibrary> NativeLibrary::CreateWithHandle(
 }
 
 fml::RefPtr<NativeLibrary> NativeLibrary::CreateForCurrentProcess() {
+#if defined(FML_OS_ANDROID)
+  // On Android, using RTLD_DEFAULT can cause crashes on x86 emulators running
+  // ARM binaries (Houdini/libndk_translation) when calling dlsym.
+  // To avoid this, we dlopen the library containing this function.
+  Dl_info info;
+  if (dladdr(reinterpret_cast<const void*>(&NativeLibrary::CreateForCurrentProcess), &info) != 0 &&
+      info.dli_fname != nullptr) {
+    void* handle = ::dlopen(info.dli_fname, RTLD_NOW);
+    if (handle != nullptr) {
+      return fml::AdoptRef(new NativeLibrary(handle, true));
+    }
+  }
+#endif
   return fml::AdoptRef(new NativeLibrary(RTLD_DEFAULT, false));
 }
 
