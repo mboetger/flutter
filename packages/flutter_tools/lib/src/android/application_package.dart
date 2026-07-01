@@ -202,7 +202,11 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
     final String? packageId = manifests.first.getAttribute('package') ?? androidProject.namespace;
 
     String? launchActivity;
-    for (final XmlElement activity in document.findAllElements('activity')) {
+    final activityElements = <XmlElement>[
+      ...document.findAllElements('activity'),
+      ...document.findAllElements('activity-alias'),
+    ];
+    for (final activity in activityElements) {
       final String? enabled = activity.getAttribute('android:enabled');
       if (enabled != null && enabled == 'false') {
         continue;
@@ -227,8 +231,10 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
             actionName.isNotEmpty &&
             categoryName.isNotEmpty) {
           final String? activityName = activity.getAttribute('android:name');
-          launchActivity = '$packageId/$activityName';
-          break;
+          if (activityName != null) {
+            launchActivity = '$packageId/$activityName';
+            break;
+          }
         }
       }
     }
@@ -285,7 +291,7 @@ class _Element extends _Entry {
 
   _Element? firstElement(String name) {
     for (final _Element child in children.whereType<_Element>()) {
-      if (child.name?.startsWith(name) ?? false) {
+      if (child.name == name) {
         return child;
       }
     }
@@ -293,7 +299,7 @@ class _Element extends _Entry {
   }
 
   Iterable<_Element> allElements(String name) {
-    return children.whereType<_Element>().where((_Element e) => e.name?.startsWith(name) ?? false);
+    return children.whereType<_Element>().where((_Element e) => e.name == name);
   }
 }
 
@@ -370,7 +376,10 @@ class ApkManifestData {
       return null;
     }
 
-    final Iterable<_Element> activities = application.allElements('activity');
+    final Iterable<_Element> activities = <_Element>[
+      ...application.allElements('activity'),
+      ...application.allElements('activity-alias'),
+    ];
 
     _Element? launchActivity;
     for (final activity in activities) {

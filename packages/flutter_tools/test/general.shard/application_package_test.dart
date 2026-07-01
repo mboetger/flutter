@@ -540,6 +540,31 @@ void main() {
 
       expect(data, isNull);
     });
+
+    testWithoutContext('Parses manifest with an activity-alias', () {
+      final ApkManifestData data = ApkManifestData.parseFromXmlDump(
+        _aaptDataWithActivityAlias,
+        BufferLogger.test(),
+      )!;
+
+      expect(data, isNotNull);
+      expect(data.packageName, 'io.flutter.examples.hello_world');
+      expect(data.launchableActivityName, 'io.flutter.examples.hello_world.MainActivityAlias');
+    });
+
+    testWithoutContext('Error when parsing manifest with disabled activity-alias', () {
+      final logger = BufferLogger.test();
+      final ApkManifestData? data = ApkManifestData.parseFromXmlDump(
+        _aaptDataWithDisabledActivityAlias,
+        logger,
+      );
+
+      expect(data, isNull);
+      expect(
+        logger.errorText,
+        'Error running io.flutter.examples.hello_world. Default activity not found\n',
+      );
+    });
   });
 
   group('PrebuiltIOSApp', () {
@@ -1194,3 +1219,42 @@ flutter:
 ''');
   return FlutterProject.fromDirectory(directory);
 }
+
+const _aaptDataWithActivityAlias = '''
+N: android=http://schemas.android.com/apk/res/android
+  E: manifest (line=7)
+    A: android:versionCode(0x0101021b)=(type 0x10)0x1
+    A: android:versionName(0x0101021c)="0.0.1" (Raw: "0.0.1")
+    A: package="io.flutter.examples.hello_world" (Raw: "io.flutter.examples.hello_world")
+    E: application (line=29)
+      A: android:label(0x01010001)="hello_world" (Raw: "hello_world")
+      E: activity (line=34)
+        A: android:name(0x01010003)="io.flutter.examples.hello_world.MainActivity" (Raw: "io.flutter.examples.hello_world.MainActivity")
+      E: activity-alias (line=38)
+        A: android:name(0x01010003)="io.flutter.examples.hello_world.MainActivityAlias" (Raw: "io.flutter.examples.hello_world.MainActivityAlias")
+        A: android:targetActivity(0x01010202)="io.flutter.examples.hello_world.MainActivity" (Raw: "io.flutter.examples.hello_world.MainActivity")
+        E: intent-filter (line=42)
+          E: action (line=43)
+            A: android:name(0x01010003)="android.intent.action.MAIN" (Raw: "android.intent.action.MAIN")
+          E: category (line=45)
+            A: android:name(0x01010003)="android.intent.category.LAUNCHER" (Raw: "android.intent.category.LAUNCHER")''';
+
+const _aaptDataWithDisabledActivityAlias = '''
+N: android=http://schemas.android.com/apk/res/android
+  E: manifest (line=7)
+    A: android:versionCode(0x0101021b)=(type 0x10)0x1
+    A: android:versionName(0x0101021c)="0.0.1" (Raw: "0.0.1")
+    A: package="io.flutter.examples.hello_world" (Raw: "io.flutter.examples.hello_world")
+    E: application (line=29)
+      A: android:label(0x01010001)="hello_world" (Raw: "hello_world")
+      E: activity (line=34)
+        A: android:name(0x01010003)="io.flutter.examples.hello_world.MainActivity" (Raw: "io.flutter.examples.hello_world.MainActivity")
+      E: activity-alias (line=38)
+        A: android:name(0x01010003)="io.flutter.examples.hello_world.MainActivityAlias" (Raw: "io.flutter.examples.hello_world.MainActivityAlias")
+        A: android:targetActivity(0x01010202)="io.flutter.examples.hello_world.MainActivity" (Raw: "io.flutter.examples.hello_world.MainActivity")
+        A: android:enabled(0x0101000e)=(type 0x12)0x0
+        E: intent-filter (line=42)
+          E: action (line=43)
+            A: android:name(0x01010003)="android.intent.action.MAIN" (Raw: "android.intent.action.MAIN")
+          E: category (line=45)
+            A: android:name(0x01010003)="android.intent.category.LAUNCHER" (Raw: "android.intent.category.LAUNCHER")''';
