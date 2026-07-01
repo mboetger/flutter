@@ -34,8 +34,6 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
     configureHeading(result, node);
     configureCustomActions(result, node);
     configureTextField(result, node);
-    configureButton(result, node);
-    configureImage(result, node);
     configureSlider(result, node);
     configureScrollable(result, node);
     configureCollection(result, node);
@@ -53,6 +51,64 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
   protected void configureRole(
       AccessibilityNodeInfo result, AccessibilityBridge.SemanticsNode node) {
     // Default implementation is a no-op.
+  }
+
+  @Override
+  public CharSequence getClassName(AccessibilityBridge.SemanticsNode node) {
+    CharSequence className = "android.view.View";
+
+    // 1. TextField (from configureTextField)
+    if (node.hasFlag(AccessibilityBridge.Flag.IS_TEXT_FIELD)) {
+      if (!node.hasFlag(AccessibilityBridge.Flag.IS_READ_ONLY)) {
+        className = "android.widget.EditText";
+      }
+    }
+
+    // 2. Button (from configureButton)
+    if (node.shouldBeTreatedAsButton()) {
+      className = "android.widget.Button";
+    }
+
+    // 3. Image (from configureImage)
+    if (node.hasFlag(AccessibilityBridge.Flag.IS_IMAGE)) {
+      className = "android.widget.ImageView";
+    }
+
+    // 4. Slider (from configureSlider)
+    if (node.hasAction(AccessibilityBridge.Action.INCREASE)
+        || node.hasAction(AccessibilityBridge.Action.DECREASE)) {
+      className = "android.widget.SeekBar";
+    }
+
+    // 5. Scrollable (from configureScrollable)
+    if (node.hasAction(AccessibilityBridge.Action.SCROLL_LEFT)
+        || node.hasAction(AccessibilityBridge.Action.SCROLL_UP)
+        || node.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT)
+        || node.hasAction(AccessibilityBridge.Action.SCROLL_DOWN)) {
+      if (node.hasFlag(AccessibilityBridge.Flag.HAS_IMPLICIT_SCROLLING)) {
+        if (node.hasAction(AccessibilityBridge.Action.SCROLL_LEFT)
+            || node.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT)) {
+          className = "android.widget.HorizontalScrollView";
+        } else {
+          className = "android.widget.ScrollView";
+        }
+      }
+    }
+
+    // 6. Checkable (from configureCheckable)
+    boolean hasCheckedState = node.hasFlag(AccessibilityBridge.Flag.HAS_CHECKED_STATE);
+    boolean hasToggledState = node.hasFlag(AccessibilityBridge.Flag.HAS_TOGGLED_STATE);
+    if (hasCheckedState) {
+      if (node.hasFlag(AccessibilityBridge.Flag.IS_IN_MUTUALLY_EXCLUSIVE_GROUP)) {
+        className = "android.widget.RadioButton";
+      } else {
+        className = "android.widget.CheckBox";
+      }
+    } else if (hasToggledState) {
+      className = "android.widget.Switch";
+    }
+
+    return className;
   }
 
   private void configureFocusable(
@@ -159,9 +215,6 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
       AccessibilityNodeInfo result, AccessibilityBridge.SemanticsNode node) {
     if (node.hasFlag(AccessibilityBridge.Flag.IS_TEXT_FIELD)) {
       result.setPassword(node.hasFlag(AccessibilityBridge.Flag.IS_OBSCURED));
-      if (!node.hasFlag(AccessibilityBridge.Flag.IS_READ_ONLY)) {
-        result.setClassName("android.widget.EditText");
-      }
       result.setEditable(!node.hasFlag(AccessibilityBridge.Flag.IS_READ_ONLY));
       if (node.textSelectionBase != -1 && node.textSelectionExtent != -1) {
         result.setTextSelection(node.textSelectionBase, node.textSelectionExtent);
@@ -196,19 +249,7 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
     }
   }
 
-  private void configureButton(
-      AccessibilityNodeInfo result, AccessibilityBridge.SemanticsNode node) {
-    if (node.shouldBeTreatedAsButton()) {
-      result.setClassName("android.widget.Button");
-    }
-  }
 
-  private void configureImage(
-      AccessibilityNodeInfo result, AccessibilityBridge.SemanticsNode node) {
-    if (node.hasFlag(AccessibilityBridge.Flag.IS_IMAGE)) {
-      result.setClassName("android.widget.ImageView");
-    }
-  }
 
   private void configureSlider(
       AccessibilityNodeInfo result, AccessibilityBridge.SemanticsNode node) {
@@ -220,7 +261,6 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
 
     if (node.hasAction(AccessibilityBridge.Action.INCREASE)
         || node.hasAction(AccessibilityBridge.Action.DECREASE)) {
-      result.setClassName("android.widget.SeekBar");
       if (node.hasAction(AccessibilityBridge.Action.INCREASE)) {
         result.addAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
       }
@@ -237,14 +277,6 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
         || node.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT)
         || node.hasAction(AccessibilityBridge.Action.SCROLL_DOWN)) {
       result.setScrollable(true);
-      if (node.hasFlag(AccessibilityBridge.Flag.HAS_IMPLICIT_SCROLLING)) {
-        if (node.hasAction(AccessibilityBridge.Action.SCROLL_LEFT)
-            || node.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT)) {
-          result.setClassName("android.widget.HorizontalScrollView");
-        } else {
-          result.setClassName("android.widget.ScrollView");
-        }
-      }
     }
 
     if (node.hasAction(AccessibilityBridge.Action.SCROLL_LEFT)
@@ -389,17 +421,11 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
     }
     result.setCheckable(hasCheckedState || hasToggledState);
     if (hasCheckedState) {
-      if (node.hasFlag(AccessibilityBridge.Flag.IS_IN_MUTUALLY_EXCLUSIVE_GROUP)) {
-        result.setClassName("android.widget.RadioButton");
-      } else {
-        result.setClassName("android.widget.CheckBox");
-      }
       setChecked(
           result,
           node.hasFlag(AccessibilityBridge.Flag.IS_CHECKED),
           node.hasFlag(AccessibilityBridge.Flag.IS_CHECK_STATE_MIXED));
     } else if (hasToggledState) {
-      result.setClassName("android.widget.Switch");
       setChecked(result, node.hasFlag(AccessibilityBridge.Flag.IS_TOGGLED), false);
     }
   }

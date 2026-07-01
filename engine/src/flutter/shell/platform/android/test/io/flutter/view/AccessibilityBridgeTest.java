@@ -3361,6 +3361,66 @@ public class AccessibilityBridgeTest {
     }
   }
 
+  @Test
+  public void itSetsClassNameOnAccessibilityEventsForTextField() {
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+    when(mockManager.isEnabled()).thenReturn(true);
+
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(mockRootView, mockManager, mockViewEmbedder);
+
+    // Create a text field semantics node.
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+    root.addFlag(AccessibilityBridge.Flag.IS_TEXT_FIELD);
+    root.value = "Hello";
+    root.textSelectionBase = 0;
+    root.textSelectionExtent = 0;
+
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // Now, we simulate a text change (e.g. paste "world").
+    // We send an update where the value changes.
+    // The bridge should send a TYPE_VIEW_TEXT_CHANGED event.
+    TestSemanticsNode root2 = new TestSemanticsNode();
+    root2.id = 0;
+    root2.addFlag(AccessibilityBridge.Flag.IS_TEXT_FIELD);
+    root2.value = "Hello World";
+    root2.textSelectionBase = 11;
+    root2.textSelectionExtent = 11;
+
+    // We need the node to have input focus and accessibility focus so that the text change event is sent.
+    accessibilityBridge.inputFocusedSemanticsNode = accessibilityBridge.flutterSemanticsTree.get(0);
+    accessibilityBridge.accessibilityFocusedSemanticsNode = accessibilityBridge.flutterSemanticsTree.get(0);
+
+    TestSemanticsUpdate testSemanticsUpdate2 = root2.toUpdate();
+    testSemanticsUpdate2.sendUpdateToBridge(accessibilityBridge);
+
+    // Verify that requestSendAccessibilityEvent was called on the parent with a TYPE_VIEW_TEXT_CHANGED event.
+    ArgumentCaptor<AccessibilityEvent> eventCaptor = ArgumentCaptor.forClass(AccessibilityEvent.class);
+    verify(mockParent, atLeastOnce()).requestSendAccessibilityEvent(eq(mockRootView), eventCaptor.capture());
+
+    // Find the TYPE_VIEW_TEXT_CHANGED event.
+    AccessibilityEvent textChangedEvent = null;
+    for (AccessibilityEvent event : eventCaptor.getAllValues()) {
+      if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+        textChangedEvent = event;
+        break;
+      }
+    }
+
+    assertNotNull(textChangedEvent);
+    assertEquals("android.widget.EditText", textChangedEvent.getClassName().toString());
+  }
+
   /// The encoding for semantics is described in platform_view_android.cc
   class TestSemanticsUpdate {
     TestSemanticsUpdate(ByteBuffer buffer, String[] strings, ByteBuffer[] stringAttributeArgs) {

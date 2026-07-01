@@ -858,10 +858,10 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
       result.setViewIdResourceName(semanticsNode.identifier);
     }
     result.setPackageName(rootAccessibilityView.getContext().getPackageName());
-    result.setClassName("android.view.View");
-    result.setSource(rootAccessibilityView, virtualViewId);
     Role role = ROLE_VALUES[semanticsNode.role];
     AccessibilityNodeConfigurator roleConfigurator = RoleConfiguratorFactory.getConfigurator(role);
+    result.setClassName(roleConfigurator.getClassName(semanticsNode));
+    result.setSource(rootAccessibilityView, virtualViewId);
     roleConfigurator.configure(result, semanticsNode);
 
     if (semanticsNode.parent != null) {
@@ -1901,6 +1901,15 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     AccessibilityEvent event = obtainAccessibilityEvent(eventType);
     event.setPackageName(rootAccessibilityView.getContext().getPackageName());
     event.setSource(rootAccessibilityView, virtualViewId);
+    SemanticsNode node = flutterSemanticsTree.get(virtualViewId);
+    if (node != null) {
+      Role role = ROLE_VALUES[node.role];
+      AccessibilityNodeConfigurator roleConfigurator = RoleConfiguratorFactory.getConfigurator(role);
+      CharSequence className = roleConfigurator.getClassName(node);
+      event.setClassName(className != null ? className : "android.view.View");
+    } else {
+      event.setClassName("android.view.View");
+    }
     return event;
   }
 

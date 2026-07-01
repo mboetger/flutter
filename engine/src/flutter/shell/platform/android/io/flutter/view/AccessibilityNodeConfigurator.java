@@ -8,4 +8,9 @@ import android.view.accessibility.AccessibilityNodeInfo;
 
 public interface AccessibilityNodeConfigurator {
   void configure(AccessibilityNodeInfo result, AccessibilityBridge.SemanticsNode node);
+
+  /**
+   * Returns the class name that should be associated with the given {@code node}.
+   */
+  CharSequence getClassName(AccessibilityBridge.SemanticsNode node);
 }
