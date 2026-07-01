@@ -16,7 +16,9 @@ import 'dart:async';
 import 'dart:convert' show json;
 import 'dart:developer' as developer;
 import 'dart:io' show exit;
-import 'dart:ui' as ui show Brightness, PlatformDispatcher, SingletonFlutterWindow, window;
+import 'dart:ui'
+    as ui
+    show AppLifecycleState, Brightness, PlatformDispatcher, SingletonFlutterWindow, window;
 
 // Before adding any more dart:ui imports, please read the README.
 
@@ -981,6 +983,13 @@ abstract class BindingBase {
       return developer.ServiceExtensionResponse.result(json.encode(result));
     });
   }
+
+  /// Called when the application lifecycle state changes.
+  ///
+  /// Overridden by bindings to respond to lifecycle changes.
+  @protected
+  @mustCallSuper
+  void handleAppLifecycleStateChanged(ui.AppLifecycleState state) {}
 
   @override
   String toString() => '<${objectRuntimeType(this, 'BindingBase')}>';

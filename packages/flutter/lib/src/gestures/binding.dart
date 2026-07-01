@@ -11,7 +11,7 @@ library;
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:ui' as ui show HitTestRequest, HitTestResponse, PointerDataPacket;
+import 'dart:ui' as ui show AppLifecycleState, HitTestRequest, HitTestResponse, PointerDataPacket;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -281,6 +281,14 @@ mixin GestureBinding on BindingBase implements HitTestable, HitTestDispatcher, H
     platformDispatcher
       ..onPointerDataPacket = _handlePointerDataPacket
       ..onHitTest = _handleHitTest;
+  }
+
+  @override
+  void handleAppLifecycleStateChanged(ui.AppLifecycleState state) {
+    super.handleAppLifecycleStateChanged(state);
+    if (state != ui.AppLifecycleState.resumed) {
+      _hitTests.keys.toList().forEach(cancelPointer);
+    }
   }
 
   /// The singleton instance of this object.
