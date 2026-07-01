@@ -617,6 +617,7 @@ class AndroidDevice extends Device {
     final String? traceAllowlist = debuggingOptions.traceAllowlist;
     final String? traceSkiaAllowlist = debuggingOptions.traceSkiaAllowlist;
     final String? traceToFile = debuggingOptions.traceToFile;
+    final int? deviceVmServicePort = debuggingOptions.deviceVmServicePort;
     final cmd = <String>[
       'shell', 'am', 'start',
       '-a', 'android.intent.action.MAIN',
@@ -681,6 +682,11 @@ class AndroidDevice extends Device {
         if (debuggingOptions.buildInfo.isDebug) ...<String>[
           ...<String>['--ez', 'enable-checked-mode', 'true'],
           ...<String>['--ez', 'verify-entry-points', 'true'],
+        ],
+        if (deviceVmServicePort != null) ...<String>[
+          '--ei',
+          'vm-service-port',
+          deviceVmServicePort.toString(),
         ],
         if (debuggingOptions.startPaused) ...<String>['--ez', 'start-paused', 'true'],
         if (debuggingOptions.disableServiceAuthCodes) ...<String>[
