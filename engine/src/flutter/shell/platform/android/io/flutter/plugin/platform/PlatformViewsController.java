@@ -105,6 +105,12 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   // The platform views.
   private final SparseArray<PlatformView> platformViews;
 
+  // For views rendered via Texture Layer (or Hybrid Composition if wrapped)
+  private final SparseArray<MutableContextWrapper> viewContextWrappers = new SparseArray<>();
+
+  // For Virtual Displays
+  private final SparseArray<MutableContextWrapper> vdContextWrappers = new SparseArray<>();
+
   // The platform view wrappers that are appended to FlutterView.
   //
   // These platform views use a PlatformViewLayer in the framework. This is different than
@@ -264,6 +270,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             }
           }
           platformViews.remove(viewId);
+          viewContextWrappers.remove(viewId);
+          vdContextWrappers.remove(viewId);
           try {
             platformView.dispose();
           } catch (RuntimeException exception) {
@@ -531,6 +539,9 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     // TODO(stuartmorgan): Make this wrapping unconditional if possible; for context see
     // https://github.com/flutter/flutter/issues/113449
     final Context mutableContext = wrapContext ? new MutableContextWrapper(context) : context;
+    if (wrapContext) {
+      viewContextWrappers.put(request.viewId, (MutableContextWrapper) mutableContext);
+    }
     final PlatformView platformView =
         viewFactory.create(mutableContext, request.viewId, createParams);
 
@@ -569,12 +580,21 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
 
     Log.i(TAG, "Hosting view in a virtual display for platform view: " + request.viewId);
 
+    // Remove from viewContextWrappers to prevent direct updates to the platform view's context
+    // wrapper,
+    // which would overwrite the PresentationContext set by SingleViewPresentation.
+    viewContextWrappers.remove(request.viewId);
+
+    // Create wrapper for the Virtual Display itself to prevent leaking the activity.
+    MutableContextWrapper vdContextWrapper = new MutableContextWrapper(context);
+    vdContextWrappers.put(request.viewId, vdContextWrapper);
+
     final PlatformViewRenderTarget renderTarget = makePlatformViewRenderTarget(textureRegistry);
     final int physicalWidth = toPhysicalPixels(request.logicalWidth);
     final int physicalHeight = toPhysicalPixels(request.logicalHeight);
     final VirtualDisplayController vdController =
         VirtualDisplayController.create(
-            context,
+            vdContextWrapper,
             accessibilityEventsDelegate,
             platformView,
             renderTarget,
@@ -805,6 +825,12 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
               + "attach was called while the PlatformViewsController was already attached.");
     }
     this.context = context;
+    for (int i = 0; i < viewContextWrappers.size(); i++) {
+      viewContextWrappers.valueAt(i).setBaseContext(context);
+    }
+    for (int i = 0; i < vdContextWrappers.size(); i++) {
+      vdContextWrappers.valueAt(i).setBaseContext(context);
+    }
     this.textureRegistry = textureRegistry;
     platformViewsChannel = new PlatformViewsChannel(dartExecutor);
   }
@@ -840,6 +866,15 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     }
     destroyOverlaySurfaces();
     platformViewsChannel = null;
+    if (context != null) {
+      Context applicationContext = context.getApplicationContext();
+      for (int i = 0; i < viewContextWrappers.size(); i++) {
+        viewContextWrappers.valueAt(i).setBaseContext(applicationContext);
+      }
+      for (int i = 0; i < vdContextWrappers.size(); i++) {
+        vdContextWrappers.valueAt(i).setBaseContext(applicationContext);
+      }
+    }
     context = null;
     textureRegistry = null;
   }
