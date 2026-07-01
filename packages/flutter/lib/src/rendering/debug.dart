@@ -33,6 +33,14 @@ const HSVColor _kDebugDefaultRepaintColor = HSVColor.fromAHSV(0.4, 60.0, 1.0, 1.
 ///
 /// Padding is filled in solid `const Color(0x900090FF)`, with the inner edge
 /// outlined in `const Color(0xFF0090FF)`, using [debugPaintPadding].
+///
+/// This is the Flutter equivalent of the Android "Show layout bounds"
+/// developer setting (sometimes referred to as `showLayoutBounds`). The Android
+/// setting has no effect on Flutter applications because Flutter renders its UI
+/// directly to a canvas rather than using native Android views.
+///
+/// To debug layout bounds in Flutter, set this flag to true or use the "Show
+/// Guidelines" feature in the Flutter DevTools.
 bool debugPaintSizeEnabled = false;
 
 /// Causes each RenderBox to paint a line at each of its baselines.
