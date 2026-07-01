@@ -2,6 +2,11 @@ def flutterPluginVersion = "managed"
 
 apply plugin: "com.android.application"
 
+repositories {
+    google()
+    mavenCentral()
+}
+
 android {
     namespace = "{{androidIdentifier}}.host"
     compileSdk = {{compileSdkVersion}}

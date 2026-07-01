@@ -4,6 +4,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+repositories {
+    google()
+    mavenCentral()
+}
+
 android {
     namespace = "{{androidIdentifier}}"
     compileSdk = flutter.compileSdkVersion
