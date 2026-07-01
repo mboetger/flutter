@@ -36,6 +36,7 @@ class SemanticsAction {
   static const int _kScrollToOffsetIndex = 1 << 23;
   static const int _kExpandIndex = 1 << 24;
   static const int _kCollapseIndex = 1 << 25;
+  static const int _kSetProgressIndex = 1 << 26;
 
   static const SemanticsAction tap = SemanticsAction._(_kTapIndex, 'tap');
   static const SemanticsAction longPress = SemanticsAction._(_kLongPressIndex, 'longPress');
@@ -93,6 +94,7 @@ class SemanticsAction {
   static const SemanticsAction focus = SemanticsAction._(_kFocusIndex, 'focus');
   static const SemanticsAction expand = SemanticsAction._(_kExpandIndex, 'expand');
   static const SemanticsAction collapse = SemanticsAction._(_kCollapseIndex, 'collapse');
+  static const SemanticsAction setProgress = SemanticsAction._(_kSetProgressIndex, 'setProgress');
 
   static const Map<int, SemanticsAction> _kActionById = <int, SemanticsAction>{
     _kTapIndex: tap,
@@ -121,6 +123,7 @@ class SemanticsAction {
     _kFocusIndex: focus,
     _kExpandIndex: expand,
     _kCollapseIndex: collapse,
+    _kSetProgressIndex: setProgress,
   };
 
   static List<SemanticsAction> get values => _kActionById.values.toList(growable: false);

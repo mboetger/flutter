@@ -180,6 +180,7 @@ typedef enum {
   kFlutterSemanticsActionExpand = 1 << 24,
   /// A request that the node should be collapsed.
   kFlutterSemanticsActionCollapse = 1 << 25,
+  kFlutterSemanticsActionSetProgress = 1 << 26,
 } FlutterSemanticsAction;
 
 /// The set of properties that may be associated with a semantics node.

@@ -47,6 +47,7 @@ enum class SemanticsAction : int32_t {
   kScrollToOffset = 1 << 23,
   kExpand = 1 << 24,
   kCollapse = 1 << 25,
+  kSetProgress = 1 << 26,
 };
 
 constexpr int kVerticalScrollSemanticsActions =

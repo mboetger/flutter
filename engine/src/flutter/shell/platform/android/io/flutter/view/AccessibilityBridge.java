@@ -984,6 +984,11 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     if (semanticsNode == null) {
       return false;
     }
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_24
+        && accessibilityAction == AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId()) {
+      return performSetProgress(semanticsNode, virtualViewId, arguments);
+    }
+
     switch (accessibilityAction) {
       case AccessibilityNodeInfo.ACTION_CLICK:
         {
@@ -1327,6 +1332,15 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     // node based on prediction. If the result is incorrect, it will be updated in the next frame.
     node.value = newText;
     node.valueAttributes = null;
+    return true;
+  }
+
+  private boolean performSetProgress(@NonNull SemanticsNode node, int virtualViewId, @Nullable Bundle arguments) {
+    if (arguments == null || !arguments.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE)) {
+      return false;
+    }
+    float progress = arguments.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE);
+    accessibilityChannel.dispatchSemanticsAction(virtualViewId, Action.SET_PROGRESS, (double) progress);
     return true;
   }
 
@@ -2048,7 +2062,8 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     FOCUS(1 << 22),
     SCROLL_TO_OFFSET(1 << 23),
     EXPAND(1 << 24),
-    COLLAPSE(1 << 25);
+    COLLAPSE(1 << 25),
+    SET_PROGRESS(1 << 26);
 
     public final int value;
 

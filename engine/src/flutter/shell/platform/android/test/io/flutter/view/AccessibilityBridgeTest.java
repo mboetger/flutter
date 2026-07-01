@@ -3280,6 +3280,108 @@ public class AccessibilityBridgeTest {
     assertFalse(nonHeadingInfo.isHeading());
   }
 
+  @Config(sdk = API_LEVELS.API_28)
+  @TargetApi(API_LEVELS.API_28)
+  @Test
+  public void itSupportsSetProgressActionOnSlider() {
+    AccessibilityChannel mockChannel = mock(AccessibilityChannel.class);
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(null, mockChannel, null, null, null, null);
+
+    TestSemanticsNode sliderNode = new TestSemanticsNode();
+    sliderNode.addFlag(AccessibilityBridge.Flag.IS_SLIDER);
+    sliderNode.addAction(AccessibilityBridge.Action.INCREASE);
+    sliderNode.addAction(AccessibilityBridge.Action.DECREASE);
+    sliderNode.value = "0.5";
+    sliderNode.minValue = "0.0";
+    sliderNode.maxValue = "1.0";
+
+    TestSemanticsUpdate sliderUpdate = sliderNode.toUpdate();
+    sliderUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    AccessibilityNodeInfo sliderInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
+    List<AccessibilityNodeInfo.AccessibilityAction> actions = sliderInfo.getActionList();
+
+    // Verify that ACTION_SET_PROGRESS is in the action list.
+    assertTrue(
+        "Slider should support ACTION_SET_PROGRESS",
+        actions.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS));
+
+    // Verify RangeInfo is set.
+    AccessibilityNodeInfo.RangeInfo rangeInfo = sliderInfo.getRangeInfo();
+    assertNotNull("RangeInfo should not be null", rangeInfo);
+    assertEquals(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, rangeInfo.getType());
+    assertEquals(0.0f, rangeInfo.getMin(), 0.001f);
+    assertEquals(1.0f, rangeInfo.getMax(), 0.001f);
+    assertEquals(0.5f, rangeInfo.getCurrent(), 0.001f);
+
+    // Verify that performing ACTION_SET_PROGRESS is handled.
+    Bundle arguments = new Bundle();
+    arguments.putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, 0.8f);
+    boolean performed =
+        accessibilityBridge.performAction(
+            0, AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId(), arguments);
+    assertTrue("Performing ACTION_SET_PROGRESS should return true", performed);
+
+    // Verify that the action is dispatched to the channel.
+    verify(mockChannel)
+        .dispatchSemanticsAction(
+            eq(0), eq(AccessibilityBridge.Action.SET_PROGRESS), eq((double) 0.8f));
+  }
+
+  @Config(sdk = API_LEVELS.API_28)
+  @TargetApi(API_LEVELS.API_28)
+  @Test
+  public void itSupportsSetProgressActionOnSliderWithPercentage() {
+    AccessibilityChannel mockChannel = mock(AccessibilityChannel.class);
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(null, mockChannel, null, null, null, null);
+
+    TestSemanticsNode sliderNode = new TestSemanticsNode();
+    sliderNode.addFlag(AccessibilityBridge.Flag.IS_SLIDER);
+    sliderNode.addAction(AccessibilityBridge.Action.INCREASE);
+    sliderNode.addAction(AccessibilityBridge.Action.DECREASE);
+    sliderNode.value = "50%";
+    sliderNode.minValue = "10.0";
+    sliderNode.maxValue = "20.0";
+
+    TestSemanticsUpdate sliderUpdate = sliderNode.toUpdate();
+    sliderUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    AccessibilityNodeInfo sliderInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
+
+    // Verify RangeInfo is set and calculated correctly.
+    AccessibilityNodeInfo.RangeInfo rangeInfo = sliderInfo.getRangeInfo();
+    assertNotNull("RangeInfo should not be null", rangeInfo);
+    assertEquals(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, rangeInfo.getType());
+    assertEquals(10.0f, rangeInfo.getMin(), 0.001f);
+    assertEquals(20.0f, rangeInfo.getMax(), 0.001f);
+    assertEquals(15.0f, rangeInfo.getCurrent(), 0.001f);
+  }
+
+  @Config(sdk = API_LEVELS.API_28)
+  @TargetApi(API_LEVELS.API_28)
+  @Test
+  public void itDoesNotSupportSetProgressActionOnNonSlider() {
+    AccessibilityBridge accessibilityBridge = setUpBridge();
+
+    TestSemanticsNode nonSliderNode = new TestSemanticsNode();
+    nonSliderNode.value = "0.5";
+    nonSliderNode.minValue = "0.0";
+    nonSliderNode.maxValue = "1.0";
+
+    TestSemanticsUpdate nonSliderUpdate = nonSliderNode.toUpdate();
+    nonSliderUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    AccessibilityNodeInfo nonSliderInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
+    List<AccessibilityNodeInfo.AccessibilityAction> actions = nonSliderInfo.getActionList();
+
+    // Verify that ACTION_SET_PROGRESS is not in the action list.
+    assertFalse(
+        "Non-slider should not support ACTION_SET_PROGRESS",
+        actions.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS));
+  }
+
   AccessibilityBridge setUpBridge() {
     return setUpBridge(null, null, null, null, null, null);
   }

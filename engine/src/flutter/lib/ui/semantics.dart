@@ -48,6 +48,7 @@ class SemanticsAction {
   static const int _kScrollToOffsetIndex = 1 << 23;
   static const int _kExpandIndex = 1 << 24;
   static const int _kCollapseIndex = 1 << 25;
+  static const int _kSetProgressIndex = 1 << 26;
   // READ THIS:
   // - The maximum supported bit index on the web (in JS mode) is 1 << 31.
   // - If you add an action here, you MUST update the numSemanticsActions value
@@ -310,6 +311,11 @@ class SemanticsAction {
   /// For example, this action might be recognized by a dropdown.
   static const SemanticsAction collapse = SemanticsAction._(_kCollapseIndex, 'collapse');
 
+  /// A request to set the progress to a specific value.
+  ///
+  /// The payload of this [SemanticsAction] is a double value.
+  static const SemanticsAction setProgress = SemanticsAction._(_kSetProgressIndex, 'setProgress');
+
   /// The possible semantics actions.
   ///
   /// The map's key is the [index] of the action and the value is the action
@@ -341,6 +347,7 @@ class SemanticsAction {
     _kFocusIndex: focus,
     _kExpandIndex: expand,
     _kCollapseIndex: collapse,
+    _kSetProgressIndex: setProgress,
   };
 
   // TODO(matanlurey): have original authors document; see https://github.com/flutter/flutter/issues/151917.

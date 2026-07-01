@@ -227,6 +227,34 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
       if (node.hasAction(AccessibilityBridge.Action.DECREASE)) {
         result.addAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
       }
+      if (Build.VERSION.SDK_INT >= API_LEVELS.API_24) {
+        result.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS);
+      }
+    }
+
+    if (node.hasAction(AccessibilityBridge.Action.INCREASE)
+        || node.hasAction(AccessibilityBridge.Action.DECREASE)) {
+      if (node.minValue == null || node.maxValue == null) {
+        return;
+      }
+      try {
+        float min = Float.parseFloat(node.minValue);
+        float max = Float.parseFloat(node.maxValue);
+        float current = min; // Default to min if value is missing or unparseable
+        if (node.value != null) {
+          String trimmedValue = node.value.trim();
+          if (trimmedValue.endsWith("%")) {
+            float percent = Float.parseFloat(trimmedValue.substring(0, trimmedValue.length() - 1));
+            current = min + (max - min) * (percent / 100.0f);
+          } else {
+            current = Float.parseFloat(trimmedValue);
+          }
+        }
+        result.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+            AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, min, max, current));
+      } catch (NumberFormatException e) {
+        // Safe degrade if values are not numeric
+      }
     }
   }
 
