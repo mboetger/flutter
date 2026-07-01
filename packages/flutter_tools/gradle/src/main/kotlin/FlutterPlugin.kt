@@ -429,7 +429,7 @@ class FlutterPlugin : Plugin<Project> {
             )
             return
         }
-        // Flutter host module project (Add-to-app).
+        // Flutter host module project (Add-to-app) or standalone library.
         val hostAppProjectName: String? =
             if (projectToAddTasksTo.rootProject.hasProperty("flutter.hostAppProjectName")) {
                 projectToAddTasksTo.rootProject.property(
@@ -440,64 +440,91 @@ class FlutterPlugin : Plugin<Project> {
             }
         val appProject: Project? =
             projectToAddTasksTo.rootProject.findProject(":$hostAppProjectName")
-        check(appProject != null) {
-            "Project :$hostAppProjectName doesn't exist. To customize the host app project name, set `flutter.hostAppProjectName=<project-name>` in gradle.properties."
-        }
-        // Wait for the host app project configuration.
-        appProject.afterEvaluate {
+        if (appProject == null) {
+            // If the user explicitly configured a host app, but we couldn't find it, fail loudly.
+            if (projectToAddTasksTo.rootProject.hasProperty("flutter.hostAppProjectName")) {
+                throw GradleException(
+                    "Project :$hostAppProjectName doesn't exist. " +
+                    "To customize the host app project name, set `flutter.hostAppProjectName=<project-name>` in gradle.properties."
+                )
+            }
+            // Otherwise, warn and treat as standalone library.
+            projectToAddTasksTo.logger.warn(
+                "Project :$hostAppProjectName doesn't exist. Treating $projectToAddTasksTo as a standalone Android library. " +
+                "If this is an add-to-app module, ensure your host app project is named :$hostAppProjectName or set " +
+                "`flutter.hostAppProjectName` in your gradle.properties."
+            )
             val androidLibraryExtension =
                 projectToAddTasksTo.extensions.findByType(LibraryExtension::class.java)
             check(androidLibraryExtension != null)
-            androidLibraryExtension.libraryVariants.all libraryVariantAll@{
+            androidLibraryExtension.libraryVariants.configureEach {
                 val libraryVariant = this
-                var copyFlutterAssetsTask: Task? = null
-                val androidAppExtension =
-                    appProject.extensions.findByName("android") as? AbstractAppExtension
-                check(androidAppExtension != null)
-                androidAppExtension.applicationVariants.all applicationVariantAll@{
-                    val appProjectVariant = this
-                    val appAssembleTask: Task = appProjectVariant.assembleProvider.get()
-                    if (!FlutterPluginUtils.shouldConfigureFlutterTask(project, appAssembleTask)) {
-                        return@applicationVariantAll
-                    }
-
-                    // Find a compatible application variant in the host app.
-                    //
-                    // For example, consider a host app that defines the following variants:
-                    // | ----------------- | ----------------------------- |
-                    // |   Build Variant   |   Flutter Equivalent Variant  |
-                    // | ----------------- | ----------------------------- |
-                    // |   freeRelease     |   release                     |
-                    // |   freeDebug       |   debug                       |
-                    // |   freeDevelop     |   debug                       |
-                    // |   profile         |   profile                     |
-                    // | ----------------- | ----------------------------- |
-                    //
-                    // This mapping is based on the following rules:
-                    // 1. If the host app build variant name is `profile` then the equivalent
-                    //    Flutter variant is `profile`.
-                    // 2. If the host app build variant is debuggable
-                    //    (e.g. `buildType.debuggable = true`), then the equivalent Flutter
-                    //    variant is `debug`.
-                    // 3. Otherwise, the equivalent Flutter variant is `release`.
-                    val variantBuildMode: String =
-                        FlutterPluginUtils.buildModeFor(libraryVariant.buildType)
-                    if (FlutterPluginUtils.buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
-                        return@applicationVariantAll
-                    }
-                    copyFlutterAssetsTask = copyFlutterAssetsTask ?: addFlutterDeps(
-                        libraryVariant,
-                        flutterPlugin,
-                        targetPlatforms
+                if (!FlutterPluginUtils.shouldConfigureFlutterTask(
+                        projectToAddTasksTo,
+                        libraryVariant.assembleProvider.get()
                     )
-                    // TODO(gmackall): Migrate to AGPs variant api.
-                    //    https://github.com/flutter/flutter/issues/166550
-                    val mergeAssets =
-                        projectToAddTasksTo
-                            .tasks
-                            .findByPath(":$hostAppProjectName:merge${FlutterPluginUtils.capitalize(appProjectVariant.name)}Assets")
-                    check(mergeAssets != null)
-                    mergeAssets.dependsOn(copyFlutterAssetsTask)
+                ) {
+                    return@configureEach
+                }
+                addFlutterDeps(libraryVariant, flutterPlugin, targetPlatforms)
+            }
+        } else {
+            // Wait for the host app project configuration.
+            appProject.afterEvaluate {
+                val androidLibraryExtension =
+                    projectToAddTasksTo.extensions.findByType(LibraryExtension::class.java)
+                check(androidLibraryExtension != null)
+                androidLibraryExtension.libraryVariants.all libraryVariantAll@{
+                    val libraryVariant = this
+                    var copyFlutterAssetsTask: Task? = null
+                    val androidAppExtension =
+                        appProject.extensions.findByName("android") as? AbstractAppExtension
+                    check(androidAppExtension != null)
+                    androidAppExtension.applicationVariants.all applicationVariantAll@{
+                        val appProjectVariant = this
+                        val appAssembleTask: Task = appProjectVariant.assembleProvider.get()
+                        if (!FlutterPluginUtils.shouldConfigureFlutterTask(project, appAssembleTask)) {
+                            return@applicationVariantAll
+                        }
+
+                        // Find a compatible application variant in the host app.
+                        //
+                        // For example, consider a host app that defines the following variants:
+                        // | ----------------- | ----------------------------- |
+                        // |   Build Variant   |   Flutter Equivalent Variant  |
+                        // | ----------------- | ----------------------------- |
+                        // |   freeRelease     |   release                     |
+                        // |   freeDebug       |   debug                       |
+                        // |   freeDevelop     |   debug                       |
+                        // |   profile         |   profile                     |
+                        // | ----------------- | ----------------------------- |
+                        //
+                        // This mapping is based on the following rules:
+                        // 1. If the host app build variant name is `profile` then the equivalent
+                        //    Flutter variant is `profile`.
+                        // 2. If the host app build variant is debuggable
+                        //    (e.g. `buildType.debuggable = true`), then the equivalent Flutter
+                        //    variant is `debug`.
+                        // 3. Otherwise, the equivalent Flutter variant is `release`.
+                        val variantBuildMode: String =
+                            FlutterPluginUtils.buildModeFor(libraryVariant.buildType)
+                        if (FlutterPluginUtils.buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
+                            return@applicationVariantAll
+                        }
+                        copyFlutterAssetsTask = copyFlutterAssetsTask ?: addFlutterDeps(
+                            libraryVariant,
+                            flutterPlugin,
+                            targetPlatforms
+                        )
+                        // TODO(gmackall): Migrate to AGPs variant api.
+                        //    https://github.com/flutter/flutter/issues/166550
+                        val mergeAssets =
+                            projectToAddTasksTo
+                                .tasks
+                                .findByPath(":$hostAppProjectName:merge${FlutterPluginUtils.capitalize(appProjectVariant.name)}Assets")
+                        check(mergeAssets != null)
+                        mergeAssets.dependsOn(copyFlutterAssetsTask)
+                    }
                 }
             }
         }
@@ -653,14 +680,16 @@ class FlutterPlugin : Plugin<Project> {
             val validateDeferredComponentsValue: Boolean =
                 project.findProperty("validate-deferred-components")?.toString()?.toBoolean() ?: true
 
-            if (FlutterPluginUtils.shouldProjectSplitPerAbi(project)) {
+            // Only configure split-per-abi for ApkVariants (applications).
+            // LibraryVariant outputs cannot be cast to ApkVariantOutput.
+            if (variant is ApkVariant && FlutterPluginUtils.shouldProjectSplitPerAbi(project)) {
                 variant.outputs.forEach { output ->
                     // need to force this as the API does not return the right thing for our use.
                     // TODO(gmackall): Migrate to AGPs variant api.
                     //    https://github.com/flutter/flutter/issues/166550
                     @Suppress("DEPRECATION")
                     output as com.android.build.gradle.api.ApkVariantOutput
-                    val versionCodeIfPresent: Int? = if (variant is ApkVariant) variant.versionCode else null
+                    val versionCodeIfPresent: Int? = variant.versionCode
 
                     // TODO(gmackall): Migrate to AGPs variant api.
                     //    https://github.com/flutter/flutter/issues/166550
