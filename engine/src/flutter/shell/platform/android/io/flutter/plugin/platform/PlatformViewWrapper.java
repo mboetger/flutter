@@ -44,6 +44,7 @@ public class PlatformViewWrapper extends FrameLayout {
   private int prevTop;
   private int left;
   private int top;
+  private int clipBehavior = 1; // Default to Clip.hardEdge
   private AndroidTouchProcessor touchProcessor;
   private PlatformViewRenderTarget renderTarget;
 
@@ -243,5 +244,12 @@ public class PlatformViewWrapper extends FrameLayout {
       activeFocusListener = null;
       observer.removeOnGlobalFocusChangeListener(currFocusListener);
     }
+  }
+
+  public void setClipBehavior(int clipBehavior) {
+    this.clipBehavior = clipBehavior;
+    boolean clip = clipBehavior != 0; // 0 is Clip.none
+    setClipChildren(clip);
+    setClipToPadding(clip);
   }
 }

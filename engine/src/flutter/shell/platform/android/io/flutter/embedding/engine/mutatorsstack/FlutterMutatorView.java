@@ -33,6 +33,7 @@ public class FlutterMutatorView extends FrameLayout {
   private float screenDensity;
   private int left;
   private int top;
+  private int clipBehavior = 1; // Default to Clip.hardEdge
 
   private final AndroidTouchProcessor androidTouchProcessor;
   private Paint paint;
@@ -189,6 +190,13 @@ public class FlutterMutatorView extends FrameLayout {
     // for the current platform view.
     // See AccessibilityBridge for more.
     return super.requestSendAccessibilityEvent(child, event);
+  }
+
+  public void setClipBehavior(int clipBehavior) {
+    this.clipBehavior = clipBehavior;
+    boolean clip = clipBehavior != 0; // 0 is Clip.none
+    setClipChildren(clip);
+    setClipToPadding(clip);
   }
 
   @Override

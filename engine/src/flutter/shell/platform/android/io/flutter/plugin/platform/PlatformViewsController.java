@@ -123,6 +123,24 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   // Map of unique IDs to views that render overlay layers.
   private final SparseArray<PlatformOverlayView> overlayLayerViews;
 
+  // Clip behaviors for each platform view.
+  private final SparseArray<Integer> viewClipBehaviors = new SparseArray<>();
+
+  private void updateFlutterViewClipBehavior() {
+    if (flutterView == null) {
+      return;
+    }
+    boolean anyNoClip = false;
+    for (int index = 0; index < viewClipBehaviors.size(); index++) {
+      if (viewClipBehaviors.valueAt(index) == 0) { // Clip.none
+        anyNoClip = true;
+        break;
+      }
+    }
+    flutterView.setClipChildren(!anyNoClip);
+    flutterView.setClipToPadding(!anyNoClip);
+  }
+
   // The platform view wrappers that are appended to FlutterView.
   //
   // These platform views use a TextureLayer in the framework. This is different than
@@ -169,6 +187,9 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
           ensureValidRequest(request);
           throwIfHCPPEnabled();
 
+          viewClipBehaviors.put(request.viewId, request.clipBehavior);
+          updateFlutterViewClipBehavior();
+
           final PlatformView platformView = createPlatformView(request, false);
 
           configureForHybridComposition(platformView, request);
@@ -193,6 +214,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         @Override
         public long createForTextureLayer(@NonNull PlatformViewCreationRequest request) {
           ensureValidRequest(request);
+          viewClipBehaviors.put(request.viewId, request.clipBehavior);
+          updateFlutterViewClipBehavior();
           final int viewId = request.viewId;
           if (viewWrappers.get(viewId) != null) {
             throw new IllegalStateException(
@@ -248,6 +271,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
 
         @Override
         public void dispose(int viewId) {
+          viewClipBehaviors.remove(viewId);
+          updateFlutterViewClipBehavior();
           final PlatformView platformView = platformViews.get(viewId);
           if (platformView == null) {
             Log.e(TAG, "Disposing unknown platform view with id: " + viewId);
@@ -468,6 +493,20 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         }
 
         @Override
+        public void setClipBehavior(int viewId, int clipBehavior) {
+          viewClipBehaviors.put(viewId, clipBehavior);
+          final FlutterMutatorView mutatorView = platformViewParent.get(viewId);
+          if (mutatorView != null) {
+            mutatorView.setClipBehavior(clipBehavior);
+          }
+          final PlatformViewWrapper platformViewWrapper = viewWrappers.get(viewId);
+          if (platformViewWrapper != null) {
+            platformViewWrapper.setClipBehavior(clipBehavior);
+          }
+          updateFlutterViewClipBehavior();
+        }
+
+        @Override
         public void clearFocus(int viewId) {
           View embeddedView;
 
@@ -630,6 +669,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     }
     viewWrapper.setTouchProcessor(androidTouchProcessor);
     viewWrapper.resizeRenderTarget(physicalWidth, physicalHeight);
+    viewWrapper.setClipBehavior(request.clipBehavior);
 
     final FrameLayout.LayoutParams viewWrapperLayoutParams =
         new FrameLayout.LayoutParams(physicalWidth, physicalHeight, Gravity.LEFT | Gravity.TOP);
@@ -852,6 +892,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
    */
   public void attachToView(@NonNull FlutterView newFlutterView) {
     flutterView = newFlutterView;
+    updateFlutterViewClipBehavior();
     // Add wrapper for platform views that use GL texture.
     for (int index = 0; index < viewWrappers.size(); index++) {
       final PlatformViewWrapper view = viewWrappers.valueAt(index);
@@ -1174,6 +1215,9 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     final FlutterMutatorView parentView =
         new FlutterMutatorView(
             context, context.getResources().getDisplayMetrics().density, androidTouchProcessor);
+
+    int clipBehavior = viewClipBehaviors.get(viewId, 1);
+    parentView.setClipBehavior(clipBehavior);
 
     parentView.setOnDescendantFocusChangeListener(
         (view, hasFocus) -> {

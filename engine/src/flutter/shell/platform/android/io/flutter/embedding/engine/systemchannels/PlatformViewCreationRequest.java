@@ -56,6 +56,13 @@ public class PlatformViewCreationRequest {
    */
   public final int direction;
 
+  /**
+   * The clip behavior of the platform view.
+   *
+   * <p>0 = Clip.none, 1 = Clip.hardEdge, 2 = Clip.antiAlias, 3 = Clip.antiAliasWithSaveLayer
+   */
+  public final int clipBehavior;
+
   public final RequestedDisplayMode displayMode;
 
   /** Custom parameters that are unique to the desired platform view. */
@@ -63,14 +70,14 @@ public class PlatformViewCreationRequest {
 
   // Restrict primary constructor to private to enforce static factory usage.
   public static PlatformViewCreationRequest createHCPPRequest(
-      int viewId, String viewType, int direction, ByteBuffer params) {
-    return new PlatformViewCreationRequest(viewId, viewType, 0, 0, 0, 0, direction, null, params);
+      int viewId, String viewType, int direction, int clipBehavior, ByteBuffer params) {
+    return new PlatformViewCreationRequest(viewId, viewType, 0, 0, 0, 0, direction, clipBehavior, null, params);
   }
 
   public static PlatformViewCreationRequest createHybridCompositionRequest(
-      int viewId, String viewType, int direction, ByteBuffer params) {
+      int viewId, String viewType, int direction, int clipBehavior, ByteBuffer params) {
     return new PlatformViewCreationRequest(
-        viewId, viewType, 0, 0, 0, 0, direction, RequestedDisplayMode.HYBRID_ONLY, params);
+        viewId, viewType, 0, 0, 0, 0, direction, clipBehavior, RequestedDisplayMode.HYBRID_ONLY, params);
   }
 
   public static PlatformViewCreationRequest createTLHCWithFallbackRequest(
@@ -81,6 +88,7 @@ public class PlatformViewCreationRequest {
       double width,
       double height,
       int direction,
+      int clipBehavior,
       boolean hybridFallback,
       ByteBuffer params) {
     return new PlatformViewCreationRequest(
@@ -91,6 +99,7 @@ public class PlatformViewCreationRequest {
         width,
         height,
         direction,
+        clipBehavior,
         hybridFallback
             ? RequestedDisplayMode.TEXTURE_WITH_HYBRID_FALLBACK
             : RequestedDisplayMode.TEXTURE_WITH_VIRTUAL_FALLBACK,
@@ -119,6 +128,35 @@ public class PlatformViewCreationRequest {
         logicalWidth,
         logicalHeight,
         direction,
+        1, // Default clipBehavior (Clip.hardEdge)
+        RequestedDisplayMode.TEXTURE_WITH_VIRTUAL_FALLBACK,
+        params);
+  }
+
+  /**
+   * Creates a request to construct a platform view with a specific clip behavior. Prefer use of the
+   * mode-specific named constructors above where possible.
+   */
+  @VisibleForTesting
+  public PlatformViewCreationRequest(
+      int viewId,
+      @NonNull String viewType,
+      double logicalTop,
+      double logicalLeft,
+      double logicalWidth,
+      double logicalHeight,
+      int direction,
+      int clipBehavior,
+      @Nullable ByteBuffer params) {
+    this(
+        viewId,
+        viewType,
+        logicalTop,
+        logicalLeft,
+        logicalWidth,
+        logicalHeight,
+        direction,
+        clipBehavior,
         RequestedDisplayMode.TEXTURE_WITH_VIRTUAL_FALLBACK,
         params);
   }
@@ -135,6 +173,7 @@ public class PlatformViewCreationRequest {
       double logicalWidth,
       double logicalHeight,
       int direction,
+      int clipBehavior,
       @Nullable RequestedDisplayMode displayMode,
       @Nullable ByteBuffer params) {
     this.viewId = viewId;
@@ -144,6 +183,7 @@ public class PlatformViewCreationRequest {
     this.logicalWidth = logicalWidth;
     this.logicalHeight = logicalHeight;
     this.direction = direction;
+    this.clipBehavior = clipBehavior;
     this.displayMode = displayMode;
     this.params = params;
   }

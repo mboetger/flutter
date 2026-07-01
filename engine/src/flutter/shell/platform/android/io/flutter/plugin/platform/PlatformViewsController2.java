@@ -74,6 +74,24 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
   private final SparseArray<FlutterMutatorView> platformViewParent;
   private final MotionEventTracker motionEventTracker;
 
+  // Clip behaviors for each platform view.
+  private final SparseArray<Integer> viewClipBehaviors = new SparseArray<>();
+
+  private void updateFlutterViewClipBehavior() {
+    if (flutterView == null) {
+      return;
+    }
+    boolean anyNoClip = false;
+    for (int index = 0; index < viewClipBehaviors.size(); index++) {
+      if (viewClipBehaviors.valueAt(index) == 0) { // Clip.none
+        anyNoClip = true;
+        break;
+      }
+    }
+    flutterView.setClipChildren(!anyNoClip);
+    flutterView.setClipToPadding(!anyNoClip);
+  }
+
   private final ArrayList<SurfaceControl.Transaction> pendingTransactions;
   private final ArrayList<SurfaceControl.Transaction> activeTransactions;
   private Surface overlayerSurface = null;
@@ -105,6 +123,8 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
   }
 
   public PlatformView createFlutterPlatformView(@NonNull PlatformViewCreationRequest request) {
+    viewClipBehaviors.put(request.viewId, request.clipBehavior);
+    updateFlutterViewClipBehavior();
     final PlatformViewFactory viewFactory = registry.getFactory(request.viewType);
     if (viewFactory == null) {
       throw new IllegalStateException(
@@ -239,6 +259,7 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
    */
   public void attachToView(@NonNull FlutterView newFlutterView) {
     flutterView = newFlutterView;
+    updateFlutterViewClipBehavior();
     // Add wrapper for platform views that are composed at the view hierarchy level.
     for (int index = 0; index < platformViewParent.size(); index++) {
       final FlutterMutatorView view = platformViewParent.valueAt(index);
@@ -465,6 +486,9 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
     final FlutterMutatorView parentView =
         new FlutterMutatorView(
             context, context.getResources().getDisplayMetrics().density, androidTouchProcessor);
+
+    int clipBehavior = viewClipBehaviors.get(viewId, 1);
+    parentView.setClipBehavior(clipBehavior);
 
     parentView.setOnDescendantFocusChangeListener(
         (view, hasFocus) -> {
@@ -768,6 +792,8 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
 
         @Override
         public void dispose(int viewId) {
+          viewClipBehaviors.remove(viewId);
+          updateFlutterViewClipBehavior();
           viewsWithPendingSurfaceCallback.remove(viewId);
           final PlatformView platformView = platformViews.get(viewId);
           if (platformView == null) {
@@ -837,6 +863,16 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
             return;
           }
           embeddedView.setLayoutDirection(direction);
+        }
+
+        @Override
+        public void setClipBehavior(int viewId, int clipBehavior) {
+          viewClipBehaviors.put(viewId, clipBehavior);
+          final FlutterMutatorView mutatorView = platformViewParent.get(viewId);
+          if (mutatorView != null) {
+            mutatorView.setClipBehavior(clipBehavior);
+          }
+          updateFlutterViewClipBehavior();
         }
 
         @Override

@@ -103,6 +103,15 @@ public class PlatformViewsControllerDelegator
   }
 
   @Override
+  public void setClipBehavior(int viewId, int clipBehavior) {
+    if (platformViewsController2.getPlatformViewById(viewId) != null) {
+      platformViewsController2.channelHandler.setClipBehavior(viewId, clipBehavior);
+    } else {
+      platformViewsController.channelHandler.setClipBehavior(viewId, clipBehavior);
+    }
+  }
+
+  @Override
   public void clearFocus(int viewId) {
     if (platformViewsController2.getPlatformViewById(viewId) != null) {
       platformViewsController2.channelHandler.clearFocus(viewId);

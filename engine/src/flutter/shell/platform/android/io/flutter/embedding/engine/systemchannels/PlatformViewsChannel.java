@@ -69,6 +69,9 @@ public class PlatformViewsChannel {
             case "setDirection":
               setDirection(call, result);
               break;
+            case "setClipBehavior":
+              setClipBehavior(call, result);
+              break;
             case "clearFocus":
               clearFocus(call, result);
               break;
@@ -86,6 +89,10 @@ public class PlatformViewsChannel {
           // TODO(egarciad): Remove the "hybrid" case.
           final boolean usesPlatformViewLayer =
               createArgs.containsKey("hybrid") && (boolean) createArgs.get("hybrid");
+          final int clipBehavior =
+              createArgs.containsKey("clipBehavior")
+                  ? (int) createArgs.get("clipBehavior")
+                  : 1;
           final ByteBuffer additionalParams =
               createArgs.containsKey("params")
                   ? ByteBuffer.wrap((byte[]) createArgs.get("params"))
@@ -99,6 +106,7 @@ public class PlatformViewsChannel {
                       (int) createArgs.get("id"),
                       (String) createArgs.get("viewType"),
                       (int) createArgs.get("direction"),
+                      clipBehavior,
                       additionalParams);
               handler.createPlatformViewHcpp(request);
               result.success(null);
@@ -111,6 +119,7 @@ public class PlatformViewsChannel {
                       (int) createArgs.get("id"),
                       (String) createArgs.get("viewType"),
                       (int) createArgs.get("direction"),
+                      clipBehavior,
                       additionalParams);
               handler.createForPlatformViewLayer(request);
               result.success(null);
@@ -127,6 +136,7 @@ public class PlatformViewsChannel {
                       (double) createArgs.get("width"),
                       (double) createArgs.get("height"),
                       (int) createArgs.get("direction"),
+                      clipBehavior,
                       hybridFallback,
                       additionalParams);
               long textureId = handler.createForTextureLayer(request);
@@ -258,6 +268,18 @@ public class PlatformViewsChannel {
             result.error("error", detailedExceptionString(exception), null);
           }
         }
+
+        private void setClipBehavior(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
+          Map<String, Object> args = call.arguments();
+          int viewId = (int) args.get("id");
+          int clipBehavior = (int) args.get("clipBehavior");
+          try {
+            handler.setClipBehavior(viewId, clipBehavior);
+            result.success(null);
+          } catch (IllegalStateException exception) {
+            result.error("error", detailedExceptionString(exception), null);
+          }
+        }
       };
 
   /**
@@ -358,6 +380,8 @@ public class PlatformViewsChannel {
      */
     // TODO(mattcarroll): Introduce an annotation for @TextureId
     void setDirection(int viewId, int direction);
+
+    void setClipBehavior(int viewId, int clipBehavior);
 
     /** Clears the focus from the platform view with a give id if it is currently focused. */
     void clearFocus(int viewId);

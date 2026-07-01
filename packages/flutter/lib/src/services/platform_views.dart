@@ -138,6 +138,7 @@ class PlatformViewsService {
     dynamic creationParams,
     MessageCodec<dynamic>? creationParamsCodec,
     VoidCallback? onFocus,
+    Clip clipBehavior = Clip.hardEdge,
   }) {
     assert(creationParams == null || creationParamsCodec != null);
 
@@ -147,6 +148,7 @@ class PlatformViewsService {
       layoutDirection: layoutDirection,
       creationParams: creationParams,
       creationParamsCodec: creationParamsCodec,
+      clipBehavior: clipBehavior,
     );
 
     _instance._focusCallbacks[id] = onFocus ?? () {};
@@ -168,6 +170,7 @@ class PlatformViewsService {
     dynamic creationParams,
     MessageCodec<dynamic>? creationParamsCodec,
     VoidCallback? onFocus,
+    Clip clipBehavior = Clip.hardEdge,
   }) {
     assert(creationParams == null || creationParamsCodec != null);
 
@@ -177,6 +180,7 @@ class PlatformViewsService {
       layoutDirection: layoutDirection,
       creationParams: creationParams,
       creationParamsCodec: creationParamsCodec,
+      clipBehavior: clipBehavior,
     );
     _instance._focusCallbacks[id] = onFocus ?? () {};
     return controller;
@@ -198,6 +202,7 @@ class PlatformViewsService {
     dynamic creationParams,
     MessageCodec<dynamic>? creationParamsCodec,
     VoidCallback? onFocus,
+    Clip clipBehavior = Clip.hardEdge,
   }) {
     final controller = ExpensiveAndroidViewController._(
       viewId: id,
@@ -205,6 +210,7 @@ class PlatformViewsService {
       layoutDirection: layoutDirection,
       creationParams: creationParams,
       creationParamsCodec: creationParamsCodec,
+      clipBehavior: clipBehavior,
     );
 
     _instance._focusCallbacks[id] = onFocus ?? () {};
@@ -226,6 +232,7 @@ class PlatformViewsService {
     dynamic creationParams,
     MessageCodec<dynamic>? creationParamsCodec,
     VoidCallback? onFocus,
+    Clip clipBehavior = Clip.hardEdge,
   }) {
     final controller = HybridAndroidViewController._(
       viewId: id,
@@ -233,6 +240,7 @@ class PlatformViewsService {
       layoutDirection: layoutDirection,
       creationParams: creationParams,
       creationParamsCodec: creationParamsCodec,
+      clipBehavior: clipBehavior,
     );
 
     _instance._focusCallbacks[id] = onFocus ?? () {};
@@ -741,9 +749,11 @@ abstract class AndroidViewController extends PlatformViewController {
     required TextDirection layoutDirection,
     dynamic creationParams,
     MessageCodec<dynamic>? creationParamsCodec,
+    Clip clipBehavior = Clip.hardEdge,
   }) : assert(creationParams == null || creationParamsCodec != null),
        _viewType = viewType,
        _layoutDirection = layoutDirection,
+       _clipBehavior = clipBehavior,
        _creationParams = creationParams == null
            ? null
            : _CreationParams(creationParams, creationParamsCodec!);
@@ -809,6 +819,11 @@ abstract class AndroidViewController extends PlatformViewController {
   final _AndroidMotionEventConverter _motionEventConverter = _AndroidMotionEventConverter();
 
   TextDirection _layoutDirection;
+
+  Clip _clipBehavior;
+
+  /// The clip behavior of the Android view.
+  Clip get clipBehavior => _clipBehavior;
 
   _AndroidViewState _state = _AndroidViewState.waitingForSize;
 
@@ -985,6 +1000,31 @@ abstract class AndroidViewController extends PlatformViewController {
     });
   }
 
+  /// Sets the clip behavior for the Android view.
+  Future<void> setClipBehavior(Clip clipBehavior) async {
+    assert(
+      _state != _AndroidViewState.disposed,
+      'trying to set a clip behavior for a disposed Android view. View id: $viewId',
+    );
+
+    if (clipBehavior == _clipBehavior) {
+      return;
+    }
+
+    _clipBehavior = clipBehavior;
+
+    // If the view was not yet created we just update _clipBehavior and return, as the new
+    // behavior will be used in _create.
+    if (_state == _AndroidViewState.waitingForSize) {
+      return;
+    }
+
+    await SystemChannels.platform_views.invokeMethod<void>('setClipBehavior', <String, dynamic>{
+      'id': viewId,
+      'clipBehavior': clipBehavior.index,
+    });
+  }
+
   /// Converts the [PointerEvent] and sends an Android [MotionEvent](https://developer.android.com/reference/android/view/MotionEvent)
   /// to the view.
   ///
@@ -1057,6 +1097,7 @@ class SurfaceAndroidViewController extends AndroidViewController {
     required super.layoutDirection,
     super.creationParams,
     super.creationParamsCodec,
+    super.clipBehavior,
   }) : super._();
 
   // By default, assume the implementation will be texture-based.
@@ -1081,6 +1122,7 @@ class SurfaceAndroidViewController extends AndroidViewController {
       creationParams: _creationParams,
       size: size,
       position: position,
+      clipBehavior: clipBehavior,
     );
     if (response is int) {
       (_internals as _TextureAndroidViewControllerInternals).textureId = response;
@@ -1128,6 +1170,7 @@ class ExpensiveAndroidViewController extends AndroidViewController {
     required super.layoutDirection,
     super.creationParams,
     super.creationParamsCodec,
+    super.clipBehavior,
   }) : super._();
 
   final _AndroidViewControllerInternals _internals = _HybridAndroidViewControllerInternals();
@@ -1144,6 +1187,7 @@ class ExpensiveAndroidViewController extends AndroidViewController {
       layoutDirection: _layoutDirection,
       creationParams: _creationParams,
       position: position,
+      clipBehavior: clipBehavior,
     );
   }
 
@@ -1183,6 +1227,7 @@ class HybridAndroidViewController extends AndroidViewController {
     required super.layoutDirection,
     super.creationParams,
     super.creationParamsCodec,
+    super.clipBehavior,
   }) : super._();
 
   final _AndroidViewControllerInternals _internals = _Hybrid2AndroidViewControllerInternals();
@@ -1205,6 +1250,7 @@ class HybridAndroidViewController extends AndroidViewController {
       creationParams: _creationParams,
       position: position,
       useNewController: true,
+      clipBehavior: clipBehavior,
     );
   }
 
@@ -1253,6 +1299,7 @@ class TextureAndroidViewController extends AndroidViewController {
     required super.layoutDirection,
     super.creationParams,
     super.creationParamsCodec,
+    super.clipBehavior,
   }) : super._();
 
   _AndroidViewControllerInternals _internals = _TextureAndroidViewControllerInternals();
@@ -1275,6 +1322,7 @@ class TextureAndroidViewController extends AndroidViewController {
       creationParams: _creationParams,
       size: size,
       position: position,
+      clipBehavior: clipBehavior,
     );
     if (response is int) {
       (_internals as _TextureAndroidViewControllerInternals).textureId = response;
@@ -1339,17 +1387,19 @@ abstract class _AndroidViewControllerInternals {
     _CreationParams? creationParams,
     Size? size,
     Offset? position,
+    Clip clipBehavior = Clip.hardEdge,
   }) {
     final args = <String, dynamic>{
       'id': viewId,
       'viewType': viewType,
       'direction': AndroidViewController._getAndroidDirection(layoutDirection),
       if (hybrid) 'hybrid': hybrid,
-      'width': ?size?.width,
-      'height': ?size?.height,
+      'width': size?.width,
+      'height': size?.height,
       if (hybridFallback) 'hybridFallback': hybridFallback,
-      'left': ?position?.dx,
-      'top': ?position?.dy,
+      'left': position?.dx,
+      'top': position?.dy,
+      'clipBehavior': clipBehavior.index,
     };
     if (creationParams != null) {
       final ByteData paramsByteData = creationParams.codec.encodeMessage(creationParams.data)!;

@@ -1995,6 +1995,70 @@ public class PlatformViewsControllerTest {
         /*messageData=*/ 0);
   }
 
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void itManagesFlutterViewClipping() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    final FlutterView flutterView = attach(jni, platformViewsController);
+
+    // Register a factory.
+    platformViewsController.getRegistry().registerViewFactory(
+        CountingPlatformView.VIEW_TYPE_ID,
+        new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+          @Override
+          public PlatformView create(Context context, int viewId, Object args) {
+            return new CountingPlatformView(context);
+          }
+        });
+
+    // Initially, FlutterView should clip children (default Android behavior).
+    assertTrue(flutterView.getClipChildren());
+
+    // 1. Create a view with Clip.none (0).
+    final PlatformViewCreationRequest request1 =
+        PlatformViewCreationRequest.createHybridCompositionRequest(
+            /*viewId=*/ 0,
+            CountingPlatformView.VIEW_TYPE_ID,
+            View.LAYOUT_DIRECTION_LTR,
+            /*clipBehavior=*/ 0, // Clip.none
+            /*params=*/ null);
+    platformViewsController.channelHandler.createForPlatformViewLayer(request1);
+
+    // Since we have a Clip.none view, FlutterView should NOT clip children.
+    assertFalse(flutterView.getClipChildren());
+    assertFalse(flutterView.getClipToPadding());
+
+    // 2. Create another view with Clip.hardEdge (1).
+    final PlatformViewCreationRequest request2 =
+        PlatformViewCreationRequest.createHybridCompositionRequest(
+            /*viewId=*/ 1,
+            CountingPlatformView.VIEW_TYPE_ID,
+            View.LAYOUT_DIRECTION_LTR,
+            /*clipBehavior=*/ 1, // Clip.hardEdge
+            /*params=*/ null);
+    platformViewsController.channelHandler.createForPlatformViewLayer(request2);
+
+    // Still should NOT clip because view 0 is still Clip.none.
+    assertFalse(flutterView.getClipChildren());
+
+    // 3. Dispose the Clip.none view (view 0).
+    platformViewsController.channelHandler.dispose(0);
+
+    // Now only view 1 (Clip.hardEdge) remains, so FlutterView should revert to clipping.
+    assertTrue(flutterView.getClipChildren());
+    assertTrue(flutterView.getClipToPadding());
+
+    // 4. Update view 1 to Clip.none.
+    platformViewsController.channelHandler.setClipBehavior(1, 0);
+    assertFalse(flutterView.getClipChildren());
+
+    // 5. Update view 1 back to Clip.hardEdge.
+    platformViewsController.channelHandler.setClipBehavior(1, 1);
+    assertTrue(flutterView.getClipChildren());
+  }
+
   private static FlutterView attach(
       FlutterJNI jni, PlatformViewsController platformViewsController) {
     final Context context = ApplicationProvider.getApplicationContext();
@@ -2188,6 +2252,11 @@ public class PlatformViewsControllerTest {
 
     @Implementation
     public boolean getIsSoftwareRenderingEnabled() {
+      return false;
+    }
+
+    @Implementation
+    public boolean IsSurfaceControlEnabled() {
       return false;
     }
 

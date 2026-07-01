@@ -194,6 +194,11 @@ class AndroidView extends StatefulWidget {
   /// {@macro flutter.material.Material.clipBehavior}
   ///
   /// Defaults to [Clip.hardEdge].
+  ///
+  /// Warning: When using texture-based composition (the default), [Clip.none]
+  /// may not prevent clipping if the native view draws outside the texture's
+  /// size. To support full overflow without clipping, consider using Hybrid
+  /// Composition (e.g. by using [PlatformViewsService.initExpensiveAndroidView]).
   final Clip clipBehavior;
 
   @override
@@ -773,6 +778,10 @@ class _AndroidViewState extends State<AndroidView> {
     if (didChangeLayoutDirection) {
       _controller.setLayoutDirection(_layoutDirection!);
     }
+
+    if (widget.clipBehavior != oldWidget.clipBehavior) {
+      _controller.setClipBehavior(widget.clipBehavior);
+    }
   }
 
   TextDirection _findLayoutDirection() {
@@ -799,6 +808,7 @@ class _AndroidViewState extends State<AndroidView> {
       onFocus: () {
         _focusNode!.requestFocus();
       },
+      clipBehavior: widget.clipBehavior,
     );
     if (widget.onPlatformViewCreated != null) {
       _controller.addOnPlatformViewCreatedListener(widget.onPlatformViewCreated!);
@@ -1489,6 +1499,7 @@ class AndroidViewSurface extends StatefulWidget {
     required this.controller,
     required this.hitTestBehavior,
     required this.gestureRecognizers,
+    this.clipBehavior = Clip.hardEdge,
   });
 
   /// The controller for the platform view integrated by this [AndroidViewSurface].
@@ -1503,6 +1514,9 @@ class AndroidViewSurface extends StatefulWidget {
 
   /// {@macro flutter.widgets.AndroidView.hitTestBehavior}
   final PlatformViewHitTestBehavior hitTestBehavior;
+
+  /// {@macro flutter.widgets.AndroidView.clipBehavior}
+  final Clip clipBehavior;
 
   @override
   State<StatefulWidget> createState() {
@@ -1528,6 +1542,14 @@ class _AndroidViewSurfaceState extends State<AndroidViewSurface> {
   }
 
   @override
+  void didUpdateWidget(AndroidViewSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.clipBehavior != oldWidget.clipBehavior) {
+      widget.controller.setClipBehavior(widget.clipBehavior);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (widget.controller.requiresViewComposition) {
       return _PlatformLayerBasedAndroidViewSurface(
@@ -1540,6 +1562,7 @@ class _AndroidViewSurfaceState extends State<AndroidViewSurface> {
         controller: widget.controller,
         hitTestBehavior: widget.hitTestBehavior,
         gestureRecognizers: widget.gestureRecognizers,
+        clipBehavior: widget.clipBehavior,
       );
     }
   }
@@ -1556,7 +1579,10 @@ class _TextureBasedAndroidViewSurface extends PlatformViewSurface {
     required AndroidViewController super.controller,
     required super.hitTestBehavior,
     required super.gestureRecognizers,
+    required this.clipBehavior,
   });
+
+  final Clip clipBehavior;
 
   @override
   RenderObject createRenderObject(BuildContext context) {
@@ -1567,6 +1593,7 @@ class _TextureBasedAndroidViewSurface extends PlatformViewSurface {
       viewController: viewController,
       gestureRecognizers: gestureRecognizers,
       hitTestBehavior: hitTestBehavior,
+      clipBehavior: clipBehavior,
     );
     viewController.pointTransformer = (Offset position) => renderBox.globalToLocal(position);
     return renderBox;

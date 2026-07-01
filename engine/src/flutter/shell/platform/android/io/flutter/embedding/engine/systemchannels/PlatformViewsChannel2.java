@@ -76,6 +76,9 @@ public class PlatformViewsChannel2 {
             case "setDirection":
               setDirection(call, result);
               break;
+            case "setClipBehavior":
+              setClipBehavior(call, result);
+              break;
             case "clearFocus":
               clearFocus(call, result);
               break;
@@ -89,6 +92,10 @@ public class PlatformViewsChannel2 {
 
         private void create(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
           final Map<String, Object> createArgs = call.arguments();
+          final int clipBehavior =
+              createArgs.containsKey("clipBehavior")
+                  ? (int) createArgs.get("clipBehavior")
+                  : 1;
           final ByteBuffer additionalParams =
               createArgs.containsKey("params")
                   ? ByteBuffer.wrap((byte[]) createArgs.get("params"))
@@ -99,6 +106,7 @@ public class PlatformViewsChannel2 {
                     (int) createArgs.get("id"),
                     (String) createArgs.get("viewType"),
                     (int) createArgs.get("direction"),
+                    clipBehavior,
                     additionalParams);
             handler.createPlatformView(request);
             result.success(null);
@@ -162,6 +170,18 @@ public class PlatformViewsChannel2 {
           }
         }
 
+        private void setClipBehavior(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
+          Map<String, Object> args = call.arguments();
+          int viewId = (int) args.get("id");
+          int clipBehavior = (int) args.get("clipBehavior");
+          try {
+            handler.setClipBehavior(viewId, clipBehavior);
+            result.success(null);
+          } catch (IllegalStateException exception) {
+            result.error("error", detailedExceptionString(exception), null);
+          }
+        }
+
         private void clearFocus(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
           int viewId = call.arguments();
           try {
@@ -215,6 +235,8 @@ public class PlatformViewsChannel2 {
      * {@code View}, i.e., platform view.
      */
     void setDirection(int viewId, int direction);
+
+    void setClipBehavior(int viewId, int clipBehavior);
 
     /** Clears the focus from the platform view with a give id if it is currently focused. */
     void clearFocus(int viewId);
