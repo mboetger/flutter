@@ -118,6 +118,8 @@ public class PlatformViewsChannel {
               final boolean hybridFallback =
                   createArgs.containsKey("hybridFallback")
                       && (boolean) createArgs.get("hybridFallback");
+              double scaleX = getDouble(createArgs, "scaleX", 1.0);
+              double scaleY = getDouble(createArgs, "scaleY", 1.0);
               final PlatformViewCreationRequest request =
                   PlatformViewCreationRequest.createTLHCWithFallbackRequest(
                       (int) createArgs.get("id"),
@@ -126,6 +128,8 @@ public class PlatformViewsChannel {
                       createArgs.containsKey("left") ? (double) createArgs.get("left") : 0.0,
                       (double) createArgs.get("width"),
                       (double) createArgs.get("height"),
+                      scaleX,
+                      scaleY,
                       (int) createArgs.get("direction"),
                       hybridFallback,
                       additionalParams);
@@ -160,11 +164,15 @@ public class PlatformViewsChannel {
 
         private void resize(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
           Map<String, Object> resizeArgs = call.arguments();
+          double scaleX = getDouble(resizeArgs, "scaleX", 1.0);
+          double scaleY = getDouble(resizeArgs, "scaleY", 1.0);
           PlatformViewResizeRequest resizeRequest =
               new PlatformViewResizeRequest(
                   (int) resizeArgs.get("id"),
                   (double) resizeArgs.get("width"),
-                  (double) resizeArgs.get("height"));
+                  (double) resizeArgs.get("height"),
+                  scaleX,
+                  scaleY);
           try {
             handler.resize(
                 resizeRequest,
@@ -383,10 +391,23 @@ public class PlatformViewsChannel {
     /** The new density independent height to display the platform view. */
     public final double newLogicalHeight;
 
+    /** The scale factor along the X axis. */
+    public final double scaleX;
+
+    /** The scale factor along the Y axis. */
+    public final double scaleY;
+
     public PlatformViewResizeRequest(int viewId, double newLogicalWidth, double newLogicalHeight) {
+      this(viewId, newLogicalWidth, newLogicalHeight, 1.0, 1.0);
+    }
+
+    public PlatformViewResizeRequest(
+        int viewId, double newLogicalWidth, double newLogicalHeight, double scaleX, double scaleY) {
       this.viewId = viewId;
       this.newLogicalWidth = newLogicalWidth;
       this.newLogicalHeight = newLogicalHeight;
+      this.scaleX = scaleX;
+      this.scaleY = scaleY;
     }
   }
 
@@ -402,6 +423,16 @@ public class PlatformViewsChannel {
       this.width = width;
       this.height = height;
     }
+  }
+
+  private static double getDouble(@NonNull Map<String, Object> args, @NonNull String key, double defaultValue) {
+    if (args.containsKey(key)) {
+      Object val = args.get(key);
+      if (val instanceof Number) {
+        return ((Number) val).doubleValue();
+      }
+    }
+    return defaultValue;
   }
 
   /** Allows to notify when a platform view buffer has been resized. */

@@ -16,6 +16,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnFocusChangeListener;
 import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
@@ -41,10 +42,19 @@ class VirtualDisplayController {
       int height,
       int viewId,
       Object createParams,
-      OnFocusChangeListener focusChangeListener) {
-    if (width == 0 || height == 0) {
+      OnFocusChangeListener focusChangeListener,
+      double scaleX,
+      double scaleY) {
+    if (width <= 0 || height <= 0) {
       return null;
     }
+    // We lay out the embedded view using the unscaled physical dimensions so that
+    // it renders its content at the original intended resolution. We then apply
+    // scale transforms (setScaleX/Y) to the view so Android handles the scaling.
+    // The Virtual Display itself must be sized to the scaled dimensions to prevent
+    // clipping the scaled output.
+    int scaledWidth = Math.max(1, (int) Math.round(width * scaleX));
+    int scaledHeight = Math.max(1, (int) Math.round(height * scaleY));
 
     DisplayManager displayManager =
         (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
@@ -60,13 +70,13 @@ class VirtualDisplayController {
     // TODO(cyanglaz): find a way to prevent the crash without introducing size mismatch between
     // virtual display and AndroidPlatformView widget.
     // https://github.com/flutter/flutter/issues/93115
-    renderTarget.resize(width, height);
+    renderTarget.resize(scaledWidth, scaledHeight);
     int flags = 0;
     VirtualDisplay virtualDisplay =
         displayManager.createVirtualDisplay(
             "flutter-vd#" + viewId,
-            width,
-            height,
+            scaledWidth,
+            scaledHeight,
             metrics.densityDpi,
             renderTarget.getSurface(),
             flags,
@@ -85,7 +95,11 @@ class VirtualDisplayController {
             renderTarget,
             focusChangeListener,
             viewId,
-            createParams);
+            createParams,
+            width,
+            height,
+            scaleX,
+            scaleY);
     return controller;
   }
 
@@ -97,6 +111,8 @@ class VirtualDisplayController {
   private final int viewId;
   private final PlatformViewRenderTarget renderTarget;
   private final OnFocusChangeListener focusChangeListener;
+  private double scaleX = 1.0;
+  private double scaleY = 1.0;
 
   private VirtualDisplay virtualDisplay;
 
@@ -108,7 +124,11 @@ class VirtualDisplayController {
       PlatformViewRenderTarget renderTarget,
       OnFocusChangeListener focusChangeListener,
       int viewId,
-      Object createParams) {
+      Object createParams,
+      int width,
+      int height,
+      double scaleX,
+      double scaleY) {
     this.context = context;
     this.accessibilityEventsDelegate = accessibilityEventsDelegate;
     this.renderTarget = renderTarget;
@@ -116,6 +136,16 @@ class VirtualDisplayController {
     this.viewId = viewId;
     this.virtualDisplay = virtualDisplay;
     this.densityDpi = context.getResources().getDisplayMetrics().densityDpi;
+    this.scaleX = scaleX;
+    this.scaleY = scaleY;
+    final View embeddedView = view.getView();
+    if (embeddedView != null) {
+      embeddedView.setLayoutParams(new FrameLayout.LayoutParams(width, height));
+      embeddedView.setPivotX(0f);
+      embeddedView.setPivotY(0f);
+      embeddedView.setScaleX((float) scaleX);
+      embeddedView.setScaleY((float) scaleY);
+    }
     presentation =
         new SingleViewPresentation(
             context,
@@ -125,6 +155,14 @@ class VirtualDisplayController {
             viewId,
             focusChangeListener);
     presentation.show();
+  }
+
+  public double getScaleX() {
+    return scaleX;
+  }
+
+  public double getScaleY() {
+    return scaleY;
   }
 
   public int getRenderTargetWidth() {
@@ -142,14 +180,45 @@ class VirtualDisplayController {
   }
 
   public void resize(final int width, final int height, final Runnable onNewSizeFrameAvailable) {
-    // When 'hot reload', although the resize method is triggered, the size of the native View has
-    // not changed.
-    if (width == getRenderTargetWidth() && height == getRenderTargetHeight()) {
-      getView().postDelayed(onNewSizeFrameAvailable, 0);
+    resize(width, height, 1.0, 1.0, onNewSizeFrameAvailable);
+  }
+
+  public void resize(
+      final int width,
+      final int height,
+      final double scaleX,
+      final double scaleY,
+      final Runnable onNewSizeFrameAvailable) {
+    // We lay out the embedded view using the unscaled physical dimensions so that
+    // it renders its content at the original intended resolution. We then apply
+    // scale transforms (setScaleX/Y) to the view so Android handles the scaling.
+    // The Virtual Display itself must be sized to the scaled dimensions to prevent
+    // clipping the scaled output.
+    int scaledWidth = Math.max(1, (int) Math.round(width * scaleX));
+    int scaledHeight = Math.max(1, (int) Math.round(height * scaleY));
+
+    final View embeddedView = getView();
+    if (embeddedView != null) {
+      embeddedView.setLayoutParams(new FrameLayout.LayoutParams(width, height));
+      embeddedView.setPivotX(0f);
+      embeddedView.setPivotY(0f);
+      embeddedView.setScaleX((float) scaleX);
+      embeddedView.setScaleY((float) scaleY);
+    }
+
+    if (scaledWidth == getRenderTargetWidth() && scaledHeight == getRenderTargetHeight()) {
+      if (embeddedView != null) {
+        embeddedView.postDelayed(onNewSizeFrameAvailable, 0);
+      }
+      this.scaleX = scaleX;
+      this.scaleY = scaleY;
       return;
     }
+    this.scaleX = scaleX;
+    this.scaleY = scaleY;
+
     if (Build.VERSION.SDK_INT >= API_LEVELS.API_31) {
-      resize31(getView(), width, height, onNewSizeFrameAvailable);
+      resize31(embeddedView, scaledWidth, scaledHeight, onNewSizeFrameAvailable);
       return;
     }
     boolean isFocused = getView().isFocused();
@@ -160,20 +229,19 @@ class VirtualDisplayController {
 
     final DisplayManager displayManager =
         (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
-    renderTarget.resize(width, height);
+    renderTarget.resize(scaledWidth, scaledHeight);
     int flags = 0;
     virtualDisplay =
         displayManager.createVirtualDisplay(
             "flutter-vd#" + viewId,
-            width,
-            height,
+            scaledWidth,
+            scaledHeight,
             densityDpi,
             renderTarget.getSurface(),
             flags,
             callback,
             null /* handler */);
 
-    final View embeddedView = getView();
     // There's a bug in Android version older than O where view tree observer onDrawListeners don't
     // get properly
     // merged when attaching to window, as a workaround we register the on draw listener after the

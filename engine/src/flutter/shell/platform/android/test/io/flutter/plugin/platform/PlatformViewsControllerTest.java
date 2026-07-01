@@ -42,6 +42,7 @@ import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.embedding.engine.systemchannels.AccessibilityChannel;
 import io.flutter.embedding.engine.systemchannels.MouseCursorChannel;
 import io.flutter.embedding.engine.systemchannels.PlatformViewCreationRequest;
+import io.flutter.embedding.engine.systemchannels.PlatformViewsChannel;
 import io.flutter.embedding.engine.systemchannels.PlatformViewTouch;
 import io.flutter.embedding.engine.systemchannels.ScribeChannel;
 import io.flutter.embedding.engine.systemchannels.SettingsChannel;
@@ -278,13 +279,49 @@ public class PlatformViewsControllerTest {
     resize(jni, platformViewsController, platformViewId, 10.0, 20.0);
 
     ArgumentCaptor<Runnable> resizeCallbackCaptor = ArgumentCaptor.forClass(Runnable.class);
-    verify(fakeVdController, times(1)).resize(anyInt(), anyInt(), resizeCallbackCaptor.capture());
+    verify(fakeVdController, times(1))
+        .resize(anyInt(), anyInt(), anyDouble(), anyDouble(), resizeCallbackCaptor.capture());
 
     // Simulate a detach call before the resize completes.
     platformViewsController.detach();
 
     // Trigger the callback to ensure that it doesn't crash.
     resizeCallbackCaptor.getValue().run();
+  }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void virtualDisplay_resizePassesScaleToVdController() {
+    final int platformViewId = 0;
+    FlutterView fakeFlutterView = new FlutterView(ApplicationProvider.getApplicationContext());
+    VirtualDisplayController fakeVdController = mock(VirtualDisplayController.class);
+    when(fakeVdController.getRenderTargetWidth()).thenReturn(40);
+    when(fakeVdController.getRenderTargetHeight()).thenReturn(100);
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    platformViewsController.vdControllers.put(platformViewId, fakeVdController);
+
+    platformViewsController.attachToView(fakeFlutterView);
+
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    final boolean[] callbackCalled = new boolean[1];
+    platformViewsController.channelHandler.resize(
+        new PlatformViewsChannel.PlatformViewResizeRequest(platformViewId, 10.0, 20.0, 4.0, 5.0),
+        (PlatformViewsChannel.PlatformViewBufferSize bufferSize) -> {
+          callbackCalled[0] = true;
+          assertEquals(10, bufferSize.width);
+          assertEquals(20, bufferSize.height);
+        }
+    );
+
+    ArgumentCaptor<Runnable> resizeCallbackCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(fakeVdController, times(1))
+        .resize(eq(10), eq(20), eq(4.0), eq(5.0), resizeCallbackCaptor.capture());
+
+    resizeCallbackCaptor.getValue().run();
+    assertTrue(callbackCalled[0]);
   }
 
   @Test
@@ -1900,6 +1937,183 @@ public class PlatformViewsControllerTest {
     assertTrue(flutterView.indexOfChild(overlayView) == -1);
   }
 
+  @Test
+  @Config(
+      shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class, ShadowPresentation.class, ShadowFlutterSurfaceView.class},
+      minSdk = 35)
+  public void itScalesVirtualDisplayEmbeddedViewOnCreate() {
+    // This test targets the Virtual Display fallback path (which is triggered when
+    // SurfaceView is used, as it is not supported by Texture Layer Hybrid Composition).
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    platformViewsController.getRegistry().registerViewFactory(
+        "testType",
+        new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+          @Override
+          public PlatformView create(Context context, int viewId, Object args) {
+            return new CountingPlatformView(context);
+          }
+        });
+
+    // Create platform view with scaleX = 2.0, scaleY = 3.0
+    int viewId = 0;
+    createPlatformView(jni, platformViewsController, viewId, "testType", false, 10.0, 10.0, 2.0, 3.0);
+
+    VirtualDisplayController vdController = platformViewsController.vdControllers.get(viewId);
+    assertNotNull(vdController);
+    View embeddedView = vdController.getView();
+    assertNotNull(embeddedView);
+
+    // Verify the scale is propagated to the embedded view.
+    assertEquals(2.0f, embeddedView.getScaleX(), 0.0f);
+    assertEquals(3.0f, embeddedView.getScaleY(), 0.0f);
+    assertEquals(0.0f, embeddedView.getPivotX(), 0.0f);
+    assertEquals(0.0f, embeddedView.getPivotY(), 0.0f);
+
+    // Verify the embedded view layout params match the unscaled physical size.
+    float density = ApplicationProvider.getApplicationContext().getResources().getDisplayMetrics().density;
+    assertEquals((int) Math.round(10.0 * density), embeddedView.getLayoutParams().width);
+    assertEquals((int) Math.round(10.0 * density), embeddedView.getLayoutParams().height);
+
+    // Verify the Virtual Display render target size is also scaled.
+    int expectedWidth = (int) Math.round((10.0 * 2.0) * density);
+    int expectedHeight = (int) Math.round((10.0 * 3.0) * density);
+    assertEquals(expectedWidth, vdController.getRenderTargetWidth());
+    assertEquals(expectedHeight, vdController.getRenderTargetHeight());
+
+    platformViewsController.disposePlatformView(viewId);
+  }
+
+  @Test
+  @Config(
+      shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class, ShadowPresentation.class, ShadowFlutterSurfaceView.class},
+      minSdk = 35)
+  public void itScalesVirtualDisplayEmbeddedViewOnResize() {
+    // This test targets the Virtual Display fallback path (which is triggered when
+    // SurfaceView is used, as it is not supported by Texture Layer Hybrid Composition).
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    platformViewsController.getRegistry().registerViewFactory(
+        "testType",
+        new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+          @Override
+          public PlatformView create(Context context, int viewId, Object args) {
+            return new CountingPlatformView(context);
+          }
+        });
+
+    int viewId = 0;
+    // Create with default scale (1.0)
+    createPlatformView(jni, platformViewsController, viewId, "testType", false, 10.0, 10.0, 1.0, 1.0);
+
+    // Resize with scaleX = 4.0, scaleY = 5.0.
+    platformViewsController.channelHandler.resize(
+        new PlatformViewsChannel.PlatformViewResizeRequest(viewId, 10.0, 10.0, 4.0, 5.0),
+        (PlatformViewsChannel.PlatformViewBufferSize bufferSize) -> {}
+    );
+
+    VirtualDisplayController vdController = platformViewsController.vdControllers.get(viewId);
+    assertNotNull(vdController);
+    View embeddedView = vdController.getView();
+    assertNotNull(embeddedView);
+
+    // Verify the scale is propagated to the embedded view.
+    assertEquals(4.0f, embeddedView.getScaleX(), 0.0f);
+    assertEquals(5.0f, embeddedView.getScaleY(), 0.0f);
+    assertEquals(0.0f, embeddedView.getPivotX(), 0.0f);
+    assertEquals(0.0f, embeddedView.getPivotY(), 0.0f);
+
+    // Verify the embedded view layout params match the unscaled physical size.
+    float density = ApplicationProvider.getApplicationContext().getResources().getDisplayMetrics().density;
+    assertEquals((int) Math.round(10.0 * density), embeddedView.getLayoutParams().width);
+    assertEquals((int) Math.round(10.0 * density), embeddedView.getLayoutParams().height);
+
+    // Verify the Virtual Display render target size is also scaled.
+    int expectedWidth = (int) Math.round((10.0 * 4.0) * density);
+    int expectedHeight = (int) Math.round((10.0 * 5.0) * density);
+    assertEquals(expectedWidth, vdController.getRenderTargetWidth());
+    assertEquals(expectedHeight, vdController.getRenderTargetHeight());
+
+    platformViewsController.disposePlatformView(viewId);
+  }
+
+  @Test
+  @Config(
+      shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class, ShadowPresentation.class, ShadowFlutterSurfaceView.class},
+      minSdk = 35)
+  public void itScalesTouchCoordinatesForScaledVirtualDisplay() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    // Mock VirtualDisplayController
+    VirtualDisplayController vdController = mock(VirtualDisplayController.class);
+    when(vdController.getScaleX()).thenReturn(2.0);
+    when(vdController.getScaleY()).thenReturn(3.0);
+
+    int viewId = 0;
+    platformViewsController.vdControllers.put(viewId, vdController);
+
+    // Create a touch event at (10, 10)
+    List<List<Integer>> pointerProperties = Arrays.asList(Arrays.asList(0, 0));
+    List<List<Double>> pointerCoords =
+        Arrays.asList(
+            Arrays.asList(
+                0.0, // orientation
+                1.0, // pressure
+                1.0, // size
+                1.0, // toolMajor
+                1.0, // toolMinor
+                1.0, // touchMajor
+                1.0, // touchMinor
+                10.0, // x
+                10.0 // y
+                ));
+
+    PlatformViewTouch touch =
+        new PlatformViewTouch(
+            viewId,
+            10L, // downTime
+            10L, // eventTime
+            MotionEvent.ACTION_DOWN,
+            1, // pointerCount
+            pointerProperties,
+            pointerCoords,
+            0, // metaState
+            0, // buttonState
+            1.0f, // xPrecision
+            1.0f, // yPrecision
+            0, // deviceId
+            0, // edgeFlags
+            0, // source
+            0, // flags
+            0L // motionEventId
+        );
+
+    // Dispatch touch
+    platformViewsController.channelHandler.onTouch(touch);
+
+    // Verify dispatchTouchEvent was called with scaled coordinates
+    ArgumentCaptor<MotionEvent> motionEventCaptor = ArgumentCaptor.forClass(MotionEvent.class);
+    verify(vdController).dispatchTouchEvent(motionEventCaptor.capture());
+    MotionEvent event = motionEventCaptor.getValue();
+    assertNotNull(event);
+
+    float density = ApplicationProvider.getApplicationContext().getResources().getDisplayMetrics().density;
+    // Expected coordinates: input * density * scale
+    // 10.0 * density * 2.0 = 20.0 * density
+    // 10.0 * density * 3.0 = 30.0 * density
+    assertEquals(10.0f * density * 2.0f, event.getX(), 0.001f);
+    assertEquals(10.0f * density * 3.0f, event.getY(), 0.001f);
+  }
+
   private static ByteBuffer encodeMethodCall(MethodCall call) {
     final ByteBuffer buffer = StandardMethodCodec.INSTANCE.encodeMethodCall(call);
     buffer.rewind();
@@ -1912,13 +2126,28 @@ public class PlatformViewsControllerTest {
       int platformViewId,
       String viewType,
       boolean hybrid) {
+    createPlatformView(jni, platformViewsController, platformViewId, viewType, hybrid, 1.0, 1.0, 1.0, 1.0);
+  }
+
+  private static void createPlatformView(
+      FlutterJNI jni,
+      PlatformViewsController platformViewsController,
+      int platformViewId,
+      String viewType,
+      boolean hybrid,
+      double width,
+      double height,
+      double scaleX,
+      double scaleY) {
     final Map<String, Object> args = new HashMap<>();
     args.put("hybrid", hybrid);
     args.put("id", platformViewId);
     args.put("viewType", viewType);
     args.put("direction", 0);
-    args.put("width", 1.0);
-    args.put("height", 1.0);
+    args.put("width", width);
+    args.put("height", height);
+    args.put("scaleX", scaleX);
+    args.put("scaleY", scaleY);
 
     final MethodCall platformCreateMethodCall = new MethodCall("create", args);
 
@@ -1953,10 +2182,23 @@ public class PlatformViewsControllerTest {
       int platformViewId,
       double width,
       double height) {
+    resize(jni, platformViewsController, platformViewId, width, height, 1.0, 1.0);
+  }
+
+  private static void resize(
+      FlutterJNI jni,
+      PlatformViewsController platformViewsController,
+      int platformViewId,
+      double width,
+      double height,
+      double scaleX,
+      double scaleY) {
     final Map<String, Object> args = new HashMap<>();
     args.put("id", platformViewId);
     args.put("width", width);
     args.put("height", height);
+    args.put("scaleX", scaleX);
+    args.put("scaleY", scaleY);
 
     final MethodCall platformResizeMethodCall = new MethodCall("resize", args);
 
@@ -2070,6 +2312,9 @@ public class PlatformViewsControllerTest {
               @Override
               public SurfaceProducer createSurfaceProducer(SurfaceLifecycle lifecycle) {
                 return new SurfaceProducer() {
+                  private int width = 0;
+                  private int height = 0;
+
                   @Override
                   public void setCallback(SurfaceProducer.Callback cb) {}
 
@@ -2083,16 +2328,19 @@ public class PlatformViewsControllerTest {
 
                   @Override
                   public int getWidth() {
-                    return 0;
+                    return width;
                   }
 
                   @Override
                   public int getHeight() {
-                    return 0;
+                    return height;
                   }
 
                   @Override
-                  public void setSize(int width, int height) {}
+                  public void setSize(int width, int height) {
+                    this.width = width;
+                    this.height = height;
+                  }
 
                   @Override
                   public Surface getSurface() {

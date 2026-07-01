@@ -355,6 +355,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             vdController.resize(
                 physicalWidth,
                 physicalHeight,
+                request.scaleX,
+                request.scaleY,
                 () -> {
                   unlockInputConnection(vdController);
                   // Converting back to logic pixels requires a context, which may no longer be
@@ -362,10 +364,19 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
                   // was present when the request arrived.
                   final float displayDensity =
                       context == null ? originalDisplayDensity : getDisplayDensity();
+                  double logicalWidth =
+                      request.scaleX == 0
+                          ? 0
+                          : toLogicalPixels(vdController.getRenderTargetWidth(), displayDensity)
+                              / request.scaleX;
+                  double logicalHeight =
+                      request.scaleY == 0
+                          ? 0
+                          : toLogicalPixels(vdController.getRenderTargetHeight(), displayDensity)
+                              / request.scaleY;
                   onComplete.run(
                       new PlatformViewsChannel.PlatformViewBufferSize(
-                          toLogicalPixels(vdController.getRenderTargetWidth(), displayDensity),
-                          toLogicalPixels(vdController.getRenderTargetHeight(), displayDensity)));
+                          (int) Math.round(logicalWidth), (int) Math.round(logicalHeight)));
                 });
             return;
           }
@@ -417,7 +428,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
 
           if (usesVirtualDisplay(viewId)) {
             final VirtualDisplayController vdController = vdControllers.get(viewId);
-            final MotionEvent event = toMotionEvent(density, touch, true);
+            final MotionEvent event = toMotionEvent(density, touch, true, vdController.getScaleX(), vdController.getScaleY());
             vdController.dispatchTouchEvent(event);
             return;
           }
@@ -432,7 +443,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             Log.e(TAG, "Sending touch to a null view with id: " + viewId);
             return;
           }
-          final MotionEvent event = toMotionEvent(density, touch, false);
+          final MotionEvent event = toMotionEvent(density, touch, false, 1.0, 1.0);
           view.dispatchTouchEvent(event);
         }
 
@@ -586,7 +597,9 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
               if (hasFocus) {
                 platformViewsChannel.invokeViewFocused(request.viewId);
               }
-            });
+            },
+            request.scaleX,
+            request.scaleY);
 
     if (vdController == null) {
       throw new IllegalStateException(
@@ -698,6 +711,12 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   @VisibleForTesting
   public MotionEvent toMotionEvent(
       float density, PlatformViewTouch touch, boolean usingVirtualDisplay) {
+    return toMotionEvent(density, touch, usingVirtualDisplay, 1.0, 1.0);
+  }
+
+  @VisibleForTesting
+  public MotionEvent toMotionEvent(
+      float density, PlatformViewTouch touch, boolean usingVirtualDisplay, double scaleX, double scaleY) {
     MotionEventTracker.MotionEventId motionEventId =
         MotionEventTracker.MotionEventId.from(touch.motionEventId);
     MotionEvent trackedEvent = motionEventTracker.pop(motionEventId);
@@ -708,7 +727,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     // event with their local counterparts.
     // Compute this early so it can be used as input to translateNonVirtualDisplayMotionEvent.
     PointerCoords[] pointerCoords =
-        parsePointerCoordsList(touch.rawPointerCoords, density)
+        parsePointerCoordsList(touch.rawPointerCoords, density, scaleX, scaleY)
             .toArray(new PointerCoords[touch.pointerCount]);
 
     // We are in virtual display mode or don't have a reference to the original MotionEvent.
@@ -1062,17 +1081,17 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   }
 
   @SuppressWarnings("unchecked")
-  private static List<PointerCoords> parsePointerCoordsList(Object rawCoordsList, float density) {
+  private static List<PointerCoords> parsePointerCoordsList(Object rawCoordsList, float density, double scaleX, double scaleY) {
     List<Object> rawCoords = (List<Object>) rawCoordsList;
     List<PointerCoords> pointerCoords = new ArrayList<>();
     for (Object o : rawCoords) {
-      pointerCoords.add(parsePointerCoords(o, density));
+      pointerCoords.add(parsePointerCoords(o, density, scaleX, scaleY));
     }
     return pointerCoords;
   }
 
   @SuppressWarnings("unchecked")
-  private static PointerCoords parsePointerCoords(Object rawCoords, float density) {
+  private static PointerCoords parsePointerCoords(Object rawCoords, float density, double scaleX, double scaleY) {
     List<Object> coordsList = (List<Object>) rawCoords;
     PointerCoords coords = new MotionEvent.PointerCoords();
     coords.orientation = (float) (double) coordsList.get(0);
@@ -1082,8 +1101,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     coords.toolMinor = (float) ((double) coordsList.get(4) * density);
     coords.touchMajor = (float) ((double) coordsList.get(5) * density);
     coords.touchMinor = (float) ((double) coordsList.get(6) * density);
-    coords.x = (float) ((double) coordsList.get(7) * density);
-    coords.y = (float) ((double) coordsList.get(8) * density);
+    coords.x = (float) ((double) coordsList.get(7) * density * scaleX);
+    coords.y = (float) ((double) coordsList.get(8) * density * scaleY);
     return coords;
   }
 

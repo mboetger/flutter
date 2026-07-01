@@ -48,6 +48,12 @@ public class PlatformViewCreationRequest {
   /** The density independent left position to display the platform view. */
   public final double logicalLeft;
 
+  /** The scale factor along the X axis. */
+  public final double scaleX;
+
+  /** The scale factor along the Y axis. */
+  public final double scaleY;
+
   /**
    * The layout direction of the new platform view.
    *
@@ -64,13 +70,13 @@ public class PlatformViewCreationRequest {
   // Restrict primary constructor to private to enforce static factory usage.
   public static PlatformViewCreationRequest createHCPPRequest(
       int viewId, String viewType, int direction, ByteBuffer params) {
-    return new PlatformViewCreationRequest(viewId, viewType, 0, 0, 0, 0, direction, null, params);
+    return new PlatformViewCreationRequest(viewId, viewType, 0, 0, 0, 0, 1.0, 1.0, direction, null, params);
   }
 
   public static PlatformViewCreationRequest createHybridCompositionRequest(
       int viewId, String viewType, int direction, ByteBuffer params) {
     return new PlatformViewCreationRequest(
-        viewId, viewType, 0, 0, 0, 0, direction, RequestedDisplayMode.HYBRID_ONLY, params);
+        viewId, viewType, 0, 0, 0, 0, 1.0, 1.0, direction, RequestedDisplayMode.HYBRID_ONLY, params);
   }
 
   public static PlatformViewCreationRequest createTLHCWithFallbackRequest(
@@ -80,6 +86,8 @@ public class PlatformViewCreationRequest {
       double left,
       double width,
       double height,
+      double scaleX,
+      double scaleY,
       int direction,
       boolean hybridFallback,
       ByteBuffer params) {
@@ -90,6 +98,8 @@ public class PlatformViewCreationRequest {
         left,
         width,
         height,
+        scaleX,
+        scaleY,
         direction,
         hybridFallback
             ? RequestedDisplayMode.TEXTURE_WITH_HYBRID_FALLBACK
@@ -118,6 +128,8 @@ public class PlatformViewCreationRequest {
         logicalLeft,
         logicalWidth,
         logicalHeight,
+        1.0,
+        1.0,
         direction,
         RequestedDisplayMode.TEXTURE_WITH_VIRTUAL_FALLBACK,
         params);
@@ -134,6 +146,8 @@ public class PlatformViewCreationRequest {
       double logicalLeft,
       double logicalWidth,
       double logicalHeight,
+      double scaleX,
+      double scaleY,
       int direction,
       @Nullable RequestedDisplayMode displayMode,
       @Nullable ByteBuffer params) {
@@ -143,6 +157,8 @@ public class PlatformViewCreationRequest {
     this.logicalLeft = logicalLeft;
     this.logicalWidth = logicalWidth;
     this.logicalHeight = logicalHeight;
+    this.scaleX = scaleX;
+    this.scaleY = scaleY;
     this.direction = direction;
     this.displayMode = displayMode;
     this.params = params;
