@@ -34,6 +34,7 @@ import io.flutter.embedding.engine.systemchannels.MouseCursorChannel;
 import io.flutter.embedding.engine.systemchannels.NavigationChannel;
 import io.flutter.embedding.engine.systemchannels.PlatformChannel;
 import io.flutter.embedding.engine.systemchannels.ProcessTextChannel;
+import io.flutter.embedding.engine.systemchannels.ResourcesChannel;
 import io.flutter.embedding.engine.systemchannels.RestorationChannel;
 import io.flutter.embedding.engine.systemchannels.ScribeChannel;
 import io.flutter.embedding.engine.systemchannels.SensitiveContentChannel;
@@ -107,6 +108,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   @NonNull private final RestorationChannel restorationChannel;
   @NonNull private final PlatformChannel platformChannel;
   @NonNull private final ProcessTextChannel processTextChannel;
+  @NonNull private final ResourcesChannel resourcesChannel;
   @NonNull private final ScribeChannel scribeChannel;
   @NonNull private final SensitiveContentChannel sensitiveContentChannel;
   @NonNull private final SettingsChannel settingsChannel;
@@ -366,6 +368,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     backGestureChannel = new BackGestureChannel(dartExecutor);
     platformChannel = new PlatformChannel(dartExecutor);
     processTextChannel = new ProcessTextChannel(dartExecutor, context.getPackageManager());
+    resourcesChannel = new ResourcesChannel(dartExecutor, context);
     restorationChannel = new RestorationChannel(dartExecutor, waitForRestorationData);
     scribeChannel = new ScribeChannel(dartExecutor);
     sensitiveContentChannel = new SensitiveContentChannel(dartExecutor);
@@ -606,6 +609,12 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   @NonNull
   public ProcessTextChannel getProcessTextChannel() {
     return processTextChannel;
+  }
+
+  /** System channel that sends resource loading requests from Flutter to Android. */
+  @NonNull
+  public ResourcesChannel getResourcesChannel() {
+    return resourcesChannel;
   }
 
   /**
