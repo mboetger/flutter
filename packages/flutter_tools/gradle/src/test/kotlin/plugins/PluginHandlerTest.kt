@@ -436,6 +436,9 @@ class PluginHandlerTest {
         every { project.logger } returns mockLogger
 
         // Plugin project setup
+        val pluginProjectDir = tempDir.resolve("camera-plugin-dir").toFile()
+        pluginProjectDir.mkdirs()
+        every { pluginProject.projectDir } returns pluginProjectDir
         every { pluginProject.hasProperty("local-engine-repo") } returns false
         every { pluginProject.hasProperty("android") } returns true
         val mockPluginContainer = mockk<org.gradle.api.plugins.PluginContainer>()
@@ -447,6 +450,7 @@ class PluginHandlerTest {
         every { pluginProject.extensions.create(any(), any<Class<Any>>()) } returns mockk()
         every { project.afterEvaluate(any<Action<Project>>()) } returns Unit
         every { pluginProject.afterEvaluate(any<Action<Project>>()) } returns Unit
+        every { project.rootProject.allprojects(any<Action<Project>>()) } returns Unit
 
         // Dependencies and configurations
         every { pluginProject.configurations.named(any<String>()) } returns mockk()
@@ -462,5 +466,74 @@ class PluginHandlerTest {
         every { project.extraProperties } returns mockk()
         every { project.extensions.findByType(FlutterExtension::class.java) } returns FlutterExtension()
         every { project.file(any()) } returns mockk()
+    }
+
+    @Test
+    fun `configurePlugins adds flatDir repository when plugin has libs directory`(
+        @TempDir tempDir: Path
+    ) {
+        val project = mockk<Project>()
+        val pluginProject = mockk<Project>()
+        val mockBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>()
+
+        setupBasicMocks(project, pluginProject, mockBuildType, tempDir)
+        setupPluginMocks(project)
+
+        // Create the libs directory in the plugin project directory
+        val pluginProjectDir = tempDir.resolve("camera-plugin-dir").toFile()
+        pluginProjectDir.mkdirs()
+        every { pluginProject.projectDir } returns pluginProjectDir
+        val libsDir = File(pluginProjectDir, "libs")
+        libsDir.mkdirs()
+
+        // Mock allprojects to execute the action on a mock subproject
+        val mockSubProject = mockk<Project>()
+        val mockRepositoryHandler = mockk<org.gradle.api.artifacts.dsl.RepositoryHandler>()
+        every { mockSubProject.repositories } returns mockRepositoryHandler
+
+        val flatDirActionSlot = slot<Action<org.gradle.api.artifacts.repositories.FlatDirectoryArtifactRepository>>()
+        every { mockRepositoryHandler.flatDir(capture(flatDirActionSlot)) } returns mockk()
+
+        every { project.rootProject.allprojects(any<Action<Project>>()) } answers {
+            val action = firstArg<Action<Project>>()
+            action.execute(mockSubProject)
+        }
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(engineVersionValue = EXAMPLE_ENGINE_VERSION)
+
+        // Verify that allprojects was called and the flatDir repository was configured with the libs directory
+        verify(exactly = 1) { project.rootProject.allprojects(any<Action<Project>>()) }
+        assertTrue(flatDirActionSlot.isCaptured)
+
+        val mockFlatDirRepository = mockk<org.gradle.api.artifacts.repositories.FlatDirectoryArtifactRepository>()
+        every { mockFlatDirRepository.dir(libsDir) } returns Unit
+        flatDirActionSlot.captured.execute(mockFlatDirRepository)
+        verify(exactly = 1) { mockFlatDirRepository.dir(libsDir) }
+    }
+
+    @Test
+    fun `configurePlugins does not add flatDir repository when plugin has no libs directory`(
+        @TempDir tempDir: Path
+    ) {
+        val project = mockk<Project>()
+        val pluginProject = mockk<Project>()
+        val mockBuildType = mockk<com.android.build.gradle.internal.dsl.BuildType>()
+
+        setupBasicMocks(project, pluginProject, mockBuildType, tempDir)
+        setupPluginMocks(project)
+
+        // Ensure no libs directory exists
+        val pluginProjectDir = tempDir.resolve("camera-plugin-dir").toFile()
+        pluginProjectDir.mkdirs()
+        every { pluginProject.projectDir } returns pluginProjectDir
+
+        every { project.rootProject.allprojects(any<Action<Project>>()) } returns Unit
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(engineVersionValue = EXAMPLE_ENGINE_VERSION)
+
+        // Verify that allprojects was NOT called
+        verify(exactly = 0) { project.rootProject.allprojects(any<Action<Project>>()) }
     }
 }

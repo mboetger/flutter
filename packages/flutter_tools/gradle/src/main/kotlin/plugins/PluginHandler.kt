@@ -14,6 +14,7 @@ import com.flutter.gradle.FlutterPluginUtils.getLegacyAndroidExtension
 import com.flutter.gradle.FlutterPluginUtils.isBuiltAsApp
 import com.flutter.gradle.FlutterPluginUtils.supportsBuildMode
 import com.flutter.gradle.NativePluginLoaderReflectionBridge
+import org.gradle.api.Action
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
@@ -103,6 +104,19 @@ class PluginHandler(
             val pluginName =
                 requireNotNull(pluginObject["name"] as? String) { "Plugin name must be a string for plugin object: $pluginObject" }
             val pluginProject: Project = project.rootProject.findProject(":$pluginName") ?: return
+
+            val libsDir = File(pluginProject.projectDir, "libs")
+            if (libsDir.exists() && libsDir.isDirectory) {
+                project.rootProject.allprojects(object : Action<Project> {
+                    override fun execute(subProject: Project) {
+                        subProject.repositories.flatDir(object : Action<org.gradle.api.artifacts.repositories.FlatDirectoryArtifactRepository> {
+                            override fun execute(repository: org.gradle.api.artifacts.repositories.FlatDirectoryArtifactRepository) {
+                                repository.dir(libsDir)
+                            }
+                        })
+                    }
+                })
+            }
 
             // Apply the "flutter" Gradle extension to plugins so that they can use it's vended
             // compile/target/min sdk values.
