@@ -428,6 +428,11 @@ known, it can be explicitly provided to attach via the command-line, e.g.
       logger: _logger,
     );
 
+    if (debugPort == null && debugUri == null) {
+      _logger.printStatus(
+        'If your app is already running, please restart it (or pass --debug-url <URL>)',
+      );
+    }
     _logger.printStatus('Waiting for a connection from Flutter on ${device.displayName}...');
     final Status discoveryStatus = _logger.startSpinner(
       timeout: const Duration(seconds: 30),

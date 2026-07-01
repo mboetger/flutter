@@ -1591,6 +1591,54 @@ void main() {
         },
       );
     });
+
+    late BufferLogger bufferLogger;
+    testUsingContext(
+      'prints helpful message when waiting for connection',
+      () async {
+        bufferLogger = BufferLogger.test();
+        final fakeLogReader = FakeDeviceLogReader();
+        final device = FakeAndroidDevice(id: '1')..onGetLogReader = () => fakeLogReader;
+        testDeviceManager.devices = <Device>[device];
+
+        final hotRunner = FakeHotRunner();
+        hotRunner.onAttach =
+            (
+              Completer<DebugConnectionInfo>? connectionInfoCompleter,
+              Completer<void>? appStartedCompleter,
+              bool enableDevTools,
+            ) async => 0;
+        hotRunner.exited = false;
+        hotRunner.isWaitingForVmService = false;
+        final hotRunnerFactory = FakeHotRunnerFactory()..hotRunner = hotRunner;
+
+        await createTestCommandRunner(
+          AttachCommand(
+            hotRunnerFactory: hotRunnerFactory,
+            stdio: stdio,
+            logger: bufferLogger,
+            terminal: terminal,
+            signals: signals,
+            platform: platform,
+            processInfo: processInfo,
+            fileSystem: testFileSystem,
+          ),
+        ).run(<String>['attach']);
+
+        expect(
+          bufferLogger.statusText,
+          contains('If your app is already running, please restart it (or pass --debug-url <URL>)'),
+        );
+
+        await fakeLogReader.dispose();
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => testFileSystem,
+        ProcessManager: () => FakeProcessManager.any(),
+        Logger: () => bufferLogger,
+        DeviceManager: () => testDeviceManager,
+      },
+    );
   });
 }
 
