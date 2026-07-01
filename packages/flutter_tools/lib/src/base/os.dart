@@ -153,7 +153,8 @@ abstract class OperatingSystemUtils {
       Abi.linuxRiscv64 => HostPlatform.linux_riscv64,
       Abi.windowsX64 => HostPlatform.windows_x64,
       Abi.windowsArm64 => HostPlatform.windows_arm64,
-      _ => throw UnsupportedError('Unsupported host platform: $_currentAbi'),
+      Abi.windowsIA32 => throwToolExit('32-bit Windows is not supported'),
+      _ => throwToolExit('Unsupported host platform: $_currentAbi'),
     };
   }
 

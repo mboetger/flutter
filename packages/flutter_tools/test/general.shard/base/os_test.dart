@@ -177,7 +177,18 @@ void main() {
 
     testWithoutContext('unsupported throws', () async {
       final OperatingSystemUtils utils = createOSUtils(FakePlatform(), currentAbi: Abi.androidArm);
-      expect(() => utils.hostPlatform, throwsUnsupportedError);
+      expect(
+        () => utils.hostPlatform,
+        throwsToolExit(message: 'Unsupported host platform: android_arm'),
+      );
+    });
+
+    testWithoutContext('32-bit Windows throws tool exit', () async {
+      final OperatingSystemUtils utils = createOSUtils(
+        FakePlatform(operatingSystem: 'windows'),
+        currentAbi: Abi.windowsIA32,
+      );
+      expect(() => utils.hostPlatform, throwsToolExit(message: '32-bit Windows is not supported'));
     });
 
     testWithoutContext('macOS ARM name', () async {
