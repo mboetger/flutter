@@ -263,7 +263,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
 
   @VisibleForTesting
   public int getHoveredObjectId() {
-    return hoveredObject.id;
+    return hoveredObject == null ? -1 : hoveredObject.id;
   }
 
   // A Java/Android cached representation of the Flutter app's navigation stack. The Flutter
@@ -1458,9 +1458,12 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
       return false;
     }
 
+    // Always pass true to stopAtPlatformView. Even if we want to ignore platform views
+    // (i.e. ignorePlatformViews is true), we still want to stop at them during hit testing
+    // so we don't look behind them and hit widgets that are visually covered by the platform view.
     SemanticsNode semanticsNodeUnderCursor =
         getRootSemanticsNode()
-            .hitTest(new float[] {event.getX(), event.getY(), 0, 1}, ignorePlatformViews);
+            .hitTest(new float[] {event.getX(), event.getY(), 0, 1}, true);
     // semanticsNodeUnderCursor can be null when hovering over non-flutter UI such as
     // the Android navigation bar due to hitTest() bounds checking.
     if (semanticsNodeUnderCursor != null && semanticsNodeUnderCursor.platformViewId != -1) {
@@ -1511,8 +1514,11 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
       return;
     }
 
+    // Always pass true to stopAtPlatformView. Even if we want to ignore platform views
+    // (i.e. ignorePlatformViews is true), we still want to stop at them during hit testing
+    // so we don't look behind them and hit widgets that are visually covered by the platform view.
     SemanticsNode semanticsNodeUnderCursor =
-        getRootSemanticsNode().hitTest(new float[] {x, y, 0, 1}, ignorePlatformViews);
+        getRootSemanticsNode().hitTest(new float[] {x, y, 0, 1}, true);
     if (semanticsNodeUnderCursor != hoveredObject) {
       // sending ENTER before EXIT is how Android wants it
       if (semanticsNodeUnderCursor != null) {

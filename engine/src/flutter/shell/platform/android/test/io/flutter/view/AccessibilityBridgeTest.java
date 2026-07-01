@@ -659,9 +659,69 @@ public class AccessibilityBridgeTest {
     when(mockEvent.getY()).thenReturn(10.0f);
     when(mockEvent.getAction()).thenReturn(MotionEvent.ACTION_HOVER_ENTER);
 
+    // Stub the embedder to return true.
+    when(mockViewEmbedder.onAccessibilityHoverEvent(eq(1), any(MotionEvent.class)))
+        .thenReturn(true);
+
     final boolean handled = accessibilityBridge.onAccessibilityHoverEvent(mockEvent);
 
     assertTrue(handled);
+  }
+
+  @Test
+  public void delegatesHoverEventsToPlatformViews() {
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(mockRootView, mockManager, mockViewEmbedder);
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+    when(mockManager.isEnabled()).thenReturn(true);
+    when(mockManager.isTouchExplorationEnabled()).thenReturn(true);
+
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+    root.left = 0;
+    root.top = 0;
+    root.bottom = 20;
+    root.right = 20;
+    TestSemanticsNode platformView = new TestSemanticsNode();
+    platformView.id = 1;
+    platformView.platformViewId = 42;
+    platformView.left = 0;
+    platformView.top = 0;
+    platformView.bottom = 20;
+    platformView.right = 20;
+    root.addChild(platformView);
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // Use MotionEvent.obtain instead of mocking to avoid fragility.
+    MotionEvent event =
+        MotionEvent.obtain(
+            0, // downTime
+            0, // eventTime
+            MotionEvent.ACTION_HOVER_ENTER,
+            10.0f, // x
+            10.0f, // y
+            0 // metaState
+            );
+
+    // Stub the embedder to return true.
+    when(mockViewEmbedder.onAccessibilityHoverEvent(eq(1), any(MotionEvent.class)))
+        .thenReturn(true);
+
+    boolean handled = accessibilityBridge.onAccessibilityHoverEvent(event);
+
+    // Verify that the hover event was delegated and the return value was propagated.
+    assertTrue(handled);
+    verify(mockViewEmbedder, times(1)).onAccessibilityHoverEvent(eq(1), any(MotionEvent.class));
+
+    event.recycle();
   }
 
   @Test
@@ -705,6 +765,80 @@ public class AccessibilityBridgeTest {
     final boolean handled = accessibilityBridge.onAccessibilityHoverEvent(mockEvent, true);
 
     assertFalse(handled);
+  }
+
+  @Test
+  public void itDoesNotHitWidgetBehindPlatformViewWhenIgnoringPlatformViews() {
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(mockRootView, mockManager, mockViewEmbedder);
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+    when(mockManager.isEnabled()).thenReturn(true);
+    when(mockManager.isTouchExplorationEnabled()).thenReturn(true);
+
+    // Create a tree:
+    // Root (0, 0, 20, 20)
+    //   Widget Behind (id=2, 0, 0, 20, 20, focusable)
+    //   Platform View (id=1, platformViewId=42, 0, 0, 20, 20)
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+    root.left = 0;
+    root.top = 0;
+    root.bottom = 20;
+    root.right = 20;
+
+    TestSemanticsNode widgetBehind = new TestSemanticsNode();
+    widgetBehind.id = 2;
+    widgetBehind.label = "behind";
+    widgetBehind.left = 0;
+    widgetBehind.top = 0;
+    widgetBehind.bottom = 20;
+    widgetBehind.right = 20;
+
+    TestSemanticsNode platformView = new TestSemanticsNode();
+    platformView.id = 1;
+    platformView.platformViewId = 42;
+    platformView.left = 0;
+    platformView.top = 0;
+    platformView.bottom = 20;
+    platformView.right = 20;
+
+    // Add platform view first so it is hit test first (on top).
+    root.addChild(platformView);
+    root.addChild(widgetBehind);
+
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // Synthesize an accessibility hit test event.
+    MotionEvent mockEvent = mock(MotionEvent.class);
+    when(mockEvent.getX()).thenReturn(10.0f);
+    when(mockEvent.getY()).thenReturn(10.0f);
+    when(mockEvent.getAction()).thenReturn(MotionEvent.ACTION_HOVER_ENTER);
+
+    // 1. With ignorePlatformViews = true
+    final boolean handledIgnored = accessibilityBridge.onAccessibilityHoverEvent(mockEvent, true);
+    // Should not be handled (returns false) because we hit the platform view and ignored it.
+    assertFalse(handledIgnored);
+    // Should NOT have set hovered object to the widget behind.
+    assertNotEquals(2, accessibilityBridge.getHoveredObjectId());
+    // Verify that we did not delegate to the platform view.
+    verify(mockViewEmbedder, never()).onAccessibilityHoverEvent(anyInt(), any(MotionEvent.class));
+
+    // 2. With ignorePlatformViews = false
+    // Stub the embedder to return true.
+    when(mockViewEmbedder.onAccessibilityHoverEvent(eq(1), any(MotionEvent.class)))
+        .thenReturn(true);
+    final boolean handledNormal = accessibilityBridge.onAccessibilityHoverEvent(mockEvent, false);
+    // Should be handled (returns true) because it was delegated to the platform view.
+    assertTrue(handledNormal);
+    verify(mockViewEmbedder, times(1)).onAccessibilityHoverEvent(eq(1), any(MotionEvent.class));
   }
 
   @Test
