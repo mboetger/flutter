@@ -6,11 +6,12 @@ import 'package:args/command_runner.dart';
 import 'package:file/file.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/create.dart';
+import 'package:flutter_tools/src/dart/pub.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
-import 'package:flutter_tools/src/template.dart';
 
 import '../../src/common.dart';
 import '../../src/context.dart';
+import '../../src/fakes.dart';
 import '../../src/test_flutter_command_runner.dart';
 
 void main() {
@@ -126,42 +127,65 @@ void main() {
   );
 
   testUsingContext(
-    'generated module build.gradle does not contain allprojects repository configuration',
+    'generated module Android project does not contain allprojects and has correct repositories/DRM',
     () async {
       final Directory projectDir = tempDir.childDirectory('flutter_module');
+      final command = CreateCommand();
+      final CommandRunner<void> runner = createTestCommandRunner(command);
+      await runner.run(<String>['create', '--template=module', projectDir.path]);
 
-      final Template template = await Template.fromName(
-        globals.fs.path.join('module', 'android', 'gradle'),
-        fileSystem: globals.fs,
-        templateManifest: null,
-        logger: globals.logger,
-        templateRenderer: globals.templateRenderer,
-      );
-      template.render(projectDir.childDirectory('.android'), <String, Object?>{
-        'projectName': 'flutter_module',
-        'androidIdentifier': 'com.example.flutter_module',
-        'compileSdkVersion': '34',
-        'minSdkVersion': '21',
-        'targetSdkVersion': '34',
-      });
+      // Verify root .android/build.gradle
+      final File rootBuildGradle = projectDir.childDirectory('.android').childFile('build.gradle');
+      expect(rootBuildGradle.existsSync(), isTrue);
+      final String rootContent = rootBuildGradle.readAsStringSync();
+      expect(rootContent, isNot(contains('allprojects')));
+      expect(rootContent, contains('repositories {'));
+      expect(rootContent, contains('google()'));
+      expect(rootContent, contains('mavenCentral()'));
 
-      final File buildGradle = projectDir.childDirectory('.android').childFile('build.gradle');
-      expect(buildGradle.existsSync(), isTrue);
-
-      final String content = buildGradle.readAsStringSync();
-      expect(content, isNot(contains('allprojects')));
-      expect(content, contains('repositories {'));
-      expect(content, contains('google()'));
-      expect(content, contains('mavenCentral()'));
-
-      final File settingsGradle = projectDir
+      // Verify root .android/settings.gradle
+      final File rootSettingsGradle = projectDir
           .childDirectory('.android')
           .childFile('settings.gradle');
-      expect(settingsGradle.existsSync(), isTrue);
-      final String settingsContent = settingsGradle.readAsStringSync();
-      expect(settingsContent, contains('dependencyResolutionManagement {'));
-      expect(settingsContent, contains('repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)'));
+      expect(rootSettingsGradle.existsSync(), isTrue);
+      final String rootSettingsContent = rootSettingsGradle.readAsStringSync();
+      expect(rootSettingsContent, contains('dependencyResolutionManagement {'));
+      expect(
+        rootSettingsContent,
+        contains('repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)'),
+      );
+
+      // Verify host app .android/app/build.gradle
+      final File appBuildGradle = projectDir
+          .childDirectory('.android')
+          .childDirectory('app')
+          .childFile('build.gradle');
+      expect(appBuildGradle.existsSync(), isTrue);
+      final String appContent = appBuildGradle.readAsStringSync();
+      expect(appContent, contains('repositories {'));
+      expect(appContent, contains('google()'));
+      expect(appContent, contains('mavenCentral()'));
+
+      // Verify library .android/Flutter/build.gradle
+      final File flutterBuildGradle = projectDir
+          .childDirectory('.android')
+          .childDirectory('Flutter')
+          .childFile('build.gradle');
+      expect(flutterBuildGradle.existsSync(), isTrue);
+      final String flutterContent = flutterBuildGradle.readAsStringSync();
+      expect(flutterContent, contains('repositories {'));
+      expect(flutterContent, contains('google()'));
+      expect(flutterContent, contains('mavenCentral()'));
     },
-    overrides: <Type, Generator>{},
+    overrides: <Type, Generator>{
+      Pub: () => Pub.test(
+        fileSystem: globals.fs,
+        logger: globals.logger,
+        processManager: globals.processManager,
+        botDetector: globals.botDetector,
+        platform: globals.platform,
+        stdio: FakeStdio(),
+      ),
+    },
   );
 }
