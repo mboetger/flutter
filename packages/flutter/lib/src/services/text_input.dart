@@ -2126,6 +2126,25 @@ class TextInput {
 
   late MethodChannel _channel;
 
+  // The active connection to the platform's text input.
+  //
+  // This connection is intentionally NOT cleared when the app transitions to
+  // [AppLifecycleState.inactive] or [AppLifecycleState.paused].
+  //
+  // Clearing this connection on lifecycle changes would cause several regressions:
+  // 1. It would send a 'clearClient' or 'hide' message to the platform,
+  //    forcefully dismissing the keyboard during temporary interruptions
+  //    (such as system dialogs, notification shades, or split-screen mode).
+  // 2. It would set [_currentConnection] to null, preventing the framework
+  //    from responding to [requestExistingInputState] when the app resumes,
+  //    which is required for the OS to restore the keyboard.
+  // 3. Re-attaching the client on resume would trigger a 'setClient' call,
+  //    which resets the native IME composition state. This would break
+  //    composing text input (e.g., Japanese or Chinese multi-stroke input)
+  //    if the user temporarily interacts with a system overlay.
+  //
+  // Instead, the framework keeps the connection active and relies on the
+  // operating system to manage the native input connection's lifecycle.
   TextInputConnection? _currentConnection;
   late TextInputConfiguration _currentConfiguration;
   TextInputConnection? _lastConnection;
