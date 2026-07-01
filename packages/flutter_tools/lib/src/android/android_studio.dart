@@ -5,6 +5,8 @@
 /// @docImport 'java.dart';
 library;
 
+import 'package:xml/xml.dart';
+
 import '../base/common.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
@@ -42,6 +44,7 @@ class AndroidStudio {
     this.configuredPath,
     this.studioAppName = 'AndroidStudio',
     this.presetPluginsPath,
+    this.pathsSelector,
   }) {
     _initAndValidate();
   }
@@ -98,6 +101,7 @@ class AndroidStudio {
       version: version,
       presetPluginsPath: presetPluginsPath,
       configuredPath: configuredPath,
+      pathsSelector: pathsSelectorValue,
     );
   }
 
@@ -135,7 +139,15 @@ class AndroidStudio {
     }
 
     if (installPath != null && globals.fs.isDirectorySync(installPath)) {
-      return AndroidStudio(installPath, version: version, studioAppName: studioAppName);
+      final String pathsSelector = homeDotDir.basename.startsWith('.')
+          ? homeDotDir.basename.substring(1)
+          : homeDotDir.basename;
+      return AndroidStudio(
+        installPath,
+        version: version,
+        studioAppName: studioAppName,
+        pathsSelector: pathsSelector,
+      );
     }
     return null;
   }
@@ -150,6 +162,7 @@ class AndroidStudio {
 
   final String? configuredPath;
   final String? presetPluginsPath;
+  final String? pathsSelector;
 
   String? _javaPath;
   var _isValid = false;
@@ -222,6 +235,96 @@ class AndroidStudio {
   }
 
   List<String> get validationMessages => _validationMessages;
+
+  bool get _isVersion4_1OrNewer {
+    if (version == null) {
+      return false;
+    }
+    return version!.major > 4 || (version!.major == 4 && version!.minor >= 1);
+  }
+
+  String? get configPath {
+    if (version == null) {
+      return null;
+    }
+    final int major = version!.major;
+    final int minor = version!.minor;
+    final String? homeDirPath = globals.fsUtils.homeDirPath;
+    if (homeDirPath == null) {
+      return null;
+    }
+
+    final String studioDirName = studioAppName.replaceAll(' ', '');
+    final String dirName = pathsSelector ?? '$studioDirName$major.$minor';
+
+    if (globals.platform.isMacOS) {
+      if (_isVersion4_1OrNewer) {
+        return globals.fs.path.join(
+          homeDirPath,
+          'Library',
+          'Application Support',
+          'Google',
+          dirName,
+        );
+      } else {
+        return globals.fs.path.join(
+          homeDirPath,
+          'Library',
+          'Preferences',
+          dirName,
+        );
+      }
+    } else if (globals.platform.isWindows) {
+      final String? appData = globals.platform.environment['APPDATA'];
+      if (_isVersion4_1OrNewer) {
+        if (appData == null) {
+          return null;
+        }
+        return globals.fs.path.join(appData, 'Google', dirName);
+      } else {
+        return globals.fs.path.join(homeDirPath, '.$dirName', 'config');
+      }
+    } else {
+      // Linux and others
+      if (_isVersion4_1OrNewer) {
+        return globals.fs.path.join(
+          homeDirPath,
+          '.config',
+          'Google',
+          dirName,
+        );
+      } else {
+        return globals.fs.path.join(homeDirPath, '.$dirName', 'config');
+      }
+    }
+  }
+
+  File? get gradleSettingsFile {
+    final String? config = configPath;
+    if (config == null) {
+      return null;
+    }
+    return globals.fs.file(globals.fs.path.join(config, 'options', 'gradle.settings.xml'));
+  }
+
+  String? get gradleServiceDirectoryPath {
+    final File? settingsFile = gradleSettingsFile;
+    if (settingsFile == null || !settingsFile.existsSync()) {
+      return null;
+    }
+    try {
+      final document = XmlDocument.parse(settingsFile.readAsStringSync());
+      final Iterable<XmlElement> options = document.findAllElements('option');
+      for (final option in options) {
+        if (option.getAttribute('name') == 'serviceDirectoryPath') {
+          return option.getAttribute('value');
+        }
+      }
+    } on Exception catch (e) {
+      globals.printTrace('Error parsing gradle.settings.xml: $e');
+    }
+    return null;
+  }
 
   /// Locates the newest, valid version of Android Studio.
   ///
@@ -443,6 +546,7 @@ class AndroidStudio {
                 installPath,
                 version: Version.parse(version),
                 studioAppName: title,
+                pathsSelector: name,
               );
               if (!alreadyFoundStudioAt(studio.directory, newerThan: studio.version)) {
                 studios.removeWhere(

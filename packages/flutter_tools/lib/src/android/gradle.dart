@@ -174,6 +174,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
        _analytics = analytics,
        _gradleUtils = gradleUtils,
        _androidStudio = androidStudio,
+       _platform = platform,
        _fileSystemUtils = FileSystemUtils(fileSystem: fileSystem, platform: platform),
        _processUtils = ProcessUtils(logger: logger, processManager: processManager);
 
@@ -186,6 +187,18 @@ class AndroidGradleBuilder implements AndroidBuilder {
   final GradleUtils _gradleUtils;
   final FileSystemUtils _fileSystemUtils;
   final AndroidStudio? _androidStudio;
+  final Platform _platform;
+
+  Map<String, String> _getGradleEnv() {
+    final env = <String, String>{
+      ...?_java?.environment,
+    };
+    final String? gradleHome = _androidStudio?.gradleServiceDirectoryPath;
+    if (gradleHome != null && !_platform.environment.containsKey('GRADLE_USER_HOME')) {
+      env['GRADLE_USER_HOME'] = gradleHome;
+    }
+    return env;
+  }
 
   /// Builds the AAR and POM files for the current Flutter module or plugin.
   @override
@@ -344,7 +357,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
         command,
         workingDirectory: project.android.hostAppGradleRoot.path,
         allowReentrantFlutter: true,
-        environment: _java?.environment,
+        environment: _getGradleEnv(),
         mapFunction: consumeLog,
       );
     } on ProcessException catch (exception) {
@@ -867,7 +880,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
         command,
         workingDirectory: project.android.hostAppGradleRoot.path,
         allowReentrantFlutter: true,
-        environment: _java?.environment,
+        environment: _getGradleEnv(),
       );
     } finally {
       status.stop();
