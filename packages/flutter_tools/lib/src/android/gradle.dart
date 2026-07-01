@@ -1311,34 +1311,50 @@ Directory _getLocalEngineRepo({
     fileSystem.path.join(engineOutPath, 'flutter_embedding_$buildMode.pom'),
     fileSystem,
   );
-  for (final artifact in const <String>['pom', 'jar']) {
-    // The Android embedding artifacts.
-    _createSymlink(
-      fileSystem.path.join(engineOutPath, 'flutter_embedding_$buildMode.$artifact'),
-      fileSystem.path.join(
-        localEngineRepo.path,
-        'io',
-        'flutter',
-        'flutter_embedding_$buildMode',
-        artifactVersion,
-        'flutter_embedding_$buildMode-$artifactVersion.$artifact',
-      ),
-      fileSystem,
-    );
-    // The engine artifacts (libflutter.so).
-    _createSymlink(
-      fileSystem.path.join(engineOutPath, '${abi}_$buildMode.$artifact'),
-      fileSystem.path.join(
-        localEngineRepo.path,
-        'io',
-        'flutter',
-        '${abi}_$buildMode',
-        artifactVersion,
-        '${abi}_$buildMode-$artifactVersion.$artifact',
-      ),
-      fileSystem,
-    );
-  }
+
+  // 1. Symlink POM files.
+  _createSymlink(
+    fileSystem.path.join(engineOutPath, 'flutter_embedding_$buildMode.pom'),
+    fileSystem.path.join(
+      localEngineRepo.path,
+      'io',
+      'flutter',
+      'flutter_embedding_$buildMode',
+      artifactVersion,
+      'flutter_embedding_$buildMode-$artifactVersion.pom',
+    ),
+    fileSystem,
+  );
+  _createSymlink(
+    fileSystem.path.join(engineOutPath, '${abi}_$buildMode.pom'),
+    fileSystem.path.join(
+      localEngineRepo.path,
+      'io',
+      'flutter',
+      '${abi}_$buildMode',
+      artifactVersion,
+      '${abi}_$buildMode-$artifactVersion.pom',
+    ),
+    fileSystem,
+  );
+
+  // 2. Symlink binary artifacts (preferring AAR and/or JAR if they exist).
+  _symlinkBinaryArtifact(
+    artifactName: 'flutter_embedding_$buildMode',
+    engineOutPath: engineOutPath,
+    localEngineRepo: localEngineRepo,
+    artifactVersion: artifactVersion,
+    fileSystem: fileSystem,
+  );
+  _symlinkBinaryArtifact(
+    artifactName: '${abi}_$buildMode',
+    engineOutPath: engineOutPath,
+    localEngineRepo: localEngineRepo,
+    artifactVersion: artifactVersion,
+    fileSystem: fileSystem,
+  );
+
+  // 3. Symlink maven-metadata.xml.
   for (final artifact in <String>['flutter_embedding_$buildMode', '${abi}_$buildMode']) {
     _createSymlink(
       fileSystem.path.join(engineOutPath, '$artifact.maven-metadata.xml'),
@@ -1347,6 +1363,39 @@ Directory _getLocalEngineRepo({
     );
   }
   return localEngineRepo;
+}
+
+void _symlinkBinaryArtifact({
+  required String artifactName,
+  required String engineOutPath,
+  required Directory localEngineRepo,
+  required String artifactVersion,
+  required FileSystem fileSystem,
+}) {
+  var symlinked = false;
+  for (final ext in const <String>['aar', 'jar']) {
+    final String targetPath = fileSystem.path.join(engineOutPath, '$artifactName.$ext');
+    if (fileSystem.file(targetPath).existsSync()) {
+      _createSymlink(
+        targetPath,
+        fileSystem.path.join(
+          localEngineRepo.path,
+          'io',
+          'flutter',
+          artifactName,
+          artifactVersion,
+          '$artifactName-$artifactVersion.$ext',
+        ),
+        fileSystem,
+      );
+      symlinked = true;
+    }
+  }
+  if (!symlinked) {
+    throwToolExit(
+      'Neither $artifactName.aar nor $artifactName.jar was found in the local engine out directory.',
+    );
+  }
 }
 
 String _getAbiByLocalEnginePath(String engineOutPath) {
