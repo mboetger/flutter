@@ -789,6 +789,56 @@ void main() {
     );
     expect(tester.getSize(find.byType(WidgetsApp)), Size.zero);
   });
+
+  testWidgets('WidgetsApp (non-router) popRoute pops the current route', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      WidgetsApp(
+        color: const Color(0xFF112233),
+        onGenerateRoute: (RouteSettings settings) {
+          return PageRouteBuilder<void>(
+            pageBuilder:
+                (
+                  BuildContext context,
+                  Animation<double> animation,
+                  Animation<double> secondaryAnimation,
+                ) {
+                  return Text(settings.name!);
+                },
+          );
+        },
+        initialRoute: '/',
+      ),
+    );
+
+    expect(find.text('/'), findsOneWidget);
+
+    final NavigatorState navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.pushNamed('/next');
+    await tester.pumpAndSettle();
+
+    expect(find.text('/'), findsNothing);
+    expect(find.text('/next'), findsOneWidget);
+
+    // Simulate Android back button (popRoute)
+    final ByteData message = const JSONMethodCodec().encodeMethodCall(const MethodCall('popRoute'));
+    final ByteData? response = await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/navigation',
+      message,
+      (_) {},
+    );
+    await tester.pumpAndSettle();
+
+    // Verify the platform message response indicates the pop was handled
+    expect(response, isNotNull);
+    final decodedResponse = const JSONMethodCodec().decodeEnvelope(response!) as bool;
+    expect(decodedResponse, isTrue);
+
+    // Verify it popped back to the initial route
+    expect(find.text('/'), findsOneWidget);
+    expect(find.text('/next'), findsNothing);
+  });
 }
 
 typedef SimpleRouterDelegateBuilder =
