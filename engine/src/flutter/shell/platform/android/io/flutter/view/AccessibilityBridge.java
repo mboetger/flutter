@@ -305,6 +305,8 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
   // Set to true after {@code release} has been invoked.
   private boolean isReleased = false;
 
+  private final boolean isFirebaseTestLab;
+
   // Handler for all messages received from Flutter via the {@code accessibilityChannel}
   final AccessibilityChannel.AccessibilityMessageHandler accessibilityMessageHandler =
       new AccessibilityChannel.AccessibilityMessageHandler() {
@@ -399,7 +401,8 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
               if (isReleased) {
                 return;
               }
-              if (accessibilityEnabled) {
+              boolean enabled = isFirebaseTestLab || accessibilityEnabled;
+              if (enabled) {
                 accessibilityChannel.onAndroidAccessibilityEnabled();
               } else {
                 setAccessibleNavigation(false);
@@ -408,7 +411,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
 
               if (onAccessibilityChangeListener != null) {
                 onAccessibilityChangeListener.onAccessibilityChanged(
-                    accessibilityEnabled, accessibilityManager.isTouchExplorationEnabled());
+                    enabled, accessibilityManager.isTouchExplorationEnabled());
               }
             }
           };
@@ -546,10 +549,12 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     this.contentResolver = contentResolver;
     this.accessibilityViewEmbedder = accessibilityViewEmbedder;
     this.platformViewsAccessibilityDelegate = platformViewsAccessibilityDelegate;
+    this.isFirebaseTestLab =
+        "true".equals(Settings.System.getString(contentResolver, "firebase.test.lab"));
     accessibilityChannel.setAccessibilityMessageHandler(accessibilityMessageHandler);
     // Tell Flutter whether accessibility is initially active or not. Then register a listener
     // to be notified of changes in the future.
-    accessibilityStateChangeListener.onAccessibilityStateChanged(accessibilityManager.isEnabled());
+    accessibilityStateChangeListener.onAccessibilityStateChanged(isAccessibilityEnabled());
     this.accessibilityManager.addAccessibilityStateChangeListener(accessibilityStateChangeListener);
 
     // Tell Flutter whether touch exploration is initially active or not. Then register a listener
@@ -568,7 +573,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
 
             if (onAccessibilityChangeListener != null) {
               onAccessibilityChangeListener.onAccessibilityChanged(
-                  accessibilityManager.isEnabled(), isTouchExplorationEnabled);
+                  isAccessibilityEnabled(), isTouchExplorationEnabled);
             }
           }
         };
@@ -657,9 +662,12 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     accessibilityChannel.setAccessibilityMessageHandler(null);
   }
 
-  /** Returns true if the Android OS currently has accessibility enabled, false otherwise. */
+  /**
+   * Returns true if the Android OS currently has accessibility enabled, or if
+   * running in Firebase Test Lab, false otherwise.
+   */
   public boolean isAccessibilityEnabled() {
-    return accessibilityManager.isEnabled();
+    return isFirebaseTestLab || accessibilityManager.isEnabled();
   }
 
   /** Returns true if the Android OS currently has touch exploration enabled, false otherwise. */
@@ -1812,7 +1820,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
    */
   @VisibleForTesting
   public void sendAccessibilityEvent(int viewId, int eventType) {
-    if (!accessibilityManager.isEnabled()) {
+    if (!isAccessibilityEnabled()) {
       return;
     }
     sendAccessibilityEvent(obtainAccessibilityEvent(viewId, eventType));
@@ -1826,7 +1834,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
    * Android {@code View}, i.e., {@link #rootAccessibilityView}.
    */
   private void sendAccessibilityEvent(@NonNull AccessibilityEvent event) {
-    if (!accessibilityManager.isEnabled()) {
+    if (!isAccessibilityEnabled()) {
       return;
     }
     // See
