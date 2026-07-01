@@ -192,6 +192,19 @@ public class PlatformChannel {
                 platformMessageHandler.share(text);
                 result.success(null);
                 break;
+              case "AndroidBoot.setCallback":
+                {
+                  long callbackHandle = ((Number) arguments).longValue();
+                  platformMessageHandler.setBootCallback(callbackHandle);
+                  result.success(null);
+                  break;
+                }
+              case "AndroidBoot.clearCallback":
+                {
+                  platformMessageHandler.clearBootCallback();
+                  result.success(null);
+                  break;
+                }
               default:
                 result.notImplemented();
                 break;
@@ -561,6 +574,12 @@ public class PlatformChannel {
      * https://developer.android.com/reference/android/content/Intent.html#ACTION_SEND
      */
     void share(@NonNull String text);
+
+    /** The Flutter application would like to register a boot callback. */
+    void setBootCallback(long callbackHandle);
+
+    /** The Flutter application would like to clear the boot callback. */
+    void clearBootCallback();
   }
 
   /** Types of sounds the Android OS can play on behalf of an application. */

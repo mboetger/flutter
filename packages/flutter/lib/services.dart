@@ -10,6 +10,7 @@
 /// library.
 library services;
 
+export 'src/services/android_boot.dart';
 export 'src/services/asset_bundle.dart';
 export 'src/services/asset_manifest.dart';
 export 'src/services/autofill.dart';

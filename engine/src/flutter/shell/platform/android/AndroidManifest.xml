@@ -10,6 +10,22 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
 
+    <application>
+        <receiver
+            android:name="io.flutter.embedding.engine.FlutterBootReceiver"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name="io.flutter.embedding.engine.FlutterBootJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true" />
+    </application>
+
     <!-- Required for io.flutter.plugin.text.ProcessTextPlugin to query activities that can process text. -->
     <queries>
         <intent>

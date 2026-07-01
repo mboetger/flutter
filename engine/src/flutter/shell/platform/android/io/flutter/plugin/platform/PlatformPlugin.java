@@ -28,6 +28,7 @@ import androidx.annotation.VisibleForTesting;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import io.flutter.Log;
+import io.flutter.embedding.engine.FlutterBootReceiver;
 import io.flutter.embedding.engine.systemchannels.PlatformChannel;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -154,6 +155,16 @@ public class PlatformPlugin {
         @Override
         public void share(@NonNull String text) {
           PlatformPlugin.this.share(text);
+        }
+
+        @Override
+        public void setBootCallback(long callbackHandle) {
+          FlutterBootReceiver.setBootCallback(activity, callbackHandle);
+        }
+
+        @Override
+        public void clearBootCallback() {
+          FlutterBootReceiver.clearBootCallback(activity);
         }
       };
 

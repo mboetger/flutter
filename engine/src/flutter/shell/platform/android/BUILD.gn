@@ -250,6 +250,8 @@ android_java_sources = [
   "io/flutter/embedding/android/SurfaceHolderCallbackCompat.java",
   "io/flutter/embedding/android/TransparencyMode.java",
   "io/flutter/embedding/android/WindowInfoRepositoryCallbackAdapterWrapper.java",
+  "io/flutter/embedding/engine/FlutterBootJobService.java",
+  "io/flutter/embedding/engine/FlutterBootReceiver.java",
   "io/flutter/embedding/engine/FlutterEngine.java",
   "io/flutter/embedding/engine/FlutterEngineCache.java",
   "io/flutter/embedding/engine/FlutterEngineConnectionRegistry.java",
