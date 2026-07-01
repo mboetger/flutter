@@ -107,6 +107,16 @@ class AgpCommonExtensionWrapper(
             else -> throw IllegalArgumentException(unsupportedMessage())
         }
 
+    val abiFilters: Set<String>
+        get() =
+            when (backingExtension) {
+                is ApplicationExtension -> backingExtension.defaultConfig.ndk.abiFilters ?: emptySet()
+                is LibraryExtension -> backingExtension.defaultConfig.ndk.abiFilters ?: emptySet()
+                is DynamicFeatureExtension -> backingExtension.defaultConfig.ndk.abiFilters ?: emptySet()
+                is TestExtension -> backingExtension.defaultConfig.ndk.abiFilters ?: emptySet()
+                else -> throw IllegalArgumentException(unsupportedMessage())
+            }
+
     // Example of wrapping a method rather than a property
     fun compileOptions(action: (Any) -> Unit) {
         when (backingExtension) {

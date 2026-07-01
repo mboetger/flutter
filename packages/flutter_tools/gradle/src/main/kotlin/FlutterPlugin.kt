@@ -152,12 +152,16 @@ class FlutterPlugin : Plugin<Project> {
             androidExtensionAsApplicationExtension.dynamicFeatures.addAll(componentNames)
         }
 
-        FlutterPluginUtils.getTargetPlatforms(project).forEach { targetArch ->
-            val abiValue: String? = FlutterPluginConstants.PLATFORM_ARCH_MAP[targetArch]
-            FlutterPluginUtils
-                .getAndroidExtension(project)
-                .splits.abi
-                .include(abiValue!!)
+        val androidComponents = project.extensions.getByType(AndroidComponentsExtension::class.java)
+        // Defer configuring splits until the DSL is finalized so we can respect the user's ndk.abiFilters.
+        androidComponents.finalizeDsl { _ ->
+            FlutterPluginUtils.getTargetPlatforms(project).forEach { targetArch ->
+                val abiValue: String? = FlutterPluginConstants.PLATFORM_ARCH_MAP[targetArch]
+                FlutterPluginUtils
+                    .getAndroidExtension(project)
+                    .splits.abi
+                    .include(abiValue!!)
+            }
         }
 
         val flutterExecutableName = getExecutableNameForPlatform("flutter")
@@ -304,14 +308,10 @@ class FlutterPlugin : Plugin<Project> {
             FlutterPluginUtils.addTasksForOutputsAppLinkSettings(projectToAddTasksTo)
         }
 
-        val targetPlatforms: List<String> =
-            FlutterPluginUtils.getTargetPlatforms(projectToAddTasksTo)
-
         // The Android Gradle Plugin is always applied to Flutter Android projects, so its components
         // extension is expected to be present. Use getByType (not findByType) so a misconfiguration
         // fails loudly rather than silently skipping libapp.so registration.
         val androidComponents = projectToAddTasksTo.extensions.getByType(AndroidComponentsExtension::class.java)
-        val targetPlatformsList = targetPlatforms
         androidComponents.onVariants { variant ->
             val capitalizeVariantName = FlutterPluginUtils.capitalize(variant.name)
             // Reference the Flutter compile task by name rather than by provider: this variant API
@@ -330,7 +330,10 @@ class FlutterPlugin : Plugin<Project> {
                             projectToAddTasksTo.layout.dir(projectToAddTasksTo.provider { task.outputDirectory!! })
                         }
                     intermediateDir.set(outputDirProvider)
-                    this.targetPlatforms.set(targetPlatformsList)
+                    // Use a provider to lazily evaluate target platforms after the DSL has been evaluated.
+                    this.targetPlatforms.set(projectToAddTasksTo.provider {
+                        FlutterPluginUtils.getTargetPlatforms(projectToAddTasksTo)
+                    })
                 }
             variant.sources.jniLibs?.addGeneratedSourceDirectory(
                 copyJniLibsTaskProvider,
@@ -356,7 +359,7 @@ class FlutterPlugin : Plugin<Project> {
                     return@configureEach
                 }
                 val copyFlutterAssetsTask: Task =
-                    addFlutterDeps(variant, flutterPlugin, targetPlatforms)
+                    addFlutterDeps(variant, flutterPlugin, FlutterPluginUtils.getTargetPlatforms(projectToAddTasksTo))
 
                 // TODO(gmackall): Migrate to AGPs variant api.
                 //    https://github.com/flutter/flutter/issues/166550
@@ -482,7 +485,7 @@ class FlutterPlugin : Plugin<Project> {
                     copyFlutterAssetsTask = copyFlutterAssetsTask ?: addFlutterDeps(
                         libraryVariant,
                         flutterPlugin,
-                        targetPlatforms
+                        FlutterPluginUtils.getTargetPlatforms(projectToAddTasksTo)
                     )
                     // TODO(gmackall): Migrate to AGPs variant api.
                     //    https://github.com/flutter/flutter/issues/166550

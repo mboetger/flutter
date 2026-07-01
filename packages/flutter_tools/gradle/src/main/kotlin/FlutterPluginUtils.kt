@@ -521,6 +521,23 @@ object FlutterPluginUtils {
     @JvmName("getCompileSdkFromProject")
     internal fun getCompileSdkFromProject(project: Project): String = getLegacyAndroidExtension(project).compileSdkVersion!!.substring(8)
 
+    internal fun getAppProject(project: Project): Project? {
+        try {
+            if (isBuiltAsApp(project)) {
+                return project
+            }
+            val hostAppProjectName =
+                if (project.rootProject.hasProperty("flutter.hostAppProjectName")) {
+                    project.rootProject.property("flutter.hostAppProjectName") as? String
+                } else {
+                    "app"
+                }
+            return project.rootProject.findProject(":$hostAppProjectName")
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
     /**
      * Returns:
      *  The default platforms if the `target-platform` property is not set.
@@ -530,16 +547,34 @@ object FlutterPluginUtils {
     @JvmStatic
     @JvmName("getTargetPlatforms")
     internal fun getTargetPlatforms(project: Project): List<String> {
-        if (!project.hasProperty(PROP_TARGET_PLATFORM)) {
-            return FlutterPluginConstants.DEFAULT_PLATFORMS
-        }
-        val platformsString = project.property(PROP_TARGET_PLATFORM) as String
-        return platformsString.split(",").map { platform ->
-            if (!FlutterPluginConstants.PLATFORM_ARCH_MAP.containsKey(platform)) {
-                throw GradleException("Invalid platform: $platform")
+        if (project.hasProperty(PROP_TARGET_PLATFORM)) {
+            val platformsString = project.property(PROP_TARGET_PLATFORM) as String
+            return platformsString.split(",").map { platform ->
+                if (!FlutterPluginConstants.PLATFORM_ARCH_MAP.containsKey(platform)) {
+                    throw GradleException("Invalid platform: $platform")
+                }
+                platform
             }
-            platform
         }
+
+        val appProject = getAppProject(project)
+        if (appProject != null) {
+            try {
+                val androidExtension = getAndroidExtension(appProject)
+                val abiFilters = androidExtension.abiFilters
+                if (abiFilters.isNotEmpty()) {
+                    val abiPlatformMap = FlutterPluginConstants.PLATFORM_ARCH_MAP.entries.associate { (k, v) -> v to k }
+                    val targetPlatforms = abiFilters.mapNotNull { abi -> abiPlatformMap[abi] }
+                    if (targetPlatforms.isNotEmpty()) {
+                        return targetPlatforms
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback to default platforms on any exception (e.g. extension not found)
+            }
+        }
+
+        return FlutterPluginConstants.DEFAULT_PLATFORMS
     }
 
     /** Prints error message for usage of KGP. */

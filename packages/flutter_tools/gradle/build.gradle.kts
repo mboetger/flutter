@@ -68,6 +68,8 @@ dependencies {
     compileOnly("com.android.tools.build:gradle:8.11.1")
 
     testImplementation(kotlin("test"))
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
     testImplementation("com.android.tools.build:gradle:8.11.1")
     testImplementation("org.mockito:mockito-core:5.8.0")
     testImplementation("io.mockk:mockk:1.13.16")
