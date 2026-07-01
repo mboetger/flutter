@@ -103,15 +103,6 @@ class AccessibilityViewEmbedder {
     if (origin == null) {
       return null;
     }
-    if (!embeddedViewToDisplayBounds.containsKey(origin.view)) {
-      // This might happen if the embedded view is sending accessibility event before the first
-      // Flutter semantics
-      // tree was sent to the accessibility bridge. In this case we don't return a node as we do not
-      // know the
-      // bounds yet.
-      // https://github.com/flutter/flutter/issues/30068
-      return null;
-    }
     AccessibilityNodeProvider provider = origin.view.getAccessibilityNodeProvider();
     if (provider == null) {
       // The provider is null for views that don't have a virtual accessibility tree.
@@ -140,6 +131,9 @@ class AccessibilityViewEmbedder {
     result.setSource(rootAccessibilityView, flutterId);
     result.setClassName(originNode.getClassName());
 
+    // The display bounds may be null if the embedded view sends accessibility events
+    // before the first Flutter semantics tree is sent to the bridge. In this case,
+    // we do not translate the screen bounds.
     Rect displayBounds = embeddedViewToDisplayBounds.get(embeddedView);
 
     copyAccessibilityFields(originNode, result);
@@ -202,7 +196,7 @@ class AccessibilityViewEmbedder {
   @SuppressWarnings("deprecation")
   private void setFlutterNodesTranslateBounds(
       @NonNull AccessibilityNodeInfo originNode,
-      @NonNull Rect displayBounds,
+      @Nullable Rect displayBounds,
       @NonNull AccessibilityNodeInfo resultNode) {
     Rect boundsInParent = new Rect();
     originNode.getBoundsInParent(boundsInParent);
@@ -210,7 +204,9 @@ class AccessibilityViewEmbedder {
 
     Rect boundsInScreen = new Rect();
     originNode.getBoundsInScreen(boundsInScreen);
-    boundsInScreen.offset(displayBounds.left, displayBounds.top);
+    if (displayBounds != null) {
+      boundsInScreen.offset(displayBounds.left, displayBounds.top);
+    }
     resultNode.setBoundsInScreen(boundsInScreen);
   }
 
@@ -343,6 +339,11 @@ class AccessibilityViewEmbedder {
       return false;
     }
     Rect displayBounds = embeddedViewToDisplayBounds.get(origin.view);
+    if (displayBounds == null) {
+      // We cannot translate the hover event coordinates to the embedded view's
+      // coordinate system without its display bounds.
+      return false;
+    }
     int pointerCount = event.getPointerCount();
     MotionEvent.PointerProperties[] pointerProperties =
         new MotionEvent.PointerProperties[pointerCount];
