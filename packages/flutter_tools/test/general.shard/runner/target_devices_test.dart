@@ -212,6 +212,25 @@ No supported devices connected.
           expect(deviceManager.androidDiscoverer.numberOfTimesPolled, 1);
         });
 
+        testUsingContext('when no devices and has diagnostics', () async {
+          deviceManager.diagnostics = <String>['Diagnostic message 1', 'Diagnostic message 2'];
+          final List<Device>? devices = await targetDevices.findAllTargetDevices();
+
+          expect(
+            logger.statusText,
+            equals('''
+No supported devices connected.
+
+Diagnostic message 1
+Diagnostic message 2
+'''),
+          );
+          expect(devices, isNull);
+          expect(deviceManager.androidDiscoverer.devicesCalled, 3);
+          expect(deviceManager.androidDiscoverer.discoverDevicesCalled, 0);
+          expect(deviceManager.androidDiscoverer.numberOfTimesPolled, 1);
+        });
+
         testUsingContext('when device is unsupported by flutter or project', () async {
           deviceManager.androidDiscoverer.deviceList = <Device>[
             attachedUnsupportedAndroidDevice,
@@ -2915,6 +2934,11 @@ class TestDeviceManager extends DeviceManager {
 
   @override
   bool hasSpecifiedAllDevices = false;
+
+  List<String> diagnostics = <String>[];
+
+  @override
+  Future<List<String>> getDeviceDiagnostics() async => diagnostics;
 
   final androidDiscoverer = TestPollingDeviceDiscovery('android');
   final otherDiscoverer = TestPollingDeviceDiscovery('other');

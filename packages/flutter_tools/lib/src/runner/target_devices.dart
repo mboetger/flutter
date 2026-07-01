@@ -217,6 +217,14 @@ class TargetDevices {
           : globals.userMessages.flutterNoSupportedDevices,
     );
     await _printUnsupportedDevice(unsupportedDevices);
+
+    final List<String> diagnostics = await _deviceManager.getDeviceDiagnostics();
+    if (diagnostics.isNotEmpty) {
+      _logger.printStatus('');
+      for (final String diagnostic in diagnostics) {
+        _logger.printStatus(diagnostic);
+      }
+    }
     return null;
   }
 

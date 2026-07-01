@@ -43,7 +43,7 @@ void main() {
       );
 
       expect(await androidDevices.pollingGetDevices(), isEmpty);
-      expect(await androidDevices.getDiagnostics(), isEmpty);
+      expect(await androidDevices.getDiagnostics(), <String>['Android SDK is missing the adb tool.']);
     },
   );
 
@@ -66,7 +66,7 @@ void main() {
       );
 
       expect(await androidDevices.pollingGetDevices(), isEmpty);
-      expect(await androidDevices.getDiagnostics(), isEmpty);
+      expect(await androidDevices.getDiagnostics(), <String>['Unable to run "adb" (adb).']);
       expect(fakeProcessManager, hasNoRemainingExpectations);
     },
   );
@@ -87,7 +87,7 @@ void main() {
       );
 
       expect(await androidDevices.pollingGetDevices(), isEmpty);
-      expect(await androidDevices.getDiagnostics(), isEmpty);
+      expect(await androidDevices.getDiagnostics(), <String>['Unable to locate Android SDK.']);
     },
   );
 

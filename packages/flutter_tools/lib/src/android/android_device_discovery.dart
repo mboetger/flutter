@@ -88,7 +88,19 @@ class AndroidDevices extends PollingDeviceDiscovery {
   @override
   Future<List<String>> getDiagnostics() async {
     if (_doesNotHaveAdb()) {
-      return <String>[];
+      final List<String> diagnostics = <String>[];
+      final AndroidSdk? androidSdk = _androidSdk;
+      if (androidSdk == null) {
+        diagnostics.add(_userMessages.androidCannotLocateSdk);
+      } else {
+        final String? adbPath = androidSdk.adbPath;
+        if (adbPath == null) {
+          diagnostics.add(_userMessages.androidMissingAdb);
+        } else if (!_processManager.canRun(adbPath)) {
+          diagnostics.add(_userMessages.androidCannotRunAdb(adbPath));
+        }
+      }
+      return diagnostics;
     }
 
     final RunResult result = await _processUtils.run(<String>[

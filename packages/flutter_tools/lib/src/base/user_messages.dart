@@ -44,6 +44,10 @@ class UserMessages {
   // Also occurs in AndroidLicenseValidator
   String androidStatusInfo(String version) => 'Android SDK version $version';
 
+  String get androidCannotLocateSdk => 'Unable to locate Android SDK.';
+  String get androidMissingAdb => 'Android SDK is missing the adb tool.';
+  String androidCannotRunAdb(String path) => 'Unable to run "adb" ($path).';
+
   // Messages used in AndroidLicenseValidator
   String androidLicensesUnknown(Platform platform) =>
       'Android license status unknown.\n'
