@@ -615,10 +615,13 @@ class _RenderCupertinoSlider extends RenderConstrainedBox implements MouseTracke
 
     config.isSemanticBoundary = isInteractive;
     config.isSlider = true;
+    config.minValue = '0.0';
+    config.maxValue = '1.0';
     if (isInteractive) {
       config.textDirection = textDirection;
       config.onIncrease = _increaseAction;
       config.onDecrease = _decreaseAction;
+      config.onSetProgress = _setProgressAction;
       config.value = '${(value * 100).round()}%';
       config.increasedValue =
           '${(clampDouble(value + _semanticActionUnit, 0.0, 1.0) * 100).round()}%';
@@ -638,6 +641,12 @@ class _RenderCupertinoSlider extends RenderConstrainedBox implements MouseTracke
   void _decreaseAction() {
     if (isInteractive) {
       onChanged!(clampDouble(value - _semanticActionUnit, 0.0, 1.0), false);
+    }
+  }
+
+  void _setProgressAction(double val) {
+    if (isInteractive) {
+      onChanged!(clampDouble(val, 0.0, 1.0), false);
     }
   }
 

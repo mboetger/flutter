@@ -112,9 +112,8 @@ typedef SemanticsUpdateCallback = void Function(SemanticsUpdate update);
 ///
 /// Use [ChildSemanticsConfigurationsResultBuilder] to generate the return
 /// value.
-typedef ChildSemanticsConfigurationsDelegate = ChildSemanticsConfigurationsResult Function(
-  List<SemanticsConfiguration>,
-);
+typedef ChildSemanticsConfigurationsDelegate =
+    ChildSemanticsConfigurationsResult Function(List<SemanticsConfiguration>);
 
 /// Controls how accessibility focus is blocked.
 ///
@@ -5527,6 +5526,19 @@ class SemanticsConfiguration {
   set onDecrease(VoidCallback? value) {
     _addArgumentlessAction(SemanticsAction.decrease, value!);
     _onDecrease = value;
+  }
+
+  /// The handler for [SemanticsAction.setProgress].
+  ///
+  /// This is a request to set the progress to a specific value.
+  /// For example, this action might be recognized by a slider control.
+  ValueChanged<double>? get onSetProgress => _onSetProgress;
+  ValueChanged<double>? _onSetProgress;
+  set onSetProgress(ValueChanged<double>? value) {
+    _addAction(SemanticsAction.setProgress, (Object? args) {
+      value!(args! as double);
+    });
+    _onSetProgress = value;
   }
 
   /// The handler for [SemanticsAction.copy].

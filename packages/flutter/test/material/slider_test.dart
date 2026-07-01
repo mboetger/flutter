@@ -1351,6 +1351,7 @@ void main() {
                                   SemanticsAction.increase,
                                   SemanticsAction.decrease,
                                   SemanticsAction.focus,
+                                  SemanticsAction.setProgress,
                                 ],
                                 value: '50%',
                                 increasedValue: '55%',
@@ -1536,6 +1537,7 @@ void main() {
                                   SemanticsAction.increase,
                                   SemanticsAction.decrease,
                                   SemanticsAction.focus,
+                                  SemanticsAction.setProgress,
                                 ],
                                 value: '50%',
                                 increasedValue: '60%',
@@ -1671,6 +1673,7 @@ void main() {
                                   SemanticsAction.decrease,
                                   SemanticsAction.didGainAccessibilityFocus,
                                   SemanticsAction.focus,
+                                  SemanticsAction.setProgress,
                                 ],
                                 value: '50%',
                                 increasedValue: '55%',
@@ -1861,6 +1864,7 @@ void main() {
                                 SemanticsAction.increase,
                                 SemanticsAction.decrease,
                                 SemanticsAction.focus,
+                                SemanticsAction.setProgress,
                               ],
                               value: '40',
                               increasedValue: '60',
@@ -1884,6 +1888,57 @@ void main() {
     );
     semantics.dispose();
   }, skip: kIsWeb); // [intended] the web traversal order by using ARIA-OWNS.
+
+  testWidgets('Slider semantics supports setProgress', (WidgetTester tester) async {
+    final SemanticsTester semantics = SemanticsTester(tester);
+    double sliderValue = 0.5;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Material(
+            child: Slider(
+              value: sliderValue,
+              onChanged: (double v) {
+                sliderValue = v;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final SemanticsOwner semanticsOwner = tester.binding.pipelineOwner.semanticsOwner!;
+
+    SemanticsNode? findSliderNode(SemanticsNode node) {
+      if (node.getSemanticsData().hasFlag(SemanticsFlag.isSlider)) {
+        return node;
+      }
+      SemanticsNode? result;
+      node.visitChildren((SemanticsNode child) {
+        final SemanticsNode? found = findSliderNode(child);
+        if (found != null) {
+          result = found;
+          return false;
+        }
+        return true;
+      });
+      return result;
+    }
+    final SemanticsNode? sliderNode = findSliderNode(semanticsOwner.rootSemanticsNode!);
+    final int nodeId = sliderNode!.id;
+
+    expect(sliderValue, 0.5);
+
+    // Perform setProgress action.
+    semanticsOwner.performAction(nodeId, SemanticsAction.setProgress, 0.8);
+    await tester.pumpAndSettle();
+
+    expect(sliderValue, 0.8);
+    semantics.dispose();
+  });
 
   // Regression test for https://github.com/flutter/flutter/issues/101868
   testWidgets('Slider.label info should not write to semantic node', (WidgetTester tester) async {
@@ -1939,6 +1994,7 @@ void main() {
                                 SemanticsAction.increase,
                                 SemanticsAction.decrease,
                                 SemanticsAction.focus,
+                                SemanticsAction.setProgress,
                               ],
                               label: 'Bingo',
                               value: '40',
@@ -2895,6 +2951,7 @@ void main() {
                                   SemanticsAction.increase,
                                   SemanticsAction.decrease,
                                   SemanticsAction.didGainAccessibilityFocus,
+                                  SemanticsAction.setProgress,
                                 ],
                                 value: '50%',
                                 increasedValue: '55%',

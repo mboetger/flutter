@@ -453,6 +453,8 @@ void main() {
         value: '50%',
         increasedValue: '60%',
         decreasedValue: '40%',
+        minValue: '0.0',
+        maxValue: '1.0',
         textDirection: TextDirection.ltr,
       ),
     );
@@ -468,7 +470,14 @@ void main() {
       ),
     );
 
-    expect(tester.getSemantics(find.byType(CupertinoSlider)), matchesSemantics(isSlider: true));
+    expect(
+      tester.getSemantics(find.byType(CupertinoSlider)),
+      matchesSemantics(
+        isSlider: true,
+        minValue: '0.0',
+        maxValue: '1.0',
+      ),
+    );
 
     handle.dispose();
   });
@@ -494,6 +503,8 @@ void main() {
         value: '50%',
         increasedValue: '60%',
         decreasedValue: '40%',
+        minValue: '0.0',
+        maxValue: '1.0',
         textDirection: TextDirection.ltr,
       ),
     );
@@ -517,10 +528,44 @@ void main() {
         value: '60%',
         increasedValue: '70%',
         decreasedValue: '50%',
+        minValue: '0.0',
+        maxValue: '1.0',
         textDirection: TextDirection.ltr,
       ),
     );
 
+    handle.dispose();
+  });
+
+  testWidgets('CupertinoSlider semantics supports setProgress', (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    double sliderValue = 0.5;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Directionality(
+          textDirection: TextDirection.ltr,
+          child: CupertinoSlider(
+            value: sliderValue,
+            onChanged: (double v) {
+              sliderValue = v;
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final SemanticsOwner semanticsOwner = tester.binding.pipelineOwner.semanticsOwner!;
+    final int nodeId = tester.getSemantics(find.byType(CupertinoSlider)).id;
+
+    expect(sliderValue, 0.5);
+
+    // Perform setProgress action.
+    semanticsOwner.performAction(nodeId, SemanticsAction.setProgress, 0.8);
+    await tester.pumpAndSettle();
+
+    expect(sliderValue, 0.8);
     handle.dispose();
   });
 

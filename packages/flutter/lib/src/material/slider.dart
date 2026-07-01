@@ -1960,6 +1960,8 @@ class _RenderSlider extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
       config.label = label!;
     }
     config.isSlider = true;
+    config.minValue = '0.0';
+    config.maxValue = '1.0';
     config.isFocusable = isInteractive;
     config.isFocused = hasFocus;
 
@@ -1971,6 +1973,7 @@ class _RenderSlider extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
       config.onIncrease = increaseAction;
       config.onDecrease = decreaseAction;
       config.onFocus = onFocusAction;
+      config.onSetProgress = setProgressAction;
     }
 
     if (semanticFormatterCallback != null) {
@@ -2024,6 +2027,18 @@ class _RenderSlider extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
       if (!_state.mounted) {
         return;
       }
+    }
+  }
+
+  void setProgressAction(double val) {
+    if (isInteractive) {
+      onChangeStart!(currentValue);
+      final double newValue = clampDouble(val, 0.0, 1.0);
+      onChanged!(newValue);
+      if (!_state.mounted) {
+        return;
+      }
+      onChangeEnd!(newValue);
     }
   }
 
