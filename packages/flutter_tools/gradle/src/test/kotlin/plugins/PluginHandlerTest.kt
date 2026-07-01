@@ -159,6 +159,21 @@ class PluginHandlerTest {
     fun `configurePlugins adds plugin project and configures its dependencies`(
         @TempDir tempDir: Path
     ) {
+        runConfigurePluginsDependencyTest(tempDir, isAppPlugin = false, expectedDependencyType = "api")
+    }
+
+    @Test
+    fun `configurePlugins adds plugin project and configures its dependencies using implementation for app plugins`(
+        @TempDir tempDir: Path
+    ) {
+        runConfigurePluginsDependencyTest(tempDir, isAppPlugin = true, expectedDependencyType = "implementation")
+    }
+
+    private fun runConfigurePluginsDependencyTest(
+        tempDir: Path,
+        isAppPlugin: Boolean,
+        expectedDependencyType: String
+    ) {
         val project = mockk<Project>()
 
         // configuration for configureLegacyPluginEachProjects
@@ -177,7 +192,7 @@ class PluginHandlerTest {
         every { pluginProject.hasProperty("android") } returns true
         val mockPluginContainer = mockk<org.gradle.api.plugins.PluginContainer>()
         every { pluginProject.plugins } returns mockPluginContainer
-        every { mockPluginContainer.hasPlugin("com.android.application") } returns false
+        every { mockPluginContainer.hasPlugin("com.android.application") } returns isAppPlugin
         every { mockBuildType.name } returns "debug"
         every { mockBuildType.isDebuggable } returns true
         every { project.rootProject.findProject(":${cameraDependency["name"]}") } returns pluginProject
@@ -207,10 +222,10 @@ class PluginHandlerTest {
             mutableListOf(
                 mockBuildType
             ).iterator() andThen
-            mutableListOf( // can't return the same iterator as it is stateful
+            mutableListOf(
                 mockBuildType
             ).iterator() andThen
-            mutableListOf( // and again
+            mutableListOf(
                 mockBuildType
             ).iterator()
         every { project.dependencies.add(any(), any()) } returns mockk()
@@ -219,7 +234,6 @@ class PluginHandlerTest {
 
         val pluginHandler = PluginHandler(project)
         mockkObject(NativePluginLoaderReflectionBridge)
-        // mock return of NativePluginLoaderReflectionBridge.getPlugins
         val pluginWithDependencies: MutableMap<String?, Any?> = cameraDependency.toMutableMap()
         pluginWithDependencies["dependencies"] =
             listOf(flutterPluginAndroidLifecycleDependency["name"])
@@ -227,7 +241,6 @@ class PluginHandlerTest {
             listOf(
                 pluginWithDependencies
             )
-        // mock method calls that are invoked by the args to NativePluginLoaderReflectionBridge
         every { project.extraProperties } returns mockk()
         every { project.extensions.findByType(FlutterExtension::class.java) } returns FlutterExtension()
         every { project.file(any()) } returns mockk()
@@ -241,19 +254,22 @@ class PluginHandlerTest {
         captureActionSlot.captured.execute(project)
         capturePluginActionSlot[0].execute(pluginProject)
         capturePluginActionSlot[1].execute(pluginProject)
-        verify { pluginProject.extensions.create("flutter", FlutterExtension::class.java) }
-        verify {
-            pluginProject.dependencies.add(
-                "debugApi",
-                "io.flutter:flutter_embedding_debug:$EXAMPLE_ENGINE_VERSION"
-            )
-        }
-        verify { project.dependencies.add("debugApi", pluginProject) }
-        verify { mockLogger wasNot called }
-        // For library projects, individual build types should be created, not addAll
-        verify(exactly = 0) { mockPluginProjectBuildTypes.addAll(any()) }
 
-        verify { pluginProject.dependencies.add("implementation", pluginDependencyProject) }
+        if (!isAppPlugin) {
+            verify { pluginProject.extensions.create("flutter", FlutterExtension::class.java) }
+            verify {
+                pluginProject.dependencies.add(
+                    "debugApi",
+                    "io.flutter:flutter_embedding_debug:$EXAMPLE_ENGINE_VERSION"
+                )
+            }
+            verify { project.dependencies.add("debugApi", pluginProject) }
+            verify { mockLogger wasNot called }
+            // For library projects, individual build types should be created, not addAll
+            verify(exactly = 0) { mockPluginProjectBuildTypes.addAll(any()) }
+        }
+
+        verify { pluginProject.dependencies.add(expectedDependencyType, pluginDependencyProject) }
     }
 
     @Test

@@ -232,8 +232,10 @@ class PluginHandler(
                     val dependencyProject =
                         project.rootProject.findProject(":$pluginDependencyName") ?: return@innerForEach
                     pluginProject.afterEvaluate {
-                        // this.dependencies.add("implementation", dependencyProject)
-                        pluginProject.dependencies.add("implementation", dependencyProject)
+                        // Use "api" for library plugins so that the host app can access their transitive dependencies.
+                        // Use "implementation" for app plugins to avoid Gradle errors since "api" is not available for application projects.
+                        val connectionType = if (isBuiltAsApp(pluginProject)) "implementation" else "api"
+                        pluginProject.dependencies.add(connectionType, dependencyProject)
                     }
                 }
             }
