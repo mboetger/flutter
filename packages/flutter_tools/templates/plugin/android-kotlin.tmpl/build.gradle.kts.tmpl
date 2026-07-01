@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 group = "{{androidIdentifier}}"
 version = "1.0-SNAPSHOT"
 
@@ -75,3 +78,30 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.mockito:mockito-core:5.0.0")
 }
+
+val flutterSdkPath = run {
+    val properties = Properties()
+    val localPropertiesFile = project.rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        FileInputStream(localPropertiesFile).use { properties.load(it) }
+    }
+    var sdkPath = properties.getProperty("flutter.sdk")
+    if (sdkPath == null) {
+        val exampleLocalPropertiesFile = project.rootProject.file("../example/android/local.properties")
+        if (exampleLocalPropertiesFile.exists()) {
+            FileInputStream(exampleLocalPropertiesFile).use { properties.load(it) }
+            sdkPath = properties.getProperty("flutter.sdk")
+        }
+    }
+    sdkPath ?: System.getenv("FLUTTER_ROOT")
+}
+
+if (flutterSdkPath != null) {
+    extra.set("flutterSdkPath", flutterSdkPath)
+    apply(from = "$flutterSdkPath/packages/flutter_tools/gradle/flutter_plugin_integration.gradle.kts")
+}
+
+
+
+
+

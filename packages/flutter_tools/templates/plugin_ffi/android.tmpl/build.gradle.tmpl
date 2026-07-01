@@ -61,3 +61,30 @@ android {
         minSdk = {{minSdkVersion}}
     }
 }
+
+def flutterSdkPath = {
+    def properties = new Properties()
+    def localPropertiesFile = project.rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.withInputStream { properties.load(it) }
+    }
+    def sdkPath = properties.getProperty("flutter.sdk")
+    if (sdkPath == null) {
+        def exampleLocalPropertiesFile = project.rootProject.file("../example/android/local.properties")
+        if (exampleLocalPropertiesFile.exists()) {
+            exampleLocalPropertiesFile.withInputStream { properties.load(it) }
+            sdkPath = properties.getProperty("flutter.sdk")
+        }
+    }
+    return sdkPath ?: System.getenv("FLUTTER_ROOT")
+}()
+
+if (flutterSdkPath != null) {
+    ext.flutterSdkPath = flutterSdkPath
+    apply from: "$flutterSdkPath/packages/flutter_tools/gradle/flutter_plugin_integration.gradle.kts"
+}
+
+
+
+
+
