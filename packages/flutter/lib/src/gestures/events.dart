@@ -1735,8 +1735,6 @@ class PointerUpEvent extends PointerEvent with _PointerEventDescription, _CopyPo
     super.position,
     super.buttons,
     super.obscured,
-    // Allow pressure customization here because PointerUpEvent can contain
-    // non-zero pressure. See https://github.com/flutter/flutter/issues/31340
     super.pressure = 0.0,
     super.pressureMin,
     super.pressureMax,
