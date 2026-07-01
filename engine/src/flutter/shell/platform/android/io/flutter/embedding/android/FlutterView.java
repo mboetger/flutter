@@ -407,6 +407,9 @@ public class FlutterView extends FrameLayout
   }
 
   private void init() {
+    if (isInEditMode()) {
+      return;
+    }
     Log.v(TAG, "Initializing FlutterView");
 
     if (flutterSurfaceView != null) {
@@ -506,6 +509,9 @@ public class FlutterView extends FrameLayout
   @Override
   protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
     super.onSizeChanged(width, height, oldWidth, oldHeight);
+    if (isInEditMode()) {
+      return;
+    }
     Log.v(
         TAG,
         "Size changed. Sending Flutter new viewport metrics. FlutterView was "
@@ -565,6 +571,9 @@ public class FlutterView extends FrameLayout
   @RequiresApi(API_LEVELS.API_28)
   protected void onAttachedToWindow() {
     super.onAttachedToWindow();
+    if (isInEditMode()) {
+      return;
+    }
     this.windowInfoRepo = createWindowInfoRepo();
     Activity activity = ViewUtils.getActivity(getContext());
     if (windowInfoRepo != null && activity != null) {
@@ -584,6 +593,10 @@ public class FlutterView extends FrameLayout
    */
   @Override
   protected void onDetachedFromWindow() {
+    if (isInEditMode()) {
+      super.onDetachedFromWindow();
+      return;
+    }
     if (windowInfoRepo != null && windowInfoListener != null) {
       windowInfoRepo.removeWindowLayoutInfoListener(windowInfoListener);
     }
@@ -734,6 +747,9 @@ public class FlutterView extends FrameLayout
   @NonNull
   public final WindowInsets onApplyWindowInsets(@NonNull WindowInsets insets) {
     WindowInsets newInsets = super.onApplyWindowInsets(insets);
+    if (isInEditMode()) {
+      return newInsets;
+    }
 
     // getSystemGestureInsets() was introduced in API 29 and immediately deprecated in 30.
     if (Build.VERSION.SDK_INT == API_LEVELS.API_29) {

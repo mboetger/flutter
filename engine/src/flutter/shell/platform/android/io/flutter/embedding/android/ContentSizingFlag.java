@@ -22,14 +22,23 @@ class ContentSizingFlag {
       "io.flutter.embedding.android.EnableContentSizing";
 
   static boolean isEnabled(Context context) {
+    if (context == null) {
+      return DEFAULT;
+    }
     // Ensure that the context is actually the application context.
     final Context appContext = context.getApplicationContext();
+    if (appContext == null) {
+      return DEFAULT;
+    }
+    PackageManager packageManager = appContext.getPackageManager();
+    if (packageManager == null) {
+      return DEFAULT;
+    }
     Bundle metaData = null;
     try {
       ApplicationInfo applicationInfo =
-          appContext
-              .getPackageManager()
-              .getApplicationInfo(appContext.getPackageName(), PackageManager.GET_META_DATA);
+          packageManager.getApplicationInfo(
+              appContext.getPackageName(), PackageManager.GET_META_DATA);
       metaData = applicationInfo.metaData;
     } catch (NameNotFoundException ex) {
       Log.e(TAG, "Could not get metadata", ex);

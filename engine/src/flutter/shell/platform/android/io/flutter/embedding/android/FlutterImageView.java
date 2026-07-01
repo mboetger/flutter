@@ -93,6 +93,9 @@ public class FlutterImageView extends View implements RenderSurface {
   }
 
   private void init() {
+    if (isInEditMode()) {
+      return;
+    }
     setAlpha(0.0f);
     isContentSizingEnabled = ContentSizingFlag.isEnabled(getContext());
   }

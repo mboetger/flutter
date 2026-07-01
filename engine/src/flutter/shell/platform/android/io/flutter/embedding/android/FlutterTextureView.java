@@ -115,6 +115,9 @@ public class FlutterTextureView extends TextureView implements RenderSurface {
   }
 
   private void init() {
+    if (isInEditMode()) {
+      return;
+    }
     // Listen for when our underlying SurfaceTexture becomes available, changes size, or
     // gets destroyed, and take the appropriate actions.
     setSurfaceTextureListener(surfaceTextureListener);
