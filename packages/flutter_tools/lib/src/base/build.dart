@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:io' show ProcessException;
+
+import 'package:platform/platform.dart';
 import 'package:process/process.dart';
 
 import '../artifacts.dart';
@@ -9,6 +12,7 @@ import '../build_info.dart';
 import '../darwin/darwin.dart';
 import '../macos/xcode.dart';
 
+import 'common.dart';
 import 'file_system.dart';
 import 'logger.dart';
 import 'process.dart';
@@ -30,10 +34,16 @@ class GenSnapshot {
     required Artifacts artifacts,
     required ProcessManager processManager,
     required Logger logger,
+    required FileSystem fileSystem,
+    Platform platform = const LocalPlatform(),
   }) : _artifacts = artifacts,
+       _fileSystem = fileSystem,
+       _platform = platform,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager);
 
   final Artifacts _artifacts;
+  final FileSystem _fileSystem;
+  final Platform _platform;
   final ProcessUtils _processUtils;
 
   String getSnapshotterPath(SnapshotType snapshotType, Artifact artifact) {
@@ -59,7 +69,7 @@ class GenSnapshot {
     required SnapshotType snapshotType,
     DarwinArch? darwinArch,
     Iterable<String> additionalArgs = const <String>[],
-  }) {
+  }) async {
     assert(darwinArch != DarwinArch.armv7);
     assert(snapshotType.platform != TargetPlatform.ios || darwinArch != null);
     final args = <String>[...additionalArgs];
@@ -79,10 +89,29 @@ class GenSnapshot {
 
     final String snapshotterPath = getSnapshotterPath(snapshotType, genSnapshotArtifact);
 
-    return _processUtils.stream(<String>[
-      snapshotterPath,
-      ...args,
-    ], mapFunction: (String line) => kIgnoredWarnings.contains(line) ? null : line);
+    try {
+      return await _processUtils.stream(<String>[
+        snapshotterPath,
+        ...args,
+      ], mapFunction: (String line) => kIgnoredWarnings.contains(line) ? null : line);
+    } on ProcessException catch (error) {
+      final bool binaryExists = _fileSystem.file(snapshotterPath).existsSync();
+      // On Linux, missing 32-bit libraries list as "No such file or directory" (errorCode 2)
+      // even if the gen_snapshot binary exists, because the linker is missing.
+      if (_platform.isLinux && binaryExists && error.errorCode == 2) {
+        throwToolExit(
+          'Failed to run gen_snapshot: $error\n\n'
+          'The binary exists but could not be executed. This can occur on 64-bit Linux\n'
+          'if the 32-bit gen_snapshot binary is run without the required 32-bit libraries\n'
+          '(e.g. libc6:i386, libstdc++6:i386).\n'
+          'To install them on Debian/Ubuntu, run:\n'
+          '  sudo dpkg --add-architecture i386\n'
+          '  sudo apt-get update\n'
+          '  sudo apt-get install libc6:i386 libstdc++6:i386',
+        );
+      }
+      throwToolExit('Failed to run gen_snapshot: $error');
+    }
   }
 }
 
@@ -93,6 +122,7 @@ class AOTSnapshotter {
     required Xcode xcode,
     required ProcessManager processManager,
     required Artifacts artifacts,
+    Platform platform = const LocalPlatform(),
   }) : _logger = logger,
        _fileSystem = fileSystem,
        _xcode = xcode,
@@ -100,6 +130,8 @@ class AOTSnapshotter {
          artifacts: artifacts,
          processManager: processManager,
          logger: logger,
+         fileSystem: fileSystem,
+         platform: platform,
        );
 
   final Logger _logger;
