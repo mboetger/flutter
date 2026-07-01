@@ -1111,6 +1111,8 @@ class AdbLogReader extends DeviceLogReader {
   @override
   final String name;
 
+  final List<String> _stderrBuffer = <String>[];
+
   late final _linesController = StreamController<String>.broadcast(
     onListen: _start,
     onCancel: _stop,
@@ -1140,15 +1142,25 @@ class AdbLogReader extends DeviceLogReader {
         .transformWithCallSite(decoder)
         .transform(const LineSplitter())
         .listen(_onLine);
-    _adbProcess.stderr
-        .transformWithCallSite(decoder)
-        .transform(const LineSplitter())
-        .listen(_onLine);
+    _adbProcess.stderr.transformWithCallSite(decoder).transform(const LineSplitter()).listen((
+      String line,
+    ) {
+      _stderrBuffer.add(line);
+      if (_stderrBuffer.length > 100) {
+        _stderrBuffer.removeAt(0);
+      }
+      _onLine(line);
+    });
     unawaited(
-      _adbProcess.exitCode.whenComplete(() {
-        if (_linesController.hasListener) {
-          _linesController.close();
+      _adbProcess.exitCode.then((int exitCode) {
+        if (_linesController.isClosed) {
+          return;
         }
+        _logger.printError('adb logcat process exited with code $exitCode');
+        if (_stderrBuffer.isNotEmpty) {
+          _logger.printError(_stderrBuffer.join('\n'));
+        }
+        _linesController.close();
       }),
     );
   }
