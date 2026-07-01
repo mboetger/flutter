@@ -494,4 +494,23 @@ public class FlutterFragmentTest {
     verify(spyCtx, times(1)).registerComponentCallbacks(any());
     verify(spyCtx, times(1)).unregisterComponentCallbacks(any());
   }
+
+  @Test
+  public void shouldRetainViewVisibilityOnStop_defaultsToFalse() {
+    FlutterFragment fragment = FlutterFragment.createDefault();
+    assertFalse(fragment.shouldRetainViewVisibilityOnStop());
+  }
+
+  @Test
+  public void shouldRetainViewVisibilityOnStop_canBeOverridden() {
+    FlutterFragmentWithRetainedVisibility fragment = new FlutterFragmentWithRetainedVisibility();
+    assertTrue(fragment.shouldRetainViewVisibilityOnStop());
+  }
+
+  public static class FlutterFragmentWithRetainedVisibility extends FlutterFragment {
+    @Override
+    public boolean shouldRetainViewVisibilityOnStop() {
+      return true;
+    }
+  }
 }

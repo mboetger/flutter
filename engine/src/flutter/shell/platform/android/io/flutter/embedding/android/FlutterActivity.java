@@ -1514,6 +1514,19 @@ public class FlutterActivity extends Activity
     }
   }
 
+  /**
+   * Whether to retain the {@link FlutterView}'s visibility (i.e., not set it to {@code GONE})
+   * and avoid trimming memory when the activity is stopped.
+   *
+   * <p>Subclasses may override this method to change the behavior.
+   *
+   * <p>Defaults to {@code false}.
+   */
+  @Override
+  public boolean shouldRetainViewVisibilityOnStop() {
+    return false;
+  }
+
   private boolean stillAttachedForEvent(String event) {
     if (delegate == null) {
       Log.w(TAG, "FlutterActivity " + hashCode() + " " + event + " called after release.");

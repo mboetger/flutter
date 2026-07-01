@@ -1628,6 +1628,53 @@ public class FlutterActivityAndFragmentDelegateTest {
     verify(mockFlutterEngine.getRenderer()).restoreSurfaceProducers();
   }
 
+  @Test
+  public void onStop_hidesViewAndTrimsMemoryByDefault() {
+    when(mockHost.shouldRetainViewVisibilityOnStop()).thenReturn(false);
+
+    FlutterActivityAndFragmentDelegate delegate = new FlutterActivityAndFragmentDelegate(mockHost);
+    
+    try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
+      scenario.onActivity(
+          activity -> {
+            when(mockHost.getActivity()).thenReturn(activity);
+            delegate.onAttach(ctx);
+            
+            View view = delegate.onCreateView(null, null, null, 0, true);
+            view.setVisibility(View.VISIBLE);
+
+            delegate.onStop();
+
+            assertEquals(View.GONE, view.getVisibility());
+            verify(mockFlutterEngine.getRenderer(), times(1))
+                .onTrimMemory(eq(TRIM_MEMORY_BACKGROUND));
+          });
+    }
+  }
+
+  @Test
+  public void onStop_retainsViewVisibilityAndDoesNotTrimMemoryWhenRequested() {
+    when(mockHost.shouldRetainViewVisibilityOnStop()).thenReturn(true);
+
+    FlutterActivityAndFragmentDelegate delegate = new FlutterActivityAndFragmentDelegate(mockHost);
+    
+    try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
+      scenario.onActivity(
+          activity -> {
+            when(mockHost.getActivity()).thenReturn(activity);
+            delegate.onAttach(ctx);
+            
+            View view = delegate.onCreateView(null, null, null, 0, true);
+            view.setVisibility(View.VISIBLE);
+
+            delegate.onStop();
+
+            assertEquals(View.VISIBLE, view.getVisibility());
+            verify(mockFlutterEngine.getRenderer(), never()).onTrimMemory(any(Integer.class));
+          });
+    }
+  }
+
   /**
    * Creates a mock {@link io.flutter.embedding.engine.FlutterEngine}.
    *

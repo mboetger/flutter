@@ -488,6 +488,7 @@ import java.util.Set;
     // See https://github.com/flutter/flutter/issues/93276
     if (previousVisibility != null) {
       flutterView.setVisibility(previousVisibility);
+      previousVisibility = null;
     }
   }
 
@@ -676,18 +677,20 @@ import java.util.Set;
       flutterEngine.getLifecycleChannel().appIsPaused();
     }
 
-    // This is a workaround for a bug on some OnePlus phones. The visibility of the application
-    // window is still true after locking the screen on some OnePlus phones, and shows a black
-    // screen when unlocked. We can work around this by changing the visibility of FlutterView in
-    // onStart and onStop.
-    // See https://github.com/flutter/flutter/issues/93276
-    previousVisibility = flutterView.getVisibility();
-    flutterView.setVisibility(View.GONE);
-    if (flutterEngine != null) {
-      // When an Activity is stopped it won't have its onTrimMemory callback invoked. Normally,
-      // this isn't a problem but because of a bug in some builds of Android 14 we must act as
-      // if the onTrimMemory callback has been called.
-      flutterEngine.getRenderer().onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_BACKGROUND);
+    if (!host.shouldRetainViewVisibilityOnStop()) {
+      // This is a workaround for a bug on some OnePlus phones. The visibility of the application
+      // window is still true after locking the screen on some OnePlus phones, and shows a black
+      // screen when unlocked. We can work around this by changing the visibility of FlutterView in
+      // onStart and onStop.
+      // See https://github.com/flutter/flutter/issues/93276
+      previousVisibility = flutterView.getVisibility();
+      flutterView.setVisibility(View.GONE);
+      if (flutterEngine != null) {
+        // When an Activity is stopped it won't have its onTrimMemory callback invoked. Normally,
+        // this isn't a problem but because of a bug in some builds of Android 14 we must act as
+        // if the onTrimMemory callback has been called.
+        flutterEngine.getRenderer().onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_BACKGROUND);
+      }
     }
   }
 
@@ -1352,5 +1355,15 @@ import java.util.Set;
     boolean attachToEngineAutomatically();
 
     boolean getBackCallbackState();
+
+    /**
+     * Whether to retain the {@link FlutterView}'s visibility (i.e., not set it to {@code GONE})
+     * and avoid trimming memory when the host is stopped.
+     *
+     * <p>Defaults to {@code false}.
+     */
+    default boolean shouldRetainViewVisibilityOnStop() {
+      return false;
+    }
   }
 }

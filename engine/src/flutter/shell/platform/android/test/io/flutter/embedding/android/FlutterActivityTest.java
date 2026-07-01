@@ -627,6 +627,33 @@ public class FlutterActivityTest {
     flutterActivity.resetFullyDrawn();
   }
 
+  @Test
+  public void shouldRetainViewVisibilityOnStop_defaultsToFalse() {
+    Intent intent = FlutterActivity.createDefaultIntent(ctx);
+    ActivityController<FlutterActivity> activityController =
+        Robolectric.buildActivity(FlutterActivity.class, intent);
+    FlutterActivity activity = activityController.get();
+
+    assertFalse(activity.shouldRetainViewVisibilityOnStop());
+  }
+
+  @Test
+  public void shouldRetainViewVisibilityOnStop_canBeOverridden() {
+    Intent intent = FlutterActivity.createDefaultIntent(ctx);
+    ActivityController<FlutterActivityWithRetainedVisibility> activityController =
+        Robolectric.buildActivity(FlutterActivityWithRetainedVisibility.class, intent);
+    FlutterActivityWithRetainedVisibility activity = activityController.get();
+
+    assertTrue(activity.shouldRetainViewVisibilityOnStop());
+  }
+
+  static class FlutterActivityWithRetainedVisibility extends FlutterActivity {
+    @Override
+    public boolean shouldRetainViewVisibilityOnStop() {
+      return true;
+    }
+  }
+
   static class FlutterActivityWithProvidedEngine extends FlutterActivity {
     @Override
     @SuppressLint("MissingSuperCall")

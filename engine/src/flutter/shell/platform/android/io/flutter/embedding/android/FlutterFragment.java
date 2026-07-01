@@ -1785,6 +1785,19 @@ public class FlutterFragment extends Fragment
     return getArguments().getBoolean(ARG_SHOULD_DELAY_FIRST_ANDROID_VIEW_DRAW);
   }
 
+  /**
+   * Whether to retain the {@link FlutterView}'s visibility (i.e., not set it to {@code GONE})
+   * and avoid trimming memory when the fragment's host is stopped.
+   *
+   * <p>Subclasses may override this method to change the behavior.
+   *
+   * <p>Defaults to {@code false}.
+   */
+  @Override
+  public boolean shouldRetainViewVisibilityOnStop() {
+    return false;
+  }
+
   private boolean stillAttachedForEvent(String event) {
     if (delegate == null) {
       Log.w(TAG, "FlutterFragment " + hashCode() + " " + event + " called after release.");
