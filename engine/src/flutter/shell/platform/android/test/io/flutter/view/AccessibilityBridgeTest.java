@@ -3361,6 +3361,41 @@ public class AccessibilityBridgeTest {
     }
   }
 
+  @Test
+  public void itSetsImportantForAccessibilityOnSemanticsUpdateForNonVirtualDisplay() {
+    PlatformViewsAccessibilityDelegate accessibilityDelegate =
+        mock(PlatformViewsAccessibilityDelegate.class);
+
+    View embeddedView = mock(View.class);
+    when(accessibilityDelegate.getPlatformViewById(1)).thenReturn(embeddedView);
+    when(accessibilityDelegate.usesVirtualDisplay(1)).thenReturn(false);
+
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ null,
+            /* accessibilityChannel= */ null,
+            /* accessibilityManager= */ null,
+            /* contentResolver= */ null,
+            /* accessibilityViewEmbedder= */ null,
+            accessibilityDelegate);
+
+    // Create a semantics tree: root (ID 0) -> platformView (ID 1)
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+
+    TestSemanticsNode platformView = new TestSemanticsNode();
+    platformView.id = 1;
+    platformView.platformViewId = 1;
+    root.addChild(platformView);
+
+    // Send a single semantics update containing the whole tree
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // Verify that the importance is set during the semantics update
+    verify(embeddedView, times(1)).setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+  }
+
   /// The encoding for semantics is described in platform_view_android.cc
   class TestSemanticsUpdate {
     TestSemanticsUpdate(ByteBuffer buffer, String[] strings, ByteBuffer[] stringAttributeArgs) {
