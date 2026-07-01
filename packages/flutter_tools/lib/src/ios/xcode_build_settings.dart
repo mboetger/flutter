@@ -180,6 +180,10 @@ Future<List<String>> _xcodeBuildSettingsLines({
     'FLUTTER_FRAMEWORK_SWIFT_PACKAGE_PATH=${globals.fs.path.normalize(packageDirectory)}',
   );
 
+  xcodeBuildSettings.add(
+    r'HEADER_SEARCH_PATHS=$(inherited) "$(PROJECT_DIR)/../.dart_tool/flutter_build/ios"',
+  );
+
   // Tell CocoaPods behavior to codesign in parallel with rest of scripts to speed it up.
   // Value must be "true", not "YES". https://github.com/CocoaPods/CocoaPods/pull/6088
   xcodeBuildSettings.add('COCOAPODS_PARALLEL_CODE_SIGN=true');

@@ -1151,13 +1151,35 @@ def __lldb_init_module(debugger: lldb.SBDebugger, _):
   }
 
   File get pluginRegistrantHeader {
+    if (isModule) {
+      return pluginRegistrantHost
+          .childDirectory('Classes')
+          .childFile('GeneratedPluginRegistrant.h');
+    }
+    return parent.generatedEphemeralDirectory
+        .childDirectory('ios')
+        .childFile('GeneratedPluginRegistrant.h');
+  }
+
+  File get pluginRegistrantImplementation {
+    if (isModule) {
+      return pluginRegistrantHost
+          .childDirectory('Classes')
+          .childFile('GeneratedPluginRegistrant.m');
+    }
+    return parent.generatedEphemeralDirectory
+        .childDirectory('ios')
+        .childFile('GeneratedPluginRegistrant.m');
+  }
+
+  File get legacyPluginRegistrantHeader {
     final Directory registryDirectory = isModule
         ? pluginRegistrantHost.childDirectory('Classes')
         : pluginRegistrantHost;
     return registryDirectory.childFile('GeneratedPluginRegistrant.h');
   }
 
-  File get pluginRegistrantImplementation {
+  File get legacyPluginRegistrantImplementation {
     final Directory registryDirectory = isModule
         ? pluginRegistrantHost.childDirectory('Classes')
         : pluginRegistrantHost;
@@ -1241,7 +1263,11 @@ class MacOSProject extends XcodeBasedProject {
   File get generatedXcodePropertiesFile =>
       ephemeralDirectory.childFile('Flutter-Generated.xcconfig');
 
-  File get pluginRegistrantImplementation =>
+  File get pluginRegistrantImplementation => parent.generatedEphemeralDirectory
+      .childDirectory('macos')
+      .childFile('GeneratedPluginRegistrant.swift');
+
+  File get legacyPluginRegistrantImplementation =>
       managedDirectory.childFile('GeneratedPluginRegistrant.swift');
 
   /// The 'AppDelegate.swift' file of the host app. This file might not exist if the app project uses Objective-C.

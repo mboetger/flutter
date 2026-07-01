@@ -297,6 +297,11 @@ class FlutterPlugin : Plugin<Project> {
             return
         }
 
+        val legacyAndroidExtension = FlutterPluginUtils.getLegacyAndroidExtension(projectToAddTasksTo)
+        val flutterSourceDir = FlutterPluginUtils.getFlutterSourceDirectory(projectToAddTasksTo)
+        val generatedSourceDir = File(flutterSourceDir, ".dart_tool/flutter_build/android")
+        legacyAndroidExtension.sourceSets.getByName("main").java.srcDir(generatedSourceDir)
+
         FlutterPluginUtils.addTaskForJavaVersion(projectToAddTasksTo)
         FlutterPluginUtils.addTaskForKGPVersion(projectToAddTasksTo)
         if (FlutterPluginUtils.isFlutterAppProject(projectToAddTasksTo)) {

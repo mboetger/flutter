@@ -23,6 +23,7 @@ import '../ios/xcodeproj.dart';
 import '../migrations/swift_package_manager_gitignore_migration.dart';
 import '../migrations/swift_package_manager_integration_migration.dart';
 import '../migrations/xcode_project_object_version_migration.dart';
+import '../migrations/xcode_project_plugin_registrant_migration.dart';
 import '../migrations/xcode_script_build_phase_migration.dart';
 import '../migrations/xcode_thin_binary_build_phase_input_paths_migration.dart';
 import '../project.dart';
@@ -103,6 +104,7 @@ Future<void> buildMacOS({
     ),
     MacOSDeploymentTargetMigration(flutterProject.macos, globals.logger),
     XcodeProjectObjectVersionMigration(flutterProject.macos, globals.logger),
+    XcodeProjectPluginRegistrantMigration(flutterProject.macos, globals.logger),
     XcodeScriptBuildPhaseMigration(flutterProject.macos, globals.logger),
     XcodeThinBinaryBuildPhaseInputPathsMigration(flutterProject.macos, globals.logger),
     FlutterApplicationMigration(flutterProject.macos, globals.logger),

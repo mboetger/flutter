@@ -34,6 +34,7 @@ import '../migrations/swift_package_manager_gitignore_migration.dart';
 import '../migrations/swift_package_manager_integration_migration.dart';
 import '../migrations/uiscene_migration.dart';
 import '../migrations/xcode_project_object_version_migration.dart';
+import '../migrations/xcode_project_plugin_registrant_migration.dart';
 import '../migrations/xcode_script_build_phase_migration.dart';
 import '../migrations/xcode_thin_binary_build_phase_input_paths_migration.dart';
 import '../plugins.dart';
@@ -158,6 +159,7 @@ Future<XcodeBuildResult> buildXcodeProject({
     ProjectBuildLocationMigration(app.project, globals.logger),
     IOSDeploymentTargetMigration(app.project, globals.logger),
     XcodeProjectObjectVersionMigration(app.project, globals.logger),
+    XcodeProjectPluginRegistrantMigration(app.project, globals.logger),
     HostAppInfoPlistMigration(app.project, globals.logger),
     XcodeScriptBuildPhaseMigration(app.project, globals.logger),
     RemoveBitcodeMigration(app.project, globals.logger),

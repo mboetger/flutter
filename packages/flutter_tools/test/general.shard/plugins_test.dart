@@ -893,11 +893,7 @@ dependencies:
 
           await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
 
-          final File registrant = flutterProject.directory
-              .childDirectory(
-                fs.path.join('android', 'app', 'src', 'main', 'java', 'io', 'flutter', 'plugins'),
-              )
-              .childFile('GeneratedPluginRegistrant.java');
+          final File registrant = flutterProject.android.generatedPluginRegistrantFile;
 
           expect(registrant, exists);
           expect(registrant.readAsStringSync(), contains('package io.flutter.plugins'));
@@ -954,11 +950,7 @@ dependencies:
 
           await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
 
-          final File registrant = flutterProject.directory
-              .childDirectory(
-                fs.path.join('android', 'app', 'src', 'main', 'java', 'io', 'flutter', 'plugins'),
-              )
-              .childFile('GeneratedPluginRegistrant.java');
+          final File registrant = flutterProject.android.generatedPluginRegistrantFile;
 
           expect(registrant, exists);
           expect(registrant.readAsStringSync(), contains('package io.flutter.plugins'));
@@ -984,11 +976,7 @@ dependencies:
 
           await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
 
-          final File registrant = flutterProject.directory
-              .childDirectory(
-                fs.path.join('android', 'app', 'src', 'main', 'java', 'io', 'flutter', 'plugins'),
-              )
-              .childFile('GeneratedPluginRegistrant.java');
+          final File registrant = flutterProject.android.generatedPluginRegistrantFile;
 
           expect(registrant, exists);
           expect(registrant.readAsStringSync(), contains('package io.flutter.plugins'));
@@ -1015,11 +1003,7 @@ dependencies:
 
           await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
 
-          final File registrant = flutterProject.directory
-              .childDirectory(
-                fs.path.join('android', 'app', 'src', 'main', 'java', 'io', 'flutter', 'plugins'),
-              )
-              .childFile('GeneratedPluginRegistrant.java');
+          final File registrant = flutterProject.android.generatedPluginRegistrantFile;
           expect(
             registrant.readAsStringSync(),
             contains('flutterEngine.getPlugins().add(new plugin1.UseNewEmbedding());'),
@@ -1045,11 +1029,7 @@ dependencies:
 
           await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
 
-          final File registrant = flutterProject.directory
-              .childDirectory(
-                fs.path.join('android', 'app', 'src', 'main', 'java', 'io', 'flutter', 'plugins'),
-              )
-              .childFile('GeneratedPluginRegistrant.java');
+          final File registrant = flutterProject.android.generatedPluginRegistrantFile;
           expect(
             registrant.readAsStringSync(),
             contains('flutterEngine.getPlugins().add(new plugin4.UseBothEmbedding());'),
@@ -1075,11 +1055,7 @@ dependencies:
 
           await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
 
-          final File registrant = flutterProject.directory
-              .childDirectory(
-                fs.path.join('android', 'app', 'src', 'main', 'java', 'io', 'flutter', 'plugins'),
-              )
-              .childFile('GeneratedPluginRegistrant.java');
+          final File registrant = flutterProject.android.generatedPluginRegistrantFile;
           expect(
             registrant.readAsStringSync(),
             contains('flutterEngine.getPlugins().add(new plugin4.UseBothEmbedding());'),
@@ -1241,9 +1217,7 @@ flutter:
 
           await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
 
-          final File registrantFile = androidProject.pluginRegistrantHost
-              .childDirectory(fs.path.join('src', 'main', 'java', 'io', 'flutter', 'plugins'))
-              .childFile('GeneratedPluginRegistrant.java');
+          final File registrantFile = androidProject.generatedPluginRegistrantFile;
 
           expect(registrantFile, exists);
           expect(registrantFile.readAsStringSync(), isNot(contains('SomePlugin')));
@@ -1333,9 +1307,7 @@ flutter:
             darwinDependencyManagement: dependencyManagement,
           );
 
-          final File registrantFile = macosProject.managedDirectory.childFile(
-            'GeneratedPluginRegistrant.swift',
-          );
+          final File registrantFile = macosProject.pluginRegistrantImplementation;
 
           expect(registrantFile, exists);
           expect(registrantFile.readAsStringSync(), isNot(contains('SomePlugin')));
@@ -1364,9 +1336,7 @@ flutter:
             darwinDependencyManagement: dependencyManagement,
           );
 
-          final File registrantFile = macosProject.managedDirectory.childFile(
-            'GeneratedPluginRegistrant.swift',
-          );
+          final File registrantFile = macosProject.pluginRegistrantImplementation;
 
           expect(registrantFile, exists);
         },
@@ -2511,9 +2481,8 @@ flutter:
             darwinDependencyManagement: dependencyManagement,
             releaseMode: false,
           );
-          final File generatedPluginRegistrant = flutterProject.macos.managedDirectory.childFile(
-            'GeneratedPluginRegistrant.swift',
-          );
+          final File generatedPluginRegistrant =
+              flutterProject.macos.pluginRegistrantImplementation;
           expect(generatedPluginRegistrant, exists);
           expect(
             generatedPluginRegistrant.readAsStringSync(),
@@ -3153,7 +3122,14 @@ class FakeMacOSProject extends Fake implements MacOSProject {
   late Directory managedDirectory;
 
   @override
-  File get pluginRegistrantImplementation =>
+  File get pluginRegistrantImplementation => managedDirectory.parent.parent
+      .childDirectory('.dart_tool')
+      .childDirectory('flutter_build')
+      .childDirectory('macos')
+      .childFile('GeneratedPluginRegistrant.swift');
+
+  @override
+  File get legacyPluginRegistrantImplementation =>
       managedDirectory.childFile('GeneratedPluginRegistrant.swift');
 
   @override
@@ -3176,10 +3152,25 @@ class FakeIosProject extends Fake implements IosProject {
   late Directory pluginRegistrantHost;
 
   @override
-  File get pluginRegistrantHeader => pluginRegistrantHost.childFile('GeneratedPluginRegistrant.h');
+  File get pluginRegistrantHeader => pluginRegistrantHost.parent.parent
+      .childDirectory('.dart_tool')
+      .childDirectory('flutter_build')
+      .childDirectory('ios')
+      .childFile('GeneratedPluginRegistrant.h');
 
   @override
-  File get pluginRegistrantImplementation =>
+  File get pluginRegistrantImplementation => pluginRegistrantHost.parent.parent
+      .childDirectory('.dart_tool')
+      .childDirectory('flutter_build')
+      .childDirectory('ios')
+      .childFile('GeneratedPluginRegistrant.m');
+
+  @override
+  File get legacyPluginRegistrantHeader =>
+      pluginRegistrantHost.childFile('GeneratedPluginRegistrant.h');
+
+  @override
+  File get legacyPluginRegistrantImplementation =>
       pluginRegistrantHost.childFile('GeneratedPluginRegistrant.m');
 
   @override
@@ -3223,7 +3214,17 @@ class FakeAndroidProject extends Fake implements AndroidProject {
   }
 
   @override
-  File get generatedPluginRegistrantFile => hostAppGradleRoot
+  File get generatedPluginRegistrantFile => hostAppGradleRoot.parent
+      .childDirectory('.dart_tool')
+      .childDirectory('flutter_build')
+      .childDirectory('android')
+      .childDirectory('io')
+      .childDirectory('flutter')
+      .childDirectory('plugins')
+      .childFile('GeneratedPluginRegistrant.java');
+
+  @override
+  File get legacyGeneratedPluginRegistrantFile => hostAppGradleRoot
       .childDirectory('app')
       .childDirectory('src')
       .childDirectory('main')

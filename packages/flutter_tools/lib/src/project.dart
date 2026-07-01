@@ -249,6 +249,9 @@ class FlutterProject {
   /// The `.dart-tool` directory of this project.
   Directory get dartTool => directory.childDirectory('.dart_tool');
 
+  /// The `.dart_tool/flutter_build` directory.
+  Directory get generatedEphemeralDirectory => dartTool.childDirectory('flutter_build');
+
   /// The location of the generated scaffolding project for hosting widget
   /// previews from this project.
   late final Directory widgetPreviewScaffold = directory.childDirectory('.widget_preview');
@@ -763,6 +766,26 @@ class AndroidProject extends FlutterProjectPlatform {
   }
 
   File get generatedPluginRegistrantFile {
+    if (isModule) {
+      return hostAppGradleRoot
+          .childDirectory('Flutter')
+          .childDirectory('src')
+          .childDirectory('main')
+          .childDirectory('java')
+          .childDirectory('io')
+          .childDirectory('flutter')
+          .childDirectory('plugins')
+          .childFile('GeneratedPluginRegistrant.java');
+    }
+    return parent.generatedEphemeralDirectory
+        .childDirectory('android')
+        .childDirectory('io')
+        .childDirectory('flutter')
+        .childDirectory('plugins')
+        .childFile('GeneratedPluginRegistrant.java');
+  }
+
+  File get legacyGeneratedPluginRegistrantFile {
     return hostAppGradleRoot
         .childDirectory('app')
         .childDirectory('src')

@@ -183,12 +183,8 @@ dependencies:
         // positives.
         project.directory.childDirectory('example').createSync();
         await project.regeneratePlatformSpecificTooling(releaseMode: false);
-        expectExists(
-          project.ios.hostAppRoot.childDirectory('Runner').childFile('GeneratedPluginRegistrant.h'),
-        );
-        expectExists(
-          androidPluginRegistrant(project.android.hostAppGradleRoot.childDirectory('app')),
-        );
+        expectExists(project.ios.pluginRegistrantHeader);
+        expectExists(project.android.generatedPluginRegistrantFile);
         expectExists(
           project.ios.hostAppRoot.childDirectory('Flutter').childFile('Generated.xcconfig'),
         );
@@ -197,9 +193,7 @@ dependencies:
       _testInMemory('injects plugins for iOS', () async {
         final FlutterProject project = await someProject();
         await project.regeneratePlatformSpecificTooling(releaseMode: false);
-        expectExists(
-          project.ios.hostAppRoot.childDirectory('Runner').childFile('GeneratedPluginRegistrant.h'),
-        );
+        expectExists(project.ios.pluginRegistrantHeader);
       });
       _testInMemory('generates Xcode configuration for iOS', () async {
         final FlutterProject project = await someProject();
@@ -211,9 +205,7 @@ dependencies:
       _testInMemory('injects plugins for Android', () async {
         final FlutterProject project = await someProject();
         await project.regeneratePlatformSpecificTooling(releaseMode: false);
-        expectExists(
-          androidPluginRegistrant(project.android.hostAppGradleRoot.childDirectory('app')),
-        );
+        expectExists(project.android.generatedPluginRegistrantFile);
       });
       _testInMemory('updates local properties for Android', () async {
         final FlutterProject project = await someProject();

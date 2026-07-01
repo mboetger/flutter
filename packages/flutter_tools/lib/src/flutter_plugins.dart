@@ -517,19 +517,19 @@ Future<void> _writeAndroidPluginRegistrant(FlutterProject project, List<Plugin> 
     'methodChannelPlugins': androidPlugins,
     'androidX': isAppUsingAndroidX(project.android.hostAppGradleRoot),
   };
-  final String javaSourcePath = globals.fs.path.join(
-    project.android.pluginRegistrantHost.path,
-    'src',
-    'main',
-    'java',
-  );
-  final String registryPath = globals.fs.path.join(
-    javaSourcePath,
-    'io',
-    'flutter',
-    'plugins',
-    'GeneratedPluginRegistrant.java',
-  );
+
+  if (!project.isModule) {
+    final File legacyRegistrant = project.android.legacyGeneratedPluginRegistrantFile;
+    if (legacyRegistrant.existsSync()) {
+      try {
+        legacyRegistrant.deleteSync();
+      } on Exception catch (e) {
+        globals.printTrace('Failed to delete legacy Android registrant: $e');
+      }
+    }
+  }
+
+  final String registryPath = project.android.generatedPluginRegistrantFile.path;
   const String templateContent = _androidPluginRegistryTemplateNewEmbedding;
   globals.printTrace('Generating $registryPath');
   await _renderTemplateToFile(
@@ -898,6 +898,26 @@ Future<void> writeIOSPluginRegistrant(
     'framework': FlutterDarwinPlatform.ios.binaryName,
     'methodChannelPlugins': iosPlugins,
   };
+
+  if (!project.isModule) {
+    final File legacyHeader = project.ios.legacyPluginRegistrantHeader;
+    if (legacyHeader.existsSync()) {
+      try {
+        legacyHeader.deleteSync();
+      } on Exception catch (e) {
+        globals.printTrace('Failed to delete legacy iOS registrant header: $e');
+      }
+    }
+    final File legacyImplementation = project.ios.legacyPluginRegistrantImplementation;
+    if (legacyImplementation.existsSync()) {
+      try {
+        legacyImplementation.deleteSync();
+      } on Exception catch (e) {
+        globals.printTrace('Failed to delete legacy iOS registrant implementation: $e');
+      }
+    }
+  }
+
   if (project.isModule) {
     final Directory registryDirectory = project.ios.pluginRegistrantHost;
     await _renderTemplateToFile(
@@ -1030,6 +1050,18 @@ Future<void> writeMacOSPluginRegistrant(
     methodChannelPlugins,
     MacOSPlugin.kConfigKey,
   );
+
+  if (pluginRegistrantImplementation == null) {
+    final File legacyImplementation = project.macos.legacyPluginRegistrantImplementation;
+    if (legacyImplementation.existsSync()) {
+      try {
+        legacyImplementation.deleteSync();
+      } on Exception catch (e) {
+        globals.printTrace('Failed to delete legacy macOS registrant: $e');
+      }
+    }
+  }
+
   final context = <String, Object>{
     'os': FlutterDarwinPlatform.macos.name,
     'framework': FlutterDarwinPlatform.macos.binaryName,
