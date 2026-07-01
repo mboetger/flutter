@@ -963,6 +963,7 @@ public class FlutterView extends FrameLayout
    * forwards all {@link MotionEvent} data from Android to Flutter.
    */
   @Override
+  @SuppressLint("ClickableViewAccessibility")
   public boolean onTouchEvent(@NonNull MotionEvent event) {
     if (!isAttachedToFlutterEngine()) {
       return super.onTouchEvent(event);
@@ -971,6 +972,22 @@ public class FlutterView extends FrameLayout
     requestUnbufferedDispatch(event);
 
     return androidTouchProcessor.onTouchEvent(event);
+  }
+
+  /**
+   * Invoked by Android or accessibility services to perform a click on this view.
+   *
+   * <p>Flutter handles all of its own gesture detection and processing. Therefore, touch events are
+   * forwarded directly to the Flutter framework without triggering the standard Android view click
+   * detection.
+   *
+   * <p>This method is overridden to satisfy the {@code ClickableViewAccessibility} lint warning and
+   * to ensure that any registered {@link View.OnClickListener} is invoked when a click is
+   * programmatically triggered (e.g., by accessibility services).
+   */
+  @Override
+  public boolean performClick() {
+    return super.performClick();
   }
 
   /**

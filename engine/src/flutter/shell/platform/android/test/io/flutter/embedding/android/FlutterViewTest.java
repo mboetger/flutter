@@ -1496,4 +1496,16 @@ public class FlutterViewTest {
     flutterView.autofill(values);
     // No exception should be thrown
   }
+
+  @Test
+  public void performClick_invokesOnClickListener() {
+    FlutterView flutterView = new FlutterView(ctx);
+    View.OnClickListener mockListener = mock(View.OnClickListener.class);
+    flutterView.setOnClickListener(mockListener);
+
+    boolean performed = flutterView.performClick();
+
+    assertTrue(performed);
+    verify(mockListener, times(1)).onClick(flutterView);
+  }
 }

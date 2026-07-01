@@ -12,26 +12,6 @@
             column="82"/>
     </issue>
 
-    <issue
-        id="ClickableViewAccessibility"
-        message="Custom view `FlutterView` overrides `onTouchEvent` but not `performClick`"
-        errorLine1="  public boolean onTouchEvent(MotionEvent event) {"
-        errorLine2="                 ~~~~~~~~~~~~">
-        <location
-            file="../../../flutter/shell/platform/android/io/flutter/view/FlutterView.java"
-            line="474"
-            column="18"/>
-    </issue>
 
-    <issue
-        id="ClickableViewAccessibility"
-        message="Custom view `FlutterView` overrides `onTouchEvent` but not `performClick`"
-        errorLine1="  public boolean onTouchEvent(@NonNull MotionEvent event) {"
-        errorLine2="                 ~~~~~~~~~~~~">
-        <location
-            file="../../../flutter/shell/platform/android/io/flutter/embedding/android/FlutterView.java"
-            line="896"
-            column="18"/>
-    </issue>
 
 </issues>
