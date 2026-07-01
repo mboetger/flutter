@@ -46,6 +46,7 @@ import io.flutter.embedding.engine.systemchannels.PlatformViewTouch;
 import io.flutter.embedding.engine.systemchannels.ScribeChannel;
 import io.flutter.embedding.engine.systemchannels.SettingsChannel;
 import io.flutter.embedding.engine.systemchannels.TextInputChannel;
+import io.flutter.plugin.common.FlutterException;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.StandardMessageCodec;
 import io.flutter.plugin.common.StandardMethodCodec;
@@ -1099,6 +1100,14 @@ public class PlatformViewsControllerTest {
     // Simulate create call from the framework.
     createPlatformView(jni, platformViewsController, platformViewId, "testType", /* hybrid=*/ true);
     assertEquals(ShadowFlutterJNI.getResponses().size(), 1);
+
+    // Verify that the response is an error.
+    ByteBuffer response = ShadowFlutterJNI.getResponses().get(0);
+    response.rewind();
+    assertThrows(
+        FlutterException.class,
+        () -> StandardMethodCodec.INSTANCE.decodeEnvelope(response)
+    );
 
     assertFalse(platformViewsController.initializePlatformViewIfNeeded(platformViewId));
   }
@@ -2185,6 +2194,11 @@ public class PlatformViewsControllerTest {
     private static SparseArray<ByteBuffer> replies = new SparseArray<>();
 
     public ShadowFlutterJNI() {}
+
+    @Implementation
+    public boolean IsSurfaceControlEnabled() {
+      return false;
+    }
 
     @Implementation
     public boolean getIsSoftwareRenderingEnabled() {

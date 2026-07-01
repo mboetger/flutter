@@ -105,7 +105,7 @@ public class MethodChannel {
   /**
    * Invokes a method on this channel, optionally expecting a result.
    *
-   * <p>Any uncaught exception thrown by the result callback will be caught and logged.
+   * <p>Any uncaught exception thrown by the result callback will be caught, logged, and rethrown.
    *
    * @param method the name String of the method.
    * @param arguments the arguments for the invocation, possibly null.
@@ -176,8 +176,9 @@ public class MethodChannel {
      * result handlers. The result may be submitted asynchronously and on any thread. Calls to
      * unknown or unimplemented methods should be handled using {@link Result#notImplemented()}.
      *
-     * <p>Any uncaught exception thrown by this method will be caught by the channel implementation
-     * and logged, and an error result will be sent back to Flutter.
+     * <p>Any uncaught exception thrown by this method will be caught by the channel implementation,
+     * logged, and an error result will be sent back to Flutter. The exception will then be
+     * rethrown, which will typically crash the application.
      *
      * <p>The handler is called on the platform thread (Android main thread) by default, or
      * otherwise on the thread specified by the {@link BinaryMessenger.TaskQueue} provided to the
@@ -248,6 +249,7 @@ public class MethodChannel {
         }
       } catch (RuntimeException e) {
         Log.e(TAG + name, "Failed to handle method call result", e);
+        throw e;
       }
     }
   }
@@ -287,6 +289,7 @@ public class MethodChannel {
         reply.reply(
             codec.encodeErrorEnvelopeWithStacktrace(
                 "error", e.getMessage(), null, Log.getStackTraceString(e)));
+        throw e;
       }
     }
   }

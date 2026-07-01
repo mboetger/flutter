@@ -281,12 +281,17 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
       @Nullable HandlerInfo handlerInfo, @Nullable ByteBuffer message, final int replyId) {
     // Called from any thread.
     if (handlerInfo != null) {
+      Reply reply = new Reply(flutterJNI, replyId);
       try {
         Log.v(TAG, "Deferring to registered handler to process message.");
-        handlerInfo.handler.onMessage(message, new Reply(flutterJNI, replyId));
+        handlerInfo.handler.onMessage(message, reply);
       } catch (Exception ex) {
         Log.e(TAG, "Uncaught exception in binary message listener", ex);
-        flutterJNI.invokePlatformMessageEmptyResponseCallback(replyId);
+        if (!reply.isDone()) {
+          flutterJNI.invokePlatformMessageEmptyResponseCallback(replyId);
+          reply.done.set(true);
+        }
+        throw (ex instanceof RuntimeException ? (RuntimeException) ex : new RuntimeException(ex));
       } catch (Error err) {
         handleError(err);
       }
@@ -375,6 +380,7 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
         }
       } catch (Exception ex) {
         Log.e(TAG, "Uncaught exception in binary message reply handler", ex);
+        throw (ex instanceof RuntimeException ? (RuntimeException) ex : new RuntimeException(ex));
       } catch (Error err) {
         handleError(err);
       }
@@ -417,6 +423,10 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
     Reply(@NonNull FlutterJNI flutterJNI, int replyId) {
       this.flutterJNI = flutterJNI;
       this.replyId = replyId;
+    }
+
+    boolean isDone() {
+      return done.get();
     }
 
     @Override

@@ -95,7 +95,7 @@ public final class BasicMessageChannel<T> {
   /**
    * Sends the specified message to the Flutter application, optionally expecting a reply.
    *
-   * <p>Any uncaught exception thrown by the reply callback will be caught and logged.
+   * <p>Any uncaught exception thrown by the reply callback will be caught, logged, and rethrown.
    *
    * @param message the message, possibly null.
    * @param callback a {@link Reply} callback, possibly null.
@@ -206,11 +206,12 @@ public final class BasicMessageChannel<T> {
      * handlers. The reply may be submitted asynchronously and invoked on any thread.
      *
      * <p>Any uncaught exception thrown by this method, or the preceding message decoding, will be
-     * caught by the channel implementation and logged, and a null reply message will be sent back
-     * to Flutter.
+     * caught by the channel implementation, logged, and a null reply message will be sent back
+     * to Flutter. The exception will then be rethrown.
      *
      * <p>Any uncaught exception thrown during encoding a reply message submitted to the {@link
      * Reply} is treated similarly: the exception is logged, and a null reply is sent to Flutter.
+     * The exception will then be rethrown.
      *
      * @param message the message, possibly null.
      * @param reply a {@link Reply} for sending a single message reply back to Flutter.
@@ -244,6 +245,7 @@ public final class BasicMessageChannel<T> {
         callback.reply(codec.decodeMessage(reply));
       } catch (RuntimeException e) {
         Log.e(TAG + name, "Failed to handle message reply", e);
+        throw e;
       }
     }
   }
@@ -269,6 +271,7 @@ public final class BasicMessageChannel<T> {
       } catch (RuntimeException e) {
         Log.e(TAG + name, "Failed to handle message", e);
         callback.reply(null);
+        throw e;
       }
     }
   }

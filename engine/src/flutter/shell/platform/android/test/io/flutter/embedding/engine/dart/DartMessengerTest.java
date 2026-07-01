@@ -9,6 +9,7 @@ import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertNotNull;
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -198,7 +199,10 @@ public class DartMessengerTest {
     final int replyId = 1;
     final long messageData = 1234;
 
-    messenger.handleMessageFromDart(channel, message, replyId, messageData);
+    assertThrows(
+        RuntimeException.class,
+        () -> messenger.handleMessageFromDart(channel, message, replyId, messageData)
+    );
     verify(fakeFlutterJni).cleanupMessageData(eq(messageData));
   }
 
