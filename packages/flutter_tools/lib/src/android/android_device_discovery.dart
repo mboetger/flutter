@@ -107,7 +107,10 @@ class AndroidDevices extends PollingDeviceDiscovery {
   bool _doesNotHaveAdb() {
     return _androidSdk == null ||
         _androidSdk.adbPath == null ||
-        !_processManager.canRun(_androidSdk.adbPath);
+        !_processManager.canRun(_androidSdk.adbPath) ||
+        // If the Android SDK has no platforms, we cannot use it to build or run,
+        // so we treat it as if we don't have adb to avoid triggering adb errors.
+        _androidSdk.latestVersion == null;
   }
 
   // 015d172c98400a03       device usb:340787200X product:nakasi model:Nexus_7 device:grouper

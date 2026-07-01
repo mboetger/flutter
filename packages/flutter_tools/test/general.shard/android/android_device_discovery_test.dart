@@ -91,6 +91,28 @@ void main() {
     },
   );
 
+  testWithoutContext(
+    'AndroidDevices returns empty device list and diagnostics when Android SDK has no platforms',
+    () async {
+      final fakeProcessManager = FakeProcessManager.empty();
+      final sdk = FakeAndroidSdk('adb', null);
+      final workflow = AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags());
+      final androidDevices = AndroidDevices(
+        androidSdk: sdk,
+        logger: BufferLogger.test(),
+        androidWorkflow: workflow,
+        processManager: fakeProcessManager,
+        fileSystem: MemoryFileSystem.test(),
+        platform: FakePlatform(),
+        userMessages: UserMessages(),
+      );
+
+      expect(await androidDevices.pollingGetDevices(), isEmpty);
+      expect(await androidDevices.getDiagnostics(), isEmpty);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    },
+  );
+
   testWithoutContext('AndroidDevices throwsToolExit on failing adb', () {
     final ProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
       const FakeCommand(
@@ -357,8 +379,18 @@ device4       unknown usb:3-7
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
-  FakeAndroidSdk([this.adbPath = 'adb']);
+  FakeAndroidSdk([this.adbPath = 'adb', this.latestVersion = const _DefaultAndroidSdkVersion()]);
 
   @override
   final String? adbPath;
+
+  @override
+  final AndroidSdkVersion? latestVersion;
+}
+
+class _DefaultAndroidSdkVersion implements AndroidSdkVersion {
+  const _DefaultAndroidSdkVersion();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
