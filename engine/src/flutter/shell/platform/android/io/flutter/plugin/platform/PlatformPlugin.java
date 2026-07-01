@@ -413,7 +413,6 @@ public class PlatformPlugin {
           enabledOverlays &= ~View.SYSTEM_UI_FLAG_FULLSCREEN;
           break;
         case BOTTOM_OVERLAYS:
-          enabledOverlays &= ~View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
           enabledOverlays &= ~View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
           break;
       }
