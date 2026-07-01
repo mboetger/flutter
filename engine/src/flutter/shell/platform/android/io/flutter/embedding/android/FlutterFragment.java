@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -32,6 +33,7 @@ import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
 import io.flutter.plugin.platform.PlatformPlugin;
 import io.flutter.plugin.view.SensitiveContentPlugin;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -1081,6 +1083,202 @@ public class FlutterFragment extends Fragment
   @Override
   public ExclusiveAppComponent<Activity> getExclusiveAppComponent() {
     return delegate;
+  }
+
+  /**
+   * Called when a fragment is being created from a layout file.
+   *
+   * <p>This method parses custom XML attributes to configure the {@code FlutterFragment}.
+   * Because the Flutter Android embedding is distributed as a JAR, custom attributes cannot
+   * be defined in a library-level {@code attrs.xml}. To bypass AAPT2 compilation errors,
+   * developers must specify these attributes <b>without a namespace prefix</b> in their XML
+   * layout files.
+   *
+   * <p>Example:
+   * <pre>{@code
+   * <fragment
+   *     android:id="@+id/flutter_fragment"
+   *     android:name="io.flutter.embedding.android.FlutterFragment"
+   *     android:layout_width="match_parent"
+   *     android:layout_height="match_parent"
+   *     flutter_dart_entrypoint="custom_entrypoint"
+   *     flutter_initial_route="/custom_route"
+   *     flutter_handle_deeplinking="true" />
+   * }</pre>
+   */
+  @Override
+  public void onInflate(
+      @NonNull Context context,
+      @NonNull AttributeSet attrs,
+      @Nullable Bundle savedInstanceState) {
+    super.onInflate(context, attrs, savedInstanceState);
+
+    Bundle args = getArguments();
+    if (args == null) {
+      args = new Bundle();
+      setArguments(args);
+    }
+
+    String dartEntrypoint = getValueAsString(context, attrs, "flutter_dart_entrypoint");
+    if (dartEntrypoint != null) {
+      args.putString(ARG_DART_ENTRYPOINT, dartEntrypoint);
+    }
+
+    String dartEntrypointUri = getValueAsString(context, attrs, "flutter_dart_entrypoint_uri");
+    if (dartEntrypointUri != null) {
+      args.putString(ARG_DART_ENTRYPOINT_URI, dartEntrypointUri);
+    }
+
+    ArrayList<String> dartEntrypointArgs = getValueAsStringList(context, attrs, "flutter_dart_entrypoint_args");
+    if (dartEntrypointArgs != null) {
+      args.putStringArrayList(ARG_DART_ENTRYPOINT_ARGS, dartEntrypointArgs);
+    }
+
+    String initialRoute = getValueAsString(context, attrs, "flutter_initial_route");
+    if (initialRoute != null) {
+      args.putString(ARG_INITIAL_ROUTE, initialRoute);
+    }
+
+    Boolean handleDeeplinking = getValueAsBoolean(context, attrs, "flutter_handle_deeplinking");
+    if (handleDeeplinking != null) {
+      args.putBoolean(ARG_HANDLE_DEEPLINKING, handleDeeplinking);
+    }
+
+    String appBundlePath = getValueAsString(context, attrs, "flutter_app_bundle_path");
+    if (appBundlePath != null) {
+      args.putString(ARG_APP_BUNDLE_PATH, appBundlePath);
+    }
+
+    String renderModeStr = getValueAsString(context, attrs, "flutter_render_mode");
+    if (renderModeStr != null) {
+      args.putString(ARG_FLUTTERVIEW_RENDER_MODE, renderModeStr);
+    }
+
+    String transparencyModeStr = getValueAsString(context, attrs, "flutter_transparency_mode");
+    if (transparencyModeStr != null) {
+      args.putString(ARG_FLUTTERVIEW_TRANSPARENCY_MODE, transparencyModeStr);
+    }
+
+    Boolean shouldAttachEngineToActivity = getValueAsBoolean(context, attrs, "flutter_should_attach_engine_to_activity");
+    if (shouldAttachEngineToActivity != null) {
+      args.putBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, shouldAttachEngineToActivity);
+    }
+
+    Boolean shouldDelayFirstAndroidViewDraw = getValueAsBoolean(context, attrs, "flutter_should_delay_first_android_view_draw");
+    if (shouldDelayFirstAndroidViewDraw != null) {
+      args.putBoolean(ARG_SHOULD_DELAY_FIRST_ANDROID_VIEW_DRAW, shouldDelayFirstAndroidViewDraw);
+    }
+
+    Boolean shouldAutomaticallyHandleOnBackPressed = getValueAsBoolean(context, attrs, "flutter_should_automatically_handle_on_back_pressed");
+    if (shouldAutomaticallyHandleOnBackPressed != null) {
+      args.putBoolean(ARG_SHOULD_AUTOMATICALLY_HANDLE_ON_BACK_PRESSED, shouldAutomaticallyHandleOnBackPressed);
+    }
+
+    String cachedEngineId = getValueAsString(context, attrs, "flutter_cached_engine_id");
+    if (cachedEngineId != null) {
+      args.putString(ARG_CACHED_ENGINE_ID, cachedEngineId);
+    }
+
+    String cachedEngineGroupId = getValueAsString(context, attrs, "flutter_cached_engine_group_id");
+    if (cachedEngineGroupId != null) {
+      args.putString(ARG_CACHED_ENGINE_GROUP_ID, cachedEngineGroupId);
+    }
+
+    Boolean destroyEngineWithFragment = getValueAsBoolean(context, attrs, "flutter_destroy_engine_with_fragment");
+    if (destroyEngineWithFragment != null) {
+      args.putBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, destroyEngineWithFragment);
+    }
+
+    Boolean enableStateRestoration = getValueAsBoolean(context, attrs, "flutter_enable_state_restoration");
+    if (enableStateRestoration != null) {
+      args.putBoolean(ARG_ENABLE_STATE_RESTORATION, enableStateRestoration);
+    }
+  }
+
+  @Nullable
+  private String getValueAsString(
+      @NonNull Context context, @NonNull AttributeSet attrs, @NonNull String name) {
+    String value = attrs.getAttributeValue("http://schemas.android.com/apk/res-auto", name);
+    if (value == null) {
+      value = attrs.getAttributeValue(null, name);
+    }
+    if (value != null && value.startsWith("@")) {
+      int resId = attrs.getAttributeResourceValue("http://schemas.android.com/apk/res-auto", name, 0);
+      if (resId == 0) {
+        resId = attrs.getAttributeResourceValue(null, name, 0);
+      }
+      if (resId != 0) {
+        try {
+          return context.getResources().getString(resId);
+        } catch (android.content.res.Resources.NotFoundException e) {
+          Log.e(TAG, "Failed to resolve string resource for attribute: " + name, e);
+        }
+      }
+    }
+    return value;
+  }
+
+  @Nullable
+  private Boolean getValueAsBoolean(
+      @NonNull Context context, @NonNull AttributeSet attrs, @NonNull String name) {
+    String value = attrs.getAttributeValue("http://schemas.android.com/apk/res-auto", name);
+    if (value == null) {
+      value = attrs.getAttributeValue(null, name);
+    }
+    if (value != null) {
+      if (value.startsWith("@")) {
+        int resId = attrs.getAttributeResourceValue("http://schemas.android.com/apk/res-auto", name, 0);
+        if (resId == 0) {
+          resId = attrs.getAttributeResourceValue(null, name, 0);
+        }
+        if (resId != 0) {
+          try {
+            return context.getResources().getBoolean(resId);
+          } catch (android.content.res.Resources.NotFoundException e) {
+            Log.e(TAG, "Failed to resolve boolean resource for attribute: " + name, e);
+          }
+        }
+      } else {
+        return Boolean.parseBoolean(value);
+      }
+    }
+    return null;
+  }
+
+  @Nullable
+  private ArrayList<String> getValueAsStringList(
+      @NonNull Context context, @NonNull AttributeSet attrs, @NonNull String name) {
+    String value = attrs.getAttributeValue("http://schemas.android.com/apk/res-auto", name);
+    if (value == null) {
+      value = attrs.getAttributeValue(null, name);
+    }
+    if (value != null) {
+      if (value.startsWith("@")) {
+        int resId = attrs.getAttributeResourceValue("http://schemas.android.com/apk/res-auto", name, 0);
+        if (resId == 0) {
+          resId = attrs.getAttributeResourceValue(null, name, 0);
+        }
+        if (resId != 0) {
+          try {
+            String[] array = context.getResources().getStringArray(resId);
+            return new ArrayList<>(Arrays.asList(array));
+          } catch (android.content.res.Resources.NotFoundException e) {
+            Log.e(TAG, "Failed to resolve string array resource for attribute: " + name, e);
+          }
+        }
+      } else {
+        if (value.trim().isEmpty()) {
+          return new ArrayList<>();
+        }
+        String[] array = value.split(",");
+        ArrayList<String> list = new ArrayList<>();
+        for (String s : array) {
+          list.add(s.trim());
+        }
+        return list;
+      }
+    }
+    return null;
   }
 
   @Override
