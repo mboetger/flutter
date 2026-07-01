@@ -325,24 +325,57 @@ class PlatformAssetBundle extends CachingAssetBundle {
   @override
   Future<ByteData> load(String key) {
     final Uint8List encoded = utf8.encode(Uri(path: Uri.encodeFull(key)).path);
-    final Future<ByteData>? future = ServicesBinding.instance.defaultBinaryMessenger
-        .send('flutter/assets', ByteData.sublistView(encoded))
-        ?.then((ByteData? asset) {
-          if (asset == null) {
-            throw FlutterError.fromParts(<DiagnosticsNode>[
-              _errorSummaryWithKey(key),
-              ErrorDescription('The asset does not exist or has empty data.'),
-            ]);
-          }
+    final Future<ByteData?>? primaryFuture = ServicesBinding.instance.defaultBinaryMessenger.send(
+      'flutter/assets',
+      ByteData.sublistView(encoded),
+    );
+
+    Future<ByteData> resultFuture;
+    if (primaryFuture == null) {
+      if (key.startsWith('res/')) {
+        resultFuture = _loadPlatformResource(key);
+      } else {
+        resultFuture = Future<ByteData>.error(
+          FlutterError.fromParts(<DiagnosticsNode>[
+            _errorSummaryWithKey(key),
+            ErrorDescription('The asset does not exist or has empty data.'),
+          ]),
+        );
+      }
+    } else {
+      resultFuture = primaryFuture.then((ByteData? asset) {
+        if (asset != null) {
           return asset;
-        });
-    if (future == null) {
+        }
+        if (key.startsWith('res/')) {
+          return _loadPlatformResource(key);
+        }
+        throw FlutterError.fromParts(<DiagnosticsNode>[
+          _errorSummaryWithKey(key),
+          ErrorDescription('The asset does not exist or has empty data.'),
+        ]);
+      });
+    }
+    return resultFuture;
+  }
+
+  Future<ByteData> _loadPlatformResource(String key) async {
+    final Uint8List encoded = utf8.encode(key);
+    final ByteData? result = await ServicesBinding.instance.defaultBinaryMessenger.send(
+      'flutter/resources',
+      ByteData.sublistView(encoded),
+    );
+    if (result == null) {
       throw FlutterError.fromParts(<DiagnosticsNode>[
         _errorSummaryWithKey(key),
-        ErrorDescription('The asset does not exist or has empty data.'),
+        ErrorDescription(
+          'The platform resource does not exist or has empty data. '
+          'Ensure that the resource exists in your Android "res/" folder (e.g., "res/drawable/my_icon.png") '
+          'and that the key is formatted correctly as "res/<type>/<name>.<ext>".',
+        ),
       ]);
     }
-    return future;
+    return result;
   }
 
   @override
@@ -370,6 +403,20 @@ class PlatformAssetBundle extends CachingAssetBundle {
     try {
       return await ui.ImmutableBuffer.fromAsset(key);
     } on Exception catch (e) {
+      if (key.startsWith('res/')) {
+        try {
+          // Fallback to loading bytes via the platform channel.
+          // This is less efficient than fromAsset because it copies bytes into the Dart VM,
+          // but is necessary for dynamic platform resources.
+          final ByteData bytes = await _loadPlatformResource(key);
+          return await ui.ImmutableBuffer.fromUint8List(Uint8List.sublistView(bytes));
+        } on Exception catch (platformEx) {
+          throw FlutterError.fromParts(<DiagnosticsNode>[
+            _errorSummaryWithKey(key),
+            ErrorDescription(platformEx.toString()),
+          ]);
+        }
+      }
       throw FlutterError.fromParts(<DiagnosticsNode>[
         _errorSummaryWithKey(key),
         ErrorDescription(e.toString()),
