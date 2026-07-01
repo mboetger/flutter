@@ -26,10 +26,17 @@
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViewsTestHelper.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViews_Internal.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterTouchInterceptingView+Test.h"
+#import "flutter/shell/platform/darwin/ios/framework/Source/overlay_layer_pool.h"
 #include "flutter/shell/platform/darwin/ios/ios_context_noop.h"
 #include "flutter/shell/platform/darwin/ios/platform_view_ios.h"
 
 FLUTTER_ASSERT_ARC
+
+@interface FlutterPlatformViewsController (TestExposure)
+- (void)createLayerWithIosContext:(const std::shared_ptr<flutter::IOSContext>&)iosContext
+                      pixelFormat:(MTLPixelFormat)pixelFormat;
+- (std::shared_ptr<flutter::OverlayLayer>)nextLayerInPool;
+@end
 
 @class FlutterPlatformViewsTestMockPlatformView;
 __weak static UIView* gMockPlatformView = nil;
@@ -5485,6 +5492,23 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
       CGPointMake(rect.GetLeft() + rect.GetWidth() / 2, rect.GetTop() + rect.GetHeight() / 2);
   int alpha = [self alphaOfPoint:center onView:flutterView];
   XCTAssertEqual(alpha, 255);
+}
+
+- (void)testOverlayViewsHaveCorrectContentsScaleOnCreation {
+  FlutterPlatformViewsController* flutterPlatformViewsController =
+      CreateTestPlatformViewsController(self.name);
+
+  auto ios_context = std::make_shared<flutter::IOSContextNoop>();
+
+  [flutterPlatformViewsController createLayerWithIosContext:ios_context
+                                                pixelFormat:MTLPixelFormatBGRA8Unorm];
+
+  std::shared_ptr<flutter::OverlayLayer> layer = [flutterPlatformViewsController nextLayerInPool];
+  XCTAssertTrue(layer != nullptr);
+
+  CGFloat expectedScale = [UIScreen mainScreen].scale;
+  XCTAssertEqual(layer->overlay_view.layer.contentsScale, expectedScale);
+  XCTAssertEqual(layer->overlay_view_wrapper.layer.contentsScale, expectedScale);
 }
 
 @end
