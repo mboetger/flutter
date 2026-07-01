@@ -386,7 +386,7 @@ class Tooltip extends StatefulWidget {
 /// This class can be used to programmatically show the Tooltip, see the
 /// [ensureTooltipVisible] method.
 class TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
-  static const double _defaultVerticalOffset = 24.0;
+  late double _defaultVerticalOffset;
   static const bool _defaultPreferBelow = true;
   static const EdgeInsetsGeometry _defaultMargin = EdgeInsets.zero;
   static const Duration _defaultShowDuration = Duration(milliseconds: 1500);
@@ -419,6 +419,10 @@ class TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
     super.didChangeDependencies();
     _visible = TooltipVisibility.of(context);
     _tooltipTheme = TooltipTheme.of(context);
+    _defaultVerticalOffset = switch (Theme.of(context).platform) {
+      TargetPlatform.macOS || TargetPlatform.linux || TargetPlatform.windows => 24.0,
+      TargetPlatform.android || TargetPlatform.fuchsia || TargetPlatform.iOS => 32.0,
+    };
   }
 
   // https://material.io/components/tooltips#specs
