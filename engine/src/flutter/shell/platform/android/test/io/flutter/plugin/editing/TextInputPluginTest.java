@@ -3040,6 +3040,47 @@ public class TextInputPluginTest {
     assertEquals(editorInfo.hintLocales, new LocaleList(hintLocales));
   }
 
+  @Test
+  public void textInputType_name_mapsToPersonName() {
+    View testView = new View(ctx);
+    DartExecutor dartExecutor = mock(DartExecutor.class);
+    TextInputChannel textInputChannel = new TextInputChannel(dartExecutor);
+    ScribeChannel scribeChannel = new ScribeChannel(mock(DartExecutor.class));
+    TextInputPlugin textInputPlugin =
+        new TextInputPlugin(
+            testView,
+            textInputChannel,
+            scribeChannel,
+            mock(PlatformViewsController.class),
+            mock(PlatformViewsController2.class));
+    textInputPlugin.setTextInputClient(
+        0,
+        new TextInputChannel.Configuration(
+            false,
+            false,
+            true,
+            true,
+            false,
+            TextInputChannel.TextCapitalization.NONE,
+            new TextInputChannel.InputType(TextInputChannel.TextInputType.NAME, false, false),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+
+    EditorInfo editorInfo = new EditorInfo();
+    InputConnection connection =
+        textInputPlugin.createInputConnection(testView, mock(KeyboardManager.class), editorInfo);
+
+    // We expect that the input type for NAME maps to TYPE_TEXT_VARIATION_PERSON_NAME.
+    assertEquals(
+        InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PERSON_NAME,
+        editorInfo.inputType
+    );
+  }
+
   interface EventHandler {
     void sendAppPrivateCommand(View view, String action, Bundle data);
   }

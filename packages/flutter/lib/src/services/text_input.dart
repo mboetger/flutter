@@ -174,10 +174,7 @@ class TextInputType {
 
   /// Optimized for a person's name.
   ///
-  /// On iOS, requests the
-  /// [UIKeyboardType.namePhonePad](https://developer.apple.com/documentation/uikit/uikeyboardtype/namephonepad)
-  /// keyboard, a keyboard optimized for entering a person’s name or phone number.
-  /// Does not support auto-capitalization.
+  /// On iOS, requests the default keyboard.
   ///
   /// On Android, requests a keyboard optimized for
   /// [TYPE_TEXT_VARIATION_PERSON_NAME](https://developer.android.com/reference/android/text/InputType#TYPE_TEXT_VARIATION_PERSON_NAME).

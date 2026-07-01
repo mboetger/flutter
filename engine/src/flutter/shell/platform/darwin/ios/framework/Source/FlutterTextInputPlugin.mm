@@ -120,7 +120,7 @@ static UIKeyboardType ToUIKeyboardType(NSDictionary* type) {
     return UIKeyboardTypeDefault;
   }
   if ([inputType isEqualToString:@"TextInputType.name"]) {
-    return UIKeyboardTypeNamePhonePad;
+    return UIKeyboardTypeDefault;
   }
   if ([inputType isEqualToString:@"TextInputType.number"]) {
     if ([type[@"signed"] boolValue]) {

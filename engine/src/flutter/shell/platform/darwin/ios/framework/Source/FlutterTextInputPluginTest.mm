@@ -367,6 +367,17 @@ class MockPlatformViewDelegate : public PlatformView::Delegate {
   XCTAssertEqual(inputView.keyboardType, UIKeyboardTypeURL);
 }
 
+- (void)testKeyboardTypeName {
+  NSDictionary* config = self.mutableTemplateCopy;
+  [config setValue:@{@"name" : @"TextInputType.name"} forKey:@"inputType"];
+  [self setClientId:123 configuration:config];
+
+  NSArray<FlutterTextInputView*>* inputFields = self.installedInputViews;
+  FlutterTextInputView* inputView = inputFields[0];
+
+  XCTAssertEqual(inputView.keyboardType, UIKeyboardTypeDefault);
+}
+
 - (void)testKeyboardTypeWebSearch {
   NSDictionary* config = self.mutableTemplateCopy;
   [config setValue:@{@"name" : @"TextInputType.webSearch"} forKey:@"inputType"];
