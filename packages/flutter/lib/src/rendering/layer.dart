@@ -18,7 +18,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:vector_math/vector_math_64.dart' show Vector4;
 
 import 'debug.dart';
 
@@ -2674,9 +2673,7 @@ class FollowerLayer extends ContainerLayer {
     if (_invertedTransform == null) {
       return null;
     }
-    final vector = Vector4(localPosition.dx, localPosition.dy, 0.0, 1.0);
-    final Vector4 result = _invertedTransform!.transform(vector);
-    return Offset(result[0] - linkedOffset!.dx, result[1] - linkedOffset!.dy);
+    return MatrixUtils.transformPoint(_invertedTransform!, localPosition) - linkedOffset!;
   }
 
   @override

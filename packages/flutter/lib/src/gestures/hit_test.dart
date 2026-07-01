@@ -6,7 +6,6 @@
 library;
 
 import 'package:flutter/foundation.dart';
-import 'package:vector_math/vector_math_64.dart';
 
 import 'events.dart';
 
@@ -224,8 +223,7 @@ class HitTestResult {
   @protected
   void pushTransform(Matrix4 transform) {
     assert(
-      _debugVectorMoreOrLessEquals(transform.getRow(2), Vector4(0, 0, 1, 0)) &&
-          _debugVectorMoreOrLessEquals(transform.getColumn(2), Vector4(0, 0, 1, 0)),
+      _debugMatrixRowAndColumnAreValid(transform),
       'The third row and third column of a transform matrix for pointer '
       'events must be Vector4(0, 0, 1, 0) to ensure that a transformed '
       'point is directly under the pointing device. Did you forget to run the paint '
@@ -288,15 +286,22 @@ class HitTestResult {
     assert(_transforms.isNotEmpty);
   }
 
-  bool _debugVectorMoreOrLessEquals(
-    Vector4 a,
-    Vector4 b, {
-    double epsilon = precisionErrorTolerance,
-  }) {
+  bool _debugMatrixRowAndColumnAreValid(Matrix4 transform) {
     var result = true;
     assert(() {
-      final Vector4 difference = a - b;
-      result = difference.storage.every((double component) => component.abs() < epsilon);
+      final Float64List storage = transform.storage;
+      const double epsilon = precisionErrorTolerance;
+      final bool rowValid =
+          storage[2].abs() < epsilon &&
+          storage[6].abs() < epsilon &&
+          (storage[10] - 1.0).abs() < epsilon &&
+          storage[14].abs() < epsilon;
+      final bool colValid =
+          storage[8].abs() < epsilon &&
+          storage[9].abs() < epsilon &&
+          (storage[10] - 1.0).abs() < epsilon &&
+          storage[11].abs() < epsilon;
+      result = rowValid && colValid;
       return true;
     }());
     return result;

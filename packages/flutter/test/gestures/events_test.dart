@@ -4,7 +4,6 @@
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vector_math/vector_math_64.dart';
 
 import 'gesture_tester.dart';
 
@@ -245,8 +244,13 @@ void main() {
     changed = PointerEvent.removePerspectiveTransform(original);
     expect(changed, isNot(original));
     original
-      ..setColumn(2, Vector4(0, 0, 1, 0))
-      ..setRow(2, Vector4(0, 0, 1, 0));
+      ..setEntry(0, 2, 0.0)
+      ..setEntry(1, 2, 0.0)
+      ..setEntry(2, 2, 1.0)
+      ..setEntry(3, 2, 0.0)
+      ..setEntry(2, 0, 0.0)
+      ..setEntry(2, 1, 0.0)
+      ..setEntry(2, 3, 0.0);
     expect(changed, original);
   });
 

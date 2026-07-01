@@ -624,10 +624,14 @@ abstract class PointerEvent with Diagnosticable {
   /// achieved by setting the third column and third row of the matrix to
   /// "0, 0, 1, 0".
   static Matrix4 removePerspectiveTransform(Matrix4 transform) {
-    final vector = Vector4(0, 0, 1, 0);
     return transform.clone()
-      ..setColumn(2, vector)
-      ..setRow(2, vector);
+      ..setEntry(0, 2, 0.0)
+      ..setEntry(1, 2, 0.0)
+      ..setEntry(2, 2, 1.0)
+      ..setEntry(3, 2, 0.0)
+      ..setEntry(2, 0, 0.0)
+      ..setEntry(2, 1, 0.0)
+      ..setEntry(2, 3, 0.0);
   }
 }
 
