@@ -57,6 +57,7 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          d8InvokeCustomsHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -769,6 +770,62 @@ assembleProfile
         Platform: () => fakePlatform('android'),
         FileSystem: () => fileSystem,
         ProcessManager: () => processManager,
+      },
+    );
+  });
+
+  group('d8 invoke-customs error', () {
+    const errorLine =
+        'Message{kind=ERROR, text=Invoke-customs are only supported starting with Android O (--min-api 26), sources=[Unknown source file], tool name=Optional.of(D8)}';
+
+    testWithoutContext('pattern', () {
+      expect(d8InvokeCustomsHandler.test(errorLine), isTrue);
+    });
+
+    testUsingContext(
+      'handler - Groovy',
+      () async {
+        await d8InvokeCustomsHandler.handler(
+          line: errorLine,
+          project: FlutterProject.fromDirectoryTest(fileSystem.currentDirectory),
+          usesAndroidX: true,
+        );
+
+        expect(testLogger.statusText, contains('JavaVersion.VERSION_1_8'));
+        expect(testLogger.statusText, contains('compileOptions'));
+        expect(testLogger.statusText, contains('sourceCompatibility'));
+        expect(testLogger.statusText, contains('targetCompatibility'));
+        expect(testLogger.statusText, isNot(contains('=')));
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => FakeProcessManager.empty(),
+      },
+    );
+
+    testUsingContext(
+      'handler - Kotlin DSL',
+      () async {
+        fileSystem.currentDirectory
+            .childDirectory('android')
+            .childDirectory('app')
+            .childFile('build.gradle.kts')
+            .createSync(recursive: true);
+
+        await d8InvokeCustomsHandler.handler(
+          line: errorLine,
+          project: FlutterProject.fromDirectoryTest(fileSystem.currentDirectory),
+          usesAndroidX: true,
+        );
+
+        expect(testLogger.statusText, contains('JavaVersion.VERSION_1_8'));
+        expect(testLogger.statusText, contains('compileOptions'));
+        expect(testLogger.statusText, contains('sourceCompatibility = JavaVersion.VERSION_1_8'));
+        expect(testLogger.statusText, contains('targetCompatibility = JavaVersion.VERSION_1_8'));
+      },
+      overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => FakeProcessManager.empty(),
       },
     );
   });

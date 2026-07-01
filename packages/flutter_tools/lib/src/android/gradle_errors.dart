@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  d8InvokeCustomsHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,34 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+@visibleForTesting
+final d8InvokeCustomsHandler = GradleHandledError(
+  test: _lineMatcher(const <String>[
+    'Invoke-customs are only supported starting with Android O (--min-api 26)',
+  ]),
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    final File gradleFile = project.android.appGradleFile;
+    final bool isKotlinDsl = gradleFile.path.endsWith('.kts');
+    final compileOptions = isKotlinDsl
+        ? '  compileOptions {\n'
+              '    sourceCompatibility = JavaVersion.VERSION_1_8\n'
+              '    targetCompatibility = JavaVersion.VERSION_1_8\n'
+              '  }'
+        : '  compileOptions {\n'
+              '    sourceCompatibility JavaVersion.VERSION_1_8\n'
+              '    targetCompatibility JavaVersion.VERSION_1_8\n'
+              '  }';
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Android Gradle plugin requires Java 8 compatibility to use some features.\n'
+      'Fix this issue by adding the following to the file ${gradleFile.path}:\n'
+      'android {\n'
+      '$compileOptions\n'
+      '}',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'd8-invoke-customs',
 );
