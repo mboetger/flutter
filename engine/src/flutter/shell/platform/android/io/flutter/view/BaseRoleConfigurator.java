@@ -237,13 +237,11 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
         || node.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT)
         || node.hasAction(AccessibilityBridge.Action.SCROLL_DOWN)) {
       result.setScrollable(true);
-      if (node.hasFlag(AccessibilityBridge.Flag.HAS_IMPLICIT_SCROLLING)) {
-        if (node.hasAction(AccessibilityBridge.Action.SCROLL_LEFT)
-            || node.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT)) {
-          result.setClassName("android.widget.HorizontalScrollView");
-        } else {
-          result.setClassName("android.widget.ScrollView");
-        }
+      if (node.hasAction(AccessibilityBridge.Action.SCROLL_LEFT)
+          || node.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT)) {
+        result.setClassName("android.widget.HorizontalScrollView");
+      } else {
+        result.setClassName("android.widget.ScrollView");
       }
     }
 

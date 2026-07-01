@@ -2606,6 +2606,38 @@ public class AccessibilityBridgeTest {
   }
 
   @Test
+  public void horizontalScrollViewWithoutImplicitScrollingIsHorizontalScrollView() {
+    AccessibilityBridge accessibilityBridge = setUpBridge();
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    // No HAS_IMPLICIT_SCROLLING flag.
+    testSemanticsNode.addAction(Action.SCROLL_LEFT);
+    testSemanticsNode.addAction(Action.SCROLL_RIGHT);
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+    AccessibilityNodeInfo nodeInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
+    
+    // This should be HorizontalScrollView, but it will be null/default because of the bug.
+    assertNotNull("Class name should not be null", nodeInfo.getClassName());
+    assertEquals("android.widget.HorizontalScrollView", nodeInfo.getClassName().toString());
+  }
+
+  @Test
+  public void verticalScrollViewWithoutImplicitScrollingIsScrollView() {
+    AccessibilityBridge accessibilityBridge = setUpBridge();
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    // No HAS_IMPLICIT_SCROLLING flag.
+    testSemanticsNode.addAction(Action.SCROLL_UP);
+    testSemanticsNode.addAction(Action.SCROLL_DOWN);
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+    AccessibilityNodeInfo nodeInfo = accessibilityBridge.createAccessibilityNodeInfo(0);
+
+    // This should be ScrollView, but it will be null/default because of the bug.
+    assertNotNull("Class name should not be null", nodeInfo.getClassName());
+    assertEquals("android.widget.ScrollView", nodeInfo.getClassName().toString());
+  }
+
+  @Test
   public void itAddsProgressBarToClassName() {
     AccessibilityBridge accessibilityBridge = setUpBridge();
     TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
