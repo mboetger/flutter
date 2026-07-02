@@ -37,8 +37,8 @@ void main() {
     expect(
       tester.getSemantics(find.byType(RichText)),
       matchesSemantics(
+        label: 'rootonetwothree',
         children: <Matcher>[
-          matchesSemantics(label: 'root'),
           matchesSemantics(label: 'one'),
           matchesSemantics(label: 'two'),
           matchesSemantics(label: 'three'),
@@ -72,18 +72,24 @@ void main() {
     expect(
       tester.getSemantics(find.byType(RichText)),
       matchesSemantics(
-        children: <Matcher>[
-          matchesSemantics(
-            attributedLabel: AttributedString(
-              'root',
-              attributes: <StringAttribute>[
-                LocaleStringAttribute(
-                  range: const TextRange(start: 0, end: 4),
-                  locale: const Locale('es', 'MX'),
-                ),
-              ],
+        attributedLabel: AttributedString(
+          'rootone\uFFFCthree',
+          attributes: <StringAttribute>[
+            LocaleStringAttribute(
+              range: const TextRange(start: 0, end: 4),
+              locale: const Locale('es', 'MX'),
             ),
-          ),
+            LocaleStringAttribute(
+              range: const TextRange(start: 4, end: 7),
+              locale: const Locale('es', 'MX'),
+            ),
+            LocaleStringAttribute(
+              range: const TextRange(start: 8, end: 13),
+              locale: const Locale('es', 'MX'),
+            ),
+          ],
+        ),
+        children: <Matcher>[
           matchesSemantics(
             attributedLabel: AttributedString(
               'one',
@@ -136,15 +142,15 @@ void main() {
     expect(
       tester.getSemantics(find.byType(RichText)),
       matchesSemantics(
+        attributedLabel: AttributedString(
+          'rootone\uFFFCthree',
+          attributes: <StringAttribute>[
+            SpellOutStringAttribute(range: const TextRange(start: 0, end: 4)),
+            SpellOutStringAttribute(range: const TextRange(start: 4, end: 7)),
+            SpellOutStringAttribute(range: const TextRange(start: 8, end: 13)),
+          ],
+        ),
         children: <Matcher>[
-          matchesSemantics(
-            attributedLabel: AttributedString(
-              'root',
-              attributes: <StringAttribute>[
-                SpellOutStringAttribute(range: const TextRange(start: 0, end: 4)),
-              ],
-            ),
-          ),
           matchesSemantics(
             attributedLabel: AttributedString(
               'one',
@@ -288,7 +294,9 @@ void main() {
     expect(paragraph.devicePixelRatio, 4.0);
   });
 
-  testWidgets('RichText defaults to 1.0 devicePixelRatio when no View or MediaQuery is present', (WidgetTester tester) async {
+  testWidgets('RichText defaults to 1.0 devicePixelRatio when no View or MediaQuery is present', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       RawView(
         view: tester.view,
@@ -304,5 +312,33 @@ void main() {
 
     final RenderParagraph paragraph = tester.renderObject(find.byType(RichText));
     expect(paragraph.devicePixelRatio, 1.0);
+  });
+
+  testWidgets('TextSpan with TapGestureRecognizer does not split semantics', (
+    WidgetTester tester,
+  ) async {
+    final key = UniqueKey();
+    final recognizer = TapGestureRecognizer()..onTap = () {};
+    addTearDown(recognizer.dispose);
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: RichText(
+          key: key,
+          text: TextSpan(
+            text: 'This is ',
+            children: <InlineSpan>[
+              TextSpan(text: 'a link', recognizer: recognizer),
+              const TextSpan(text: ' and more text.'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final SemanticsNode semantics = tester.getSemantics(find.byKey(key));
+
+    expect(semantics, matchesSemantics(label: 'This is a link and more text.'));
   });
 }

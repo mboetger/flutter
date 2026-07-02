@@ -41,10 +41,8 @@ typedef _TextBoundaryAtPosition = _TextBoundaryRecord Function(TextPosition posi
 
 /// Signature for a function that determines the [_TextBoundaryRecord] at the given
 /// [TextPosition], for the given [String].
-typedef _TextBoundaryAtPositionInText = _TextBoundaryRecord Function(
-  TextPosition position,
-  String text,
-);
+typedef _TextBoundaryAtPositionInText =
+    _TextBoundaryRecord Function(TextPosition position, String text);
 
 const String _kEllipsis = '\u2026';
 
@@ -1233,7 +1231,10 @@ class RenderParagraph extends RenderBox
       config.isSemanticBoundary = true;
     } else if (needsChildConfigurationsDelegate) {
       config.childConfigurationsDelegate = _childSemanticsConfigurationsDelegate;
-    } else {
+    }
+
+    if (needsAssembleSemanticsNode ||
+        (!needsAssembleSemanticsNode && !needsChildConfigurationsDelegate)) {
       if (_cachedAttributedLabels == null) {
         final buffer = StringBuffer();
         var offset = 0;
@@ -1391,6 +1392,9 @@ class RenderParagraph extends RenderBox
         for (final ui.TextBox textBox in rects.skip(1)) {
           rect = rect.expandToInclude(textBox.toRect());
           currentDirection = textBox.direction;
+        }
+        if (!info.requiresOwnNode) {
+          continue;
         }
         // Any of the text boxes may have had infinite dimensions.
         // We shouldn't pass infinite dimensions up to the bridges.

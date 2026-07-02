@@ -757,12 +757,8 @@ void main() {
     paragraph.assembleSemanticsNode(result, SemanticsConfiguration(), <SemanticsNode>[
       truncatedChild,
     ]);
-    // It should only contain the semantics node of the TextSpan.
-    expect(result.childrenCount, 1);
-    result.visitChildren((SemanticsNode node) {
-      expect(node != truncatedChild, isTrue);
-      return true;
-    });
+    // The plain text is merged into the parent, and the placeholder is truncated.
+    expect(result.childrenCount, 0);
   });
 
   test('Supports gesture recognizer semantics', () {
@@ -786,11 +782,10 @@ void main() {
       children.add(child);
       return true;
     });
-    expect(children.length, 4);
-    expect(children[0].getSemanticsData().actions, 0);
-    expect(children[1].getSemanticsData().hasAction(SemanticsAction.tap), true);
-    expect(children[2].getSemanticsData().hasAction(SemanticsAction.longPress), true);
-    expect(children[3].getSemanticsData().hasAction(SemanticsAction.tap), true);
+    expect(children.length, 3);
+    expect(children[0].getSemanticsData().hasAction(SemanticsAction.tap), true);
+    expect(children[1].getSemanticsData().hasAction(SemanticsAction.longPress), true);
+    expect(children[2].getSemanticsData().hasAction(SemanticsAction.tap), true);
   });
 
   test('Supports empty text span with spell out', () {
