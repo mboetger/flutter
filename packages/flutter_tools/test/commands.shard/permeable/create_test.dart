@@ -740,6 +740,7 @@ void main() {
         <String>[
           'analysis_options.yaml',
           'android/src/main/kotlin/com/example/flutter_project/FlutterProjectPlugin.kt',
+          'android/src/main/kotlin/com/example/flutter_project/FlutterProjectPluginMethodCallHandler.kt',
           'example/android/app/src/main/kotlin/com/example/flutter_project_example/MainActivity.kt',
           'example/ios/Runner/AppDelegate.swift',
           'example/ios/Runner/Runner-Bridging-Header.h',
@@ -821,10 +822,12 @@ void main() {
       ],
       <String>[
         'android/src/main/java/com/bar/foo/flutter_project/FlutterProjectPlugin.java',
+        'android/src/main/java/com/bar/foo/flutter_project/FlutterProjectPluginMethodCallHandler.java',
         'example/android/app/src/main/java/com/bar/foo/flutter_project_example/MainActivity.java',
       ],
       unexpectedPaths: <String>[
         'android/src/main/java/com/example/flutter_project/FlutterProjectPlugin.java',
+        'android/src/main/java/com/example/flutter_project/FlutterProjectPluginMethodCallHandler.java',
         'example/android/app/src/main/java/com/example/flutter_project_example/MainActivity.java',
       ],
     );
@@ -845,10 +848,12 @@ void main() {
       ],
       <String>[
         'android/src/main/java/com/example/xyz/XyzPlugin.java',
+        'android/src/main/java/com/example/xyz/XyzPluginMethodCallHandler.java',
         'example/android/app/src/main/java/com/example/xyz_example/MainActivity.java',
       ],
       unexpectedPaths: <String>[
         'android/src/main/java/com/example/flutter_project/FlutterProjectPlugin.java',
+        'android/src/main/java/com/example/flutter_project/FlutterProjectPluginMethodCallHandler.java',
         'example/android/app/src/main/java/com/example/flutter_project_example/MainActivity.java',
       ],
     );
