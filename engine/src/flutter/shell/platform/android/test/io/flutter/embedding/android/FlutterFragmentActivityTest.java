@@ -461,4 +461,55 @@ public class FlutterFragmentActivityTest {
           FlutterFragmentActivityWithIntentBuilders.class, engineGroupId);
     }
   }
+
+  @Test
+  public void itDoesNotDestroyProvidedEngine() {
+    org.robolectric.android.controller.ActivityController<FlutterFragmentActivityWithTrackingEngine>
+        controller = Robolectric.buildActivity(FlutterFragmentActivityWithTrackingEngine.class);
+
+    controller.create().start().resume();
+    FlutterFragmentActivityWithTrackingEngine activity = controller.get();
+
+    assertNotNull(activity.getFlutterEngine());
+    MyEngine engine = (MyEngine) activity.getFlutterEngine();
+    assertNotNull(engine);
+    assertFalse(engine.isDestroyed);
+
+    controller.pause().stop().destroy();
+
+    // The engine should NOT be destroyed because it was provided by the subclass.
+    assertFalse(engine.isDestroyed);
+  }
+
+  static class FlutterFragmentActivityWithTrackingEngine extends FlutterFragmentActivity {
+    @Override
+    protected FlutterFragment createFlutterFragment() {
+      return FlutterFragment.createDefault();
+    }
+
+    @Nullable
+    @Override
+    public FlutterEngine provideFlutterEngine(@NonNull Context context) {
+      FlutterJNI flutterJNI = mock(FlutterJNI.class);
+      FlutterLoader flutterLoader = mock(FlutterLoader.class);
+      when(flutterJNI.isAttached()).thenReturn(true);
+      when(flutterLoader.automaticallyRegisterPlugins()).thenReturn(true);
+
+      return new MyEngine(context, flutterLoader, flutterJNI);
+    }
+  }
+
+  static class MyEngine extends FlutterEngine {
+    boolean isDestroyed = false;
+
+    public MyEngine(Context context, FlutterLoader flutterLoader, FlutterJNI flutterJNI) {
+      super(context, flutterLoader, flutterJNI, new String[] {}, true);
+    }
+
+    @Override
+    public void destroy() {
+      super.destroy();
+      isDestroyed = true;
+    }
+  }
 }

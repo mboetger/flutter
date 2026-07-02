@@ -1211,7 +1211,6 @@ public class FlutterFragment extends Fragment
   @Override
   public void onDetach() {
     getContext().unregisterComponentCallbacks(this);
-    super.onDetach();
     if (delegate != null) {
       delegate.onDetach();
       delegate.release();
@@ -1219,6 +1218,7 @@ public class FlutterFragment extends Fragment
     } else {
       Log.v(TAG, "FlutterFragment " + this + " onDetach called after release.");
     }
+    super.onDetach();
   }
 
   /**
@@ -1402,6 +1402,9 @@ public class FlutterFragment extends Fragment
         getArguments().getBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, false);
     if (getCachedEngineId() != null || delegate.isFlutterEngineFromHost()) {
       // Only destroy a cached engine if explicitly requested by app developer.
+      if (getActivity() instanceof FlutterFragmentActivity) {
+        return ((FlutterFragmentActivity) getActivity()).shouldDestroyEngineWithHost();
+      }
       return explicitDestructionRequested;
     } else {
       // If this Fragment created the FlutterEngine, destroy it by default unless
