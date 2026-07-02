@@ -252,6 +252,12 @@ class AccessibilityViewEmbedder {
       output.setHintText(input.getHintText());
       output.setShowingHintText(input.isShowingHintText());
     }
+
+    if (input.getActionList() != null) {
+      for (AccessibilityNodeInfo.AccessibilityAction action : input.getActionList()) {
+        output.addAction(action);
+      }
+    }
   }
 
   /**
