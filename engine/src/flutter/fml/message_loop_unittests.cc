@@ -212,3 +212,51 @@ TEST(MessageLoop, CanCreateConcurrentMessageLoop) {
   latch.Wait();
   ASSERT_GE(thread_ids.size(), 1u);
 }
+
+TEST(MessageLoop, AndroidLatencyBenchmark) {
+  fml::AutoResetWaitableEvent latch;
+  std::thread thread([&latch]() {
+    fml::MessageLoop::EnsureInitializedForCurrentThread();
+    auto& loop = fml::MessageLoop::GetCurrent();
+
+    int count = 0;
+    const int kMaxCount = 100;
+    std::vector<double> latencies_us;
+
+    std::function<void()> post_next;
+    post_next = [&]() {
+      auto post_time = fml::TimePoint::Now();
+      loop.GetTaskRunner()->PostTask([&, post_time]() {
+        auto run_time = fml::TimePoint::Now();
+        auto latency = (run_time - post_time).ToMicroseconds();
+        latencies_us.push_back(latency);
+
+        if (++count < kMaxCount) {
+          post_next();
+        } else {
+          loop.Terminate();
+        }
+      });
+    };
+
+    post_next();
+    loop.Run();
+
+    double sum = 0;
+    double max_val = 0;
+    double min_val = 1e9;
+    for (auto val : latencies_us) {
+      sum += val;
+      if (val > max_val)
+        max_val = val;
+      if (val < min_val)
+        min_val = val;
+    }
+    double avg = sum / latencies_us.size();
+    std::cout << "Latency (us) - Avg: " << avg << ", Min: " << min_val
+              << ", Max: " << max_val << std::endl;
+    latch.Signal();
+  });
+  latch.Wait();
+  thread.join();
+}

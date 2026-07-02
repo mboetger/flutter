@@ -29,6 +29,7 @@ class MessageLoopAndroid : public MessageLoopImpl {
  private:
   fml::UniqueObject<ALooper*, UniqueLooperTraits> looper_;
   fml::UniqueFD timer_fd_;
+  fml::UniqueFD wake_fd_;
   bool running_ = false;
 
   MessageLoopAndroid();
@@ -42,6 +43,8 @@ class MessageLoopAndroid : public MessageLoopImpl {
   void WakeUp(fml::TimePoint time_point) override;
 
   void OnEventFired();
+
+  void OnWakeFired();
 
   FML_FRIEND_MAKE_REF_COUNTED(MessageLoopAndroid);
   FML_FRIEND_REF_COUNTED_THREAD_SAFE(MessageLoopAndroid);
