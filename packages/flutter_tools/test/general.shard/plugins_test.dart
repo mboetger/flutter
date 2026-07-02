@@ -1109,6 +1109,81 @@ dependencies:
         },
       );
 
+      testUsingContext(
+        'Registrant does not have namespace collision when two plugins have the same class name but different packages',
+        () async {
+          androidProject.embeddingVersion = AndroidEmbeddingVersion.v2;
+
+          // Plugin 1: package 'plugin1', class 'UseNewEmbedding'
+          final Directory plugin1Dir = fs.systemTempDirectory.createTempSync('plugin1.');
+          plugin1Dir.childFile('pubspec.yaml').writeAsStringSync('''
+flutter:
+  plugin:
+    androidPackage: plugin1
+    pluginClass: UseNewEmbedding
+''');
+          plugin1Dir
+              .childDirectory('android')
+              .childDirectory('src')
+              .childDirectory('main')
+              .childDirectory('java')
+              .childDirectory('plugin1')
+              .childFile('UseNewEmbedding.java')
+            ..createSync(recursive: true)
+            ..writeAsStringSync('import io.flutter.embedding.engine.plugins.FlutterPlugin;');
+          addToPackageConfig('plugin1', plugin1Dir);
+
+          // Plugin 2: package 'plugin2', class 'UseNewEmbedding'
+          final Directory plugin2Dir = fs.systemTempDirectory.createTempSync('plugin2.');
+          plugin2Dir.childFile('pubspec.yaml').writeAsStringSync('''
+flutter:
+  plugin:
+    androidPackage: plugin2
+    pluginClass: UseNewEmbedding
+''');
+          plugin2Dir
+              .childDirectory('android')
+              .childDirectory('src')
+              .childDirectory('main')
+              .childDirectory('java')
+              .childDirectory('plugin2')
+              .childFile('UseNewEmbedding.java')
+            ..createSync(recursive: true)
+            ..writeAsStringSync('import io.flutter.embedding.engine.plugins.FlutterPlugin;');
+          addToPackageConfig('plugin2', plugin2Dir);
+
+          await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
+
+          final File registrant = flutterProject.directory
+              .childDirectory(
+                fs.path.join('android', 'app', 'src', 'main', 'java', 'io', 'flutter', 'plugins'),
+              )
+              .childFile('GeneratedPluginRegistrant.java');
+
+          expect(registrant, exists);
+          final String registrantContent = registrant.readAsStringSync();
+
+          // Verify that it uses fully qualified names and doesn't import the classes,
+          // which would cause a collision.
+          expect(registrantContent, isNot(contains('import plugin1.UseNewEmbedding;')));
+          expect(registrantContent, isNot(contains('import plugin2.UseNewEmbedding;')));
+          expect(
+            registrantContent,
+            contains('flutterEngine.getPlugins().add(new plugin1.UseNewEmbedding());'),
+          );
+          expect(
+            registrantContent,
+            contains('flutterEngine.getPlugins().add(new plugin2.UseNewEmbedding());'),
+          );
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+          XcodeProjectInterpreter: () => xcodeProjectInterpreter,
+          Pub: ThrowingPub.new,
+        },
+      );
+
       group('Build time plugin injection', () {
         testUsingContext(
           "Registrant for web doesn't escape slashes in imports",
