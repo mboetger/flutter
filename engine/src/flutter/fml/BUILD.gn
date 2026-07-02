@@ -307,7 +307,7 @@ source_set("string_conversion") {
   ]
 }
 
-if (enable_unittests) {
+if (enable_unittests || is_android) {
   test_fixtures("fml_fixtures") {
     fixtures = []
   }

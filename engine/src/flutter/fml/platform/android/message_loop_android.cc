@@ -5,6 +5,7 @@
 #include "flutter/fml/platform/android/message_loop_android.h"
 
 #include <fcntl.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 
 #include "flutter/fml/platform/linux/timerfd.h"
@@ -30,9 +31,11 @@ static ALooper* AcquireLooperForThread() {
 
 MessageLoopAndroid::MessageLoopAndroid()
     : looper_(AcquireLooperForThread()),
-      timer_fd_(::timerfd_create(kClockType, TFD_NONBLOCK | TFD_CLOEXEC)) {
+      timer_fd_(::timerfd_create(kClockType, TFD_NONBLOCK | TFD_CLOEXEC)),
+      wake_fd_(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)) {
   FML_CHECK(looper_.is_valid());
   FML_CHECK(timer_fd_.is_valid());
+  FML_CHECK(wake_fd_.is_valid());
 
   static const int kWakeEvents = ALOOPER_EVENT_INPUT;
 
@@ -51,10 +54,28 @@ MessageLoopAndroid::MessageLoopAndroid()
                                    this                    // baton
   );
   FML_CHECK(add_result == 1);
+
+  ALooper_callbackFunc read_wake_fd = [](int, int events, void* data) -> int {
+    if (events & kWakeEvents) {
+      reinterpret_cast<MessageLoopAndroid*>(data)->OnWakeFired();
+    }
+    return 1;  // continue receiving callbacks
+  };
+
+  add_result = ::ALooper_addFd(looper_.get(),          // looper
+                               wake_fd_.get(),         // fd
+                               ALOOPER_POLL_CALLBACK,  // ident
+                               kWakeEvents,            // events
+                               read_wake_fd,           // callback
+                               this                    // baton
+  );
+  FML_CHECK(add_result == 1);
 }
 
 MessageLoopAndroid::~MessageLoopAndroid() {
   int remove_result = ::ALooper_removeFd(looper_.get(), timer_fd_.get());
+  FML_CHECK(remove_result == 1);
+  remove_result = ::ALooper_removeFd(looper_.get(), wake_fd_.get());
   FML_CHECK(remove_result == 1);
 }
 
@@ -82,14 +103,29 @@ void MessageLoopAndroid::Terminate() {
 }
 
 void MessageLoopAndroid::WakeUp(fml::TimePoint time_point) {
-  [[maybe_unused]] bool result = TimerRearm(timer_fd_.get(), time_point);
-  FML_DCHECK(result);
+  if (time_point <= fml::TimePoint::Now()) {
+    uint64_t value = 1;
+    [[maybe_unused]] ssize_t result =
+        ::write(wake_fd_.get(), &value, sizeof(value));
+    FML_DCHECK(result == sizeof(value));
+  } else {
+    [[maybe_unused]] bool result = TimerRearm(timer_fd_.get(), time_point);
+    FML_DCHECK(result);
+  }
 }
 
 void MessageLoopAndroid::OnEventFired() {
   if (TimerDrain(timer_fd_.get())) {
     RunExpiredTasksNow();
   }
+}
+
+void MessageLoopAndroid::OnWakeFired() {
+  uint64_t value = 0;
+  [[maybe_unused]] ssize_t result =
+      ::read(wake_fd_.get(), &value, sizeof(value));
+  FML_DCHECK(result == sizeof(value));
+  RunExpiredTasksNow();
 }
 
 }  // namespace fml

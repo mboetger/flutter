@@ -13,6 +13,9 @@
 
 #if FLUTTER_PTHREAD_SUPPORTED
 #include <pthread.h>
+#if defined(FML_OS_ANDROID)
+#include <sys/prctl.h>
+#endif
 #else
 #endif
 
@@ -80,9 +83,13 @@ TEST(Thread, ThreadNameCreatedWithConfig) {
   bool done = false;
   thread.GetTaskRunner()->PostTask([&done, &name]() {
     done = true;
+    [[maybe_unused]] pthread_t current_thread = pthread_self();
     char thread_name[16];
-    pthread_t current_thread = pthread_self();
+#if defined(FML_OS_ANDROID)
+    prctl(PR_GET_NAME, thread_name);
+#else
     pthread_getname_np(current_thread, thread_name, 16);
+#endif
     ASSERT_EQ(thread_name, name);
   });
   thread.Join();
@@ -124,9 +131,13 @@ TEST(Thread, ThreadPriorityCreatedWithConfig) {
   int policy;
   thread.GetTaskRunner()->PostTask([&]() {
     done = true;
-    char thread_name[16];
     pthread_t current_thread = pthread_self();
+    char thread_name[16];
+#if defined(FML_OS_ANDROID)
+    prctl(PR_GET_NAME, thread_name);
+#else
     pthread_getname_np(current_thread, thread_name, 16);
+#endif
     pthread_getschedparam(current_thread, &policy, &param);
     ASSERT_EQ(thread_name, thread1_name);
     ASSERT_EQ(policy, SCHED_OTHER);
@@ -138,9 +149,13 @@ TEST(Thread, ThreadPriorityCreatedWithConfig) {
                           thread2_name, fml::Thread::ThreadPriority::kDisplay));
   thread2.GetTaskRunner()->PostTask([&]() {
     done = true;
-    char thread_name[16];
     pthread_t current_thread = pthread_self();
+    char thread_name[16];
+#if defined(FML_OS_ANDROID)
+    prctl(PR_GET_NAME, thread_name);
+#else
     pthread_getname_np(current_thread, thread_name, 16);
+#endif
     pthread_getschedparam(current_thread, &policy, &param);
     ASSERT_EQ(thread_name, thread2_name);
     ASSERT_EQ(policy, SCHED_OTHER);
