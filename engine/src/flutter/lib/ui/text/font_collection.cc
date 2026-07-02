@@ -175,4 +175,24 @@ void FontCollection::LoadFontFromList(Dart_Handle font_data_handle,
   tonic::DartInvoke(callback, {tonic::ToDart(0)});
 }
 
+void FontCollection::RegisterFont(std::vector<uint8_t> font_data,
+                                  const std::string& family_name) {
+  std::unique_ptr<SkStreamAsset> font_stream = std::make_unique<SkMemoryStream>(
+      font_data.data(), font_data.size(), true);
+  sk_sp<SkFontMgr> font_mgr = txt::GetDefaultFontManager();
+  sk_sp<SkTypeface> typeface = font_mgr->makeFromStream(std::move(font_stream));
+  if (!typeface) {
+    FML_LOG(ERROR) << "Failed to create typeface from font data.";
+    return;
+  }
+  txt::TypefaceFontAssetProvider& font_provider =
+      dynamic_font_manager_->font_provider();
+  if (family_name.empty()) {
+    font_provider.RegisterTypeface(typeface);
+  } else {
+    font_provider.RegisterTypeface(typeface, family_name);
+  }
+  collection_->ClearFontFamilyCache();
+}
+
 }  // namespace flutter

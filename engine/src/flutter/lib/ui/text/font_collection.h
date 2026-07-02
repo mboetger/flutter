@@ -36,6 +36,9 @@ class FontCollection {
                                Dart_Handle callback,
                                const std::string& family_name);
 
+  void RegisterFont(std::vector<uint8_t> font_data,
+                    const std::string& family_name);
+
  private:
   std::shared_ptr<txt::FontCollection> collection_;
   sk_sp<txt::DynamicFontManager> dynamic_font_manager_;

@@ -2237,6 +2237,18 @@ void Shell::SendFontChangeNotification() {
   OnPlatformViewDispatchPlatformMessage(std::move(fontsChangeMessage));
 }
 
+void Shell::RegisterFont(std::vector<uint8_t> data, std::string family_name) {
+  FML_DCHECK(is_set_up_);
+  task_runners_.GetUITaskRunner()->PostTask(
+      [engine = weak_engine_, data = std::move(data),
+       family_name = std::move(family_name)]() {
+        if (engine) {
+          engine->GetFontCollection().RegisterFont(std::move(data),
+                                                   family_name);
+        }
+      });
+}
+
 bool Shell::OnServiceProtocolReloadAssetFonts(
     const ServiceProtocol::Handler::ServiceProtocolMap& params,
     rapidjson::Document* response) {

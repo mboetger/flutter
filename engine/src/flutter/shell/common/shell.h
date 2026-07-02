@@ -220,6 +220,8 @@ class Shell final : public PlatformView::Delegate,
   void RunEngine(RunConfiguration run_configuration,
                  const std::function<void(Engine::RunStatus)>& result_callback);
 
+  void RegisterFont(std::vector<uint8_t> data, std::string family_name);
+
   //------------------------------------------------------------------------------
   /// @return     The settings used to launch this shell.
   ///

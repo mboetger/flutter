@@ -7,6 +7,7 @@ package io.flutter.embedding.engine;
 import android.content.Context;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.AssetManager;
+import android.graphics.Typeface;
 import android.view.Surface;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -95,6 +96,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   @NonNull private final DartExecutor dartExecutor;
   @NonNull private final FlutterEngineConnectionRegistry pluginRegistry;
   @NonNull private final LocalizationPlugin localizationPlugin;
+  @NonNull private final FlutterLoader flutterLoader;
 
   // System channels.
   @NonNull private final AccessibilityChannel accessibilityChannel;
@@ -383,6 +385,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     if (flutterLoader == null) {
       flutterLoader = injector.flutterLoader();
     }
+    this.flutterLoader = flutterLoader;
 
     if (!flutterJNI.isAttached()) {
       flutterLoader.startInitialization(context.getApplicationContext());
@@ -440,6 +443,10 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
 
     if (!isAttachedToJni()) {
       throw new RuntimeException("FlutterEngine failed to attach to its native Object reference.");
+    }
+
+    for (FlutterLoader.FontInfo font : flutterLoader.getLoadedFonts()) {
+      flutterJNI.registerFont(font.data, font.familyName);
     }
   }
 
@@ -758,5 +765,16 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   @Override
   public void updateDisplayMetrics(float width, float height, float density) {
     flutterJNI.updateDisplayMetrics(0 /* display ID */, width, height, density);
+  }
+
+  /**
+   * Register a custom Typeface for a font family.
+   *
+   * @param fontFamily The font family name.
+   * @param typeface The Typeface to register.
+   */
+  public void registerTypeface(@NonNull String fontFamily, @NonNull Typeface typeface) {
+    // This is a no-op because XML fonts are automatically loaded from resources.
+    Log.w(TAG, "registerTypeface is a no-op. XML fonts are automatically loaded from resources.");
   }
 }

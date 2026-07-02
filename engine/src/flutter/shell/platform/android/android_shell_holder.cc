@@ -364,6 +364,13 @@ void AndroidShellHolder::UpdateDisplayMetrics() {
   shell_->OnDisplayUpdates(std::move(displays));
 }
 
+void AndroidShellHolder::RegisterFont(std::vector<uint8_t> data,
+                                      std::string family_name) {
+  if (IsValid()) {
+    shell_->RegisterFont(std::move(data), family_name);
+  }
+}
+
 bool AndroidShellHolder::IsSurfaceControlEnabled() {
   return GetPlatformView()->IsSurfaceControlEnabled();
 }

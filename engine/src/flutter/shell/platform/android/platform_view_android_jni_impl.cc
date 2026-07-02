@@ -634,6 +634,22 @@ static void NotifyLowMemoryWarning(JNIEnv* env,
   ANDROID_SHELL_HOLDER->NotifyLowMemoryWarning();
 }
 
+static void RegisterFont(JNIEnv* env,
+                         jobject jcaller,
+                         jlong shell_holder,
+                         jbyteArray jdata,
+                         jstring jfamily_name) {
+  std::vector<uint8_t> data;
+  if (jdata) {
+    jsize len = env->GetArrayLength(jdata);
+    data.resize(len);
+    env->GetByteArrayRegion(jdata, 0, len,
+                            reinterpret_cast<jbyte*>(data.data()));
+  }
+  std::string family_name = fml::jni::JavaStringToString(env, jfamily_name);
+  ANDROID_SHELL_HOLDER->RegisterFont(std::move(data), family_name);
+}
+
 static jboolean FlutterTextUtilsIsEmoji(JNIEnv* env,
                                         jobject obj,
                                         jint codePoint) {
@@ -792,6 +808,11 @@ bool RegisterApi(JNIEnv* env) {
           .name = "nativeNotifyLowMemoryWarning",
           .signature = "(J)V",
           .fnPtr = reinterpret_cast<void*>(&NotifyLowMemoryWarning),
+      },
+      {
+          .name = "nativeRegisterFont",
+          .signature = "(J[BLjava/lang/String;)V",
+          .fnPtr = reinterpret_cast<void*>(&RegisterFont),
       },
 
       // Start of methods from FlutterView

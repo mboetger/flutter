@@ -215,7 +215,7 @@ public class FlutterLoaderTest {
 
     assertFalse(flutterLoader.initialized());
     flutterLoader.startInitialization(ctx);
-    verify(mockExecutorService, times(1)).submit(any(Callable.class));
+    verify(mockExecutorService, times(2)).submit(any(Callable.class));
   }
 
   @Test

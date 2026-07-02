@@ -106,6 +106,8 @@ class AndroidShellHolder {
 
   void UpdateDisplayMetrics();
 
+  void RegisterFont(std::vector<uint8_t> data, std::string family_name);
+
   // Visible for testing.
   const std::unique_ptr<Shell>& GetShellForTesting() const { return shell_; }
 

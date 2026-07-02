@@ -1688,6 +1688,16 @@ public class FlutterJNI {
 
   private native void nativeNotifyLowMemoryWarning(long nativeShellHolderId);
 
+  @UiThread
+  public void registerFont(@NonNull byte[] data, @NonNull String familyName) {
+    ensureRunningOnMainThread();
+    ensureAttachedToNative();
+    nativeRegisterFont(nativeShellHolderId, data, familyName);
+  }
+
+  private native void nativeRegisterFont(
+      long nativeShellHolderId, @NonNull byte[] data, @NonNull String familyName);
+
   private void ensureRunningOnMainThread() {
     if (Looper.myLooper() != mainLooper) {
       throw new RuntimeException(

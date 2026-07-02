@@ -28,8 +28,21 @@ import io.flutter.util.HandlerCompat;
 import io.flutter.util.PathUtils;
 import io.flutter.util.TraceSection;
 import io.flutter.view.VsyncWaiter;
+import android.content.ContentResolver;
+import android.content.res.XmlResourceParser;
+import android.net.Uri;
+import android.os.ParcelFileDescriptor;
+import android.util.TypedValue;
+import androidx.core.content.res.FontResourcesParserCompat;
+import androidx.core.provider.FontRequest;
+import androidx.core.provider.FontsContractCompat;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -103,6 +116,24 @@ public class FlutterLoader {
   }
 
   @Nullable Future<InitResult> initResultFuture;
+  @Nullable Future<Void> xmlFontsFuture;
+
+  public static class FontInfo {
+    @NonNull public final String familyName;
+    @NonNull public final byte[] data;
+
+    public FontInfo(@NonNull String familyName, @NonNull byte[] data) {
+      this.familyName = familyName;
+      this.data = data;
+    }
+  }
+
+  private static final List<FontInfo> loadedFonts = new ArrayList<>();
+
+  @NonNull
+  public List<FontInfo> getLoadedFonts() {
+    return loadedFonts;
+  }
 
   /**
    * Starts initialization of the native system.
@@ -243,6 +274,15 @@ public class FlutterLoader {
             }
           };
       initResultFuture = executorService.submit(initTask);
+      xmlFontsFuture =
+          executorService.submit(
+              new Callable<Void>() {
+                @Override
+                public Void call() {
+                  loadXmlFonts(appContext);
+                  return null;
+                }
+              });
     }
   }
 
@@ -285,6 +325,13 @@ public class FlutterLoader {
 
     try (TraceSection e = TraceSection.scoped("FlutterLoader#ensureInitializationComplete")) {
       InitResult result = initResultFuture.get();
+      if (xmlFontsFuture != null) {
+        try {
+          xmlFontsFuture.get();
+        } catch (Exception ex) {
+          Log.e(TAG, "Failed to load XML fonts", ex);
+        }
+      }
 
       List<String> shellArgs = new ArrayList<>();
 
@@ -739,6 +786,141 @@ public class FlutterLoader {
   @NonNull
   private String fullAssetPathFrom(@NonNull String filePath) {
     return flutterApplicationInfo.flutterAssetsDir + File.separator + filePath;
+  }
+
+  private void loadXmlFonts(@NonNull Context context) {
+    String packageName = context.getPackageName();
+    Class<?> rFontClass = null;
+    try {
+      rFontClass = Class.forName(packageName + ".R$font");
+    } catch (ClassNotFoundException e) {
+      // No XML fonts defined.
+      return;
+    }
+
+    for (Field field : rFontClass.getFields()) {
+      if (Modifier.isStatic(field.getModifiers())
+          && Modifier.isFinal(field.getModifiers())
+          && field.getType() == int.class) {
+        try {
+          String fontName = field.getName();
+          int resId = field.getInt(null);
+          loadFont(context, fontName, resId);
+        } catch (IllegalAccessException e) {
+          Log.e(TAG, "Failed to access font resource ID", e);
+        }
+      }
+    }
+  }
+
+  private void loadFont(@NonNull Context context, @NonNull String fontName, int resId) {
+    TypedValue value = new TypedValue();
+    context.getResources().getValue(resId, value, true);
+    if (value.string == null) {
+      return;
+    }
+    String path = value.string.toString();
+    if (path.endsWith(".xml")) {
+      parseXmlFont(context, fontName, resId);
+    } else {
+      byte[] bytes = readRawResource(context, resId);
+      if (bytes != null) {
+        synchronized (loadedFonts) {
+          loadedFonts.add(new FontInfo(fontName, bytes));
+        }
+      }
+    }
+  }
+
+  private void parseXmlFont(@NonNull Context context, @NonNull String fontName, int resId) {
+    try {
+      XmlResourceParser parser = context.getResources().getXml(resId);
+      FontResourcesParserCompat.FamilyResourceEntry entry =
+          FontResourcesParserCompat.parse(parser, context.getResources());
+      if (entry == null) {
+        return;
+      }
+      if (entry instanceof FontResourcesParserCompat.FontFamilyFilesResourceEntry) {
+        FontResourcesParserCompat.FontFamilyFilesResourceEntry filesEntry =
+            (FontResourcesParserCompat.FontFamilyFilesResourceEntry) entry;
+        for (FontResourcesParserCompat.FontFileResourceEntry fileEntry : filesEntry.getEntries()) {
+          int fileResId = fileEntry.getResourceId();
+          byte[] bytes = readRawResource(context, fileResId);
+          if (bytes != null) {
+            synchronized (loadedFonts) {
+              loadedFonts.add(new FontInfo(fontName, bytes));
+            }
+          }
+        }
+      } else if (entry instanceof FontResourcesParserCompat.ProviderResourceEntry) {
+        FontResourcesParserCompat.ProviderResourceEntry providerEntry =
+            (FontResourcesParserCompat.ProviderResourceEntry) entry;
+        fetchDownloadableFont(context, fontName, providerEntry);
+      }
+    } catch (Exception e) {
+      Log.e(TAG, "Failed to parse XML font " + fontName, e);
+    }
+  }
+
+  private void fetchDownloadableFont(
+      @NonNull Context context,
+      @NonNull String fontName,
+      @NonNull FontResourcesParserCompat.ProviderResourceEntry entry) {
+    FontRequest request = entry.getRequest();
+
+    try {
+      FontsContractCompat.FontFamilyResult result =
+          FontsContractCompat.fetchFonts(context, null, request);
+      if (result.getStatusCode() == FontsContractCompat.FontFamilyResult.STATUS_OK) {
+        for (FontsContractCompat.FontInfo fontInfo : result.getFonts()) {
+          if (fontInfo.getResultCode() == FontsContractCompat.Columns.RESULT_CODE_OK) {
+            Uri uri = fontInfo.getUri();
+            byte[] bytes = readContentUri(context, uri);
+            if (bytes != null) {
+              synchronized (loadedFonts) {
+                loadedFonts.add(new FontInfo(fontName, bytes));
+              }
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      Log.e(TAG, "Failed to fetch downloadable font " + fontName, e);
+    }
+  }
+
+  @Nullable
+  private byte[] readRawResource(@NonNull Context context, int resId) {
+    try (InputStream is = context.getResources().openRawResource(resId);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+      byte[] buffer = new byte[1024];
+      int len;
+      while ((len = is.read(buffer)) != -1) {
+        bos.write(buffer, 0, len);
+      }
+      return bos.toByteArray();
+    } catch (IOException e) {
+      Log.e(TAG, "Failed to read raw resource " + resId, e);
+      return null;
+    }
+  }
+
+  @Nullable
+  private byte[] readContentUri(@NonNull Context context, @NonNull Uri uri) {
+    ContentResolver resolver = context.getContentResolver();
+    try (ParcelFileDescriptor pfd = resolver.openFileDescriptor(uri, "r");
+        FileInputStream fis = new FileInputStream(pfd.getFileDescriptor());
+        ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+      byte[] buffer = new byte[1024];
+      int len;
+      while ((len = fis.read(buffer)) != -1) {
+        bos.write(buffer, 0, len);
+      }
+      return bos.toByteArray();
+    } catch (IOException e) {
+      Log.e(TAG, "Failed to read content URI " + uri, e);
+      return null;
+    }
   }
 
   public static class Settings {
