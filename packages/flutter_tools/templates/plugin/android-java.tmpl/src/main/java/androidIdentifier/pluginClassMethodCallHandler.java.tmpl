@@ -1,0 +1,22 @@
+package {{androidIdentifier}};
+
+import androidx.annotation.NonNull;
+
+import io.flutter.plugin.common.MethodCall;
+import io.flutter.plugin.common.MethodChannel;
+import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
+import io.flutter.plugin.common.MethodChannel.Result;
+
+/**
+ * Translates incoming MethodCalls into platform-specific API calls.
+ */
+public class {{pluginClass}}MethodCallHandler implements MethodCallHandler {
+  @Override
+  public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
+    if ("getPlatformVersion".equals(call.method)) {
+      result.success("Android " + android.os.Build.VERSION.RELEASE);
+    } else {
+      result.notImplemented();
+    }
+  }
+}
