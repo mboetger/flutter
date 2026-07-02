@@ -1357,7 +1357,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
             return createAccessibilityNodeInfo(embeddedInputFocusedNodeId);
           }
         }
-        // Fall through to check FOCUS_ACCESSIBILITY
+        break;
       case AccessibilityNodeInfo.FOCUS_ACCESSIBILITY:
         {
           if (accessibilityFocusedSemanticsNode != null) {
