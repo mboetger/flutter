@@ -482,6 +482,27 @@ public class PlatformPluginTest {
   }
 
   @SuppressWarnings("deprecation")
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void setSystemUiOverlays_emptyList_usesImmersiveSticky() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    platformPlugin.mPlatformMessageHandler.showSystemOverlays(new java.util.ArrayList<PlatformChannel.SystemUiOverlay>());
+
+    ArgumentCaptor<Integer> visibilityCaptor = ArgumentCaptor.forClass(Integer.class);
+    verify(fakeDecorView).setSystemUiVisibility(visibilityCaptor.capture());
+
+    int visibility = visibilityCaptor.getValue();
+    assertTrue((visibility & View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY) != 0);
+  }
+
+
+  @SuppressWarnings("deprecation")
   // SYSTEM_UI_FLAG_FULLSCREEN
   @Test
   public void setSystemUiModeListener_overlaysAreHidden() {
