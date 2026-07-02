@@ -80,6 +80,23 @@ public class FlutterFragmentTest {
   }
 
   @Test
+  public void itCanBeInstantiatedViaDefaultConstructor() {
+    FlutterFragment fragment = new FlutterFragment();
+    assertEquals("main", fragment.getDartEntrypointFunctionName());
+    assertNull(fragment.getDartEntrypointLibraryUri());
+    assertNull(fragment.getDartEntrypointArgs());
+    assertEquals("/", fragment.getInitialRoute());
+    assertArrayEquals(new String[] {}, fragment.getFlutterShellArgs().toArray());
+    assertTrue(fragment.shouldAttachEngineToActivity());
+    assertFalse(fragment.shouldHandleDeeplinking());
+    assertNull(fragment.getCachedEngineId());
+    assertTrue(fragment.shouldDestroyEngineWithHost());
+    assertEquals(RenderMode.surface, fragment.getRenderMode());
+    assertEquals(TransparencyMode.transparent, fragment.getTransparencyMode());
+    assertFalse(fragment.shouldDelayFirstAndroidViewDraw());
+  }
+
+  @Test
   public void itCreatesNewEngineFragmentWithRequestedSettings() {
     FlutterFragment fragment =
         FlutterFragment.withNewEngine()

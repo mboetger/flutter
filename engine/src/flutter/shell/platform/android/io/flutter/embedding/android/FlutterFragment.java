@@ -1354,7 +1354,9 @@ public class FlutterFragment extends Fragment
   @Override
   @NonNull
   public FlutterShellArgs getFlutterShellArgs() {
-    String[] flutterShellArgsArray = getArguments().getStringArray(ARG_FLUTTER_INITIALIZATION_ARGS);
+    Bundle args = getArguments();
+    String[] flutterShellArgsArray =
+        args != null ? args.getStringArray(ARG_FLUTTER_INITIALIZATION_ARGS) : null;
     return new FlutterShellArgs(
         flutterShellArgsArray != null ? flutterShellArgsArray : new String[] {});
   }
@@ -1367,7 +1369,8 @@ public class FlutterFragment extends Fragment
   @Nullable
   @Override
   public String getCachedEngineId() {
-    return getArguments().getString(ARG_CACHED_ENGINE_ID, null);
+    Bundle args = getArguments();
+    return args != null ? args.getString(ARG_CACHED_ENGINE_ID, null) : null;
   }
 
   /**
@@ -1378,7 +1381,8 @@ public class FlutterFragment extends Fragment
   @Override
   @Nullable
   public String getCachedEngineGroupId() {
-    return getArguments().getString(ARG_CACHED_ENGINE_GROUP_ID, null);
+    Bundle args = getArguments();
+    return args != null ? args.getString(ARG_CACHED_ENGINE_GROUP_ID, null) : null;
   }
 
   /**
@@ -1398,15 +1402,16 @@ public class FlutterFragment extends Fragment
    */
   @Override
   public boolean shouldDestroyEngineWithHost() {
+    Bundle args = getArguments();
     boolean explicitDestructionRequested =
-        getArguments().getBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, false);
-    if (getCachedEngineId() != null || delegate.isFlutterEngineFromHost()) {
+        args != null && args.getBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, false);
+    if (getCachedEngineId() != null || (delegate != null && delegate.isFlutterEngineFromHost())) {
       // Only destroy a cached engine if explicitly requested by app developer.
       return explicitDestructionRequested;
     } else {
       // If this Fragment created the FlutterEngine, destroy it by default unless
       // explicitly requested not to.
-      return getArguments().getBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
+      return args == null || args.getBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, true);
     }
   }
 
@@ -1421,7 +1426,8 @@ public class FlutterFragment extends Fragment
   @Override
   @NonNull
   public String getDartEntrypointFunctionName() {
-    return getArguments().getString(ARG_DART_ENTRYPOINT, "main");
+    Bundle args = getArguments();
+    return args != null ? args.getString(ARG_DART_ENTRYPOINT, "main") : "main";
   }
 
   /**
@@ -1434,7 +1440,8 @@ public class FlutterFragment extends Fragment
   @Override
   @Nullable
   public List<String> getDartEntrypointArgs() {
-    return getArguments().getStringArrayList(ARG_DART_ENTRYPOINT_ARGS);
+    Bundle args = getArguments();
+    return args != null ? args.getStringArrayList(ARG_DART_ENTRYPOINT_ARGS) : null;
   }
 
   /**
@@ -1448,7 +1455,8 @@ public class FlutterFragment extends Fragment
   @Override
   @Nullable
   public String getDartEntrypointLibraryUri() {
-    return getArguments().getString(ARG_DART_ENTRYPOINT_URI);
+    Bundle args = getArguments();
+    return args != null ? args.getString(ARG_DART_ENTRYPOINT_URI) : null;
   }
 
   /**
@@ -1461,9 +1469,10 @@ public class FlutterFragment extends Fragment
    * <p>Used by this {@code FlutterFragment}'s {@link FlutterActivityAndFragmentDelegate.Host}
    */
   @Override
-  @NonNull
+  @Nullable
   public String getAppBundlePath() {
-    return getArguments().getString(ARG_APP_BUNDLE_PATH);
+    Bundle args = getArguments();
+    return args != null ? args.getString(ARG_APP_BUNDLE_PATH) : null;
   }
 
   /**
@@ -1476,7 +1485,9 @@ public class FlutterFragment extends Fragment
   @Override
   @Nullable
   public String getInitialRoute() {
-    return getArguments().getString(ARG_INITIAL_ROUTE);
+    Bundle args = getArguments();
+    String route = args != null ? args.getString(ARG_INITIAL_ROUTE) : null;
+    return route != null ? route : "/";
   }
 
   /**
@@ -1490,8 +1501,11 @@ public class FlutterFragment extends Fragment
   @Override
   @NonNull
   public RenderMode getRenderMode() {
+    Bundle args = getArguments();
     String renderModeName =
-        getArguments().getString(ARG_FLUTTERVIEW_RENDER_MODE, RenderMode.surface.name());
+        args != null
+            ? args.getString(ARG_FLUTTERVIEW_RENDER_MODE, RenderMode.surface.name())
+            : RenderMode.surface.name();
     return RenderMode.valueOf(renderModeName);
   }
 
@@ -1506,9 +1520,11 @@ public class FlutterFragment extends Fragment
   @Override
   @NonNull
   public TransparencyMode getTransparencyMode() {
+    Bundle args = getArguments();
     String transparencyModeName =
-        getArguments()
-            .getString(ARG_FLUTTERVIEW_TRANSPARENCY_MODE, TransparencyMode.transparent.name());
+        args != null
+            ? args.getString(ARG_FLUTTERVIEW_TRANSPARENCY_MODE, TransparencyMode.transparent.name())
+            : TransparencyMode.transparent.name();
     return TransparencyMode.valueOf(transparencyModeName);
   }
 
@@ -1631,7 +1647,8 @@ public class FlutterFragment extends Fragment
    */
   @Override
   public boolean shouldAttachEngineToActivity() {
-    return getArguments().getBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY);
+    Bundle args = getArguments();
+    return args == null || args.getBoolean(ARG_SHOULD_ATTACH_ENGINE_TO_ACTIVITY, true);
   }
 
   /**
@@ -1640,7 +1657,8 @@ public class FlutterFragment extends Fragment
    */
   @Override
   public boolean shouldHandleDeeplinking() {
-    return getArguments().getBoolean(ARG_HANDLE_DEEPLINKING);
+    Bundle args = getArguments();
+    return args != null && args.getBoolean(ARG_HANDLE_DEEPLINKING, false);
   }
 
   @Override
@@ -1782,7 +1800,8 @@ public class FlutterFragment extends Fragment
   @VisibleForTesting
   @NonNull
   boolean shouldDelayFirstAndroidViewDraw() {
-    return getArguments().getBoolean(ARG_SHOULD_DELAY_FIRST_ANDROID_VIEW_DRAW);
+    Bundle args = getArguments();
+    return args != null && args.getBoolean(ARG_SHOULD_DELAY_FIRST_ANDROID_VIEW_DRAW, false);
   }
 
   private boolean stillAttachedForEvent(String event) {
