@@ -114,7 +114,7 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
     required FileSystem fileSystem,
     BuildInfo? buildInfo,
   }) async {
-    final File apkFile;
+    File apkFile;
     final String filename;
     if (buildInfo == null) {
       filename = 'app.apk';
@@ -132,6 +132,19 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
         apkDirectory = apkDirectory.childDirectory(buildInfo.mode.cliName);
       }
       apkFile = apkDirectory.childFile(filename);
+      if (buildInfo == null && !apkFile.existsSync()) {
+        for (final potentialFilename in <String>[
+          'app-debug.apk',
+          'app-profile.apk',
+          'app-release.apk',
+        ]) {
+          final File potentialApk = apkDirectory.childFile(potentialFilename);
+          if (potentialApk.existsSync()) {
+            apkFile = potentialApk;
+            break;
+          }
+        }
+      }
       if (apkFile.existsSync()) {
         // Grab information from the .apk. The gradle build script might alter
         // the application Id, so we need to look at what was actually built.

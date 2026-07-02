@@ -120,6 +120,59 @@ void main() {
       expect(androidApk, isNotNull);
     }, overrides: overrides);
 
+    testUsingContext(
+      'finds the built APK (e.g. app-debug.apk) when buildInfo is null if it is the only one that exists',
+      () async {
+        const aaptPath = 'aaptPath';
+        final sdkVersion = FakeAndroidSdkVersion();
+        sdkVersion.aaptPath = aaptPath;
+        sdk.latestVersion = sdkVersion;
+        sdk.platformToolsAvailable = true;
+        sdk.licensesAvailable = false;
+
+        final FlutterProject project = FlutterProject.fromDirectoryTest(fs.currentDirectory);
+        project.android.hostAppGradleRoot.childFile('build.gradle').createSync(recursive: true);
+        final File appGradle = project.android.hostAppGradleRoot.childFile(
+          fs.path.join('app', 'build.gradle'),
+        );
+        appGradle.createSync(recursive: true);
+        appGradle.writeAsStringSync("def flutterPluginVersion = 'managed'");
+
+        // We only have app-debug.apk on disk, NOT app.apk.
+        final File apkFile = project.directory
+            .childDirectory('build')
+            .childDirectory('app')
+            .childDirectory('outputs')
+            .childDirectory('flutter-apk')
+            .childFile('app-debug.apk');
+        apkFile.createSync(recursive: true);
+
+        // We expect the tool to run aapt on app-debug.apk
+        fakeProcessManager.addCommand(
+          FakeCommand(
+            command: <String>[aaptPath, 'dump', 'xmltree', apkFile.path, 'AndroidManifest.xml'],
+            stdout: _aaptDataWithDefaultEnabledAndMainLauncherActivity,
+          ),
+        );
+
+        final logger = BufferLogger.test();
+        final AndroidApk? androidApk = await AndroidApk.fromAndroidProject(
+          project.android,
+          androidSdk: sdk,
+          processManager: fakeProcessManager,
+          userMessages: UserMessages(),
+          processUtils: ProcessUtils(processManager: fakeProcessManager, logger: logger),
+          logger: logger,
+          fileSystem: fs,
+        );
+
+        expect(androidApk, isNotNull);
+        expect(androidApk!.applicationPackage.path, contains('app-debug.apk'));
+        expect(fakeProcessManager, hasNoRemainingExpectations);
+      },
+      overrides: overrides,
+    );
+
     testUsingContext('correct debug filename in module projects', () async {
       const aaptPath = 'aaptPath';
       final File apkFile = globals.fs.file('app-debug.apk');
