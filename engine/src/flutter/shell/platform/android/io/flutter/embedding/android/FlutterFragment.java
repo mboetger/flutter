@@ -1007,7 +1007,7 @@ public class FlutterFragment extends Fragment
   // implementation for details about why it exists.
   @VisibleForTesting @Nullable /* package */ FlutterActivityAndFragmentDelegate delegate;
 
-  @NonNull private FlutterActivityAndFragmentDelegate.DelegateFactory delegateFactory = this;
+
 
   /** Default delegate factory that creates a simple FlutterActivityAndFragmentDelegate instance. */
   public FlutterActivityAndFragmentDelegate createDelegate(
@@ -1057,22 +1057,7 @@ public class FlutterFragment extends Fragment
     setArguments(new Bundle());
   }
 
-  /**
-   * This method exists so that JVM tests can ensure that a delegate exists without putting this
-   * Fragment through any lifecycle events, because JVM tests cannot handle executing any lifecycle
-   * methods, at the time of writing this.
-   *
-   * <p>The testing infrastructure should be upgraded to make FlutterFragment tests easy to write
-   * while exercising real lifecycle methods. At such a time, this method should be removed.
-   */
-  // TODO(mattcarroll): remove this when tests allow for it
-  // (https://github.com/flutter/flutter/issues/43798)
-  @VisibleForTesting
-  /* package */ void setDelegateFactory(
-      @NonNull FlutterActivityAndFragmentDelegate.DelegateFactory delegateFactory) {
-    this.delegateFactory = delegateFactory;
-    delegate = delegateFactory.createDelegate(this);
-  }
+
 
   /**
    * Returns the Android App Component exclusively attached to {@link
@@ -1086,7 +1071,7 @@ public class FlutterFragment extends Fragment
   @Override
   public void onAttach(@NonNull Context context) {
     super.onAttach(context);
-    delegate = delegateFactory.createDelegate(this);
+    delegate = createDelegate(this);
     delegate.onAttach(context);
     if (getArguments().getBoolean(ARG_SHOULD_AUTOMATICALLY_HANDLE_ON_BACK_PRESSED, false)) {
       requireActivity().getOnBackPressedDispatcher().addCallback(this, onBackPressedCallback);
@@ -1400,7 +1385,7 @@ public class FlutterFragment extends Fragment
   public boolean shouldDestroyEngineWithHost() {
     boolean explicitDestructionRequested =
         getArguments().getBoolean(ARG_DESTROY_ENGINE_WITH_FRAGMENT, false);
-    if (getCachedEngineId() != null || delegate.isFlutterEngineFromHost()) {
+    if (getCachedEngineId() != null || (delegate != null && delegate.isFlutterEngineFromHost())) {
       // Only destroy a cached engine if explicitly requested by app developer.
       return explicitDestructionRequested;
     } else {
