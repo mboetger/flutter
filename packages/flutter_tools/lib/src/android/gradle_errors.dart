@@ -229,8 +229,16 @@ final flavorUndefinedHandler = GradleHandledError(
     return _undefinedTaskPattern.hasMatch(line);
   },
   handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    final String gradleExecutablePath = globals.gradleUtils!.getExecutable(project);
+    final command = <String>[];
+    if (globals.platform.isWindows) {
+      command.addAll(<String>['cmd.exe', '/c', globals.fs.path.basename(gradleExecutablePath)]);
+    } else {
+      command.add(gradleExecutablePath);
+    }
+    command.addAll(<String>['app:tasks', '--all', '--console=auto']);
     final RunResult tasksRunResult = await globals.processUtils.run(
-      <String>[globals.gradleUtils!.getExecutable(project), 'app:tasks', '--all', '--console=auto'],
+      command,
       throwOnError: true,
       workingDirectory: project.android.hostAppGradleRoot.path,
       environment: globals.java?.environment,
