@@ -64,6 +64,39 @@ import io.flutter.view.TextureRegistry;
  * for background behavior. Additionally, all plugins must respect that a {@code Activity}s may come
  * and go over time, thus requiring plugins to cleanup resources and recreate those resources as the
  * {@code Activity} comes and goes.
+ *
+ * <h3>Background / Headless Execution</h3>
+ *
+ * <p>A Flutter experience may be run in the background without any associated UI (a "headless"
+ * context), for example, when triggered by a background {@code Service}, {@code BroadcastReceiver},
+ * or alarm.
+ *
+ * <p>In these cases, the {@link io.flutter.embedding.engine.FlutterEngine} is created without an
+ * {@code Activity}. Plugins registered with this engine will receive {@link
+ * #onAttachedToEngine(FlutterPluginBinding)} but will NOT receive any {@code Activity}-related
+ * callbacks (i.e., if they implement {@link
+ * io.flutter.embedding.engine.plugins.activity.ActivityAware}, those methods will not be called).
+ *
+ * <p>To support background execution, plugins must:
+ *
+ * <ul>
+ *   <li>Avoid assuming that an {@code Activity} is always available.
+ *   <li>Implement {@link io.flutter.embedding.engine.plugins.activity.ActivityAware} and monitor
+ *       whether they are currently attached to an {@code Activity}. If they are not attached, they
+ *       should operate in a headless mode.
+ *   <li>If the plugin needs to interact with Android {@code Service} lifecycles, it should
+ *       implement {@link io.flutter.embedding.engine.plugins.service.ServiceAware}.
+ *   <li>Ensure that they can be registered in a background engine. Background engines typically
+ *       rely on {@code GeneratedPluginRegistrant} to register plugins. If the background engine is
+ *       created manually, the developer must ensure that plugins are registered, for example, by
+ *       calling {@code GeneratedPluginRegistrant.registerWith(flutterEngine)}.
+ * </ul>
+ *
+ * <p>A plugin can detect if it is running in a background context by checking if it has been
+ * attached to an {@code Activity} via {@link
+ * io.flutter.embedding.engine.plugins.activity.ActivityAware#onAttachedToActivity(io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding)}.
+ * If it has only received {@link #onAttachedToEngine(FlutterPluginBinding)} and not {@code
+ * onAttachedToActivity}, it is running in a headless/background context.
  */
 public interface FlutterPlugin {
 
