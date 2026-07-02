@@ -781,6 +781,44 @@ void main() {
     );
     expect(tester.getSize(find.byType(StretchingOverscrollIndicator)), Size.zero);
   });
+
+  testWidgets(
+    'GlowingOverscrollIndicator wrapping a Scrollable with showLeading/Trailing: false still shows glow (bug 49038)',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: GlowingOverscrollIndicator(
+            axisDirection: AxisDirection.down,
+            color: Color(0x0DFFFFFF),
+            showLeading: false,
+            showTrailing: false,
+            child: CustomScrollView(
+              physics: AlwaysScrollableScrollPhysics(),
+              slivers: <Widget>[SliverToBoxAdapter(child: SizedBox(height: 2000.0))],
+            ),
+          ),
+        ),
+      );
+
+      // We expect that no glow is painted because the outer GlowingOverscrollIndicator
+      // has showLeading and showTrailing set to false.
+      // However, the inner CustomScrollView will build its own GlowingOverscrollIndicator
+      // via the default ScrollBehavior, which will paint the glow.
+      // Thus, this test will fail because a glow (circle) WILL be painted.
+
+      for (final RenderObject painter in tester.renderObjectList(find.byType(CustomPaint))) {
+        expect(painter, doesNotOverscroll);
+      }
+
+      // Drag down (leading overscroll)
+      await slowDrag(tester, const Offset(200.0, 200.0), const Offset(0.0, 5.0));
+
+      for (final RenderObject painter in tester.renderObjectList(find.byType(CustomPaint))) {
+        expect(painter, doesNotOverscroll); // This is expected to fail on the inner painter
+      }
+    },
+  );
 }
 
 class TestScrollBehavior1 extends ScrollBehavior {

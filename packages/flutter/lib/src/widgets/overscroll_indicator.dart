@@ -243,7 +243,10 @@ class _GlowingOverscrollIndicatorState extends State<GlowingOverscrollIndicator>
       }
       final isLeading = controller == _leadingController;
       if (_lastNotificationType is! OverscrollNotification) {
-        final confirmationNotification = OverscrollIndicatorNotification(leading: isLeading);
+        final confirmationNotification = OverscrollIndicatorNotification(
+          leading: isLeading,
+          axis: widget.axis,
+        );
         confirmationNotification.dispatch(context);
         _accepted[isLeading] = confirmationNotification.accepted;
         if (_accepted[isLeading]!) {
@@ -299,19 +302,30 @@ class _GlowingOverscrollIndicatorState extends State<GlowingOverscrollIndicator>
     super.dispose();
   }
 
+  bool _handleOverscrollIndicatorNotification(OverscrollIndicatorNotification notification) {
+    if (notification.depth == 0 &&
+        (notification.axis == null || notification.axis == widget.axis)) {
+      notification.disallowIndicator();
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return NotificationListener<ScrollNotification>(
       onNotification: _handleScrollNotification,
-      child: RepaintBoundary(
-        child: CustomPaint(
-          foregroundPainter: _GlowingOverscrollIndicatorPainter(
-            leadingController: widget.showLeading ? _leadingController : null,
-            trailingController: widget.showTrailing ? _trailingController : null,
-            axisDirection: widget.axisDirection,
-            repaint: _leadingAndTrailingListener,
+      child: NotificationListener<OverscrollIndicatorNotification>(
+        onNotification: _handleOverscrollIndicatorNotification,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            foregroundPainter: _GlowingOverscrollIndicatorPainter(
+              leadingController: widget.showLeading ? _leadingController : null,
+              trailingController: widget.showTrailing ? _trailingController : null,
+              axisDirection: widget.axisDirection,
+              repaint: _leadingAndTrailingListener,
+            ),
+            child: RepaintBoundary(child: widget.child),
           ),
-          child: RepaintBoundary(child: widget.child),
         ),
       ),
     );
@@ -732,6 +746,7 @@ class _StretchingOverscrollIndicatorState extends State<StretchingOverscrollIndi
       if (_lastNotification.runtimeType is! OverscrollNotification) {
         final confirmationNotification = OverscrollIndicatorNotification(
           leading: notification.overscroll < 0.0,
+          axis: widget.axis,
         );
         confirmationNotification.dispatch(context);
         _accepted = confirmationNotification.accepted;
@@ -790,50 +805,61 @@ class _StretchingOverscrollIndicatorState extends State<StretchingOverscrollIndi
     super.dispose();
   }
 
+  bool _handleOverscrollIndicatorNotification(OverscrollIndicatorNotification notification) {
+    if (notification.depth == 0 &&
+        (notification.axis == null || notification.axis == widget.axis)) {
+      notification.disallowIndicator();
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return NotificationListener<ScrollNotification>(
       onNotification: _handleScrollNotification,
-      child: AnimatedBuilder(
-        animation: _stretchController,
-        builder: (BuildContext context, Widget? child) {
-          final double stretch = _stretchController.overscroll;
-          final double mainAxisSize;
+      child: NotificationListener<OverscrollIndicatorNotification>(
+        onNotification: _handleOverscrollIndicatorNotification,
+        child: AnimatedBuilder(
+          animation: _stretchController,
+          builder: (BuildContext context, Widget? child) {
+            final double stretch = _stretchController.overscroll;
+            final double mainAxisSize;
 
-          switch (widget.axis) {
-            case Axis.horizontal:
-              mainAxisSize = MediaQuery.widthOf(context);
-            case Axis.vertical:
-              mainAxisSize = MediaQuery.heightOf(context);
-          }
+            switch (widget.axis) {
+              case Axis.horizontal:
+                mainAxisSize = MediaQuery.widthOf(context);
+              case Axis.vertical:
+                mainAxisSize = MediaQuery.heightOf(context);
+            }
 
-          final double viewportDimension =
-              _lastOverscrollNotification?.metrics.viewportDimension ?? mainAxisSize;
+            final double viewportDimension =
+                _lastOverscrollNotification?.metrics.viewportDimension ?? mainAxisSize;
 
-          double overscroll = -stretch;
+            double overscroll = -stretch;
 
-          // Adjust overscroll for reverse scroll directions.
-          if (widget.axisDirection == AxisDirection.up ||
-              widget.axisDirection == AxisDirection.left) {
-            overscroll = -overscroll;
-          }
+            // Adjust overscroll for reverse scroll directions.
+            if (widget.axisDirection == AxisDirection.up ||
+                widget.axisDirection == AxisDirection.left) {
+              overscroll = -overscroll;
+            }
 
-          final Widget transform = StretchEffect(
-            stretchStrength: overscroll,
-            axis: widget.axis,
-            child: widget.child ?? const SizedBox.shrink(),
-          );
+            final Widget transform = StretchEffect(
+              stretchStrength: overscroll,
+              axis: widget.axis,
+              child: widget.child ?? const SizedBox.shrink(),
+            );
 
-          // Only clip if the viewport dimension is smaller than that of the
-          // screen size in the main axis. If the viewport takes up the whole
-          // screen, overflow from transforming the viewport is irrelevant.
-          return ClipRect(
-            clipBehavior: stretch != 0.0 && viewportDimension != mainAxisSize
-                ? widget.clipBehavior
-                : Clip.none,
-            child: transform,
-          );
-        },
+            // Only clip if the viewport dimension is smaller than that of the
+            // screen size in the main axis. If the viewport takes up the whole
+            // screen, overflow from transforming the viewport is irrelevant.
+            return ClipRect(
+              clipBehavior: stretch != 0.0 && viewportDimension != mainAxisSize
+                  ? widget.clipBehavior
+                  : Clip.none,
+              child: transform,
+            );
+          },
+        ),
       ),
     );
   }
@@ -1057,11 +1083,14 @@ class _StretchController extends Listenable {
 class OverscrollIndicatorNotification extends Notification with ViewportNotificationMixin {
   /// Creates a notification that an [GlowingOverscrollIndicator] or a
   /// [StretchingOverscrollIndicator] will start showing an overscroll indication.
-  OverscrollIndicatorNotification({required this.leading});
+  OverscrollIndicatorNotification({required this.leading, this.axis});
 
   /// Whether the indication will be shown on the leading edge of the scroll
   /// view.
   final bool leading;
+
+  /// The axis along which the overscroll indicator is shown.
+  final Axis? axis;
 
   /// Controls at which offset a [GlowingOverscrollIndicator] draws.
   ///
@@ -1097,5 +1126,8 @@ class OverscrollIndicatorNotification extends Notification with ViewportNotifica
   void debugFillDescription(List<String> description) {
     super.debugFillDescription(description);
     description.add('side: ${leading ? "leading edge" : "trailing edge"}');
+    if (axis != null) {
+      description.add('axis: ${axis!.name}');
+    }
   }
 }
