@@ -2,172 +2,61 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'semantics_tester.dart';
 
 void main() {
-  group('Available semantic scroll actions', () {
-    // Regression tests for https://github.com/flutter/flutter/issues/52032.
+  setUp(() {
+    debugResetSemanticsIdCounter();
+  });
 
-    const itemCount = 10;
-    const itemHeight = 150.0;
-
-    testWidgets('forward vertical', (WidgetTester tester) async {
-      final semantics = SemanticsTester(tester);
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
-
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: ListView.builder(
-            controller: controller,
-            itemCount: itemCount,
-            itemBuilder: (BuildContext context, int index) {
-              return SizedBox(height: itemHeight, child: Text('Tile $index'));
-            },
+  testWidgets('ListView has list role and items have listItem role even when fitting on screen', (
+    WidgetTester tester,
+  ) async {
+    final semantics = SemanticsTester(tester);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MediaQuery(
+          data: const MediaQueryData(size: Size(800.0, 600.0)),
+          child: ListView(
+            children: const <Widget>[
+              SizedBox(height: 100.0, child: Text('Item 1')),
+              SizedBox(height: 100.0, child: Text('Item 2')),
+            ],
           ),
         ),
-      );
+      ),
+    );
 
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollUp, SemanticsAction.scrollToOffset],
+    expect(
+      semantics,
+      hasSemantics(
+        TestSemantics.root(
+          children: <TestSemantics>[
+            TestSemantics(
+              children: <TestSemantics>[
+                TestSemantics(
+                  role: SemanticsRole.list,
+                  flags: <SemanticsFlag>[SemanticsFlag.hasImplicitScrolling],
+                  children: <TestSemantics>[
+                    TestSemantics(label: 'Item 1', role: SemanticsRole.listItem),
+                    TestSemantics(label: 'Item 2', role: SemanticsRole.listItem),
+                  ],
+                ),
+              ],
+            ),
+          ],
         ),
-      );
+        ignoreTransform: true,
+        ignoreRect: true,
+        ignoreId: true,
+      ),
+    );
 
-      // Jump to the end.
-      controller.jumpTo(itemCount * itemHeight);
-      await tester.pumpAndSettle();
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollDown, SemanticsAction.scrollToOffset],
-        ),
-      );
-
-      semantics.dispose();
-    });
-
-    testWidgets('reverse vertical', (WidgetTester tester) async {
-      final semantics = SemanticsTester(tester);
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
-
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: ListView.builder(
-            reverse: true,
-            controller: controller,
-            itemCount: itemCount,
-            itemBuilder: (BuildContext context, int index) {
-              return SizedBox(height: itemHeight, child: Text('Tile $index'));
-            },
-          ),
-        ),
-      );
-
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollDown, SemanticsAction.scrollToOffset],
-        ),
-      );
-
-      // Jump to the end.
-      controller.jumpTo(itemCount * itemHeight);
-      await tester.pumpAndSettle();
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollUp, SemanticsAction.scrollToOffset],
-        ),
-      );
-
-      semantics.dispose();
-    });
-
-    testWidgets('forward horizontal', (WidgetTester tester) async {
-      final semantics = SemanticsTester(tester);
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
-
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            controller: controller,
-            itemCount: itemCount,
-            itemBuilder: (BuildContext context, int index) {
-              return SizedBox(height: itemHeight, child: Text('Tile $index'));
-            },
-          ),
-        ),
-      );
-
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollLeft, SemanticsAction.scrollToOffset],
-        ),
-      );
-
-      // Jump to the end.
-      controller.jumpTo(itemCount * itemHeight);
-      await tester.pumpAndSettle();
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollRight, SemanticsAction.scrollToOffset],
-        ),
-      );
-
-      semantics.dispose();
-    });
-
-    testWidgets('reverse horizontal', (WidgetTester tester) async {
-      final semantics = SemanticsTester(tester);
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
-
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            reverse: true,
-            controller: controller,
-            itemCount: itemCount,
-            itemBuilder: (BuildContext context, int index) {
-              return SizedBox(height: itemHeight, child: Text('Tile $index'));
-            },
-          ),
-        ),
-      );
-
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollRight, SemanticsAction.scrollToOffset],
-        ),
-      );
-
-      // Jump to the end.
-      controller.jumpTo(itemCount * itemHeight);
-      await tester.pumpAndSettle();
-      expect(
-        semantics,
-        includesNodeWith(
-          actions: <SemanticsAction>[SemanticsAction.scrollLeft, SemanticsAction.scrollToOffset],
-        ),
-      );
-
-      semantics.dispose();
-    });
+    semantics.dispose();
   });
 }

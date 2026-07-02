@@ -16,6 +16,7 @@ import 'automatic_keep_alive.dart';
 import 'basic.dart';
 import 'framework.dart';
 import 'selection_container.dart';
+import 'sliver.dart';
 import 'two_dimensional_viewport.dart';
 
 export 'package:flutter/rendering.dart'
@@ -566,6 +567,13 @@ class SliverChildBuilderDelegate extends SliverChildDelegate {
         child = IndexedSemantics(index: semanticIndex + semanticIndexOffset, child: child);
       }
     }
+    if (context is SliverMultiBoxAdaptorElement) {
+      final SemanticsRole? itemSemanticsRole =
+          (context.widget as SliverMultiBoxAdaptorWidget).itemSemanticsRole;
+      if (itemSemanticsRole != null) {
+        child = Semantics(role: itemSemanticsRole, child: child);
+      }
+    }
     if (addAutomaticKeepAlives) {
       child = AutomaticKeepAlive(child: _SelectionKeepAlive(child: child));
     }
@@ -778,6 +786,13 @@ class SliverChildListDelegate extends SliverChildDelegate {
       final int? semanticIndex = semanticIndexCallback(child, index);
       if (semanticIndex != null) {
         child = IndexedSemantics(index: semanticIndex + semanticIndexOffset, child: child);
+      }
+    }
+    if (context is SliverMultiBoxAdaptorElement) {
+      final SemanticsRole? itemSemanticsRole =
+          (context.widget as SliverMultiBoxAdaptorWidget).itemSemanticsRole;
+      if (itemSemanticsRole != null) {
+        child = Semantics(role: itemSemanticsRole, child: child);
       }
     }
     if (addAutomaticKeepAlives) {

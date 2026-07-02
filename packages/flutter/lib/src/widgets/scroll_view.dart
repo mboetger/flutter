@@ -128,6 +128,7 @@ abstract class ScrollView extends StatelessWidget {
     this.restorationId,
     this.clipBehavior = Clip.hardEdge,
     this.hitTestBehavior = HitTestBehavior.opaque,
+    this.semanticsRole,
   }) : assert(
          !(controller != null && (primary ?? false)),
          'Primary ScrollViews obtain their ScrollController via inheritance '
@@ -414,6 +415,12 @@ abstract class ScrollView extends StatelessWidget {
   /// Defaults to [HitTestBehavior.opaque].
   final HitTestBehavior hitTestBehavior;
 
+  /// The semantic role of this scroll view.
+  ///
+  /// If non-null, the scrollable will be annotated with this role in the
+  /// semantics tree.
+  final SemanticsRole? semanticsRole;
+
   /// Returns the [AxisDirection] in which the scroll view scrolls.
   ///
   /// Combines the [scrollDirection] with the [reverse] boolean to obtain the
@@ -521,6 +528,7 @@ abstract class ScrollView extends StatelessWidget {
       semanticChildCount: semanticChildCount,
       restorationId: restorationId,
       hitTestBehavior: hitTestBehavior,
+      semanticsRole: semanticsRole,
       viewportBuilder: (BuildContext context, ViewportOffset offset) {
         return buildViewport(context, offset, axisDirection, slivers);
       },
@@ -889,6 +897,7 @@ abstract class BoxScrollView extends ScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.semanticsRole,
   });
 
   /// The amount of space by which to inset the children.
@@ -1353,7 +1362,10 @@ class ListView extends BoxScrollView {
          addRepaintBoundaries: addRepaintBoundaries,
          addSemanticIndexes: addSemanticIndexes,
        ),
-       super(semanticChildCount: semanticChildCount ?? children.length);
+       super(
+         semanticChildCount: semanticChildCount ?? children.length,
+         semanticsRole: SemanticsRole.list,
+       );
 
   /// Creates a scrollable, linear array of widgets that are created on demand.
   ///
@@ -1439,7 +1451,10 @@ class ListView extends BoxScrollView {
          addRepaintBoundaries: addRepaintBoundaries,
          addSemanticIndexes: addSemanticIndexes,
        ),
-       super(semanticChildCount: semanticChildCount ?? itemCount);
+       super(
+         semanticChildCount: semanticChildCount ?? itemCount,
+         semanticsRole: SemanticsRole.list,
+       );
 
   /// Creates a fixed-length scrollable linear array of list "items" separated
   /// by list item "separators".
@@ -1579,7 +1594,7 @@ class ListView extends BoxScrollView {
            return index.isEven ? index ~/ 2 : null;
          },
        ),
-       super(semanticChildCount: itemCount);
+       super(semanticChildCount: itemCount, semanticsRole: SemanticsRole.list);
 
   /// Creates a scrollable, linear array of widgets with a custom child model.
   ///
@@ -1622,7 +1637,8 @@ class ListView extends BoxScrollView {
              (itemExtent == null && itemExtentBuilder == null) ||
              (prototypeItem == null && itemExtentBuilder == null),
          'You can only pass one of itemExtent, prototypeItem and itemExtentBuilder.',
-       );
+       ),
+       super(semanticsRole: SemanticsRole.list);
 
   /// {@template flutter.widgets.list_view.itemExtent}
   /// If non-null, forces the children to have the given extent in the scroll

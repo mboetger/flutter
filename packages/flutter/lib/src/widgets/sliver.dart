@@ -80,6 +80,11 @@ abstract class SliverMultiBoxAdaptorWidget extends SliverWithKeepAliveWidget {
   /// {@endtemplate}
   final SliverChildDelegate delegate;
 
+  /// The semantic role of the children.
+  ///
+  /// If null, the children will not be wrapped in a [Semantics] widget with a role.
+  SemanticsRole? get itemSemanticsRole => null;
+
   @override
   SliverMultiBoxAdaptorElement createElement() => SliverMultiBoxAdaptorElement(this);
 
@@ -388,6 +393,9 @@ class SliverList extends SliverMultiBoxAdaptorWidget {
     final element = context as SliverMultiBoxAdaptorElement;
     return RenderSliverList(childManager: element);
   }
+
+  @override
+  SemanticsRole? get itemSemanticsRole => SemanticsRole.listItem;
 }
 
 /// A sliver that places multiple box children with the same main axis extent in
@@ -572,6 +580,9 @@ class SliverFixedExtentList extends SliverMultiBoxAdaptorWidget {
   void updateRenderObject(BuildContext context, RenderSliverFixedExtentList renderObject) {
     renderObject.itemExtent = itemExtent;
   }
+
+  @override
+  SemanticsRole? get itemSemanticsRole => SemanticsRole.listItem;
 }
 
 /// A sliver that places its box children in a linear array and constrains them
@@ -686,6 +697,9 @@ class SliverVariedExtentList extends SliverMultiBoxAdaptorWidget {
   void updateRenderObject(BuildContext context, RenderSliverVariedExtentList renderObject) {
     renderObject.itemExtentBuilder = itemExtentBuilder;
   }
+
+  @override
+  SemanticsRole? get itemSemanticsRole => SemanticsRole.listItem;
 }
 
 /// A sliver that places multiple box children in a two dimensional arrangement.

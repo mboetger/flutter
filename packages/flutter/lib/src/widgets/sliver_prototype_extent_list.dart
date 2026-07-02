@@ -172,6 +172,9 @@ class SliverPrototypeExtentList extends SliverMultiBoxAdaptorWidget {
 
   @override
   SliverMultiBoxAdaptorElement createElement() => _SliverPrototypeExtentListElement(this);
+
+  @override
+  SemanticsRole? get itemSemanticsRole => SemanticsRole.listItem;
 }
 
 class _SliverPrototypeExtentListElement extends SliverMultiBoxAdaptorElement {

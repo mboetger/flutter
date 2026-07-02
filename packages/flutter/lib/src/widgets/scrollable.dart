@@ -134,6 +134,7 @@ class Scrollable extends StatefulWidget {
     this.scrollBehavior,
     this.clipBehavior = Clip.hardEdge,
     this.hitTestBehavior = HitTestBehavior.opaque,
+    this.semanticsRole,
   }) : assert(semanticChildCount == null || semanticChildCount >= 0);
 
   /// {@template flutter.widgets.Scrollable.axisDirection}
@@ -332,6 +333,12 @@ class Scrollable extends StatefulWidget {
   /// clipping of the [Scrollable]. This reflects the same [Clip] that is provided
   /// to [ScrollView.clipBehavior] and is supplied to the [Viewport].
   final Clip clipBehavior;
+
+  /// The semantic role of this scrollable.
+  ///
+  /// If non-null, the scrollable will be annotated with this role in the
+  /// semantics tree.
+  final SemanticsRole? semanticsRole;
 
   /// The axis along which the scroll view scrolls.
   ///
@@ -1052,6 +1059,7 @@ class ScrollableState extends State<Scrollable>
           allowImplicitScrolling: _physics!.allowImplicitScrolling,
           axis: widget.axis,
           semanticChildCount: widget.semanticChildCount,
+          semanticsRole: widget.semanticsRole,
           child: result,
         ),
       );
@@ -1616,6 +1624,7 @@ class _ScrollSemantics extends SingleChildRenderObjectWidget {
     required this.allowImplicitScrolling,
     required this.axis,
     required this.semanticChildCount,
+    this.semanticsRole,
     super.child,
   }) : assert(semanticChildCount == null || semanticChildCount >= 0);
 
@@ -1623,6 +1632,7 @@ class _ScrollSemantics extends SingleChildRenderObjectWidget {
   final bool allowImplicitScrolling;
   final int? semanticChildCount;
   final Axis axis;
+  final SemanticsRole? semanticsRole;
 
   @override
   _RenderScrollSemantics createRenderObject(BuildContext context) {
@@ -1631,6 +1641,7 @@ class _ScrollSemantics extends SingleChildRenderObjectWidget {
       allowImplicitScrolling: allowImplicitScrolling,
       semanticChildCount: semanticChildCount,
       axis: axis,
+      semanticsRole: semanticsRole,
     );
   }
 
@@ -1640,7 +1651,8 @@ class _ScrollSemantics extends SingleChildRenderObjectWidget {
       ..allowImplicitScrolling = allowImplicitScrolling
       ..axis = axis
       ..position = position
-      ..semanticChildCount = semanticChildCount;
+      ..semanticChildCount = semanticChildCount
+      ..semanticsRole = semanticsRole;
   }
 }
 
@@ -1650,10 +1662,12 @@ class _RenderScrollSemantics extends RenderProxyBox {
     required bool allowImplicitScrolling,
     required this.axis,
     required int? semanticChildCount,
+    SemanticsRole? semanticsRole,
     RenderBox? child,
   }) : _position = position,
        _allowImplicitScrolling = allowImplicitScrolling,
        _semanticChildCount = semanticChildCount,
+       _semanticsRole = semanticsRole,
        super(child) {
     position.addListener(markNeedsSemanticsUpdate);
   }
@@ -1694,6 +1708,16 @@ class _RenderScrollSemantics extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
+  SemanticsRole? get semanticsRole => _semanticsRole;
+  SemanticsRole? _semanticsRole;
+  set semanticsRole(SemanticsRole? value) {
+    if (value == _semanticsRole) {
+      return;
+    }
+    _semanticsRole = value;
+    markNeedsSemanticsUpdate();
+  }
+
   void _onScrollToOffset(Offset targetOffset) {
     final double offset = switch (axis) {
       Axis.horizontal => targetOffset.dx,
@@ -1706,6 +1730,9 @@ class _RenderScrollSemantics extends RenderProxyBox {
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
     config.isSemanticBoundary = true;
+    if (semanticsRole != null) {
+      config.role = semanticsRole!;
+    }
     if (position.haveDimensions) {
       config
         ..hasImplicitScrolling = allowImplicitScrolling
