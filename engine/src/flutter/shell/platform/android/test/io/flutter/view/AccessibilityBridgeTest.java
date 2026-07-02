@@ -3361,6 +3361,165 @@ public class AccessibilityBridgeTest {
     }
   }
 
+  @Test
+  public void findFocusReturnsNullWhenNoNodeHasInputFocus() {
+    BasicMessageChannel mockChannel = mock(BasicMessageChannel.class);
+    AccessibilityChannel accessibilityChannel =
+        new AccessibilityChannel(mockChannel, mock(FlutterJNI.class));
+
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ mockRootView,
+            /* accessibilityChannel= */ accessibilityChannel,
+            /* accessibilityManager= */ null,
+            /* contentResolver= */ null,
+            /* accessibilityViewEmbedder= */ null,
+            /* platformViewsAccessibilityDelegate= */ null);
+
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    testSemanticsNode.id = 0;
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    accessibilityBridge.performAction(0, AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
+
+    assertEquals(0, accessibilityBridge.accessibilityFocusedSemanticsNode.id);
+    assertNull(accessibilityBridge.findFocus(AccessibilityNodeInfo.FOCUS_INPUT));
+  }
+
+  @Test
+  public void findFocusReturnsInputFocusedNode() {
+    BasicMessageChannel mockChannel = mock(BasicMessageChannel.class);
+    AccessibilityChannel accessibilityChannel =
+        new AccessibilityChannel(mockChannel, mock(FlutterJNI.class));
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ null,
+            /* accessibilityChannel= */ accessibilityChannel,
+            /* accessibilityManager= */ null,
+            /* contentResolver= */ null,
+            /* accessibilityViewEmbedder= */ null,
+            /* platformViewsAccessibilityDelegate= */ null);
+
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    testSemanticsNode.id = 0;
+    testSemanticsNode.addFlag(AccessibilityBridge.Flag.IS_FOCUSED);
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    AccessibilityNodeInfo focusedNode =
+        accessibilityBridge.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+    assertNotNull(focusedNode);
+  }
+
+  @Test
+  public void findFocusReturnsEmbeddedInputFocusedNode() {
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ null,
+            /* accessibilityChannel= */ null,
+            /* accessibilityManager= */ null,
+            /* contentResolver= */ null,
+            /* accessibilityViewEmbedder= */ mockViewEmbedder,
+            /* platformViewsAccessibilityDelegate= */ null);
+
+    View mockEmbeddedView = mock(View.class);
+    AccessibilityEvent focusEvent = mock(AccessibilityEvent.class);
+
+    // Use a virtual ID that is >= MIN_ENGINE_GENERATED_NODE_ID (65536)
+    int virtualNodeId = 65536;
+
+    when(mockViewEmbedder.requestSendAccessibilityEvent(
+            mockEmbeddedView, mockEmbeddedView, focusEvent))
+        .thenReturn(true);
+    when(mockViewEmbedder.getRecordFlutterId(mockEmbeddedView, focusEvent))
+        .thenReturn(virtualNodeId);
+    when(focusEvent.getEventType()).thenReturn(AccessibilityEvent.TYPE_VIEW_FOCUSED);
+
+    // Simulate the embedded view gaining input focus
+    accessibilityBridge.externalViewRequestSendAccessibilityEvent(
+        mockEmbeddedView, mockEmbeddedView, focusEvent);
+
+    AccessibilityNodeInfo expectedNodeInfo = mock(AccessibilityNodeInfo.class);
+    when(mockViewEmbedder.createAccessibilityNodeInfo(virtualNodeId)).thenReturn(expectedNodeInfo);
+
+    // Verify that findFocus(FOCUS_INPUT) returns the embedded node
+    AccessibilityNodeInfo focusedNode =
+        accessibilityBridge.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+    assertEquals(expectedNodeInfo, focusedNode);
+  }
+
+  @Test
+  public void findFocusReturnsAccessibilityFocusedNode() {
+    BasicMessageChannel mockChannel = mock(BasicMessageChannel.class);
+    AccessibilityChannel accessibilityChannel =
+        new AccessibilityChannel(mockChannel, mock(FlutterJNI.class));
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ null,
+            /* accessibilityChannel= */ accessibilityChannel,
+            /* accessibilityManager= */ null,
+            /* contentResolver= */ null,
+            /* accessibilityViewEmbedder= */ null,
+            /* platformViewsAccessibilityDelegate= */ null);
+
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    testSemanticsNode.id = 0;
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    accessibilityBridge.performAction(0, AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
+
+    AccessibilityNodeInfo focusedNode =
+        accessibilityBridge.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
+    assertNotNull(focusedNode);
+    assertEquals(0, accessibilityBridge.accessibilityFocusedSemanticsNode.id);
+  }
+
+  @Test
+  public void findFocusReturnsEmbeddedAccessibilityFocusedNode() {
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(
+            /* rootAccessibilityView= */ null,
+            /* accessibilityChannel= */ null,
+            /* accessibilityManager= */ null,
+            /* contentResolver= */ null,
+            /* accessibilityViewEmbedder= */ mockViewEmbedder,
+            /* platformViewsAccessibilityDelegate= */ null);
+
+    View mockEmbeddedView = mock(View.class);
+    AccessibilityEvent focusEvent = mock(AccessibilityEvent.class);
+
+    // Use a virtual ID that is >= MIN_ENGINE_GENERATED_NODE_ID (65536)
+    int virtualNodeId = 65536;
+
+    when(mockViewEmbedder.requestSendAccessibilityEvent(
+            mockEmbeddedView, mockEmbeddedView, focusEvent))
+        .thenReturn(true);
+    when(mockViewEmbedder.getRecordFlutterId(mockEmbeddedView, focusEvent))
+        .thenReturn(virtualNodeId);
+    when(focusEvent.getEventType()).thenReturn(AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED);
+
+    accessibilityBridge.externalViewRequestSendAccessibilityEvent(
+        mockEmbeddedView, mockEmbeddedView, focusEvent);
+
+    AccessibilityNodeInfo expectedNodeInfo = mock(AccessibilityNodeInfo.class);
+    when(mockViewEmbedder.createAccessibilityNodeInfo(virtualNodeId)).thenReturn(expectedNodeInfo);
+
+    AccessibilityNodeInfo focusedNode =
+        accessibilityBridge.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
+    assertEquals(expectedNodeInfo, focusedNode);
+  }
+
   /// The encoding for semantics is described in platform_view_android.cc
   class TestSemanticsUpdate {
     TestSemanticsUpdate(ByteBuffer buffer, String[] strings, ByteBuffer[] stringAttributeArgs) {
