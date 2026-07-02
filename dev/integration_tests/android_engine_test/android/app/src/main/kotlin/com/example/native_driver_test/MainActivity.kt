@@ -17,10 +17,23 @@ import com.example.android_engine_test.fixtures.BoxPlatformViewFactory
 import com.example.android_engine_test.fixtures.ChangingColorButtonPlatformViewFactory
 import com.example.android_engine_test.fixtures.OtherFaceTexturePlugin
 import com.example.android_engine_test.fixtures.SmileyFaceTexturePlugin
+import android.content.Context
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterActivityLaunchConfigs
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    override fun provideFlutterEngine(context: Context): FlutterEngine {
+        var engine = FlutterEngineCache.getInstance().get("temp_engine")
+        if (engine == null) {
+            engine = FlutterEngine(context)
+            FlutterEngineCache.getInstance().put("temp_engine", engine)
+        }
+        return engine
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         // Intentionally do not use GeneratedPluginRegistrant.
 
@@ -40,6 +53,20 @@ class MainActivity : FlutterActivity() {
                 registerViewFactory("blue_orange_gradient_surface_view_platform_view", BlueOrangeGradientSurfaceViewPlatformViewFactory())
                 registerViewFactory("changing_color_button_platform_view", ChangingColorButtonPlatformViewFactory())
                 registerViewFactory("box_platform_view", BoxPlatformViewFactory())
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "samples.flutter.dev/info")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "launchTransparentActivity") {
+                    val intent = FlutterActivity
+                        .withCachedEngine("temp_engine")
+                        .backgroundMode(FlutterActivityLaunchConfigs.BackgroundMode.transparent)
+                        .build(this)
+                    startActivity(intent)
+                    result.success(true)
+                } else {
+                    result.notImplemented()
+                }
             }
     }
 
