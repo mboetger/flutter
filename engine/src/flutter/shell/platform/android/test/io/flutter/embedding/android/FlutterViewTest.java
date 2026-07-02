@@ -41,12 +41,14 @@ import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.SparseArray;
 import android.view.DisplayCutout;
+import android.view.KeyEvent;
 import android.view.RoundedCorner;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewStructure;
 import android.view.WindowInsets;
 import android.view.autofill.AutofillValue;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import androidx.core.util.Consumer;
 import androidx.test.core.app.ActivityScenario;
@@ -82,6 +84,7 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowDisplay;
+import org.robolectric.shadows.ShadowInputMethodManager;
 import org.robolectric.shadows.ShadowViewGroup;
 
 @RunWith(AndroidJUnit4.class)
@@ -1495,5 +1498,59 @@ public class FlutterViewTest {
     SparseArray<AutofillValue> values = mock(SparseArray.class);
     flutterView.autofill(values);
     // No exception should be thrown
+  }
+
+  @Test
+  @Config(sdk = 30)
+  public void onKeyPreIme_backButtonHidesKeyboard() {
+    // We need to mock WindowInsets to show IME is visible.
+    // WindowInsets.Builder is available on API 30+.
+    WindowInsets windowInsets =
+        new WindowInsets.Builder().setVisible(WindowInsets.Type.ime(), true).build();
+
+    KeyEvent.DispatcherState dispatcherState = new KeyEvent.DispatcherState();
+    FlutterView flutterView =
+        new FlutterView(ctx) {
+          @Override
+          public WindowInsets getRootWindowInsets() {
+            return windowInsets;
+          }
+
+          @Override
+          public boolean isAttachedToWindow() {
+            return true;
+          }
+
+          @Override
+          public KeyEvent.DispatcherState getKeyDispatcherState() {
+            return dispatcherState;
+          }
+        };
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    flutterView.attachToFlutterEngine(flutterEngine);
+
+    // Lay out the view so it has bounds and can receive key events.
+    flutterView.measure(
+        View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY),
+        View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY));
+    flutterView.layout(0, 0, 100, 100);
+
+    InputMethodManager imm =
+        (InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+    ShadowInputMethodManager shadowImm = Shadows.shadowOf(imm);
+
+    // Show the soft input first so we can verify it gets hidden.
+    flutterView.requestFocus();
+    imm.showSoftInput(flutterView, 0);
+    assertTrue(shadowImm.isSoftInputVisible());
+
+    KeyEvent downEvent = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK);
+    KeyEvent upEvent = new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK);
+
+    assertTrue(flutterView.dispatchKeyEventPreIme(downEvent));
+    assertTrue(flutterView.dispatchKeyEventPreIme(upEvent));
+
+    // Verify that the keyboard was hidden.
+    assertFalse(shadowImm.isSoftInputVisible());
   }
 }

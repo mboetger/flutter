@@ -47,6 +47,8 @@ import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Consumer;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter;
 import androidx.window.layout.DisplayFeature;
 import androidx.window.layout.FoldingFeature;
@@ -954,6 +956,35 @@ public class FlutterView extends FrameLayout
     // the framework that the framework did not handle it.
     return (isAttachedToFlutterEngine() && keyboardManager.handleEvent(event))
         || super.dispatchKeyEvent(event);
+  }
+
+  @Override
+  public boolean onKeyPreIme(int keyCode, @NonNull KeyEvent event) {
+    if (keyCode == KeyEvent.KEYCODE_BACK
+        && isAttachedToFlutterEngine()
+        && textInputPlugin != null) {
+      if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
+        boolean isImeVisible = insets != null && insets.isVisible(WindowInsetsCompat.Type.ime());
+        if (isImeVisible) {
+          KeyEvent.DispatcherState state = getKeyDispatcherState();
+          if (state != null) {
+            state.startTracking(event, this);
+          }
+          return true;
+        }
+      } else if (event.getAction() == KeyEvent.ACTION_UP) {
+        KeyEvent.DispatcherState state = getKeyDispatcherState();
+        if (state != null) {
+          state.handleUpEvent(event);
+        }
+        if (event.isTracking() && !event.isCanceled()) {
+          textInputPlugin.getInputMethodManager().hideSoftInputFromWindow(getWindowToken(), 0);
+          return true;
+        }
+      }
+    }
+    return super.onKeyPreIme(keyCode, event);
   }
 
   /**
