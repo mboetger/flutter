@@ -7,15 +7,31 @@ import 'package:flutter_driver/driver_extension.dart';
 
 import 'motion_events_page.dart';
 import 'page.dart';
+import 'webview_page.dart';
 import 'wm_integrations.dart';
 
 final List<PageWidget> _allPages = <PageWidget>[
   const MotionEventsPage(),
   const WindowManagerIntegrationsPage(),
+  const WebViewPage(),
 ];
 
 void main() {
-  enableFlutterDriverExtension(handler: driverDataHandler.handleMessage);
+  enableFlutterDriverExtension(
+    handler: (String? message) async {
+      if (message == 'get_device_pixel_ratio') {
+        return WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio.toString();
+      }
+      if (message == 'focus_webview') {
+        if (webViewTestFocus != null) {
+          await webViewTestFocus!();
+          return 'ok';
+        }
+        return 'not_found';
+      }
+      return driverDataHandler.handleMessage(message);
+    },
+  );
   runApp(
     MaterialApp(
       theme: ThemeData(
