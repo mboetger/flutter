@@ -88,6 +88,7 @@ class AHBTextureSourceVK final : public TextureSourceVK {
 
  private:
   std::unique_ptr<android::HardwareBuffer> backing_store_;
+  struct AHardwareBuffer* raw_hardware_buffer_ = nullptr;
   vk::UniqueDeviceMemory device_memory_ = {};
   vk::UniqueImage image_ = {};
   vk::UniqueImageView image_view_ = {};

@@ -195,6 +195,15 @@ AHBTextureSourceVK::AHBTextureSourceVK(
     struct AHardwareBuffer* ahb,
     const AHardwareBuffer_Desc& ahb_desc)
     : TextureSourceVK(ToTextureDescriptor(ahb_desc)) {
+  if (ahb) {
+    const auto& proc =
+        impeller::android::GetProcTable().AHardwareBuffer_acquire;
+    if (proc) {
+      proc(ahb);
+      raw_hardware_buffer_ = ahb;
+    }
+  }
+
   if (!p_context) {
     return;
   }
@@ -291,7 +300,15 @@ AHBTextureSourceVK::AHBTextureSourceVK(
 }
 
 // |TextureSourceVK|
-AHBTextureSourceVK::~AHBTextureSourceVK() = default;
+AHBTextureSourceVK::~AHBTextureSourceVK() {
+  if (raw_hardware_buffer_) {
+    const auto& proc =
+        impeller::android::GetProcTable().AHardwareBuffer_release;
+    if (proc) {
+      proc(raw_hardware_buffer_);
+    }
+  }
+}
 
 bool AHBTextureSourceVK::IsValid() const {
   return is_valid_;
