@@ -261,3 +261,25 @@ The use of these factory methods are discussed in depth in website guides at htt
 The deprecated `io.flutter.facade.Flutter` class has a factory method called `createView(...)`. This method is deprecated, along with all other code in the `io.flutter.facade` package.
 
 Flutter does not currently provide convenient APIs for utilizing Flutter at the `View` level, so the use of a `FlutterView` should be avoided, if possible. However, it is technically feasible to display a `FlutterView`, if required. Be sure to use `io.flutter.embedding.android.FlutterView` instead of `io.flutter.view.FlutterView`. You can instantiate the new `FlutterView` just like any other Android `View`. Then, follow instructions in the associated Javadocs to display Flutter via a `FlutterView`.
+
+#### Method Migration Reference
+
+When migrating from the deprecated `io.flutter.view.FlutterView` to the new `io.flutter.embedding.android.FlutterView` (or other new embedding classes), use the following mapping table:
+
+| Old `io.flutter.view.FlutterView` Method | Replacement / How to achieve in New Embedding |
+| :--- | :--- |
+| `public FlutterNativeView getFlutterNativeView()` | `FlutterNativeView` is removed. Use `FlutterEngine` instead. Access it via `getAttachedFlutterEngine()` on the new `FlutterView`. |
+| `public FlutterPluginRegistry getPluginRegistry()` | Use `FlutterEngine.getPlugins()`. In most cases, plugin registration is handled automatically by `GeneratedPluginRegistrant` which takes a `FlutterEngine`. |
+| `public String getLookupKeyForAsset(String asset)` | Use `FlutterInjector.instance().flutterLoader().getLookupKeyForAsset(asset)`. |
+| `public String getLookupKeyForAsset(String asset, String packageName)` | Use `FlutterInjector.instance().flutterLoader().getLookupKeyForAsset(asset, packageName)`. |
+| `public void addActivityLifecycleListener(ActivityLifecycleListener listener)` | Lifecycle is managed by the hosting `FlutterActivity` or `FlutterFragment`. For custom hosting, use `FlutterEngine.getLifecycleChannel()`. |
+| `public void onStart()`, `onPause()`, `onPostResume()`, `onStop()` | These lifecycle methods are no longer on `FlutterView`. The hosting Activity/Fragment should handle these and forward them to the `FlutterEngine` (e.g., via `LifecycleChannel`). |
+| `public void onMemoryPressure()` | Use `FlutterEngine.handleLowMemory()`. |
+| `public void addFirstFrameListener(FirstFrameListener listener)` | Use `public void addOnFirstFrameRenderedListener(@NonNull FlutterUiDisplayListener listener)`. |
+| `public void removeFirstFrameListener(FirstFrameListener listener)` | Use `public void removeOnFirstFrameRenderedListener(@NonNull FlutterUiDisplayListener listener)`. |
+| `public void setInitialRoute(String route)` | Use `FlutterEngine.getNavigationChannel().setInitialRoute(route)` before running the engine, or configure it via `FlutterActivity`/`FlutterFragment` builders. |
+| `public void pushRoute(String route)` | Use `FlutterEngine.getNavigationChannel().pushRoute(route)`. |
+| `public void popRoute()` | Use `FlutterEngine.getNavigationChannel().popRoute()`. |
+| `public FlutterNativeView detach()` | Use `public void detachFromFlutterEngine()`. |
+| `public void destroy()` | Use `detachFromFlutterEngine()`. If the host application owns the `FlutterEngine`, it must also call `FlutterEngine.destroy()`. |
+| `public Bitmap getBitmap()` | Use `FlutterView.getAttachedFlutterEngine().getRenderer().getBitmap()`. |

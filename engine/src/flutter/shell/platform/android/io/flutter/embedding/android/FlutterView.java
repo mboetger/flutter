@@ -82,6 +82,13 @@ import java.util.Set;
 /**
  * Displays a Flutter UI on an Android device.
  *
+ * <p><strong>Important:</strong> This is the new Android embedding {@code FlutterView} ({@code
+ * io.flutter.embedding.android.FlutterView}). It should not be confused with the deprecated and
+ * removed {@code io.flutter.view.FlutterView} from the old embedding. If you are migrating from the
+ * old embedding, please refer to the <a
+ * href="https://github.com/flutter/flutter/blob/main/docs/platforms/android/Upgrading-pre-1.12-Android-projects.md">
+ * Upgrading pre-1.12 Android projects</a> migration guide.
+ *
  * <p>A {@code FlutterView}'s UI is painted by a corresponding {@link
  * io.flutter.embedding.engine.FlutterEngine}.
  *
