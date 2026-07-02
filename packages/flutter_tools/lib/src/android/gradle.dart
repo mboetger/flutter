@@ -173,11 +173,13 @@ class AndroidGradleBuilder implements AndroidBuilder {
        _artifacts = artifacts,
        _analytics = analytics,
        _gradleUtils = gradleUtils,
+       _platform = platform,
        _androidStudio = androidStudio,
        _fileSystemUtils = FileSystemUtils(fileSystem: fileSystem, platform: platform),
        _processUtils = ProcessUtils(logger: logger, processManager: processManager);
 
   final Java? _java;
+  final Platform _platform;
   final Logger _logger;
   final ProcessUtils _processUtils;
   final FileSystem _fileSystem;
@@ -331,11 +333,14 @@ class AndroidGradleBuilder implements AndroidBuilder {
     }
 
     final Status status = _logger.startProgress("Running Gradle task '$taskName'...");
-    final command = <String>[
-      gradleExecutablePath,
-      ...options, // suppresses gradle output.
-      taskName,
-    ];
+    final command = <String>[];
+    if (_platform.isWindows) {
+      command.addAll(<String>['cmd.exe', '/c', _fileSystem.path.basename(gradleExecutablePath)]);
+    } else {
+      command.add(gradleExecutablePath);
+    }
+    command.addAll(options); // suppresses gradle output.
+    command.add(taskName);
     preRunTask?.call();
 
     var exitCode = 1;
@@ -793,14 +798,20 @@ class AndroidGradleBuilder implements AndroidBuilder {
       'gradle',
       'aar_init_script.gradle',
     );
-    final command = <String>[
-      _gradleUtils.getExecutable(project),
+    final String gradleExecutablePath = _gradleUtils.getExecutable(project);
+    final command = <String>[];
+    if (_platform.isWindows) {
+      command.addAll(<String>['cmd.exe', '/c', _fileSystem.path.basename(gradleExecutablePath)]);
+    } else {
+      command.add(gradleExecutablePath);
+    }
+    command.addAll(<String>[
       '-I=$initScript',
       '-Pflutter-root=$flutterRoot',
       '-Poutput-dir=${outputDirectory.path}',
       '-Pis-plugin=${manifest.isPlugin}',
       '-PbuildNumber=$buildNumber',
-    ];
+    ]);
     if (_logger.isVerbose) {
       command.add('--full-stacktrace');
       command.add('--info');
