@@ -1318,9 +1318,10 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
    */
   private boolean performSetText(SemanticsNode node, int virtualViewId, @NonNull Bundle arguments) {
     String newText = "";
-    if (arguments != null
-        && arguments.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE)) {
-      newText = arguments.getString(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE);
+    if (arguments != null) {
+      CharSequence charSequence =
+          arguments.getCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE);
+      newText = charSequence != null ? charSequence.toString() : "";
     }
     accessibilityChannel.dispatchSemanticsAction(virtualViewId, Action.SET_TEXT, newText);
     // The voice access expects the semantics node to update immediately. Update the semantics
