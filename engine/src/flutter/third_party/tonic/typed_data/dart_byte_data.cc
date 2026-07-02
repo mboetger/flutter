@@ -20,7 +20,7 @@ void FreeFinalizer(void* isolate_callback_data, void* peer) {
 
 // For large objects it is more efficient to use an external typed data object
 // with a buffer allocated outside the Dart heap.
-const size_t DartByteData::kExternalSizeThreshold = 1000;
+const size_t DartByteData::kExternalSizeThreshold = 10 * 1024 * 1024;
 
 Dart_Handle DartByteData::Create(const void* data, size_t length) {
   if (length < kExternalSizeThreshold) {
