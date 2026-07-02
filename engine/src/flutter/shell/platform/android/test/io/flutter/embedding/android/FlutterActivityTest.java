@@ -244,7 +244,6 @@ public class FlutterActivityTest {
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
-    flutterActivity.setDelegate(new FlutterActivityAndFragmentDelegate(flutterActivity));
 
     assertEquals("main", flutterActivity.getDartEntrypointFunctionName());
     assertNull(flutterActivity.getDartEntrypointLibraryUri());
@@ -271,7 +270,6 @@ public class FlutterActivityTest {
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
-    flutterActivity.setDelegate(new FlutterActivityAndFragmentDelegate(flutterActivity));
 
     assertTrue(flutterActivity.shouldDestroyEngineWithHost());
   }
@@ -298,7 +296,6 @@ public class FlutterActivityTest {
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
-    flutterActivity.setDelegate(new FlutterActivityAndFragmentDelegate(flutterActivity));
 
     assertEquals("/custom/route", flutterActivity.getInitialRoute());
     assertArrayEquals(
@@ -323,7 +320,6 @@ public class FlutterActivityTest {
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
-    flutterActivity.setDelegate(new FlutterActivityAndFragmentDelegate(flutterActivity));
 
     assertEquals("my_cached_engine_group", flutterActivity.getCachedEngineGroupId());
     assertEquals("custom_entrypoint", flutterActivity.getDartEntrypointFunctionName());
@@ -447,7 +443,7 @@ public class FlutterActivityTest {
     when(mockDelegate.isAttached()).thenAnswer(invocation -> isDelegateAttached);
     doAnswer(invocation -> isDelegateAttached = false).when(mockDelegate).onDetach();
 
-    flutterActivity.setDelegate(mockDelegate);
+    flutterActivity.delegate = mockDelegate;
     flutterActivity.onStart();
     flutterActivity.onResume();
 
@@ -485,7 +481,7 @@ public class FlutterActivityTest {
     FlutterActivity flutterActivity = activityController.get();
     FlutterActivityAndFragmentDelegate delegate =
         new FlutterActivityAndFragmentDelegate(flutterActivity);
-    flutterActivity.setDelegate(delegate);
+    flutterActivity.delegate = delegate;
 
     assertEquals(flutterActivity.getExclusiveAppComponent(), delegate);
   }
@@ -561,7 +557,7 @@ public class FlutterActivityTest {
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
 
-    flutterActivity.setDelegate(mockDelegate);
+    flutterActivity.delegate = mockDelegate;
     flutterActivity.onStart();
     flutterActivity.onResume();
     flutterActivity.onPause();
@@ -588,7 +584,7 @@ public class FlutterActivityTest {
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
 
-    flutterActivity.setDelegate(mockDelegate);
+    flutterActivity.delegate = mockDelegate;
     flutterActivity.onStart();
     flutterActivity.onResume();
     flutterActivity.onPause();

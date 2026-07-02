@@ -602,22 +602,7 @@ public class FlutterActivity extends Activity
     lifecycle = new LifecycleRegistry(this);
   }
 
-  /**
-   * This method exists so that JVM tests can ensure that a delegate exists without putting this
-   * Activity through any lifecycle events, because JVM tests cannot handle executing any lifecycle
-   * methods, at the time of writing this.
-   *
-   * <p>The testing infrastructure should be upgraded to make FlutterActivity tests easy to write
-   * while exercising real lifecycle methods. At such a time, this method should be removed.
-   *
-   * @param delegate The delegate.
-   */
-  // TODO(mattcarroll): remove this when tests allow for it
-  // (https://github.com/flutter/flutter/issues/43798)
-  @VisibleForTesting
-  /* package */ void setDelegate(@NonNull FlutterActivityAndFragmentDelegate delegate) {
-    this.delegate = delegate;
-  }
+
 
   /**
    * Returns the Android App Component exclusively attached to {@link
@@ -1081,7 +1066,7 @@ public class FlutterActivity extends Activity
   public boolean shouldDestroyEngineWithHost() {
     boolean explicitDestructionRequested =
         getIntent().getBooleanExtra(EXTRA_DESTROY_ENGINE_WITH_ACTIVITY, false);
-    if (getCachedEngineId() != null || delegate.isFlutterEngineFromHost()) {
+    if (getCachedEngineId() != null || (delegate != null && delegate.isFlutterEngineFromHost())) {
       // Only destroy a cached engine if explicitly requested by app developer.
       return explicitDestructionRequested;
     } else {

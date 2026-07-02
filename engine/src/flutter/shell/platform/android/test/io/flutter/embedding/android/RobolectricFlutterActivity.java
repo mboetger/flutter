@@ -23,9 +23,7 @@ public class RobolectricFlutterActivity {
   public static FlutterActivity createFlutterActivity(@NonNull Intent intent) {
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
-    FlutterActivity flutterActivity = activityController.get();
-    flutterActivity.setDelegate(new FlutterActivityAndFragmentDelegate(flutterActivity));
-    return flutterActivity;
+    return activityController.get();
   }
 
   /**
