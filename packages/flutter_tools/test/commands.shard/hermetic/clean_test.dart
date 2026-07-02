@@ -319,6 +319,104 @@ void main() {
       );
     });
 
+    group('IDE cleanup', () {
+      late MemoryFileSystem fs;
+
+      setUp(() {
+        fs = MemoryFileSystem.test();
+        fs.file('pubspec.yaml').createSync(recursive: true);
+      });
+
+      testUsingContext(
+        '$CleanCommand cleans stale modules from .idea/modules.xml',
+        () async {
+          final FlutterProject projectUnderTest = setupProjectUnderTest(fs.currentDirectory, false);
+
+          final Directory ideaDir = projectUnderTest.directory.childDirectory('.idea');
+          ideaDir.createSync(recursive: true);
+          final File modulesXml = ideaDir.childFile('modules.xml');
+
+          // Create a fake pub cache directory
+          final Directory pubCache = fs.directory('/.pub-cache')..createSync();
+          final File existingIml = pubCache
+              .childDirectory('hosted')
+              .childDirectory('pub.dartlang.org')
+              .childDirectory('foo-1.0.0')
+              .childDirectory('android')
+              .childFile('foo.iml');
+          existingIml.createSync(recursive: true);
+
+          // We will reference:
+          // 1. A local valid module (exists)
+          // 2. A pub cache module that exists
+          // 3. A pub cache module that does NOT exist (stale)
+          // 4. A local module that does NOT exist (should NOT be removed)
+          modulesXml.writeAsStringSync(r'''
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/my_app.iml" filepath="$PROJECT_DIR$/my_app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dartlang.org/foo-1.0.0/android/foo.iml" filepath="$PROJECT_DIR$/../.pub-cache/hosted/pub.dartlang.org/foo-1.0.0/android/foo.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dartlang.org/bar-1.0.0/android/bar.iml" filepath="$PROJECT_DIR$/../.pub-cache/hosted/pub.dartlang.org/bar-1.0.0/android/bar.iml" />
+      <module fileurl="file://$PROJECT_DIR$/missing_local.iml" filepath="$PROJECT_DIR$/missing_local.iml" />
+    </modules>
+  </component>
+</project>
+''');
+
+          // Create the local iml so it exists
+          projectUnderTest.directory.childFile('my_app.iml').createSync();
+
+          xcodeProjectInterpreter.isInstalled = false;
+
+          final CommandRunner<void> runner = createTestCommandRunner(CleanCommand());
+          await runner.run(<String>['clean']);
+
+          expect(modulesXml.existsSync(), isTrue);
+          final String content = modulesXml.readAsStringSync();
+
+          // Should contain my_app.iml (local, exists)
+          expect(content, contains('my_app.iml'));
+          // Should contain foo.iml (pub cache, exists)
+          expect(content, contains('foo-1.0.0/android/foo.iml'));
+          // Should NOT contain bar.iml (pub cache, does NOT exist)
+          expect(content, isNot(contains('bar-1.0.0/android/bar.iml')));
+          // Should contain missing_local.iml (local, does NOT exist, but we don't clean local)
+          expect(content, contains('missing_local.iml'));
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+        },
+      );
+
+      testUsingContext(
+        '$CleanCommand handles malformed .idea/modules.xml gracefully',
+        () async {
+          final FlutterProject projectUnderTest = setupProjectUnderTest(fs.currentDirectory, false);
+
+          final Directory ideaDir = projectUnderTest.directory.childDirectory('.idea');
+          ideaDir.createSync(recursive: true);
+          final File modulesXml = ideaDir.childFile('modules.xml');
+
+          modulesXml.writeAsStringSync('invalid xml');
+
+          xcodeProjectInterpreter.isInstalled = false;
+
+          final CommandRunner<void> runner = createTestCommandRunner(CleanCommand());
+          await runner.run(<String>['clean']);
+
+          expect(modulesXml.existsSync(), isTrue);
+          expect(modulesXml.readAsStringSync(), equals('invalid xml'));
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+        },
+      );
+    });
+
     group('Windows', () {
       late FakePlatform windowsPlatform;
       late MemoryFileSystem fileSystem;
@@ -383,6 +481,80 @@ void main() {
         );
         expect(throwingFile, exists);
       }, overrides: <Type, Generator>{Platform: () => windowsPlatform, Xcode: () => xcode});
+
+      group('stale modules', () {
+        late MemoryFileSystem windowsFileSystem;
+
+        setUp(() {
+          windowsFileSystem = MemoryFileSystem(style: FileSystemStyle.windows);
+          windowsFileSystem.file('pubspec.yaml').createSync(recursive: true);
+        });
+
+        testUsingContext(
+          '$CleanCommand cleans stale modules from .idea/modules.xml on Windows',
+          () async {
+            final FlutterProject projectUnderTest = setupProjectUnderTest(
+              windowsFileSystem.currentDirectory,
+              false,
+            );
+
+            final Directory ideaDir = projectUnderTest.directory.childDirectory('.idea');
+            ideaDir.createSync(recursive: true);
+            final File modulesXml = ideaDir.childFile('modules.xml');
+
+            // Create a fake pub cache directory
+            final Directory pubCache = windowsFileSystem.directory(r'C:\.pub-cache')
+              ..createSync(recursive: true);
+            final File existingIml = pubCache
+                .childDirectory('hosted')
+                .childDirectory('pub.dartlang.org')
+                .childDirectory('foo-1.0.0')
+                .childDirectory('android')
+                .childFile('foo.iml');
+            existingIml.createSync(recursive: true);
+
+            // We will reference:
+            // 1. A local valid module (exists)
+            // 2. A pub cache module that exists (using Windows backslashes)
+            // 3. A pub cache module that does NOT exist (stale, using Windows backslashes)
+            modulesXml.writeAsStringSync(r'''
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/my_app.iml" filepath="$PROJECT_DIR$\my_app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dartlang.org/foo-1.0.0/android/foo.iml" filepath="$PROJECT_DIR$\..\.pub-cache\hosted\pub.dartlang.org\foo-1.0.0\android\foo.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dartlang.org/bar-1.0.0/android/bar.iml" filepath="$PROJECT_DIR$\..\.pub-cache\hosted\pub.dartlang.org\bar-1.0.0\android\bar.iml" />
+    </modules>
+  </component>
+</project>
+''');
+
+            // Create the local iml so it exists
+            projectUnderTest.directory.childFile('my_app.iml').createSync();
+
+            xcodeProjectInterpreter.isInstalled = false;
+
+            final CommandRunner<void> runner = createTestCommandRunner(CleanCommand());
+            await runner.run(<String>['clean']);
+
+            expect(modulesXml.existsSync(), isTrue);
+            final String content = modulesXml.readAsStringSync();
+
+            // Should contain my_app.iml (local, exists)
+            expect(content, contains('my_app.iml'));
+            // Should contain foo.iml (pub cache, exists)
+            expect(content, contains('foo-1.0.0'));
+            // Should NOT contain bar.iml (pub cache, does NOT exist)
+            expect(content, isNot(contains('bar-1.0.0')));
+          },
+          overrides: <Type, Generator>{
+            Platform: () => windowsPlatform,
+            FileSystem: () => windowsFileSystem,
+            ProcessManager: () => FakeProcessManager.any(),
+          },
+        );
+      });
     });
   });
 }

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:meta/meta.dart';
+import 'package:xml/xml.dart';
 
 import '../base/common.dart';
 import '../base/error_handling_io.dart';
@@ -93,6 +94,9 @@ class CleanCommand extends FlutterCommand {
     deleteFile(flutterProject.macos.ephemeralDirectory);
     deleteFile(flutterProject.windows.ephemeralDirectory);
     deleteFile(flutterProject.flutterPluginsDependenciesFile);
+
+    _cleanStaleModules(flutterProject.directory.childDirectory('.idea'));
+    _cleanStaleModules(flutterProject.android.hostAppGradleRoot.childDirectory('.idea'));
   }
 
   Future<void> _cleanXcode(XcodeBasedProject xcodeProject) async {
@@ -183,6 +187,70 @@ class CleanCommand extends FlutterCommand {
       }
     } finally {
       deletionStatus.stop();
+    }
+  }
+
+  void _cleanStaleModules(Directory ideaDir) {
+    if (!ideaDir.existsSync()) {
+      return;
+    }
+    final File modulesXml = ideaDir.childFile('modules.xml');
+    if (!modulesXml.existsSync()) {
+      return;
+    }
+    try {
+      final document = XmlDocument.parse(modulesXml.readAsStringSync());
+      final modulesToRemove = <XmlElement>[];
+      for (final XmlElement module in document.findAllElements('module')) {
+        final String? filepath = module.getAttribute('filepath');
+        if (filepath == null) {
+          continue;
+        }
+
+        const projectDirVar = r'$PROJECT_DIR$';
+        const moduleDirVar = r'$MODULE_DIR$';
+
+        String resolvedPath = filepath;
+        final String projectRootPath = ideaDir.parent.path;
+        if (resolvedPath.contains(projectDirVar)) {
+          resolvedPath = resolvedPath.replaceAll(projectDirVar, projectRootPath);
+        }
+        if (resolvedPath.contains(moduleDirVar)) {
+          resolvedPath = resolvedPath.replaceAll(moduleDirVar, ideaDir.path);
+        }
+
+        final FileSystem fs = ideaDir.fileSystem;
+        if (!fs.path.isAbsolute(resolvedPath)) {
+          resolvedPath = fs.path.absolute(projectRootPath, resolvedPath);
+        }
+
+        resolvedPath = fs.path.normalize(resolvedPath);
+
+        if (!fs.file(resolvedPath).existsSync()) {
+          final bool isInPubCache =
+              resolvedPath.contains('.pub-cache') ||
+              resolvedPath.contains(fs.path.join('Pub', 'Cache')) ||
+              resolvedPath.contains('pub.dartlang.org');
+
+          final bool isOutsideProject = !fs.path.isWithin(projectRootPath, resolvedPath);
+
+          if (isInPubCache || isOutsideProject) {
+            modulesToRemove.add(module);
+          }
+        }
+      }
+
+      if (modulesToRemove.isNotEmpty) {
+        for (final module in modulesToRemove) {
+          module.remove();
+        }
+        modulesXml.writeAsStringSync(document.toXmlString(pretty: true));
+        globals.printStatus(
+          'Removed ${modulesToRemove.length} stale module-references from ${modulesXml.path}',
+        );
+      }
+    } on Exception catch (e) {
+      globals.printTrace('Failed to clean stale modules from ${modulesXml.path}: $e');
     }
   }
 }
