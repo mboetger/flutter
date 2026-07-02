@@ -14,7 +14,8 @@ namespace flutter {
 class AndroidContextGLImpeller : public AndroidContext {
  public:
   AndroidContextGLImpeller(std::unique_ptr<impeller::egl::Display> display,
-                           bool enable_gpu_tracing);
+                           bool enable_gpu_tracing,
+                           bool use_protected_context = false);
 
   ~AndroidContextGLImpeller();
 
@@ -42,6 +43,7 @@ class AndroidContextGLImpeller : public AndroidContext {
   std::unique_ptr<impeller::egl::Context> onscreen_context_;
   std::unique_ptr<impeller::egl::Context> offscreen_context_;
   bool is_valid_ = false;
+  bool use_protected_context_ = false;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidContextGLImpeller);
 };

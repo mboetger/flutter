@@ -100,6 +100,11 @@ class AndroidEGLSurface {
   ///
   DlISize GetSize() const;
 
+  //----------------------------------------------------------------------------
+  /// @return     The underlying EGLSurface handle.
+  ///
+  EGLSurface GetHandle() const { return surface_; }
+
  private:
   /// Returns true if the EGLContext held is current for the display and surface
   bool IsContextCurrent() const;

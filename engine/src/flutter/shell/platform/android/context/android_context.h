@@ -34,6 +34,7 @@ class AndroidContext {
     bool enable_gpu_tracing = false;
     bool enable_surface_control = false;
     bool quiet = false;
+    bool use_protected_context = false;
     impeller::Flags impeller_flags;
   };
 

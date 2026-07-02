@@ -191,7 +191,7 @@ void AndroidContextDynamicImpeller::SetupImpellerContext() {
   if (!vk_context_) {
     gl_context_ = std::make_shared<AndroidContextGLImpeller>(
         std::make_unique<impeller::egl::Display>(),
-        settings_.enable_gpu_tracing);
+        settings_.enable_gpu_tracing, settings_.use_protected_context);
   }
 }
 

@@ -5,6 +5,11 @@
 #include "flutter/shell/platform/android/android_context_gl_skia.h"
 
 #include <utility>
+#include <vector>
+
+#ifndef EGL_PROTECTED_CONTENT_EXT
+#define EGL_PROTECTED_CONTENT_EXT 0x32C0
+#endif
 
 #include "flutter/fml/trace_event.h"
 #include "flutter/shell/platform/android/android_egl_surface.h"
@@ -16,10 +21,19 @@ using EGLResult = std::pair<bool, T>;
 
 static EGLResult<EGLContext> CreateContext(EGLDisplay display,
                                            EGLConfig config,
-                                           EGLContext share = EGL_NO_CONTEXT) {
-  EGLint attributes[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+                                           EGLContext share = EGL_NO_CONTEXT,
+                                           bool use_protected_context = false) {
+  std::vector<EGLint> attributes;
+  attributes.push_back(EGL_CONTEXT_CLIENT_VERSION);
+  attributes.push_back(2);
+  if (use_protected_context) {
+    attributes.push_back(EGL_PROTECTED_CONTENT_EXT);
+    attributes.push_back(EGL_TRUE);
+  }
+  attributes.push_back(EGL_NONE);
 
-  EGLContext context = eglCreateContext(display, config, share, attributes);
+  EGLContext context =
+      eglCreateContext(display, config, share, attributes.data());
 
   return {context != EGL_NO_CONTEXT, context};
 }
@@ -62,13 +76,26 @@ static bool TeardownContext(EGLDisplay display, EGLContext context) {
 
 AndroidContextGLSkia::AndroidContextGLSkia(
     fml::RefPtr<AndroidEnvironmentGL> environment,
-    const TaskRunners& task_runners)
+    const TaskRunners& task_runners,
+    bool use_protected_context)
     : AndroidContext(AndroidRenderingAPI::kSkiaOpenGLES),
       environment_(std::move(environment)),
-      task_runners_(task_runners) {
+      task_runners_(task_runners),
+      use_protected_context_(use_protected_context) {
   if (!environment_->IsValid()) {
     FML_LOG(ERROR) << "Could not create an Android GL environment.";
     return;
+  }
+
+  if (use_protected_context_) {
+    const char* extensions =
+        eglQueryString(environment_->Display(), EGL_EXTENSIONS);
+    if (!extensions || !strstr(extensions, "EGL_EXT_protected_content")) {
+      FML_LOG(WARNING)
+          << "Protected context requested but EGL_EXT_protected_content is not "
+             "supported by the EGL display. Falling back to a normal context.";
+      use_protected_context_ = false;
+    }
   }
 
   bool success = false;
@@ -82,16 +109,16 @@ AndroidContextGLSkia::AndroidContextGLSkia(
   }
 
   // Create a context for the configuration.
-  std::tie(success, context_) =
-      CreateContext(environment_->Display(), config_, EGL_NO_CONTEXT);
+  std::tie(success, context_) = CreateContext(
+      environment_->Display(), config_, EGL_NO_CONTEXT, use_protected_context_);
   if (!success) {
     FML_LOG(ERROR) << "Could not create an EGL context";
     LogLastEGLError();
     return;
   }
 
-  std::tie(success, resource_context_) =
-      CreateContext(environment_->Display(), config_, context_);
+  std::tie(success, resource_context_) = CreateContext(
+      environment_->Display(), config_, context_, use_protected_context_);
   if (!success) {
     FML_LOG(ERROR) << "Could not create an EGL resource context";
     LogLastEGLError();
@@ -144,11 +171,17 @@ std::unique_ptr<AndroidEGLSurface> AndroidContextGLSkia::CreateOnscreenSurface(
   } else {
     EGLDisplay display = environment_->Display();
 
-    const EGLint attribs[] = {EGL_NONE};
+    std::vector<EGLint> attribs;
+    if (use_protected_context_) {
+      attribs.push_back(EGL_PROTECTED_CONTENT_EXT);
+      attribs.push_back(EGL_TRUE);
+    }
+    attribs.push_back(EGL_NONE);
 
     EGLSurface surface = eglCreateWindowSurface(
         display, config_,
-        reinterpret_cast<EGLNativeWindowType>(window->handle()), attribs);
+        reinterpret_cast<EGLNativeWindowType>(window->handle()),
+        attribs.data());
     return std::make_unique<AndroidEGLSurface>(surface, display, context_);
   }
 }
@@ -159,9 +192,19 @@ AndroidContextGLSkia::CreateOffscreenSurface() const {
   // contexts. We never bind the pbuffer to anything.
   EGLDisplay display = environment_->Display();
 
-  const EGLint attribs[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE};
+  std::vector<EGLint> attribs;
+  attribs.push_back(EGL_WIDTH);
+  attribs.push_back(1);
+  attribs.push_back(EGL_HEIGHT);
+  attribs.push_back(1);
+  if (use_protected_context_) {
+    attribs.push_back(EGL_PROTECTED_CONTENT_EXT);
+    attribs.push_back(EGL_TRUE);
+  }
+  attribs.push_back(EGL_NONE);
 
-  EGLSurface surface = eglCreatePbufferSurface(display, config_, attribs);
+  EGLSurface surface =
+      eglCreatePbufferSurface(display, config_, attribs.data());
   return std::make_unique<AndroidEGLSurface>(surface, display,
                                              resource_context_);
 }
@@ -170,9 +213,19 @@ std::unique_ptr<AndroidEGLSurface> AndroidContextGLSkia::CreatePbufferSurface()
     const {
   EGLDisplay display = environment_->Display();
 
-  const EGLint attribs[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE};
+  std::vector<EGLint> attribs;
+  attribs.push_back(EGL_WIDTH);
+  attribs.push_back(1);
+  attribs.push_back(EGL_HEIGHT);
+  attribs.push_back(1);
+  if (use_protected_context_) {
+    attribs.push_back(EGL_PROTECTED_CONTENT_EXT);
+    attribs.push_back(EGL_TRUE);
+  }
+  attribs.push_back(EGL_NONE);
 
-  EGLSurface surface = eglCreatePbufferSurface(display, config_, attribs);
+  EGLSurface surface =
+      eglCreatePbufferSurface(display, config_, attribs.data());
   return std::make_unique<AndroidEGLSurface>(surface, display, context_);
 }
 
@@ -208,8 +261,8 @@ EGLDisplay AndroidContextGLSkia::GetEGLDisplay() const {
 EGLContext AndroidContextGLSkia::CreateNewContext() const {
   bool success;
   EGLContext context;
-  std::tie(success, context) =
-      CreateContext(environment_->Display(), config_, EGL_NO_CONTEXT);
+  std::tie(success, context) = CreateContext(
+      environment_->Display(), config_, EGL_NO_CONTEXT, use_protected_context_);
   return success ? context : EGL_NO_CONTEXT;
 }
 

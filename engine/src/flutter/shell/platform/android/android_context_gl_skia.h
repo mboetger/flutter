@@ -28,7 +28,8 @@ class AndroidEGLSurface;
 class AndroidContextGLSkia : public AndroidContext {
  public:
   AndroidContextGLSkia(fml::RefPtr<AndroidEnvironmentGL> environment,
-                       const TaskRunners& taskRunners);
+                       const TaskRunners& taskRunners,
+                       bool use_protected_context = false);
 
   ~AndroidContextGLSkia();
 
@@ -107,6 +108,7 @@ class AndroidContextGLSkia : public AndroidContext {
   EGLContext resource_context_;
   bool valid_ = false;
   TaskRunners task_runners_;
+  bool use_protected_context_ = false;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidContextGLSkia);
 };

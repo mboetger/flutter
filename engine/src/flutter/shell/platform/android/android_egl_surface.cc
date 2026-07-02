@@ -94,8 +94,10 @@ AndroidEGLSurface::AndroidEGLSurface(EGLSurface surface,
 }
 
 AndroidEGLSurface::~AndroidEGLSurface() {
-  [[maybe_unused]] auto result = eglDestroySurface(display_, surface_);
-  FML_DCHECK(result == EGL_TRUE);
+  if (surface_ != EGL_NO_SURFACE) {
+    [[maybe_unused]] auto result = eglDestroySurface(display_, surface_);
+    FML_DCHECK(result == EGL_TRUE);
+  }
 }
 
 bool AndroidEGLSurface::IsValid() const {

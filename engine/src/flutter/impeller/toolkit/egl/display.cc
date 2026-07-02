@@ -10,6 +10,10 @@
 #include "impeller/toolkit/egl/context.h"
 #include "impeller/toolkit/egl/surface.h"
 
+#ifndef EGL_PROTECTED_CONTENT_EXT
+#define EGL_PROTECTED_CONTENT_EXT 0x32C0
+#endif
+
 namespace impeller {
 namespace egl {
 
@@ -36,7 +40,8 @@ bool Display::IsValid() const {
 }
 
 std::unique_ptr<Context> Display::CreateContext(const Config& config,
-                                                const Context* share_context) {
+                                                const Context* share_context,
+                                                bool use_protected_context) {
   const auto& desc = config.GetDescriptor();
 
   std::vector<EGLint> attributes;
@@ -51,6 +56,16 @@ std::unique_ptr<Context> Display::CreateContext(const Config& config,
       attributes.push_back(EGL_CONTEXT_CLIENT_VERSION);
       attributes.push_back(3);
       break;
+  }
+  if (use_protected_context) {
+    const char* extensions = ::eglQueryString(display_, EGL_EXTENSIONS);
+    if (extensions && strstr(extensions, "EGL_EXT_protected_content")) {
+      attributes.push_back(EGL_PROTECTED_CONTENT_EXT);
+      attributes.push_back(EGL_TRUE);
+    } else {
+      FML_LOG(WARNING) << "Protected context requested but "
+                          "EGL_EXT_protected_content not supported.";
+    }
   }
   // Termination sentinel must be present.
   attributes.push_back(EGL_NONE);
@@ -171,12 +186,21 @@ std::unique_ptr<Config> Display::ChooseConfig(ConfigDescriptor config) const {
 
 std::unique_ptr<Surface> Display::CreateWindowSurface(
     const Config& config,
-    EGLNativeWindowType window) {
-  const EGLint attribs[] = {EGL_NONE};
+    EGLNativeWindowType window,
+    bool use_protected_context) {
+  std::vector<EGLint> attribs;
+  if (use_protected_context) {
+    const char* extensions = ::eglQueryString(display_, EGL_EXTENSIONS);
+    if (extensions && strstr(extensions, "EGL_EXT_protected_content")) {
+      attribs.push_back(EGL_PROTECTED_CONTENT_EXT);
+      attribs.push_back(EGL_TRUE);
+    }
+  }
+  attribs.push_back(EGL_NONE);
   auto surface = ::eglCreateWindowSurface(display_,            // display
                                           config.GetHandle(),  // config
                                           window,              // window
-                                          attribs              // attrib_list
+                                          attribs.data()       // attrib_list
   );
   if (surface == EGL_NO_SURFACE) {
     IMPELLER_LOG_EGL_ERROR;
@@ -185,19 +209,27 @@ std::unique_ptr<Surface> Display::CreateWindowSurface(
   return std::unique_ptr<Surface>(new Surface(display_, surface));
 }
 
-std::unique_ptr<Surface> Display::CreatePixelBufferSurface(const Config& config,
-                                                           size_t width,
-                                                           size_t height) {
-  // clang-format off
-  const EGLint attribs[] = {
-      EGL_WIDTH,     static_cast<EGLint>(width),
-      EGL_HEIGHT,    static_cast<EGLint>(height),
-      EGL_NONE
-  };
-  // clang-format on
+std::unique_ptr<Surface> Display::CreatePixelBufferSurface(
+    const Config& config,
+    size_t width,
+    size_t height,
+    bool use_protected_context) {
+  std::vector<EGLint> attribs;
+  attribs.push_back(EGL_WIDTH);
+  attribs.push_back(static_cast<EGLint>(width));
+  attribs.push_back(EGL_HEIGHT);
+  attribs.push_back(static_cast<EGLint>(height));
+  if (use_protected_context) {
+    const char* extensions = ::eglQueryString(display_, EGL_EXTENSIONS);
+    if (extensions && strstr(extensions, "EGL_EXT_protected_content")) {
+      attribs.push_back(EGL_PROTECTED_CONTENT_EXT);
+      attribs.push_back(EGL_TRUE);
+    }
+  }
+  attribs.push_back(EGL_NONE);
   auto surface = ::eglCreatePbufferSurface(display_,            // display
                                            config.GetHandle(),  // config
-                                           attribs              // attrib_list
+                                           attribs.data()       // attrib_list
   );
   if (surface == EGL_NO_SURFACE) {
     IMPELLER_LOG_EGL_ERROR;

@@ -107,10 +107,12 @@ static std::shared_ptr<impeller::Context> CreateImpellerContext(
 
 AndroidContextGLImpeller::AndroidContextGLImpeller(
     std::unique_ptr<impeller::egl::Display> display,
-    bool enable_gpu_tracing)
+    bool enable_gpu_tracing,
+    bool use_protected_context)
     : AndroidContext(AndroidRenderingAPI::kImpellerOpenGLES),
       reactor_worker_(std::shared_ptr<ReactorWorker>(new ReactorWorker())),
-      display_(std::move(display)) {
+      display_(std::move(display)),
+      use_protected_context_(use_protected_context) {
   if (!display_ || !display_->IsValid()) {
     FML_LOG(ERROR) << "Could not create context with invalid EGL display.";
     return;
@@ -152,14 +154,15 @@ AndroidContextGLImpeller::AndroidContextGLImpeller(
     return;
   }
 
-  auto onscreen_context = display_->CreateContext(*onscreen_config, nullptr);
+  auto onscreen_context = display_->CreateContext(*onscreen_config, nullptr,
+                                                  use_protected_context_);
   if (!onscreen_context) {
     FML_LOG(ERROR) << "Could not create onscreen context.";
     return;
   }
 
-  auto offscreen_context =
-      display_->CreateContext(*offscreen_config, onscreen_context.get());
+  auto offscreen_context = display_->CreateContext(
+      *offscreen_config, onscreen_context.get(), use_protected_context_);
   if (!offscreen_context) {
     FML_LOG(ERROR) << "Could not create offscreen context.";
     return;
@@ -167,8 +170,8 @@ AndroidContextGLImpeller::AndroidContextGLImpeller(
 
   // Creating the impeller::Context requires a current context, which requires
   // some surface.
-  auto offscreen_surface =
-      display_->CreatePixelBufferSurface(*offscreen_config, 1u, 1u);
+  auto offscreen_surface = display_->CreatePixelBufferSurface(
+      *offscreen_config, 1u, 1u, use_protected_context_);
   if (!offscreen_context->MakeCurrent(*offscreen_surface)) {
     FML_LOG(ERROR) << "Could not make offscreen context current.";
     return;
@@ -238,7 +241,8 @@ bool AndroidContextGLImpeller::ResourceContextMakeCurrent(
 
 std::unique_ptr<impeller::egl::Surface>
 AndroidContextGLImpeller::CreateOffscreenSurface() {
-  return display_->CreatePixelBufferSurface(*offscreen_config_, 1u, 1u);
+  return display_->CreatePixelBufferSurface(*offscreen_config_, 1u, 1u,
+                                            use_protected_context_);
 }
 
 bool AndroidContextGLImpeller::OnscreenContextMakeCurrent(
@@ -260,7 +264,8 @@ bool AndroidContextGLImpeller::OnscreenContextClearCurrent() {
 
 std::unique_ptr<impeller::egl::Surface>
 AndroidContextGLImpeller::CreateOnscreenSurface(EGLNativeWindowType window) {
-  return display_->CreateWindowSurface(*onscreen_config_, window);
+  return display_->CreateWindowSurface(*onscreen_config_, window,
+                                       use_protected_context_);
 }
 
 AndroidRenderingAPI AndroidContextGLImpeller::RenderingApi() const {

@@ -59,8 +59,10 @@ class Display {
   ///
   /// @return     A context if one can be created. `nullptr` otherwise.
   ///
-  virtual std::unique_ptr<Context> CreateContext(const Config& config,
-                                                 const Context* share_context);
+  virtual std::unique_ptr<Context> CreateContext(
+      const Config& config,
+      const Context* share_context,
+      bool use_protected_context = false);
 
   //----------------------------------------------------------------------------
   /// @brief      Create a window surface. The window is an opaque pointer whose
@@ -77,7 +79,8 @@ class Display {
   ///
   virtual std::unique_ptr<Surface> CreateWindowSurface(
       const Config& config,
-      EGLNativeWindowType window);
+      EGLNativeWindowType window,
+      bool use_protected_context = false);
 
   //----------------------------------------------------------------------------
   /// @brief      Create an offscreen pixelbuffer surface. These are of limited
@@ -93,8 +96,11 @@ class Display {
   /// @return     A valid pixel buffer surface if one can be created. `nullptr`
   ///             otherwise.
   ///
-  virtual std::unique_ptr<Surface>
-  CreatePixelBufferSurface(const Config& config, size_t width, size_t height);
+  virtual std::unique_ptr<Surface> CreatePixelBufferSurface(
+      const Config& config,
+      size_t width,
+      size_t height,
+      bool use_protected_context = false);
 
   const EGLDisplay& GetHandle() const;
 

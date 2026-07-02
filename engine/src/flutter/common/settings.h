@@ -254,6 +254,9 @@ struct Settings {
   // must be available to the application.
   bool enable_vulkan_validation = false;
 
+  // Enable protected GL context and surface creation.
+  bool use_protected_context = false;
+
   // Enable GPU tracing in GLES backends.
   // Some devices claim to support the required APIs but crash on their usage.
   bool enable_opengl_gpu_tracing = false;
