@@ -470,6 +470,20 @@ class AndroidDevice extends Device {
     try {
       await runAdbCheckedAsync(<String>[
         'shell',
+        'run-as',
+        app.id,
+        'rm',
+        '-rf',
+        'code_cache',
+        'app_flutter',
+      ]);
+    } on ProcessException catch (error) {
+      _logger.printTrace('Warning: Failed to clear code_cache and app_flutter: $error');
+    }
+
+    try {
+      await runAdbCheckedAsync(<String>[
+        'shell',
         'echo',
         '-n',
         _getSourceSha1(app),

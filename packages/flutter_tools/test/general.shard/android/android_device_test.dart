@@ -10,6 +10,7 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_console.dart';
 import 'package:flutter_tools/src/android/android_device.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
+import 'package:flutter_tools/src/android/application_package.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
@@ -546,6 +547,82 @@ Uptime: 441088659 Realtime: 521464097
     },
     overrides: <Type, Generator>{Logger: () => BufferLogger.test()},
   );
+
+  testWithoutContext(
+    'AndroidDevice.installApp clears code_cache and app_flutter directories',
+    () async {
+      final fileSystem = MemoryFileSystem.test();
+      final processManager = FakeProcessManager.empty();
+      final logger = BufferLogger.test();
+      final AndroidDevice device = setUpAndroidDevice(
+        fileSystem: fileSystem,
+        processManager: processManager,
+        logger: logger,
+      );
+      final File apkFile = fileSystem.file('app-debug.apk')..createSync();
+      final apk = AndroidApk(
+        id: 'com.example.app',
+        applicationPackage: apkFile,
+        launchActivity: 'MainActivity',
+        versionCode: 1,
+      );
+
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>['adb', 'version'],
+          stdout: 'Android Debug Bridge version 1.0.39',
+        ),
+      );
+      processManager.addCommand(const FakeCommand(command: <String>['adb', 'start-server']));
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.version.sdk]: [28]\n',
+        ),
+      );
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'install', '-t', '-r', 'app-debug.apk'],
+        ),
+      );
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'run-as',
+            'com.example.app',
+            'rm',
+            '-rf',
+            'code_cache',
+            'app_flutter',
+          ],
+        ),
+      );
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>[
+            'adb',
+            '-s',
+            '1234',
+            'shell',
+            'echo',
+            '-n',
+            '',
+            '>',
+            '/data/local/tmp/sky.com.example.app.sha1',
+          ],
+        ),
+      );
+
+      final bool installed = await device.installApp(apk);
+
+      expect(installed, true);
+      expect(processManager, hasNoRemainingExpectations);
+    },
+  );
 }
 
 /// A mock VM Service that throws a generic [RPCErrorKind.kServerError] error
@@ -576,12 +653,13 @@ AndroidDevice setUpAndroidDevice({
   ProcessManager? processManager,
   Platform? platform,
   AndroidConsoleSocketFactory androidConsoleSocketFactory = kAndroidConsoleSocketFactory,
+  Logger? logger,
 }) {
   androidSdk ??= FakeAndroidSdk();
   return AndroidDevice(
     id ?? '1234',
     modelID: 'TestModel',
-    logger: BufferLogger.test(),
+    logger: logger ?? BufferLogger.test(),
     platform: platform ?? FakePlatform(),
     androidSdk: androidSdk,
     fileSystem: fileSystem ?? MemoryFileSystem.test(),
