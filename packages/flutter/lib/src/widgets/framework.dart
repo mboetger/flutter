@@ -5068,6 +5068,12 @@ abstract class Element extends DiagnosticableTree implements BuildContext {
             'save a reference to the ancestor by calling dependOnInheritedWidgetOfExactType() '
             "in the widget's didChangeDependencies() method.",
           ),
+          ErrorHint(
+            'This error commonly occurs when a BuildContext is used after an '
+            'asynchronous gap (i.e. after an "await"). Consider checking '
+            'whether the BuildContext is mounted using "context.mounted" (or '
+            '"mounted" if in a State) before performing the lookup.',
+          ),
         ]);
       }
       return true;
