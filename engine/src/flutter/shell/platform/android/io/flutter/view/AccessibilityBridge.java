@@ -798,8 +798,6 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
    */
   @Override
   @SuppressWarnings("deprecation")
-  // Suppressing Lint warning for new API, as we are version guarding all calls to newer APIs
-  @SuppressLint("NewApi")
   public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualViewId) {
     setAccessibleNavigation(true);
     if (virtualViewId >= MIN_ENGINE_GENERATED_NODE_ID) {
