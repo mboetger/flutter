@@ -87,8 +87,9 @@ androidComponents {
 Future<void> _assertSplitPerAbiVersionCodes(
   int? buildNumber,
   Directory workingDirectory,
-  bool usingCustomAppGradleFile,
-) async {
+  bool usingCustomAppGradleFile, {
+  bool forceVersionCodeIgnoringAbi = false,
+}) async {
   if (usingCustomAppGradleFile) {
     // Replace the app level build.gradle with one that modifies the version code.
     final File appBuildGradle = fileSystem
@@ -111,6 +112,10 @@ Future<void> _assertSplitPerAbiVersionCodes(
 
   if (buildNumber != null) {
     args.addAll(<String>['--build-number', buildNumber.toString()]);
+  }
+
+  if (forceVersionCodeIgnoringAbi) {
+    args.addAll(<String>['-P', 'force-version-code-ignoring-abi=true']);
   }
 
   final ProcessResult result = processManager.runSync(
@@ -177,8 +182,9 @@ Future<void> _assertSplitPerAbiVersionCodes(
     );
 
     final int actual = actualVersionCodes[abi]!;
-    final int expected =
-        (abiIndex * 1000) + ((buildNumber ?? 1) * (usingCustomAppGradleFile ? 10000 : 1));
+    final int expected = forceVersionCodeIgnoringAbi
+        ? (buildNumber ?? 1)
+        : (abiIndex * 1000) + ((buildNumber ?? 1) * (usingCustomAppGradleFile ? 10000 : 1));
     expect(
       actual,
       expected,
@@ -231,6 +237,14 @@ void main() {
     'APK versionCodes after --split-per-abi with custom build-number=42 and gradle file follow "(abiIndex * 1000) + (42 * 10000)"',
     () async {
       await _assertSplitPerAbiVersionCodes(42, appDir, true);
+    },
+  );
+
+  // Check with force-version-code-ignoring-abi=true
+  testWithoutContext(
+    'APK versionCodes after --split-per-abi with force-version-code-ignoring-abi=true do not include ABI multiplier',
+    () async {
+      await _assertSplitPerAbiVersionCodes(2, appDir, false, forceVersionCodeIgnoringAbi: true);
     },
   );
 }

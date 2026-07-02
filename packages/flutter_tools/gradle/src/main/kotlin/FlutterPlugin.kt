@@ -653,7 +653,7 @@ class FlutterPlugin : Plugin<Project> {
             val validateDeferredComponentsValue: Boolean =
                 project.findProperty("validate-deferred-components")?.toString()?.toBoolean() ?: true
 
-            if (FlutterPluginUtils.shouldProjectSplitPerAbi(project)) {
+            if (FlutterPluginUtils.shouldProjectSplitPerAbi(project) && !FlutterPluginUtils.shouldForceVersionCodeIgnoringAbi(project)) {
                 variant.outputs.forEach { output ->
                     // need to force this as the API does not return the right thing for our use.
                     // TODO(gmackall): Migrate to AGPs variant api.

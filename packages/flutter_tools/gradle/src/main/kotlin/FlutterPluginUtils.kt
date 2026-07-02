@@ -280,6 +280,15 @@ object FlutterPluginUtils {
             ?.toBoolean() ?: false
 
     @JvmStatic
+    @JvmName("shouldForceVersionCodeIgnoringAbi")
+    internal fun shouldForceVersionCodeIgnoringAbi(project: Project): Boolean =
+        project
+            .findProperty(
+                PROP_FORCE_VERSION_CODE_IGNORING_ABI
+            )?.toString()
+            ?.toBoolean() ?: false
+
+    @JvmStatic
     @JvmName("shouldProjectUseLocalEngine")
     internal fun shouldProjectUseLocalEngine(project: Project): Boolean = project.hasProperty(PROP_LOCAL_ENGINE_REPO)
 

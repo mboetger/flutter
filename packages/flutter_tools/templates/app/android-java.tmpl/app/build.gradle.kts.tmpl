@@ -27,6 +27,10 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // To override the version code without the ABI multiplier when building split APKs,
+        // you can set the property `force-version-code-ignoring-abi=true` in gradle.properties
+        // or pass `-Pforce-version-code-ignoring-abi=true` to the flutter build command.
     }
 
     buildTypes {
