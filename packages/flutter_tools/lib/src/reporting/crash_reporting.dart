@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:file/file.dart';
 import 'package:http/http.dart' as http;
+import 'package:process/process.dart';
 import 'package:unified_analytics/unified_analytics.dart';
 
 import '../base/file_system.dart';
@@ -59,13 +60,16 @@ class CrashReporter {
     required FileSystem fileSystem,
     required Logger logger,
     required FlutterProjectFactory flutterProjectFactory,
+    required ProcessManager processManager,
   }) : _fileSystem = fileSystem,
        _logger = logger,
-       _flutterProjectFactory = flutterProjectFactory;
+       _flutterProjectFactory = flutterProjectFactory,
+       _processManager = processManager;
 
   final FileSystem _fileSystem;
   final Logger _logger;
   final FlutterProjectFactory _flutterProjectFactory;
+  final ProcessManager _processManager;
 
   /// Prints instructions for filing a bug about the crash.
   Future<void> informUser(CrashDetails details, File crashFile) async {
@@ -94,6 +98,7 @@ class CrashReporter {
       fileSystem: _fileSystem,
       logger: _logger,
       flutterProjectFactory: _flutterProjectFactory,
+      processManager: _processManager,
     );
 
     final String gitHubTemplateURL = await gitHubTemplateCreator.toolCrashIssueTemplateGitHubURL(

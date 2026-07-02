@@ -191,6 +191,7 @@ void main() {
             fileSystem: fs,
             logger: logger,
             flutterProjectFactory: FlutterProjectFactory(fileSystem: fs, logger: logger),
+            processManager: FakeProcessManager.any(),
           );
           expect(
             await creator.toolCrashIssueTemplateGitHubURL(command, error, stackTrace, doctorText),
@@ -216,6 +217,7 @@ void main() {
             fileSystem: fs,
             logger: logger,
             flutterProjectFactory: FlutterProjectFactory(fileSystem: fs, logger: logger),
+            processManager: FakeProcessManager.any(),
           );
           final Directory projectDirectory = fs.currentDirectory;
 
@@ -287,6 +289,53 @@ device_info-0.4.1+4
 ''';
 
           expect(actualBody, expectedBody);
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+        },
+      );
+
+      testUsingContext(
+        'app metadata with gradle',
+        () async {
+          final creator = GitHubTemplateCreator(
+            fileSystem: fs,
+            logger: logger,
+            flutterProjectFactory: FlutterProjectFactory(fileSystem: fs, logger: logger),
+            processManager: FakeProcessManager.any(),
+          );
+          final Directory projectDirectory = fs.currentDirectory;
+
+          projectDirectory.childFile('pubspec.yaml').writeAsStringSync('''
+name: failing_app
+version: 2.0.1+100
+flutter:
+  uses-material-design: true
+''');
+
+          // Create gradle-wrapper.properties
+          final Directory gradleWrapperDirectory = projectDirectory
+              .childDirectory('android')
+              .childDirectory('gradle')
+              .childDirectory('wrapper');
+          gradleWrapperDirectory.createSync(recursive: true);
+          gradleWrapperDirectory.childFile('gradle-wrapper.properties').writeAsStringSync(r'''
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-6.7-all.zip
+''');
+
+          final String actualURL = await creator.toolCrashIssueTemplateGitHubURL(
+            command,
+            error,
+            stackTrace,
+            doctorText,
+          );
+          final String? actualBody = Uri.parse(actualURL).queryParameters['body'];
+          expect(actualBody, contains('**Gradle Version**: 6.7'));
         },
         overrides: <Type, Generator>{
           FileSystem: () => fs,

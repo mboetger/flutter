@@ -84,6 +84,7 @@ void main() {
       fileSystem: fs,
       logger: logger,
       flutterProjectFactory: FlutterProjectFactory(fileSystem: fs, logger: logger),
+      processManager: FakeProcessManager.any(),
     );
 
     final File file = fs.file('flutter_00.log');

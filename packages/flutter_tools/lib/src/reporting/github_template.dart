@@ -5,7 +5,9 @@
 import 'dart:async';
 
 import 'package:file/file.dart';
+import 'package:process/process.dart';
 
+import '../android/gradle_utils.dart' as gradle;
 import '../base/file_system.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
@@ -24,13 +26,16 @@ class GitHubTemplateCreator {
     required FileSystem fileSystem,
     required Logger logger,
     required FlutterProjectFactory flutterProjectFactory,
+    required ProcessManager processManager,
   }) : _fileSystem = fileSystem,
        _logger = logger,
-       _flutterProjectFactory = flutterProjectFactory;
+       _flutterProjectFactory = flutterProjectFactory,
+       _processManager = processManager;
 
   final FileSystem _fileSystem;
   final Logger _logger;
   final FlutterProjectFactory _flutterProjectFactory;
+  final ProcessManager _processManager;
 
   static String toolCrashSimilarIssuesURL(String errorString) {
     return 'https://github.com/flutter/flutter/issues?q=is%3Aissue+${Uri.encodeQueryComponent(errorString)}';
@@ -125,7 +130,7 @@ $doctorText
 ```
 
 ## Flutter Application Metadata
-${_projectMetadataInformation()}
+${await _projectMetadataInformation()}
 ''';
 
     return 'https://github.com/flutter/flutter/issues'
@@ -136,7 +141,7 @@ ${_projectMetadataInformation()}
   }
 
   /// Provide information about the Flutter project in the working directory, if present.
-  String _projectMetadataInformation() {
+  Future<String> _projectMetadataInformation() async {
     FlutterProject project;
     try {
       project = _flutterProjectFactory.fromDirectory(_fileSystem.currentDirectory);
@@ -151,6 +156,16 @@ ${_projectMetadataInformation()}
       }
       final metadata = FlutterProjectMetadata(project.metadataFile, _logger);
       final FlutterTemplateType? projectType = metadata.projectType;
+
+      String? gradleVersion;
+      if (project.android.hostAppGradleRoot.existsSync()) {
+        gradleVersion = await gradle.getGradleVersion(
+          project.android.hostAppGradleRoot,
+          _logger,
+          _processManager,
+        );
+      }
+
       final description = StringBuffer()
         ..writeln('**Type**: ${projectType == null ? 'malformed' : projectType.cliName}')
         ..writeln('**Version**: ${manifest.appVersion}')
@@ -162,6 +177,10 @@ ${_projectMetadataInformation()}
         ..writeln('**iOS bundle identifier**: ${manifest.iosBundleIdentifier}')
         ..writeln('**Creation channel**: ${metadata.versionChannel}')
         ..writeln('**Creation framework version**: ${metadata.versionRevision}');
+
+      if (gradleVersion != null) {
+        description.writeln('**Gradle Version**: $gradleVersion');
+      }
 
       final File file = project.flutterPluginsDependenciesFile;
       if (file.existsSync()) {
