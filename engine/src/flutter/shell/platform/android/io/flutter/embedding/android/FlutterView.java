@@ -240,7 +240,6 @@ public class FlutterView extends FrameLayout
   /**
    * Constructs a {@code FlutterView} programmatically, without any XML attributes.
    *
-   * <p>
    *
    * <ul>
    *   <li>A {@link FlutterSurfaceView} is used to render the Flutter UI.

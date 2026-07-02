@@ -100,6 +100,7 @@ def main():
       android_package_list,
       '-source',
       '1.8',
+      '-Xdoclint:all,-missing',
   ] + packages
 
   if not args.quiet:

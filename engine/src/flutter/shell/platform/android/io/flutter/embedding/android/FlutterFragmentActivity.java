@@ -453,8 +453,6 @@ public class FlutterFragmentActivity extends FragmentActivity
    * Creates a {@link FrameLayout} with an ID of {@code #FRAGMENT_CONTAINER_ID} that will contain
    * the {@link FlutterFragment} displayed by this {@code FlutterFragmentActivity}.
    *
-   * <p>
-   *
    * @return the FrameLayout container
    */
   @NonNull
