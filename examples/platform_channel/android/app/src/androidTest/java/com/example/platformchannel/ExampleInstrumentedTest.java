@@ -5,11 +5,12 @@
 package com.example.platformchannel;
 
 import android.graphics.Bitmap;
-import android.support.test.InstrumentationRegistry;
-import android.support.test.rule.ActivityTestRule;
-import android.support.test.runner.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.rule.ActivityTestRule;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import io.flutter.view.FlutterView;
+import io.flutter.embedding.android.FlutterActivity;
+import io.flutter.embedding.android.FlutterView;
 
 import android.app.Instrumentation;
 import java.util.concurrent.CountDownLatch;
@@ -33,11 +34,7 @@ public class ExampleInstrumentedTest {
         final BitmapPoller poller = new BitmapPoller(5);
         instr.runOnMainSync(new Runnable() {
             public void run() {
-                final FlutterView flutterView = activityRule.getActivity().getFlutterView();
-
-                // Call onPostResume to start the engine's renderer even if the activity
-                // is paused in the test environment.
-                flutterView.onPostResume();
+                final FlutterView flutterView = activityRule.getActivity().findViewById(FlutterActivity.FLUTTER_VIEW_ID);
 
                 poller.start(flutterView);
             }
@@ -85,7 +82,9 @@ public class ExampleInstrumentedTest {
 
         private Runnable checkBitmap = new Runnable() {
             public void run() {
-                bitmap = flutterView.getBitmap();
+                if (flutterView.getAttachedFlutterEngine() != null && flutterView.getAttachedFlutterEngine().getRenderer() != null) {
+                    bitmap = flutterView.getAttachedFlutterEngine().getRenderer().getBitmap();
+                }
                 triesPending--;
                 if (bitmap != null || triesPending == 0) {
                     latch.countDown();
