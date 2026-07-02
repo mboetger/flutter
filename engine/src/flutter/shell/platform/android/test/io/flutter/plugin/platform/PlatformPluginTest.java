@@ -40,8 +40,12 @@ import android.view.Window;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import androidx.activity.OnBackPressedCallback;
+import android.graphics.Rect;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.fragment.app.FragmentActivity;
+import java.util.ArrayList;
+import java.util.List;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.core.app.ApplicationProvider;
 import io.flutter.embedding.engine.systemchannels.PlatformChannel;
@@ -959,5 +963,42 @@ public class PlatformPluginTest {
         PlatformChannel.HapticFeedbackType.ERROR_NOTIFICATION);
     verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.REJECT);
     clearInvocations(fakeDecorView);
+  }
+
+  @Test
+  public void setSystemGestureExclusionRects() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    List<Rect> rects = new ArrayList<>();
+    rects.add(new Rect(1, 2, 3, 4));
+
+    try (MockedStatic<ViewCompat> viewCompatMock = mockStatic(ViewCompat.class)) {
+      platformPlugin.mPlatformMessageHandler.setSystemGestureExclusionRects(rects);
+      viewCompatMock.verify(() -> ViewCompat.setSystemGestureExclusionRects(fakeDecorView, rects));
+    }
+  }
+
+  @Test
+  public void getSystemGestureExclusionRects() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    List<Rect> rects = new ArrayList<>();
+    rects.add(new Rect(1, 2, 3, 4));
+
+    try (MockedStatic<ViewCompat> viewCompatMock = mockStatic(ViewCompat.class)) {
+      viewCompatMock.when(() -> ViewCompat.getSystemGestureExclusionRects(fakeDecorView)).thenReturn(rects);
+      List<Rect> result = platformPlugin.mPlatformMessageHandler.getSystemGestureExclusionRects();
+      assertEquals(rects, result);
+    }
   }
 }

@@ -427,4 +427,96 @@ void main() {
       FlutterError.onError = originalOnError;
     }
   });
+
+  test('setSystemGestureExclusionRects control test', () async {
+    final log = <MethodCall>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        log.add(methodCall);
+        return null;
+      },
+    );
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    try {
+      await SystemChrome.setSystemGestureExclusionRects(<Rect>[
+        const Rect.fromLTRB(10.0, 20.0, 30.0, 40.0),
+      ]);
+
+      expect(log, hasLength(1));
+      expect(
+        log.single,
+        isMethodCall(
+          'SystemChrome.setSystemGestureExclusionRects',
+          arguments: <Map<String, int>>[
+            <String, int>{'left': 10, 'top': 20, 'right': 30, 'bottom': 40},
+          ],
+        ),
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  test('getSystemGestureExclusionRects control test', () async {
+    final log = <MethodCall>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        log.add(methodCall);
+        if (methodCall.method == 'SystemChrome.getSystemGestureExclusionRects') {
+          return <dynamic>[
+            <dynamic, dynamic>{'left': 10, 'top': 20, 'right': 30, 'bottom': 40},
+          ];
+        }
+        return null;
+      },
+    );
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    try {
+      final List<Rect> rects = await SystemChrome.getSystemGestureExclusionRects();
+
+      expect(log, hasLength(1));
+      expect(
+        log.single,
+        isMethodCall('SystemChrome.getSystemGestureExclusionRects', arguments: null),
+      );
+      expect(rects, hasLength(1));
+      expect(rects.single, const Rect.fromLTRB(10.0, 20.0, 30.0, 40.0));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  test('SystemGestureExclusionRects no-op on non-Android', () async {
+    final log = <MethodCall>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        log.add(methodCall);
+        return null;
+      },
+    );
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+    try {
+      await SystemChrome.setSystemGestureExclusionRects(<Rect>[
+        const Rect.fromLTRB(10.0, 20.0, 30.0, 40.0),
+      ]);
+      final List<Rect> rects = await SystemChrome.getSystemGestureExclusionRects();
+
+      expect(log, isEmpty);
+      expect(rects, isEmpty);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 }

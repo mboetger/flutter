@@ -16,6 +16,7 @@ import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Build;
+import android.graphics.Rect;
 import android.view.HapticFeedbackConstants;
 import android.view.SoundEffectConstants;
 import android.view.View;
@@ -25,6 +26,7 @@ import androidx.activity.OnBackPressedDispatcherOwner;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import io.flutter.Log;
@@ -154,6 +156,17 @@ public class PlatformPlugin {
         @Override
         public void share(@NonNull String text) {
           PlatformPlugin.this.share(text);
+        }
+
+        @Override
+        public void setSystemGestureExclusionRects(@NonNull List<Rect> rects) {
+          PlatformPlugin.this.setSystemGestureExclusionRects(rects);
+        }
+
+        @Override
+        @NonNull
+        public List<Rect> getSystemGestureExclusionRects() {
+          return PlatformPlugin.this.getSystemGestureExclusionRects();
         }
       };
 
@@ -720,5 +733,16 @@ public class PlatformPlugin {
     intent.putExtra(Intent.EXTRA_TEXT, text);
 
     activity.startActivity(Intent.createChooser(intent, null));
+  }
+
+  private void setSystemGestureExclusionRects(@NonNull List<Rect> rects) {
+    View decorView = activity.getWindow().getDecorView();
+    ViewCompat.setSystemGestureExclusionRects(decorView, rects);
+  }
+
+  @NonNull
+  private List<Rect> getSystemGestureExclusionRects() {
+    View decorView = activity.getWindow().getDecorView();
+    return ViewCompat.getSystemGestureExclusionRects(decorView);
   }
 }

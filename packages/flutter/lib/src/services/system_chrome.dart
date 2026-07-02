@@ -790,6 +790,57 @@ abstract final class SystemChrome {
     }
   }
 
+  /// Sets the system gesture exclusion rects for the current area.
+  ///
+  /// The [rects] argument is a list of [Rect]s that should be excluded from
+  /// system gestures.
+  ///
+  /// This is only supported on Android 10 (API 29) and above. On other
+  /// platforms, this is a no-op.
+  static Future<void> setSystemGestureExclusionRects(List<Rect> rects) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    final serializedRects = <Map<String, int>>[];
+    for (final rect in rects) {
+      serializedRects.add(<String, int>{
+        'left': rect.left.round(),
+        'top': rect.top.round(),
+        'right': rect.right.round(),
+        'bottom': rect.bottom.round(),
+      });
+    }
+    await SystemChannels.platform.invokeMethod<void>(
+      'SystemChrome.setSystemGestureExclusionRects',
+      serializedRects,
+    );
+  }
+
+  /// Gets the system gesture exclusion rects for the current area.
+  ///
+  /// This is only supported on Android 10 (API 29) and above. On other
+  /// platforms, this returns an empty list.
+  static Future<List<Rect>> getSystemGestureExclusionRects() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return const <Rect>[];
+    }
+    final List<dynamic>? rects = await SystemChannels.platform.invokeMethod<List<dynamic>>(
+      'SystemChrome.getSystemGestureExclusionRects',
+    );
+    if (rects == null) {
+      return const <Rect>[];
+    }
+    return rects.map<Rect>((dynamic rect) {
+      final map = rect as Map<dynamic, dynamic>;
+      return Rect.fromLTRB(
+        (map['left'] as num).toDouble(),
+        (map['top'] as num).toDouble(),
+        (map['right'] as num).toDouble(),
+        (map['bottom'] as num).toDouble(),
+      );
+    }).toList();
+  }
+
   static SystemUiOverlayStyle? _pendingStyle;
 
   /// The last style that was set using [SystemChrome.setSystemUIOverlayStyle].

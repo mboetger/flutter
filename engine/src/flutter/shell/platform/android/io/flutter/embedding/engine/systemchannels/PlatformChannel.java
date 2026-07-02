@@ -5,6 +5,7 @@
 package io.flutter.embedding.engine.systemchannels;
 
 import android.content.pm.ActivityInfo;
+import android.graphics.Rect;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
@@ -192,6 +193,24 @@ public class PlatformChannel {
                 platformMessageHandler.share(text);
                 result.success(null);
                 break;
+              case "SystemChrome.setSystemGestureExclusionRects":
+                try {
+                  List<Rect> rects = decodeRects((JSONArray) arguments);
+                  platformMessageHandler.setSystemGestureExclusionRects(rects);
+                  result.success(null);
+                } catch (JSONException exception) {
+                  result.error("error", exception.getMessage(), null);
+                }
+                break;
+              case "SystemChrome.getSystemGestureExclusionRects":
+                try {
+                  List<Rect> rects = platformMessageHandler.getSystemGestureExclusionRects();
+                  JSONArray encodedRects = encodeRects(rects);
+                  result.success(encodedRects);
+                } catch (JSONException exception) {
+                  result.error("error", exception.getMessage(), null);
+                }
+                break;
               default:
                 result.notImplemented();
                 break;
@@ -320,6 +339,34 @@ public class PlatformChannel {
     }
     String label = encodedDescription.getString("label");
     return new AppSwitcherDescription(color, label);
+  }
+
+  @NonNull
+  private List<Rect> decodeRects(@NonNull JSONArray encodedRects) throws JSONException {
+    List<Rect> rects = new ArrayList<>();
+    for (int i = 0; i < encodedRects.length(); i++) {
+      JSONObject encodedRect = encodedRects.getJSONObject(i);
+      int left = encodedRect.getInt("left");
+      int top = encodedRect.getInt("top");
+      int right = encodedRect.getInt("right");
+      int bottom = encodedRect.getInt("bottom");
+      rects.add(new Rect(left, top, right, bottom));
+    }
+    return rects;
+  }
+
+  @NonNull
+  private JSONArray encodeRects(@NonNull List<Rect> rects) throws JSONException {
+    JSONArray encodedRects = new JSONArray();
+    for (Rect rect : rects) {
+      JSONObject encodedRect = new JSONObject();
+      encodedRect.put("left", rect.left);
+      encodedRect.put("top", rect.top);
+      encodedRect.put("right", rect.right);
+      encodedRect.put("bottom", rect.bottom);
+      encodedRects.put(encodedRect);
+    }
+    return encodedRects;
   }
 
   /**
@@ -561,6 +608,13 @@ public class PlatformChannel {
      * https://developer.android.com/reference/android/content/Intent.html#ACTION_SEND
      */
     void share(@NonNull String text);
+
+    /** The Flutter application would like to set the system gesture exclusion rects. */
+    void setSystemGestureExclusionRects(@NonNull List<Rect> rects);
+
+    /** The Flutter application would like to get the system gesture exclusion rects. */
+    @NonNull
+    List<Rect> getSystemGestureExclusionRects();
   }
 
   /** Types of sounds the Android OS can play on behalf of an application. */
