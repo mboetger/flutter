@@ -5,6 +5,7 @@
 package io.flutter.view;
 
 import androidx.annotation.Keep;
+import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.FlutterJNI;
 
 /**
@@ -25,6 +26,12 @@ public final class FlutterCallbackInformation {
    * @return an instance of FlutterCallbackInformation for the provided handle.
    */
   public static FlutterCallbackInformation lookupCallbackInformation(long handle) {
+    if (!FlutterInjector.instance().flutterLoader().initialized()) {
+      throw new IllegalStateException(
+          "FlutterCallbackInformation lookup failed. This is likely because the FlutterEngine was"
+              + " not initialized. Ensure that a FlutterEngine is created before performing a"
+              + " callback lookup.");
+    }
     return FlutterJNI.nativeLookupCallbackInformation(handle);
   }
 
