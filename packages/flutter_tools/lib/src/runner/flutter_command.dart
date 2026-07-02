@@ -1984,7 +1984,7 @@ abstract class FlutterCommand extends Command<void> {
     await validateCommand();
 
     final FlutterProject project = FlutterProject.current();
-    project.checkForDeprecation(deprecationBehavior: deprecationBehavior);
+    await project.checkForDeprecation(deprecationBehavior: deprecationBehavior);
 
     if (shouldRunPub) {
       await pub.get(
