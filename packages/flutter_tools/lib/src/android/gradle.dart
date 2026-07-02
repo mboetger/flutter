@@ -349,10 +349,14 @@ class AndroidGradleBuilder implements AndroidBuilder {
       );
     } on ProcessException catch (exception) {
       consumeLog(exception.toString());
-      // Rethrow the exception if the error isn't handled by any of the
+      // Throw a ToolExit if the error isn't handled by any of the
       // `localGradleErrors`.
       if (detectedGradleError == null) {
-        rethrow;
+        throwToolExit(
+          'An error occurred while executing Gradle task: $taskName.\n'
+          '$exception',
+          exitCode: 1,
+        );
       }
     } finally {
       status.stop();
