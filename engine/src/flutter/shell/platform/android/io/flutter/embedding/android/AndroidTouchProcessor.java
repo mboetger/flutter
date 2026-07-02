@@ -21,7 +21,9 @@ import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /** Sends touch information from Android to Flutter in a format that Flutter understands. */
 public class AndroidTouchProcessor {
@@ -127,6 +129,7 @@ public class AndroidTouchProcessor {
   private final boolean trackMotionEvents;
 
   private final Map<Integer, float[]> ongoingPans = new HashMap<>();
+  private final Set<Integer> downPointers = new HashSet<>();
 
   // Only used on api 25 and below to avoid requerying display metrics.
   private int cachedVerticalScrollFactor;
@@ -161,12 +164,21 @@ public class AndroidTouchProcessor {
   public boolean onTouchEvent(@NonNull MotionEvent event, @NonNull Matrix transformMatrix) {
     int maskedAction = event.getActionMasked();
     int pointerChange = getPointerChangeForAction(event.getActionMasked());
-    boolean updateForSinglePointer =
-        maskedAction == MotionEvent.ACTION_DOWN || maskedAction == MotionEvent.ACTION_POINTER_DOWN;
-    boolean updateForMultiplePointers =
-        !updateForSinglePointer
-            && (maskedAction == MotionEvent.ACTION_UP
-                || maskedAction == MotionEvent.ACTION_POINTER_UP);
+
+    if (maskedAction == MotionEvent.ACTION_BUTTON_PRESS) {
+      int actionIndex = event.getActionIndex();
+      int pointerId = uniquePointerIdByType(event, actionIndex);
+      if (downPointers.contains(pointerId)) {
+        pointerChange = PointerChange.MOVE;
+      } else {
+        pointerChange = PointerChange.DOWN;
+      }
+    } else if (maskedAction == MotionEvent.ACTION_BUTTON_RELEASE) {
+      pointerChange = PointerChange.MOVE;
+    }
+
+    boolean updateForSinglePointer = pointerChange == PointerChange.DOWN;
+    boolean updateForMultiplePointers = pointerChange == PointerChange.UP;
 
     int deviceType = getPointerDeviceTypeForToolType(event.getToolType(event.getActionIndex()));
     boolean shouldRemovePointer =
@@ -318,6 +330,12 @@ public class AndroidTouchProcessor {
     // https://github.com/flutter/flutter/issues/134405
     final int viewId = IMPLICIT_VIEW_ID;
     final int pointerId = uniquePointerIdByType(event, pointerIndex);
+
+    if (pointerChange == PointerChange.DOWN) {
+      downPointers.add(pointerId);
+    } else if (pointerChange == PointerChange.UP || pointerChange == PointerChange.CANCEL) {
+      downPointers.remove(pointerId);
+    }
 
     int pointerKind = getPointerDeviceTypeForToolType(event.getToolType(pointerIndex));
     // We use this in lieu of using event.getRawX and event.getRawY as we wish to support

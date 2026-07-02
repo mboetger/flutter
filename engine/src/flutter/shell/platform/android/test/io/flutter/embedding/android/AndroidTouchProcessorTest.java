@@ -11,6 +11,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +24,7 @@ import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
@@ -784,5 +786,63 @@ public class AndroidTouchProcessorTest {
     assertEquals(0.0, readPointerPhysicalX(packet));
     assertEquals(0.0, readPointerPhysicalY(packet));
     inOrder.verifyNoMoreInteractions();
+  }
+
+  @Test
+  public void stylusButtonPressAndRelease() {
+    MotionEventMocker mocker =
+        new MotionEventMocker(0, InputDevice.SOURCE_STYLUS, MotionEvent.TOOL_TYPE_STYLUS);
+
+    // Simulate stylus touching the screen (ACTION_DOWN)
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_DOWN, 0.0f, 0.0f, 0));
+
+    // Simulate button press while touching (ACTION_BUTTON_PRESS)
+    touchProcessor.onTouchEvent(
+        mocker.mockEvent(
+            MotionEvent.ACTION_BUTTON_PRESS, 0.0f, 0.0f, MotionEvent.BUTTON_STYLUS_PRIMARY));
+
+    // Simulate button release while touching (ACTION_BUTTON_RELEASE)
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_BUTTON_RELEASE, 0.0f, 0.0f, 0));
+
+    // Simulate stylus leaving the screen (ACTION_UP)
+    touchProcessor.onTouchEvent(mocker.mockEvent(MotionEvent.ACTION_UP, 0.0f, 0.0f, 0));
+
+    // Capture all calls
+    verify(mockRenderer, times(4))
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    List<ByteBuffer> packets = packetCaptor.getAllValues();
+
+    // 1. ACTION_DOWN -> PointerChange.DOWN
+    assertEquals(AndroidTouchProcessor.PointerChange.DOWN, readPointerChange(packets.get(0)));
+
+    // 2. ACTION_BUTTON_PRESS -> PointerChange.MOVE (with button state)
+    assertEquals(AndroidTouchProcessor.PointerChange.MOVE, readPointerChange(packets.get(1)));
+    assertEquals(enginePrimaryStylusButton, readButtons(packets.get(1)));
+
+    // 3. ACTION_BUTTON_RELEASE -> PointerChange.MOVE (without button state)
+    assertEquals(AndroidTouchProcessor.PointerChange.MOVE, readPointerChange(packets.get(2)));
+    assertEquals(0, readButtons(packets.get(2)));
+
+    // 4. ACTION_UP -> PointerChange.UP
+    assertEquals(AndroidTouchProcessor.PointerChange.UP, readPointerChange(packets.get(3)));
+  }
+
+  @Test
+  public void stylusButtonPressFirst_triggersDown() {
+    MotionEventMocker mocker =
+        new MotionEventMocker(0, InputDevice.SOURCE_STYLUS, MotionEvent.TOOL_TYPE_STYLUS);
+
+    // Simulate stylus touching the screen but sending ACTION_BUTTON_PRESS first
+    touchProcessor.onTouchEvent(
+        mocker.mockEvent(
+            MotionEvent.ACTION_BUTTON_PRESS, 0.0f, 0.0f, MotionEvent.BUTTON_STYLUS_PRIMARY));
+
+    verify(mockRenderer, times(1))
+        .dispatchPointerDataPacket(packetCaptor.capture(), packetSizeCaptor.capture());
+    ByteBuffer packet = packetCaptor.getValue();
+
+    // We expect this to trigger DOWN because it's the first event in onTouchEvent
+    assertEquals(AndroidTouchProcessor.PointerChange.DOWN, readPointerChange(packet));
+    assertEquals(enginePrimaryStylusButton, readButtons(packet));
   }
 }
