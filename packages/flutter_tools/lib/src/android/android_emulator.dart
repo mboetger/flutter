@@ -264,12 +264,9 @@ class AndroidEmulator extends Emulator {
         _logger.printError('Address these issues and try again.');
 
         if (earlyFailure && !completer.isCompleted) {
-          final String stderrString = stderrList.join('\n');
           try {
-            throwToolExit(
-              'The Android emulator exited with code $status during startup.\n$stderrString',
-            );
-          } catch (error, stackTrace) {
+            throwToolExit('The Android emulator exited with code $status $when');
+          } on Object catch (error, stackTrace) {
             completer.completeError(error, stackTrace);
           }
         }
