@@ -12,6 +12,7 @@ import 'package:yaml/yaml.dart';
 
 import 'android/android_builder.dart';
 import 'android/gradle_utils.dart' as gradle;
+import 'android/migrations/android_embedding_migration.dart';
 import 'base/common.dart';
 import 'base/error_handling_io.dart';
 import 'base/file_system.dart';
@@ -482,9 +483,11 @@ class FlutterProject {
     );
   }
 
-  void checkForDeprecation({DeprecationBehavior deprecationBehavior = DeprecationBehavior.none}) {
+  Future<void> checkForDeprecation({
+    DeprecationBehavior deprecationBehavior = DeprecationBehavior.none,
+  }) async {
     if (android.existsSync() && pubspecFile.existsSync()) {
-      android.checkForDeprecation(deprecationBehavior: deprecationBehavior);
+      await android.checkForDeprecation(deprecationBehavior: deprecationBehavior);
     }
   }
 
@@ -998,7 +1001,12 @@ See the link below for more information:
     }, printStatusWhenWriting: false);
   }
 
-  void checkForDeprecation({DeprecationBehavior deprecationBehavior = DeprecationBehavior.none}) {
+  Future<void> checkForDeprecation({
+    DeprecationBehavior deprecationBehavior = DeprecationBehavior.none,
+  }) async {
+    if (computeEmbeddingVersion().version == AndroidEmbeddingVersion.v1) {
+      await AndroidEmbeddingMigration(this, globals.logger).migrate();
+    }
     if (deprecationBehavior == DeprecationBehavior.none) {
       return;
     }

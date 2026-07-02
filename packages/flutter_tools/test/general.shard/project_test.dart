@@ -226,7 +226,7 @@ dependencies:
         final FlutterProject project = await someProject(androidManifestOverride: invalidManifest);
 
         expect(
-          () => project.checkForDeprecation(deprecationBehavior: DeprecationBehavior.ignore),
+          project.checkForDeprecation(deprecationBehavior: DeprecationBehavior.ignore),
           throwsToolExit(
             message:
                 'Please ensure that the android manifest is a valid XML document and try again.',
@@ -242,7 +242,7 @@ dependencies:
           // android:name="flutterEmbedding" android:value="2" />.
 
           // Default is "DeprecationBehavior.none"
-          project.checkForDeprecation();
+          await project.checkForDeprecation();
           expect(testLogger.statusText, isEmpty);
         },
       );
@@ -252,7 +252,7 @@ dependencies:
         // v1 embedding, as opposed to having <meta-data
         // android:name="flutterEmbedding" android:value="2" />.
 
-        project.checkForDeprecation(deprecationBehavior: DeprecationBehavior.ignore);
+        await project.checkForDeprecation(deprecationBehavior: DeprecationBehavior.ignore);
         expect(
           testLogger.statusText,
           isNot(
@@ -267,7 +267,7 @@ dependencies:
         () async {
           final FlutterProject project = await aPluginProject();
 
-          project.checkForDeprecation(deprecationBehavior: DeprecationBehavior.exit);
+          await project.checkForDeprecation(deprecationBehavior: DeprecationBehavior.exit);
           expect(
             testLogger.statusText,
             isNot(
@@ -282,6 +282,22 @@ dependencies:
               contains('No `<meta-data android:name="flutterEmbedding" android:value="2"/>` in '),
             ),
           );
+        },
+      );
+      _testInMemory(
+        'checkForDeprecation automatically migrates V1 Android project to V2',
+        () async {
+          final FlutterProject project = await someProject(
+            androidManifestOverride: '<manifest><application></application></manifest>',
+          );
+          expect(project.android.computeEmbeddingVersion().version, AndroidEmbeddingVersion.v1);
+
+          await project.checkForDeprecation(deprecationBehavior: DeprecationBehavior.exit);
+
+          expect(project.android.computeEmbeddingVersion().version, AndroidEmbeddingVersion.v2);
+          final String manifestContent = project.android.appManifestFile.readAsStringSync();
+          expect(manifestContent, contains('flutterEmbedding'));
+          expect(manifestContent, contains('android:value="2"'));
         },
       );
       _testInMemory('Android plugin without example app does not show a warning', () async {
