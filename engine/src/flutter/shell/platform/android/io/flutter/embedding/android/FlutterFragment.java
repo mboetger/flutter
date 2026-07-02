@@ -1226,8 +1226,6 @@ public class FlutterFragment extends Fragment
    *
    * <p>See {@link android.app.Activity#onRequestPermissionsResult(int, String[], int[])}
    *
-   * <p>
-   *
    * @param requestCode identifier passed with the initial permission request
    * @param permissions permissions that were requested
    * @param grantResults permission grants or denials
@@ -1245,8 +1243,6 @@ public class FlutterFragment extends Fragment
    * Fragment}.
    *
    * <p>See {@link android.app.Activity#onNewIntent(Intent)}
-   *
-   * <p>
    *
    * @param intent new Intent
    */
@@ -1304,8 +1300,6 @@ public class FlutterFragment extends Fragment
    * A result has been returned after an invocation of {@link
    * Fragment#startActivityForResult(Intent, int)}.
    *
-   * <p>
-   *
    * @param requestCode request code sent with {@link Fragment#startActivityForResult(Intent, int)}
    * @param resultCode code representing the result of the {@code Activity} that was launched
    * @param data any corresponding return data, held within an {@code Intent}
@@ -1334,8 +1328,6 @@ public class FlutterFragment extends Fragment
    * Callback invoked when memory is low.
    *
    * <p>This implementation forwards a memory pressure warning to the running Flutter app.
-   *
-   * <p>
    *
    * @param level level
    */

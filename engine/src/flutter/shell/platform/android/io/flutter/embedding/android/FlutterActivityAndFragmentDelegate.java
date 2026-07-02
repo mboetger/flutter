@@ -178,8 +178,6 @@ import java.util.Set;
    *
    * <p>This method does the following:
    *
-   * <p>
-   *
    * <ol>
    *   <li>Initializes the Flutter system.
    *   <li>Obtains or creates a {@link io.flutter.embedding.engine.FlutterEngine}.
@@ -264,8 +262,6 @@ import java.util.Set;
 
   /**
    * Obtains a reference to a FlutterEngine to back this delegate and its {@code host}.
-   *
-   * <p>
    *
    * <p>First, the {@code host} is asked if it would like to use a cached {@link
    * io.flutter.embedding.engine.FlutterEngine}, and if so, the cached {@link
@@ -471,8 +467,6 @@ import java.util.Set;
    *
    * <p>This method:
    *
-   * <p>
-   *
    * <ol>
    *   <li>Begins executing Dart code, if it is not already executing.
    * </ol>
@@ -659,8 +653,6 @@ import java.util.Set;
    *
    * <p>This method:
    *
-   * <p>
-   *
    * <ol>
    *   <li>This method notifies the running Flutter app that it is "paused" as per the Flutter app
    *       lifecycle.
@@ -758,8 +750,6 @@ import java.util.Set;
    * Invoke this from {@code Activity#onDestroy()} or {@code Fragment#onDetach()}.
    *
    * <p>This method:
-   *
-   * <p>
    *
    * <ol>
    *   <li>Detaches this delegate's {@link io.flutter.embedding.engine.FlutterEngine} from its
