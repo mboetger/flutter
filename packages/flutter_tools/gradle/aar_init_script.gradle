@@ -61,11 +61,7 @@ void configureProject(Project project, String outputDir) {
         .toFile().text.trim()
     project.dependencies {
         // Add the embedding dependency.
-        compileOnly ("io.flutter:flutter_embedding_release:1.0.0-$engineVersion") {
-            // We only need to expose io.flutter.plugin.*
-            // No need for the embedding transitive dependencies.
-            transitive = false
-        }
+        compileOnly "io.flutter:flutter_embedding_release:1.0.0-$engineVersion"
     }
 }
 
