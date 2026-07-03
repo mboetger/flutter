@@ -401,6 +401,49 @@ void main() {
         expect(find.text(errorFormatText), findsOneWidget);
       },
     );
+
+    testWidgets('InputDatePickerFormField keyboardType can be customized', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Form(
+              child: InputDatePickerFormField(
+                initialDate: DateTime(2016, DateTime.january, 15),
+                firstDate: DateTime(2001),
+                lastDate: DateTime(2031, DateTime.december, 31),
+                keyboardType: TextInputType.text,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final TextField textField = tester.widget<TextField>(find.byType(TextField));
+      expect(textField.keyboardType, TextInputType.text);
+    });
+
+    testWidgets('InputDatePickerFormField keyboardType defaults to TextInputType.datetime', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Form(
+              child: InputDatePickerFormField(
+                initialDate: DateTime(2016, DateTime.january, 15),
+                firstDate: DateTime(2001),
+                lastDate: DateTime(2031, DateTime.december, 31),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final TextField textField = tester.widget<TextField>(find.byType(TextField));
+      expect(textField.keyboardType, TextInputType.datetime);
+    });
   });
 
   testWidgets('FocusNode can request focus', (WidgetTester tester) async {
