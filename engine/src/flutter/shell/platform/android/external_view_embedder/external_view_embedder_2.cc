@@ -227,6 +227,7 @@ DlCanvas* AndroidExternalViewEmbedder2::GetRootCanvas() {
 void AndroidExternalViewEmbedder2::Reset() {
   composition_order_.clear();
   slices_.clear();
+  visited_platform_views_.clear();
 }
 
 // |ExternalViewEmbedder|
@@ -305,6 +306,57 @@ void AndroidExternalViewEmbedder2::HideOverlayLayerIfNeeded() {
   if (overlay_layer_is_shown_.load()) {
     jni_facade_->hideOverlaySurface2();
     overlay_layer_is_shown_.store(false);
+  }
+}
+
+void AndroidExternalViewEmbedder2::PushVisitedPlatformView(
+    int64_t platform_view_id) {
+  visited_platform_views_.push_back(platform_view_id);
+}
+
+void AndroidExternalViewEmbedder2::PushFilterToVisitedPlatformViews(
+    const std::shared_ptr<DlImageFilter>& filter,
+    const DlRect& filter_rect) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushImageFilter(filter, filter_rect);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder2::PushClipRectToVisitedPlatformViews(
+    const DlRect& clip_rect) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipRect(clip_rect);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder2::PushClipRRectToVisitedPlatformViews(
+    const DlRoundRect& clip_rrect) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipRRect(clip_rrect);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder2::PushClipRSuperellipseToVisitedPlatformViews(
+    const DlRoundSuperellipse& clip_rse) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipRSuperellipse(clip_rse);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder2::PushClipPathToVisitedPlatformViews(
+    const DlPath& clip_path) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipPath(clip_path);
+    }
   }
 }
 

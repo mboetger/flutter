@@ -1112,5 +1112,51 @@ TEST(AndroidExternalViewEmbedder, TeardownDoesNotCallJNIMethod) {
   embedder->Teardown();
 }
 
+TEST(AndroidExternalViewEmbedder, BackdropFilterPropagatedToJNI) {
+  auto jni_mock = std::make_shared<JNIMock>();
+  auto android_context = AndroidContext(AndroidRenderingAPI::kSoftware);
+  auto embedder = std::make_unique<AndroidExternalViewEmbedder>(
+      android_context, jni_mock, nullptr, GetTaskRunnersForFixture());
+
+  fml::Thread rasterizer_thread("rasterizer");
+  auto raster_thread_merger =
+      GetThreadMergerFromPlatformThread(&rasterizer_thread);
+
+  embedder->BeginFrame(nullptr, raster_thread_merger);
+  embedder->PrepareFlutterView(DlISize(100, 100), 1.0);
+
+  // 1. Preroll platform view
+  MutatorsStack stack;
+  auto params =
+      std::make_unique<EmbeddedViewParams>(DlMatrix(), DlSize(100, 100), stack);
+  embedder->PrerollCompositeEmbeddedView(0, std::move(params));
+  embedder->PushVisitedPlatformView(0);
+
+  // 2. Push backdrop filter
+  auto filter = DlImageFilter::MakeBlur(5, 5, DlTileMode::kClamp);
+  embedder->PushFilterToVisitedPlatformViews(filter,
+                                             DlRect::MakeXYWH(0, 0, 100, 100));
+
+  // 3. Submit
+  // We expect the JNI call to have the backdrop filter in the mutators stack.
+  MutatorsStack expected_stack;
+  expected_stack.PushBackdropFilter(filter, DlRect::MakeXYWH(0, 0, 100, 100));
+
+  EXPECT_CALL(*jni_mock, FlutterViewOnDisplayPlatformView(0, _, _, _, _, _, _,
+                                                          expected_stack));
+
+  SurfaceFrame::FramebufferInfo framebuffer_info;
+  auto surface_frame = std::make_unique<SurfaceFrame>(
+      SkSurfaces::Null(100, 100), framebuffer_info,
+      [](const SurfaceFrame& surface_frame, DlCanvas* canvas) { return true; },
+      [](const SurfaceFrame& surface_frame) { return true; },
+      DlISize(100, 100));
+
+  embedder->SubmitFlutterView(kImplicitViewId, nullptr, nullptr,
+                              std::move(surface_frame));
+
+  embedder->EndFrame(/*should_resubmit_frame=*/false, raster_thread_merger);
+}
+
 }  // namespace testing
 }  // namespace flutter

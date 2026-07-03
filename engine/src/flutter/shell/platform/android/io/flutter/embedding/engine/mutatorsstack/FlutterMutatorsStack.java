@@ -31,7 +31,11 @@ public class FlutterMutatorsStack {
     CLIP_RRECT,
     CLIP_PATH,
     TRANSFORM,
-    OPACITY
+    OPACITY,
+    BACKDROP_FILTER,
+    BACKDROP_CLIP_RECT,
+    BACKDROP_CLIP_RRECT,
+    BACKDROP_CLIP_PATH
   }
 
   /**
@@ -48,6 +52,8 @@ public class FlutterMutatorsStack {
     @Nullable private Path path;
     @Nullable private float[] radiis;
     private float opacity = 1.f;
+    private float sigmaX = 0.f;
+    private float sigmaY = 0.f;
 
     private FlutterMutatorType type;
 
@@ -105,6 +111,37 @@ public class FlutterMutatorsStack {
     }
 
     /**
+     * Initialize a backdrop filter mutator.
+     *
+     * @param sigmaX the sigmaX value of the blur.
+     * @param sigmaY the sigmaY value of the blur.
+     */
+    public FlutterMutator(float sigmaX, float sigmaY) {
+      this.type = FlutterMutatorType.BACKDROP_FILTER;
+      this.sigmaX = sigmaX;
+      this.sigmaY = sigmaY;
+    }
+
+    /** Initialize a mutator with a specific type and rect. */
+    public FlutterMutator(Rect rect, FlutterMutatorType type) {
+      this.type = type;
+      this.rect = rect;
+    }
+
+    /** Initialize a mutator with a specific type, rect, and radiis. */
+    public FlutterMutator(Rect rect, float[] radiis, FlutterMutatorType type) {
+      this.type = type;
+      this.rect = rect;
+      this.radiis = radiis;
+    }
+
+    /** Initialize a mutator with a specific type and path. */
+    public FlutterMutator(Path path, FlutterMutatorType type) {
+      this.type = type;
+      this.path = path;
+    }
+
+    /**
      * Get the mutator type.
      *
      * @return The type of the mutator.
@@ -147,6 +184,22 @@ public class FlutterMutatorsStack {
      */
     public float getOpacity() {
       return opacity;
+    }
+
+    /**
+     * Get the sigmaX of the mutator if the {@link #getType()} returns
+     * FlutterMutatorType.BACKDROP_FILTER.
+     */
+    public float getSigmaX() {
+      return sigmaX;
+    }
+
+    /**
+     * Get the sigmaY of the mutator if the {@link #getType()} returns
+     * FlutterMutatorType.BACKDROP_FILTER.
+     */
+    public float getSigmaY() {
+      return sigmaY;
     }
   }
 
@@ -230,6 +283,33 @@ public class FlutterMutatorsStack {
     mutators.add(mutator);
     path.transform(finalMatrix);
     finalClippingPaths.add(path);
+  }
+
+  /** Push a backdropFilter {@link FlutterMutatorsStack.FlutterMutator} to the stack. */
+  public void pushBackdropFilter(float sigmaX, float sigmaY) {
+    FlutterMutator mutator = new FlutterMutator(sigmaX, sigmaY);
+    mutators.add(mutator);
+  }
+
+  /** Push a backdropClipRect {@link FlutterMutatorsStack.FlutterMutator} to the stack. */
+  public void pushBackdropClipRect(int left, int top, int right, int bottom) {
+    Rect rect = new Rect(left, top, right, bottom);
+    FlutterMutator mutator = new FlutterMutator(rect, FlutterMutatorType.BACKDROP_CLIP_RECT);
+    mutators.add(mutator);
+  }
+
+  /** Push a backdropClipRRect {@link FlutterMutatorsStack.FlutterMutator} to the stack. */
+  public void pushBackdropClipRRect(int left, int top, int right, int bottom, float[] radiis) {
+    Rect rect = new Rect(left, top, right, bottom);
+    FlutterMutator mutator =
+        new FlutterMutator(rect, radiis, FlutterMutatorType.BACKDROP_CLIP_RRECT);
+    mutators.add(mutator);
+  }
+
+  /** Push a backdropClipPath {@link FlutterMutatorsStack.FlutterMutator} to the stack. */
+  public void pushBackdropClipPath(Path path) {
+    FlutterMutator mutator = new FlutterMutator(path, FlutterMutatorType.BACKDROP_CLIP_PATH);
+    mutators.add(mutator);
   }
 
   /**

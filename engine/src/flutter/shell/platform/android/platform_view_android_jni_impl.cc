@@ -165,6 +165,10 @@ static jmethodID g_mutators_stack_push_cliprect_method = nullptr;
 static jmethodID g_mutators_stack_push_cliprrect_method = nullptr;
 static jmethodID g_mutators_stack_push_opacity_method = nullptr;
 static jmethodID g_mutators_stack_push_clippath_method = nullptr;
+static jmethodID g_mutators_stack_push_backdrop_filter_method = nullptr;
+static jmethodID g_mutators_stack_push_backdrop_cliprect_method = nullptr;
+static jmethodID g_mutators_stack_push_backdrop_cliprrect_method = nullptr;
+static jmethodID g_mutators_stack_push_backdrop_clippath_method = nullptr;
 
 // android.graphics.Path class, methods, and nested classes.
 static fml::jni::ScopedJavaGlobalRef<jclass>* path_class = nullptr;
@@ -1116,6 +1120,39 @@ bool PlatformViewAndroid::Register(JNIEnv* env) {
     return false;
   }
 
+  g_mutators_stack_push_backdrop_filter_method = env->GetMethodID(
+      g_mutators_stack_class->obj(), "pushBackdropFilter", "(FF)V");
+  if (g_mutators_stack_push_backdrop_filter_method == nullptr) {
+    FML_LOG(ERROR)
+        << "Could not locate FlutterMutatorsStack.pushBackdropFilter method";
+    return false;
+  }
+
+  g_mutators_stack_push_backdrop_cliprect_method = env->GetMethodID(
+      g_mutators_stack_class->obj(), "pushBackdropClipRect", "(IIII)V");
+  if (g_mutators_stack_push_backdrop_cliprect_method == nullptr) {
+    FML_LOG(ERROR)
+        << "Could not locate FlutterMutatorsStack.pushBackdropClipRect method";
+    return false;
+  }
+
+  g_mutators_stack_push_backdrop_cliprrect_method = env->GetMethodID(
+      g_mutators_stack_class->obj(), "pushBackdropClipRRect", "(IIII[F)V");
+  if (g_mutators_stack_push_backdrop_cliprrect_method == nullptr) {
+    FML_LOG(ERROR)
+        << "Could not locate FlutterMutatorsStack.pushBackdropClipRRect method";
+    return false;
+  }
+
+  g_mutators_stack_push_backdrop_clippath_method =
+      env->GetMethodID(g_mutators_stack_class->obj(), "pushBackdropClipPath",
+                       "(Landroid/graphics/Path;)V");
+  if (g_mutators_stack_push_backdrop_clippath_method == nullptr) {
+    FML_LOG(ERROR)
+        << "Could not locate FlutterMutatorsStack.pushBackdropClipPath method";
+    return false;
+  }
+
   g_java_weak_reference_class = new fml::jni::ScopedJavaGlobalRef<jclass>(
       env, env->FindClass("java/lang/ref/WeakReference"));
   if (g_java_weak_reference_class->is_null()) {
@@ -1821,16 +1858,103 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
                             radiisArray.obj());
         break;
       }
-      // TODO(cyanglaz): Implement other mutators.
-      // https://github.com/flutter/flutter/issues/58426
-      case MutatorType::kClipPath:
-      case MutatorType::kOpacity:
-      case MutatorType::kBackdropFilter:
-      case MutatorType::kBackdropClipRect:
-      case MutatorType::kBackdropClipRRect:
-      case MutatorType::kBackdropClipRSuperellipse:
-      case MutatorType::kBackdropClipPath:
+      case MutatorType::kOpacity: {
+        float opacity = (*iter)->GetAlphaFloat();
+        env->CallVoidMethod(mutatorsStack, g_mutators_stack_push_opacity_method,
+                            opacity);
         break;
+      }
+      case MutatorType::kClipPath: {
+        auto& dlPath = (*iter)->GetPath();
+        FML_DCHECK(!dlPath.IsRect());
+        FML_DCHECK(!dlPath.IsOval());
+        FML_DCHECK(!dlPath.IsRoundRect());
+
+        AndroidPathReceiver receiver(env);
+        receiver.SetFillType(dlPath.GetFillType());
+        dlPath.Dispatch(receiver);
+
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_clippath_method,
+                            receiver.TakePath());
+        break;
+      }
+      case MutatorType::kBackdropFilter: {
+        auto& filter = (*iter)->GetFilterMutation().GetFilter();
+        if (auto* blur = filter.asBlur()) {
+          env->CallVoidMethod(mutatorsStack,
+                              g_mutators_stack_push_backdrop_filter_method,
+                              blur->sigma_x(), blur->sigma_y());
+        }
+        break;
+      }
+      case MutatorType::kBackdropClipRect: {
+        const DlRect& rect = (*iter)->GetBackdropClipRect().rect;
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_cliprect_method,
+                            static_cast<int>(rect.GetLeft()),   //
+                            static_cast<int>(rect.GetTop()),    //
+                            static_cast<int>(rect.GetRight()),  //
+                            static_cast<int>(rect.GetBottom()));
+        break;
+      }
+      case MutatorType::kBackdropClipRRect: {
+        const DlRoundRect& rrect = (*iter)->GetBackdropClipRRect().rrect;
+        const DlRect& rect = rrect.GetBounds();
+        const DlRoundingRadii radii = rrect.GetRadii();
+        SkScalar radiis[8] = {
+            radii.top_left.width,     radii.top_left.height,
+            radii.top_right.width,    radii.top_right.height,
+            radii.bottom_right.width, radii.bottom_right.height,
+            radii.bottom_left.width,  radii.bottom_left.height,
+        };
+        fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
+            env, env->NewFloatArray(8));
+        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_cliprrect_method,
+                            static_cast<int>(rect.GetLeft()),    //
+                            static_cast<int>(rect.GetTop()),     //
+                            static_cast<int>(rect.GetRight()),   //
+                            static_cast<int>(rect.GetBottom()),  //
+                            radiisArray.obj());
+        break;
+      }
+      case MutatorType::kBackdropClipRSuperellipse: {
+        const DlRoundRect& rrect = (*iter)
+                                       ->GetBackdropClipRSuperellipse()
+                                       .rse.ToApproximateRoundRect();
+        const DlRect& rect = rrect.GetBounds();
+        const DlRoundingRadii radii = rrect.GetRadii();
+        SkScalar radiis[8] = {
+            radii.top_left.width,     radii.top_left.height,
+            radii.top_right.width,    radii.top_right.height,
+            radii.bottom_right.width, radii.bottom_right.height,
+            radii.bottom_left.width,  radii.bottom_left.height,
+        };
+        fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
+            env, env->NewFloatArray(8));
+        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_cliprrect_method,
+                            static_cast<int>(rect.GetLeft()),    //
+                            static_cast<int>(rect.GetTop()),     //
+                            static_cast<int>(rect.GetRight()),   //
+                            static_cast<int>(rect.GetBottom()),  //
+                            radiisArray.obj());
+        break;
+      }
+      case MutatorType::kBackdropClipPath: {
+        auto& dlPath = (*iter)->GetBackdropClipPath().path;
+        AndroidPathReceiver receiver(env);
+        receiver.SetFillType(dlPath.GetFillType());
+        dlPath.Dispatch(receiver);
+
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_clippath_method,
+                            receiver.TakePath());
+        break;
+      }
     }
     ++iter;
   }
@@ -2336,14 +2460,82 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
                             receiver.TakePath());
         break;
       }
-      // TODO(cyanglaz): Implement other mutators.
-      // https://github.com/flutter/flutter/issues/58426
-      case MutatorType::kBackdropFilter:
-      case MutatorType::kBackdropClipRect:
-      case MutatorType::kBackdropClipRRect:
-      case MutatorType::kBackdropClipRSuperellipse:
-      case MutatorType::kBackdropClipPath:
+      case MutatorType::kBackdropFilter: {
+        auto& filter = (*iter)->GetFilterMutation().GetFilter();
+        if (auto* blur = filter.asBlur()) {
+          env->CallVoidMethod(mutatorsStack,
+                              g_mutators_stack_push_backdrop_filter_method,
+                              blur->sigma_x(), blur->sigma_y());
+        }
         break;
+      }
+      case MutatorType::kBackdropClipRect: {
+        const DlRect& rect = (*iter)->GetBackdropClipRect().rect;
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_cliprect_method,
+                            static_cast<int>(rect.GetLeft()),   //
+                            static_cast<int>(rect.GetTop()),    //
+                            static_cast<int>(rect.GetRight()),  //
+                            static_cast<int>(rect.GetBottom()));
+        break;
+      }
+      case MutatorType::kBackdropClipRRect: {
+        const DlRoundRect& rrect = (*iter)->GetBackdropClipRRect().rrect;
+        const DlRect& rect = rrect.GetBounds();
+        const DlRoundingRadii radii = rrect.GetRadii();
+        SkScalar radiis[8] = {
+            radii.top_left.width,     radii.top_left.height,
+            radii.top_right.width,    radii.top_right.height,
+            radii.bottom_right.width, radii.bottom_right.height,
+            radii.bottom_left.width,  radii.bottom_left.height,
+        };
+        fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
+            env, env->NewFloatArray(8));
+        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_cliprrect_method,
+                            static_cast<int>(rect.GetLeft()),    //
+                            static_cast<int>(rect.GetTop()),     //
+                            static_cast<int>(rect.GetRight()),   //
+                            static_cast<int>(rect.GetBottom()),  //
+                            radiisArray.obj());
+        break;
+      }
+      case MutatorType::kBackdropClipRSuperellipse: {
+        const DlRoundRect& rrect = (*iter)
+                                       ->GetBackdropClipRSuperellipse()
+                                       .rse.ToApproximateRoundRect();
+        const DlRect& rect = rrect.GetBounds();
+        const DlRoundingRadii radii = rrect.GetRadii();
+        SkScalar radiis[8] = {
+            radii.top_left.width,     radii.top_left.height,
+            radii.top_right.width,    radii.top_right.height,
+            radii.bottom_right.width, radii.bottom_right.height,
+            radii.bottom_left.width,  radii.bottom_left.height,
+        };
+        fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
+            env, env->NewFloatArray(8));
+        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_cliprrect_method,
+                            static_cast<int>(rect.GetLeft()),    //
+                            static_cast<int>(rect.GetTop()),     //
+                            static_cast<int>(rect.GetRight()),   //
+                            static_cast<int>(rect.GetBottom()),  //
+                            radiisArray.obj());
+        break;
+      }
+      case MutatorType::kBackdropClipPath: {
+        auto& dlPath = (*iter)->GetBackdropClipPath().path;
+        AndroidPathReceiver receiver(env);
+        receiver.SetFillType(dlPath.GetFillType());
+        dlPath.Dispatch(receiver);
+
+        env->CallVoidMethod(mutatorsStack,
+                            g_mutators_stack_push_backdrop_clippath_method,
+                            receiver.TakePath());
+        break;
+      }
     }
     ++iter;
   }

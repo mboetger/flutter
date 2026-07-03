@@ -85,6 +85,28 @@ class AndroidExternalViewEmbedder2 final : public ExternalViewEmbedder {
   // |ExternalViewEmbedder|
   void Teardown() override;
 
+  // |ExternalViewEmbedder|
+  void PushVisitedPlatformView(int64_t platform_view_id) override;
+
+  // |ExternalViewEmbedder|
+  void PushFilterToVisitedPlatformViews(
+      const std::shared_ptr<DlImageFilter>& filter,
+      const DlRect& filter_rect) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipRectToVisitedPlatformViews(const DlRect& clip_rect) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipRRectToVisitedPlatformViews(
+      const DlRoundRect& clip_rrect) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipRSuperellipseToVisitedPlatformViews(
+      const DlRoundSuperellipse& clip_rse) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipPathToVisitedPlatformViews(const DlPath& clip_path) override;
+
   // Gets the rect based on the device pixel ratio of a platform view displayed
   // on the screen.
   static DlRect GetViewRect(
@@ -157,6 +179,8 @@ class AndroidExternalViewEmbedder2 final : public ExternalViewEmbedder {
   // Hides the overlay layer if it does not have content and the previous
   // frame did have content.
   void HideOverlayLayerIfNeeded();
+
+  std::vector<int64_t> visited_platform_views_;
 };
 
 }  // namespace flutter

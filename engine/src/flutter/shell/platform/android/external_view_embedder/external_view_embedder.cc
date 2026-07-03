@@ -203,6 +203,7 @@ void AndroidExternalViewEmbedder::Reset() {
 
   composition_order_.clear();
   slices_.clear();
+  visited_platform_views_.clear();
 }
 
 // |ExternalViewEmbedder|
@@ -278,6 +279,57 @@ void AndroidExternalViewEmbedder::DestroySurfaces() {
                                       latch.Signal();
                                     });
   latch.Wait();
+}
+
+void AndroidExternalViewEmbedder::PushVisitedPlatformView(
+    int64_t platform_view_id) {
+  visited_platform_views_.push_back(platform_view_id);
+}
+
+void AndroidExternalViewEmbedder::PushFilterToVisitedPlatformViews(
+    const std::shared_ptr<DlImageFilter>& filter,
+    const DlRect& filter_rect) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushImageFilter(filter, filter_rect);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder::PushClipRectToVisitedPlatformViews(
+    const DlRect& clip_rect) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipRect(clip_rect);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder::PushClipRRectToVisitedPlatformViews(
+    const DlRoundRect& clip_rrect) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipRRect(clip_rrect);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder::PushClipRSuperellipseToVisitedPlatformViews(
+    const DlRoundSuperellipse& clip_rse) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipRSuperellipse(clip_rse);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder::PushClipPathToVisitedPlatformViews(
+    const DlPath& clip_path) {
+  for (int64_t id : visited_platform_views_) {
+    if (view_params_.count(id) == 1) {
+      view_params_.at(id).PushPlatformViewClipPath(clip_path);
+    }
+  }
 }
 
 }  // namespace flutter

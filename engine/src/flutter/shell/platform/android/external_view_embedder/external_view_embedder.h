@@ -80,6 +80,28 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
   // |ExternalViewEmbedder|
   void Teardown() override;
 
+  // |ExternalViewEmbedder|
+  void PushVisitedPlatformView(int64_t platform_view_id) override;
+
+  // |ExternalViewEmbedder|
+  void PushFilterToVisitedPlatformViews(
+      const std::shared_ptr<DlImageFilter>& filter,
+      const DlRect& filter_rect) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipRectToVisitedPlatformViews(const DlRect& clip_rect) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipRRectToVisitedPlatformViews(
+      const DlRoundRect& clip_rrect) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipRSuperellipseToVisitedPlatformViews(
+      const DlRoundSuperellipse& clip_rse) override;
+
+  // |ExternalViewEmbedder|
+  void PushClipPathToVisitedPlatformViews(const DlPath& clip_path) override;
+
   // Gets the rect based on the device pixel ratio of a platform view displayed
   // on the screen.
   DlRect GetViewRect(int64_t view_id) const;
@@ -147,6 +169,8 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
                                                       int64_t view_id,
                                                       EmbedderViewSlice* slice,
                                                       const DlRect& rect);
+
+  std::vector<int64_t> visited_platform_views_;
 };
 
 }  // namespace flutter
