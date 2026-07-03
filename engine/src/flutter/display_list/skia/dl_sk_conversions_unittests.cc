@@ -443,5 +443,15 @@ TEST(DisplayListSkConversions, ToSkRSTransform) {
   }
 }
 
+TEST(DisplayListSkConversions, ToSkMaskFilter) {
+  // Test with sigma >= 0.1
+  auto filter1 = DlBlurMaskFilter::Make(DlBlurStyle::kNormal, 0.1);
+  EXPECT_NE(ToSk(filter1.get()), nullptr);
+
+  // Test with sigma < 0.1
+  auto filter2 = DlBlurMaskFilter::Make(DlBlurStyle::kNormal, 0.09);
+  EXPECT_EQ(ToSk(filter2.get()), nullptr);
+}
+
 }  // namespace testing
 }  // namespace flutter
