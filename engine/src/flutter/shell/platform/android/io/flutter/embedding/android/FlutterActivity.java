@@ -630,8 +630,6 @@ public class FlutterActivity extends Activity
 
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
-    switchLaunchThemeForNormalTheme();
-
     super.onCreate(savedInstanceState);
 
     if (savedInstanceState != null) {
@@ -643,6 +641,9 @@ public class FlutterActivity extends Activity
 
     delegate = new FlutterActivityAndFragmentDelegate(this);
     delegate.onAttach(this);
+
+    switchLaunchThemeForNormalTheme();
+
     delegate.onRestoreInstanceState(savedInstanceState);
 
     lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);

@@ -780,4 +780,47 @@ public class FlutterActivityTest {
       onCreateCalled = true;
     }
   }
+
+  @Test
+  public void themeIsNotSwitchedBeforeEngineInitialization() {
+    Intent intent = ThemeSpyActivity.createDefaultIntent(ctx);
+    ActivityController<ThemeSpyActivity> activityController =
+        Robolectric.buildActivity(ThemeSpyActivity.class, intent);
+    ThemeSpyActivity activity = activityController.get();
+
+    activityController.create();
+
+    assertNull(
+        "Theme should not be switched to NormalTheme before engine initialization",
+        activity.themeAppliedBeforeEngineInit);
+  }
+
+  static class ThemeSpyActivity extends FlutterActivity {
+    public Integer themeAppliedBeforeEngineInit = null;
+    public boolean engineInitCalled = false;
+
+    @Override
+    protected Bundle getMetaData() throws PackageManager.NameNotFoundException {
+      Bundle bundle = new Bundle();
+      bundle.putInt(
+          io.flutter.embedding.android.FlutterActivityLaunchConfigs.NORMAL_THEME_META_DATA_KEY,
+          12345);
+      return bundle;
+    }
+
+    @Nullable
+    @Override
+    public FlutterEngine provideFlutterEngine(@NonNull Context context) {
+      engineInitCalled = true;
+      return mock(FlutterEngine.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+    }
+
+    @Override
+    public void setTheme(int resid) {
+      super.setTheme(resid);
+      if (!engineInitCalled) {
+        themeAppliedBeforeEngineInit = resid;
+      }
+    }
+  }
 }
