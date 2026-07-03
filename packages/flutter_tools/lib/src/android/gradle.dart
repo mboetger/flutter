@@ -173,6 +173,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
        _artifacts = artifacts,
        _analytics = analytics,
        _gradleUtils = gradleUtils,
+       _platform = platform,
        _androidStudio = androidStudio,
        _fileSystemUtils = FileSystemUtils(fileSystem: fileSystem, platform: platform),
        _processUtils = ProcessUtils(logger: logger, processManager: processManager);
@@ -186,6 +187,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
   final GradleUtils _gradleUtils;
   final FileSystemUtils _fileSystemUtils;
   final AndroidStudio? _androidStudio;
+  final Platform _platform;
 
   /// Builds the AAR and POM files for the current Flutter module or plugin.
   @override
@@ -587,10 +589,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     );
 
     if (exitCode != 0) {
-      throwToolExit(
-        'Gradle task $assembleTask failed with exit code $exitCode',
-        exitCode: exitCode,
-      );
+      throwToolExit(_gradleFailureMessage(assembleTask, exitCode), exitCode: exitCode);
     }
 
     if (isBuildingBundle) {
@@ -884,10 +883,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     if (result.exitCode != 0) {
       _logger.printStatus(result.stdout, wrap: false);
       _logger.printError(result.stderr, wrap: false);
-      throwToolExit(
-        'Gradle task $aarTask failed with exit code ${result.exitCode}.',
-        exitCode: result.exitCode,
-      );
+      throwToolExit(_gradleFailureMessage(aarTask, result.exitCode), exitCode: result.exitCode);
     }
     final Directory repoDirectory = getRepoDirectory(outputDirectory);
     if (!repoDirectory.existsSync()) {
@@ -986,9 +982,25 @@ class AndroidGradleBuilder implements AndroidBuilder {
     }
 
     if (exitCode != 0) {
-      throwToolExit('Gradle task $taskName failed with exit code $exitCode');
+      throwToolExit(_gradleFailureMessage(taskName, exitCode), exitCode: exitCode);
     }
     return outputPath;
+  }
+
+  String _gradleFailureMessage(String taskName, int exitCode) {
+    var message = 'Gradle task $taskName failed with exit code $exitCode';
+    if (exitCode < 0) {
+      final gradlew = _platform.isWindows ? 'gradlew.bat' : './gradlew';
+      message +=
+          '\n\n'
+          'This exit code may indicate that the Gradle daemon was killed or crashed (e.g. due to running out of memory, or being killed by the OS or security software).\n'
+          'To get more details, you can:\n'
+          " - Run the build with '--verbose' (e.g. 'flutter run --verbose' or 'flutter build apk --verbose').\n"
+          " - Run '$gradlew' directly in the 'android' directory:\n"
+          '   cd android\n'
+          '   $gradlew $taskName';
+    }
+    return message;
   }
 }
 
