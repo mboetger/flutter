@@ -296,6 +296,39 @@ void main() {
 
     logReader.dispose();
   });
+
+  testWithoutContext(
+    'AdbLogReader ignores flutter logs from other PIDs when appPid is known',
+    () async {
+      const appPid = 1234;
+      const otherPid = 5678;
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        FakeCommand(
+          command: const <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+          completer: Completer<void>.sync(),
+          stdout:
+              '$kDummyLine'
+              '05-11 12:54:46.665 I/flutter($appPid): Hello from this app\n'
+              '05-11 12:54:46.665 I/flutter($otherPid): Hello from another app\n',
+        ),
+      ]);
+      final AdbLogReader logReader = await AdbLogReader.createLogReader(
+        createFakeDevice(null),
+        processManager,
+        BufferLogger.test(),
+      );
+      await logReader.provideVmService(_FakeFlutterVmService(appPid));
+      final onDone = Completer<void>.sync();
+      final emittedLines = <String>[];
+      logReader.logLines.listen((String line) {
+        emittedLines.add(line);
+      }, onDone: onDone.complete);
+      await null;
+      logReader.dispose();
+      await onDone.future;
+      expect(emittedLines, const <String>['I/flutter($appPid): Hello from this app']);
+    },
+  );
 }
 
 AndroidDevice createFakeDevice(int? sdkLevel) {

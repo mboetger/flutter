@@ -1159,9 +1159,12 @@ class AdbLogReader extends DeviceLogReader {
   // 'W/ActivityManager(pid): '
   static final _logFormat = RegExp(r'^[VDIWEF]\/.*?\(\s*(\d+)\):\s');
 
+  static final _flutterLog = RegExp(r'^[VDIWEF]\/flutter[^:]*:\s+', caseSensitive: false);
+  static final _dartVmLog = RegExp(r'^[IE]\/DartVM[^:]*:\s+');
+
   static final _allowedTags = <RegExp>[
-    RegExp(r'^[VDIWEF]\/flutter[^:]*:\s+', caseSensitive: false),
-    RegExp(r'^[IE]\/DartVM[^:]*:\s+'),
+    _flutterLog,
+    _dartVmLog,
     RegExp(r'^[WEF]\/AndroidRuntime:\s+'),
     RegExp(r'^[WEF]\/AndroidRuntime\([0-9]+\):\s+'),
     RegExp(r'^[WEF]\/ActivityManager:\s+.*(\bflutter\b|\bdomokit\b|\bsky\b)'),
@@ -1249,7 +1252,11 @@ class AdbLogReader extends DeviceLogReader {
         }
       } else {
         // Filter on approved names and levels.
-        acceptLine = _allowedTags.any((RegExp re) => re.hasMatch(line));
+        if (_appPid != null && (_flutterLog.hasMatch(line) || _dartVmLog.hasMatch(line))) {
+          acceptLine = false;
+        } else {
+          acceptLine = _allowedTags.any((RegExp re) => re.hasMatch(line));
+        }
       }
 
       if (acceptLine) {
