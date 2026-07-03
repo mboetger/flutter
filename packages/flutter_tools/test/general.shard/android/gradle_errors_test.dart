@@ -57,7 +57,8 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
-          incompatibleKotlinVersionHandler,
+          failedToReadZipFileHandler,
+          outputFilesRepositoryHandler,          incompatibleKotlinVersionHandler,
         ]),
       );
     });
@@ -1648,7 +1649,26 @@ An exception occurred applying plugin request [id: 'kotlin-android']
         line: applyingKotlinAndroidPluginErrorExample,
         project: project,
         usesAndroidX: true,
-      );
+  group('gradle errors from issue 56275', () {
+    testUsingContext('detects failed to read zip file in build intermediates', () async {
+      const String errorMessage = r'''
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:processDebugResources'.
+> java.io.IOException: Failed to read zip file '/path/to/project/build/app/intermediates/processed_res/debug/processDebugResources/out/resources-debug.ap_'
+''';
+
+      expect(formatTestErrorMessage(errorMessage, failedToReadZipFileHandler), isTrue);
+
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+      expect(
+        await failedToReadZipFileHandler.handler(
+          line: errorMessage,
+          project: project,
+          usesAndroidX: true,
+        ),
+        equals(GradleBuildStatus.exit),      );
 
       expect(
         testLogger.statusText,
@@ -1690,7 +1710,36 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
         line: useNewAgpDslErrorHandlerExample,
         project: project,
         usesAndroidX: true,
+        contains('Gradle failed to read a zip file.'),
       );
+      expect(
+        testLogger.statusText,
+        contains('flutter clean'),
+      );
+    }, overrides: <Type, Generator>{
+      FileSystem: () => fileSystem,
+      ProcessManager: () => processManager,
+    });
+
+    testUsingContext('detects failed to create service of type OutputFilesRepository', () async {
+      const String errorMessage = r'''
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Failed to apply plugin [class 'org.gradle.api.plugins.BasePlugin']
+> Could not create service of type OutputFilesRepository using ExecutionGradleServices.createOutputFilesRepository()
+''';
+
+      expect(formatTestErrorMessage(errorMessage, outputFilesRepositoryHandler), isTrue);
+
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+      expect(
+        await outputFilesRepositoryHandler.handler(
+          line: errorMessage,
+          project: project,
+          usesAndroidX: true,
+        ),
+        equals(GradleBuildStatus.exit),      );
 
       expect(
         testLogger.statusText,
@@ -1714,7 +1763,17 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
       ProcessManager: () => processManager,
     },
   );
-}
+        contains('Gradle failed to create a service of type OutputFilesRepository.'),
+      );
+      expect(
+        testLogger.statusText,
+        contains('flutter clean'),
+      );
+    }, overrides: <Type, Generator>{
+      FileSystem: () => fileSystem,
+      ProcessManager: () => processManager,
+    });
+  });}
 
 bool formatTestErrorMessage(String errorMessage, GradleHandledError error) {
   return errorMessage.split('\n').any((String line) => error.test(line));

@@ -85,7 +85,8 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
-  incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
+  failedToReadZipFileHandler,
+  outputFilesRepositoryHandler,  incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
 const _boxTitle = 'Flutter Fix';
@@ -716,4 +717,39 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+@visibleForTesting
+final GradleHandledError failedToReadZipFileHandler = GradleHandledError(
+  test: (String line) => line.contains('java.io.IOException: Failed to read zip file') && line.contains('build'),
+  handler: ({
+    required String line,
+    required FlutterProject project,
+    required bool usesAndroidX,
+  }) async {
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Gradle failed to read a zip file.\n\n'
+      'To resolve this, please run the following command in a Terminal:\n'
+      'flutter clean',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'failed-to-read-zip-file',
 );
+
+@visibleForTesting
+final GradleHandledError outputFilesRepositoryHandler = GradleHandledError(
+  test: (String line) => line.contains('Could not create service of type OutputFilesRepository using ExecutionGradleServices.createOutputFilesRepository()'),
+  handler: ({
+    required String line,
+    required FlutterProject project,
+    required bool usesAndroidX,
+  }) async {
+    globals.printBox(
+      '${globals.logger.terminal.warningMark} Gradle failed to create a service of type OutputFilesRepository.\n\n'
+      'To resolve this, please run the following command in a Terminal:\n'
+      'flutter clean',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'failed-to-create-output-files-repository-service',);
