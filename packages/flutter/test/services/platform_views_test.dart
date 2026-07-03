@@ -656,4 +656,48 @@ void main() {
       'motionEventId: 0)',
     );
   });
+
+  test('AndroidMotionEvent has helper methods matching Android MotionEvent', () {
+    const properties = AndroidPointerProperties(id: 1, toolType: 2);
+    const coords = AndroidPointerCoords(
+      orientation: 0.1,
+      pressure: 0.2,
+      size: 0.3,
+      toolMajor: 0.4,
+      toolMinor: 0.5,
+      touchMajor: 0.6,
+      touchMinor: 0.7,
+      x: 0.8,
+      y: 0.9,
+    );
+    final event = AndroidMotionEvent(
+      downTime: 0,
+      eventTime: 0,
+      action: 0,
+      pointerCount: 1,
+      pointerProperties: <AndroidPointerProperties>[properties],
+      pointerCoords: <AndroidPointerCoords>[coords],
+      metaState: 0,
+      buttonState: 0,
+      xPrecision: 0.0,
+      yPrecision: 0.0,
+      deviceId: 0,
+      edgeFlags: 0,
+      source: 0,
+      flags: 0,
+      motionEventId: 0,
+    );
+
+    expect(event.getPointerId(0), 1);
+    expect(event.getToolType(0), 2);
+    expect(event.getOrientation(0), 0.1);
+    expect(event.getPressure(0), 0.2);
+    expect(event.getSize(0), 0.3);
+    expect(event.getToolMajor(0), 0.4);
+    expect(event.getToolMinor(0), 0.5);
+    expect(event.getTouchMajor(0), 0.6);
+    expect(event.getTouchMinor(0), 0.7);
+    expect(event.getX(0), 0.8);
+    expect(event.getY(0), 0.9);
+  });
 }

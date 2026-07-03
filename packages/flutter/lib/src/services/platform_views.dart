@@ -538,6 +538,61 @@ class AndroidMotionEvent {
   /// Used to identify this [MotionEvent](https://developer.android.com/reference/android/view/MotionEvent.html) uniquely in the Flutter Engine.
   final int motionEventId;
 
+  /// The pointer pointerId of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getPointerId(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getPointerId(int)).
+  int getPointerId(int pointerIndex) => pointerProperties[pointerIndex].id;
+
+  /// The tool type of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getToolType(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getToolType(int)).
+  int getToolType(int pointerIndex) => pointerProperties[pointerIndex].toolType;
+
+  /// The X coordinate of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getX(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getX(int)).
+  double getX(int pointerIndex) => pointerCoords[pointerIndex].x;
+
+  /// The Y coordinate of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getY(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getY(int)).
+  double getY(int pointerIndex) => pointerCoords[pointerIndex].y;
+
+  /// The pressure of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getPressure(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getPressure(int)).
+  double getPressure(int pointerIndex) => pointerCoords[pointerIndex].pressure;
+
+  /// The physical size of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getSize(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getSize(int)).
+  double getSize(int pointerIndex) => pointerCoords[pointerIndex].size;
+
+  /// The tool major axis of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getToolMajor(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getToolMajor(int)).
+  double getToolMajor(int pointerIndex) => pointerCoords[pointerIndex].toolMajor;
+
+  /// The tool minor axis of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getToolMinor(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getToolMinor(int)).
+  double getToolMinor(int pointerIndex) => pointerCoords[pointerIndex].toolMinor;
+
+  /// The touch major axis of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getTouchMajor(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getTouchMajor(int)).
+  double getTouchMajor(int pointerIndex) => pointerCoords[pointerIndex].touchMajor;
+
+  /// The touch minor axis of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getTouchMinor(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getTouchMinor(int)).
+  double getTouchMinor(int pointerIndex) => pointerCoords[pointerIndex].touchMinor;
+
+  /// The orientation of the pointer at the given pointerIndex.
+  ///
+  /// See Android's [MotionEvent#getOrientation(int)](https://developer.android.com/reference/android/view/MotionEvent.html#getOrientation(int)).
+  double getOrientation(int pointerIndex) => pointerCoords[pointerIndex].orientation;
+
   List<dynamic> _asList(int viewId) {
     return <dynamic>[
       viewId,
