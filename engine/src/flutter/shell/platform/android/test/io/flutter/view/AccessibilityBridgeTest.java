@@ -601,8 +601,6 @@ public class AccessibilityBridgeTest {
     TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
     testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
 
-    verify(mockRootView, times(1)).setAccessibilityPaneTitle(eq(" "));
-
     // Synthesize an accessibility hit test event.
     MotionEvent mockEvent = mock(MotionEvent.class);
     when(mockEvent.getX()).thenReturn(10.0f);
@@ -614,9 +612,9 @@ public class AccessibilityBridgeTest {
 
     ArgumentCaptor<AccessibilityEvent> eventCaptor =
         ArgumentCaptor.forClass(AccessibilityEvent.class);
-    verify(mockParent, times(2))
+    verify(mockParent, times(3))
         .requestSendAccessibilityEvent(eq(mockRootView), eventCaptor.capture());
-    AccessibilityEvent event = eventCaptor.getAllValues().get(1);
+    AccessibilityEvent event = eventCaptor.getAllValues().get(2);
     assertEquals(AccessibilityEvent.TYPE_VIEW_HOVER_ENTER, event.getEventType());
     assertEquals(2, accessibilityBridge.getHoveredObjectId());
   }
@@ -2092,7 +2090,61 @@ public class AccessibilityBridgeTest {
     TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
     testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
 
-    verify(mockRootView, times(1)).setAccessibilityPaneTitle(eq(" "));
+    // Verify that TYPE_WINDOW_STATE_CHANGED is sent for the route node.
+    ArgumentCaptor<AccessibilityEvent> eventCaptor =
+        ArgumentCaptor.forClass(AccessibilityEvent.class);
+    verify(mockParent, atLeastOnce())
+        .requestSendAccessibilityEvent(eq(mockRootView), eventCaptor.capture());
+
+    boolean foundWindowStateChanged = false;
+    for (AccessibilityEvent event : eventCaptor.getAllValues()) {
+      if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        foundWindowStateChanged = true;
+        assertEquals(" ", event.getText().get(0).toString());
+      }
+    }
+    assertTrue(foundWindowStateChanged);
+  }
+
+  @Test
+  @Config(sdk = 28)
+  public void itSendsWindowStateChangedEventWhenRouteNameIsEmptyOnApi28() {
+    AccessibilityViewEmbedder mockViewEmbedder = mock(AccessibilityViewEmbedder.class);
+    AccessibilityManager mockManager = mock(AccessibilityManager.class);
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(mockRootView, mockManager, mockViewEmbedder);
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+    when(mockManager.isEnabled()).thenReturn(true);
+
+    // Sent a11y tree with scopeRoute without namesRoute.
+    TestSemanticsNode root = new TestSemanticsNode();
+    root.id = 0;
+    TestSemanticsNode scopeRoute = new TestSemanticsNode();
+    scopeRoute.id = 1;
+    scopeRoute.addFlag(AccessibilityBridge.Flag.SCOPES_ROUTE);
+    root.children.add(scopeRoute);
+    TestSemanticsUpdate testSemanticsUpdate = root.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(accessibilityBridge);
+
+    // Verify that TYPE_WINDOW_STATE_CHANGED is sent for the route node.
+    ArgumentCaptor<AccessibilityEvent> eventCaptor =
+        ArgumentCaptor.forClass(AccessibilityEvent.class);
+    verify(mockParent, atLeastOnce())
+        .requestSendAccessibilityEvent(eq(mockRootView), eventCaptor.capture());
+
+    boolean foundWindowStateChanged = false;
+    for (AccessibilityEvent event : eventCaptor.getAllValues()) {
+      if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        foundWindowStateChanged = true;
+        assertEquals(" ", event.getText().get(0).toString());
+      }
+    }
+    assertTrue(foundWindowStateChanged);
   }
 
   @Test

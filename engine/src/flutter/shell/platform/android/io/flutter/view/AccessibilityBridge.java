@@ -1849,6 +1849,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
    */
   private void onWindowNameChange(@NonNull SemanticsNode route) {
     String routeName = route.getRouteName();
+    final boolean hasRouteName = routeName != null;
     if (routeName == null) {
       // The routeName will be null when there is no semantics node that represents namesRoute in
       // the scopeRoute. The TYPE_WINDOW_STATE_CHANGED only works the route name is not null and not
@@ -1860,7 +1861,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
       // next.
       routeName = " ";
     }
-    if (Build.VERSION.SDK_INT >= API_LEVELS.API_28) {
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_28 && hasRouteName) {
       setAccessibilityPaneTitle(routeName);
     } else {
       AccessibilityEvent event =
