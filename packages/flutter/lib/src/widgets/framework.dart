@@ -923,7 +923,27 @@ abstract class State<T extends StatefulWidget> with Diagnosticable {
   /// configuration, the framework will update this property to refer to the new
   /// widget and then call [didUpdateWidget], passing the old configuration as
   /// an argument.
-  T get widget => _widget!;
+  T get widget {
+    assert(() {
+      if (_widget == null) {
+        throw FlutterError.fromParts(<DiagnosticsNode>[
+          ErrorSummary('The getter widget was called on a State object before it was initialized.'),
+          ErrorDescription(
+            'The framework associates State objects with a StatefulWidget after '
+            'creating them with StatefulWidget.createState and before calling '
+            'initState.\n'
+            'This error usually happens if you try to access the widget getter '
+            'in the constructor of the State object, or if the State object was '
+            'not properly initialized by the framework (for example, if a custom '
+            'StatefulElement overrides the state getter to return a State object '
+            'that was not created by the element\'s constructor).'
+          ),
+        ]);
+      }
+      return true;
+    }());
+    return _widget!;
+  }
   T? _widget;
 
   /// The current stage in the lifecycle for this state object.
@@ -949,6 +969,18 @@ abstract class State<T extends StatefulWidget> with Diagnosticable {
   BuildContext get context {
     assert(() {
       if (_element == null) {
+        if (_debugLifecycleState == _StateLifecycle.created) {
+          throw FlutterError.fromParts(<DiagnosticsNode>[
+            ErrorSummary('The getter context was called on a State object before it was initialized.'),
+            ErrorDescription(
+              'The framework associates State objects with a BuildContext after '
+              'creating them with StatefulWidget.createState and before calling '
+              'initState.\n'
+              'This error usually happens if you try to access the context getter '
+              'in the constructor of the State object.'
+            ),
+          ]);
+        }
         throw FlutterError(
           'This widget has been unmounted, so the State no longer has a context (and should be considered defunct). \n'
           'Consider canceling any active work during "dispose" or using the "mounted" getter to determine if the State is still active.',
@@ -5958,6 +5990,19 @@ class StatefulElement extends ComponentElement {
   @override
   void _firstBuild() {
     assert(state._debugLifecycleState == _StateLifecycle.created);
+    assert(() {
+      if (!identical(state, _state)) {
+        throw FlutterError.fromParts(<DiagnosticsNode>[
+          ErrorSummary('StatefulElement.state returned a different State object than the one created by the Widget.'),
+          ErrorDescription(
+            'The StatefulElement $this has a state ($state) that is not identical to the '
+            'state created by the widget\'s createState method ($_state).\n'
+            'Overriding StatefulElement.state to return a different State object is not supported.'
+          ),
+        ]);
+      }
+      return true;
+    }());
     final Object? debugCheckForReturnedFuture = state.initState() as dynamic;
     assert(() {
       if (debugCheckForReturnedFuture is Future) {

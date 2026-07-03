@@ -2147,7 +2147,48 @@ void main() {
       expect(focusNode.debugLabel, 'Shortcuts: <Shortcut Registrar>');
     });
   });
+
+  testWidgets('Shortcuts initState regression test for #54958', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MyShortcuts(
+        shortcuts: const <ShortcutActivator, Intent>{},
+        child: const SizedBox(),
+      ),
+    );
+    final dynamic exception = tester.takeException();
+    expect(exception, isNotNull);
+    expect(exception.toString(), contains('StatefulElement.state returned a different State object than the one created by the Widget.'));
+  });
 }
+
+class MyShortcuts extends Shortcuts {
+  const MyShortcuts({
+    super.key,
+    required super.shortcuts,
+    required super.child,
+  });
+
+  @override
+  StatefulElement createElement() => MyStatefulElement(this);
+}
+
+class MyStatefulElement extends StatefulElement {
+  MyStatefulElement(MyShortcuts super.widget) : _myState = widget.createState() as State<Shortcuts> {
+    _useSuperState = false;
+  }
+
+  final State<Shortcuts> _myState;
+  bool _useSuperState = true;
+
+  @override
+  State<StatefulWidget> get state {
+    if (_useSuperState) {
+      return super.state;
+    }
+    return _myState;
+  }
+}
+
 
 class TestCallbackRegistration extends StatefulWidget {
   const TestCallbackRegistration({
