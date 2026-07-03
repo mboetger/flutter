@@ -1600,6 +1600,14 @@ public class FlutterFragment extends Fragment
    * method if the subclass needs to override the {@code FragmentActivity}'s behavior, or add to it.
    *
    * <p>Used by this {@code FlutterFragment}'s {@link FlutterActivityAndFragmentDelegate.Host}
+   *
+   * <p><b>Warning:</b> When using a cached {@link io.flutter.embedding.engine.FlutterEngine} (e.g.
+   * via {@link io.flutter.embedding.engine.FlutterEngineCache}), if the engine's Dart entrypoint is
+   * executed before the Activity or Fragment is attached, any platform channels or plugins
+   * registered in {@code configureFlutterEngine} will not be available to the Dart code that ran
+   * prior to the attachment. In such cases, these configurations/registrations should be performed
+   * when the {@link io.flutter.embedding.engine.FlutterEngine} is first created and cached (e.g.,
+   * in {@code Application.onCreate}).
    */
   @Override
   public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {

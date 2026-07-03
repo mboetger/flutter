@@ -780,4 +780,161 @@ public class FlutterActivityTest {
       onCreateCalled = true;
     }
   }
+
+  private static class FlutterActivityWithLateRegistration extends FlutterActivity {
+    public boolean configureFlutterEngineCalled = false;
+    public boolean channelHandlerRegistered = false;
+
+    public static CachedEngineIntentBuilder withCachedEngine(@NonNull String cachedEngineId) {
+      return new CachedEngineIntentBuilder(
+          FlutterActivityWithLateRegistration.class, cachedEngineId);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
+      super.configureFlutterEngine(flutterEngine);
+      configureFlutterEngineCalled = true;
+      flutterEngine
+          .getDartExecutor()
+          .setMessageHandler(
+              "test_channel",
+              (message, reply) -> {
+                // dummy handler
+              });
+      channelHandlerRegistered = true;
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void testMissingPluginExceptionWithCachedEngineAndLateRegistration() {
+    // 1. Create a cached FlutterEngine (simulating Application.onCreate)
+    FlutterLoader mockFlutterLoader = mock(FlutterLoader.class);
+    FlutterJNI mockFlutterJni = mock(FlutterJNI.class);
+    when(mockFlutterJni.isAttached()).thenReturn(true);
+
+    // We need to capture the PlatformMessageHandler to simulate Dart messages
+    final io.flutter.embedding.engine.dart.PlatformMessageHandler[] messageHandlerHolder =
+        new io.flutter.embedding.engine.dart.PlatformMessageHandler[1];
+    doAnswer(
+            invocation -> {
+              messageHandlerHolder[0] = invocation.getArgument(0);
+              return null;
+            })
+        .when(mockFlutterJni)
+        .setPlatformMessageHandler(org.mockito.ArgumentMatchers.any());
+
+    FlutterEngine cachedEngine = new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni);
+    FlutterEngineCache.getInstance().put("my_cached_engine", cachedEngine);
+
+    assertNotNull(messageHandlerHolder[0]);
+    io.flutter.embedding.engine.dart.PlatformMessageHandler platformMessageHandler =
+        messageHandlerHolder[0];
+
+    // 2. Simulate Dart sending a message on "test_channel" BEFORE the Activity is launched.
+    // This represents Dart running immediately upon entrypoint execution.
+    final boolean[] emptyResponseCalled = new boolean[1];
+    doAnswer(
+            invocation -> {
+              emptyResponseCalled[0] = true;
+              return null;
+            })
+        .when(mockFlutterJni)
+        .invokePlatformMessageEmptyResponseCallback(org.mockito.ArgumentMatchers.anyInt());
+
+    // Send a message from Dart. Since no handler is registered, it should trigger the empty
+    // response (not implemented).
+    java.nio.ByteBuffer message = java.nio.ByteBuffer.allocate(0);
+    platformMessageHandler.handleMessageFromDart("test_channel", message, 1, 0);
+
+    // Flush the looper to execute the dispatched message handler task
+    org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+
+    // Verify that it indeed got an empty response (which translates to MissingPluginException in
+    // Dart)
+    assertTrue(
+        "Should have responded with empty response because no handler is registered yet",
+        emptyResponseCalled[0]);
+
+    // 3. Now launch the Activity which will configure the engine (late registration)
+    Intent intent =
+        FlutterActivityWithLateRegistration.withCachedEngine("my_cached_engine").build(ctx);
+    ActivityController<FlutterActivityWithLateRegistration> activityController =
+        Robolectric.buildActivity(FlutterActivityWithLateRegistration.class, intent);
+    FlutterActivityWithLateRegistration activity = activityController.get();
+
+    activity.onCreate(null);
+
+    // Verify that the activity configured the engine
+    assertTrue(activity.configureFlutterEngineCalled);
+    assertTrue(activity.channelHandlerRegistered);
+
+    // Clean up
+    activityController.destroy();
+    FlutterEngineCache.getInstance().remove("my_cached_engine");
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void testNoMissingPluginExceptionWithCachedEngineAndEarlyRegistration() {
+    // 1. Create a cached FlutterEngine (simulating Application.onCreate)
+    FlutterLoader mockFlutterLoader = mock(FlutterLoader.class);
+    FlutterJNI mockFlutterJni = mock(FlutterJNI.class);
+    when(mockFlutterJni.isAttached()).thenReturn(true);
+
+    // We need to capture the PlatformMessageHandler to simulate Dart messages
+    final io.flutter.embedding.engine.dart.PlatformMessageHandler[] messageHandlerHolder =
+        new io.flutter.embedding.engine.dart.PlatformMessageHandler[1];
+    doAnswer(
+            invocation -> {
+              messageHandlerHolder[0] = invocation.getArgument(0);
+              return null;
+            })
+        .when(mockFlutterJni)
+        .setPlatformMessageHandler(org.mockito.ArgumentMatchers.any());
+
+    FlutterEngine cachedEngine = new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni);
+    FlutterEngineCache.getInstance().put("my_cached_engine", cachedEngine);
+
+    assertNotNull(messageHandlerHolder[0]);
+    io.flutter.embedding.engine.dart.PlatformMessageHandler platformMessageHandler =
+        messageHandlerHolder[0];
+
+    // 2. Register the channel handler EARLY (simulating registration in Application.onCreate)
+    final boolean[] handlerCalled = new boolean[1];
+    cachedEngine
+        .getDartExecutor()
+        .setMessageHandler(
+            "test_channel",
+            (message, reply) -> {
+              handlerCalled[0] = true;
+              reply.reply(java.nio.ByteBuffer.allocate(0));
+            });
+
+    // 3. Simulate Dart sending a message on "test_channel" BEFORE the Activity is launched.
+    final boolean[] emptyResponseCalled = new boolean[1];
+    doAnswer(
+            invocation -> {
+              emptyResponseCalled[0] = true;
+              return null;
+            })
+        .when(mockFlutterJni)
+        .invokePlatformMessageEmptyResponseCallback(org.mockito.ArgumentMatchers.anyInt());
+
+    // Send a message from Dart.
+    java.nio.ByteBuffer message = java.nio.ByteBuffer.allocate(0);
+    platformMessageHandler.handleMessageFromDart("test_channel", message, 1, 0);
+
+    // Flush the looper to execute the dispatched message handler task
+    org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+
+    // Verify that the handler was called and we did NOT get an empty response callback (since the
+    // handler replied)
+    assertTrue("Early registered handler should have been called", handlerCalled[0]);
+    assertFalse("Should not have responded with empty response", emptyResponseCalled[0]);
+
+    // Clean up
+    FlutterEngineCache.getInstance().remove("my_cached_engine");
+  }
 }

@@ -741,6 +741,14 @@ public class FlutterFragmentActivity extends FragmentActivity
    * without invoking super(). To keep automatic plugin registration and further configure the
    * FlutterEngine, override this method, invoke super(), and then configure the FlutterEngine as
    * desired.
+   *
+   * <p><b>Warning:</b> When using a cached {@link io.flutter.embedding.engine.FlutterEngine} (e.g.
+   * via {@link io.flutter.embedding.engine.FlutterEngineCache}), if the engine's Dart entrypoint is
+   * executed before the Activity or Fragment is attached, any platform channels or plugins
+   * registered in {@code configureFlutterEngine} will not be available to the Dart code that ran
+   * prior to the attachment. In such cases, these configurations/registrations should be performed
+   * when the {@link io.flutter.embedding.engine.FlutterEngine} is first created and cached (e.g.,
+   * in {@code Application.onCreate}).
    */
   @Override
   public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {

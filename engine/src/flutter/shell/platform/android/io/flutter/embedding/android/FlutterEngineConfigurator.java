@@ -29,6 +29,14 @@ public interface FlutterEngineConfigurator {
    * configuration, e.g., plugins, must not expect or depend upon an available {@code Activity} at
    * the time that this method is invoked.
    *
+   * <p><b>Warning:</b> When using a cached {@link io.flutter.embedding.engine.FlutterEngine} (e.g.
+   * via {@link io.flutter.embedding.engine.FlutterEngineCache}), if the engine's Dart entrypoint is
+   * executed before the Activity or Fragment is attached, any platform channels or plugins
+   * registered in {@code configureFlutterEngine} will not be available to the Dart code that ran
+   * prior to the attachment. In such cases, these configurations/registrations should be performed
+   * when the {@link io.flutter.embedding.engine.FlutterEngine} is first created and cached (e.g.,
+   * in {@code Application.onCreate}).
+   *
    * @param flutterEngine The Flutter engine.
    */
   void configureFlutterEngine(@NonNull FlutterEngine flutterEngine);
