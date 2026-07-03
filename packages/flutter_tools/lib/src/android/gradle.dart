@@ -5,6 +5,7 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:convert/convert.dart';
 import 'package:crypto/crypto.dart';
 import 'package:meta/meta.dart';
@@ -605,6 +606,11 @@ class AndroidGradleBuilder implements AndroidBuilder {
         throwToolExit(failedToStripDebugSymbolsErrorMessage);
       }
 
+      final String? launchActivity = _getLaunchActivity(project);
+      if (launchActivity != null) {
+        _validateHasLaunchActivity(bundleFile, launchActivity, _logger);
+      }
+
       final appSize = (buildInfo.mode == BuildMode.debug)
           ? '' // Don't display the size when building a debug variant.
           : ' (${getSizeAsPlatformMB(bundleFile.lengthSync())})';
@@ -626,6 +632,8 @@ class AndroidGradleBuilder implements AndroidBuilder {
         : listApkPaths(androidBuildInfo);
     final Directory apkDirectory = getApkDirectory(project);
 
+    final String? launchActivity = _getLaunchActivity(project);
+
     // Generate sha1 for every generated APKs.
     for (final File apkFile in apkFilesPaths.map(apkDirectory.childFile)) {
       if (!apkFile.existsSync()) {
@@ -635,6 +643,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
           logger: _logger,
           analytics: _analytics,
         );
+      }
+
+      if (launchActivity != null) {
+        _validateHasLaunchActivity(apkFile, launchActivity, _logger);
       }
 
       final String filename = apkFile.basename;
@@ -989,6 +1001,143 @@ class AndroidGradleBuilder implements AndroidBuilder {
       throwToolExit('Gradle task $taskName failed with exit code $exitCode');
     }
     return outputPath;
+  }
+
+  String? _getLaunchActivity(FlutterProject project) {
+    final File manifest = project.android.appManifestFile;
+    if (!manifest.existsSync()) {
+      return null;
+    }
+    try {
+      final document = XmlDocument.parse(manifest.readAsStringSync());
+      final Iterable<XmlElement> manifests = document.findElements('manifest');
+      if (manifests.isEmpty) {
+        return null;
+      }
+      final String? packageId =
+          manifests.first.getAttribute('package') ?? project.android.namespace;
+      if (packageId == null) {
+        return null;
+      }
+      for (final XmlElement activity in document.findAllElements('activity')) {
+        final String? enabled = activity.getAttribute('android:enabled');
+        if (enabled == 'false') {
+          continue;
+        }
+        for (final XmlElement intentFilter in activity.findElements('intent-filter')) {
+          final bool isMain = intentFilter
+              .findElements('action')
+              .any(
+                (XmlElement el) => el.getAttribute('android:name') == 'android.intent.action.MAIN',
+              );
+          final bool isLauncher = intentFilter
+              .findElements('category')
+              .any(
+                (XmlElement el) =>
+                    el.getAttribute('android:name') == 'android.intent.category.LAUNCHER',
+              );
+          if (isMain && isLauncher) {
+            final String? activityName = activity.getAttribute('android:name');
+            if (activityName == null) {
+              continue;
+            }
+            final String canonicalClassName;
+            if (activityName.startsWith('.')) {
+              canonicalClassName = '$packageId$activityName';
+            } else if (activityName.contains('.')) {
+              canonicalClassName = activityName;
+            } else {
+              canonicalClassName = '$packageId.$activityName';
+            }
+            if (canonicalClassName.contains(r'${')) {
+              return null;
+            }
+            return canonicalClassName;
+          }
+        }
+      }
+    } on Object catch (_) {
+      // Ignore XML parsing errors here, as the build might still succeed or fail elsewhere.
+    }
+    return null;
+  }
+
+  void _validateHasLaunchActivity(File apkOrBundleFile, String activityClass, Logger logger) {
+    if (activityClass.startsWith('android.') || activityClass.startsWith('com.android.')) {
+      logger.printTrace('Skipping validation for framework activity: $activityClass');
+      return;
+    }
+
+    final dexClassDescriptor = 'L${activityClass.replaceAll('.', '/')};';
+    logger.printTrace('Validating that $apkOrBundleFile contains class $dexClassDescriptor');
+
+    if (!apkOrBundleFile.existsSync()) {
+      logger.printTrace('Skipping validation because file does not exist: ${apkOrBundleFile.path}');
+      return;
+    }
+
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(apkOrBundleFile.readAsBytesSync());
+    } on Object catch (e) {
+      logger.printTrace('Failed to decode ZIP archive $apkOrBundleFile: $e');
+      return;
+    }
+
+    var hasLaunchActivity = false;
+    final List<int> descriptorBytes = utf8.encode(dexClassDescriptor);
+
+    for (final ArchiveFile file in archive.files) {
+      if (file.name.endsWith('.dex')) {
+        final dynamic content = file.content;
+        if (content is! List<int>) {
+          logger.printTrace(
+            'Skipping DEX file ${file.name} because content type is ${content.runtimeType} instead of List<int>',
+          );
+          continue;
+        }
+        if (_indexOf(content, descriptorBytes) != -1) {
+          hasLaunchActivity = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasLaunchActivity) {
+      throwToolExit(
+        'The launch activity class "$activityClass" was not found in the built APK or Bundle. '
+        'This can happen if the class was not compiled (e.g. due to misconfigured sourceSets in build.gradle) '
+        'or was stripped by R8.\n'
+        'Please verify that "$activityClass" exists in your project and is not excluded in your ProGuard/R8 configuration.',
+      );
+    }
+  }
+
+  int _indexOf(List<int> source, List<int> target) {
+    if (target.isEmpty) {
+      return 0;
+    }
+    final int firstByte = target[0];
+    final int max = source.length - target.length;
+    var start = 0;
+    while (start <= max) {
+      final int index = source.indexOf(firstByte, start);
+      if (index == -1 || index > max) {
+        return -1;
+      }
+      var match = true;
+      for (var j = 1; j < target.length; j++) {
+        if (source[index + j] != target[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return index;
+      }
+      start = index + 1;
+    }
+    return -1;
   }
 }
 
