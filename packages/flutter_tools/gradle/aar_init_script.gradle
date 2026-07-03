@@ -180,11 +180,11 @@ projectsEvaluated {
             // the module's equivalent task depend on the plugin's task.
             String variantName = variant.name.capitalize()
 
-                Task moduleProjectTask = moduleProject.tasks.named("assembleAar$variantName").get()
-                assert(moduleProjectTask != null)
-                Task pluginProjectTask = pluginProject.tasks.named("assembleAar$variantName").get()
-                assert(pluginProjectTask != null)
-                moduleProjectTask.dependsOn(pluginProjectTask)
+            pluginProject.tasks.matching { it.name == "assembleAar$variantName" }.all { pluginProjectTask ->
+                moduleProject.tasks.named("assembleAar$variantName").configure { moduleProjectTask ->
+                    moduleProjectTask.dependsOn(pluginProjectTask)
+                }
+            }
         }
     }
 }
