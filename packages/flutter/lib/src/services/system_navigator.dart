@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+import 'binding.dart';
 import 'system_channels.dart';
 
 /// Controls specific aspects of the system navigation stack.
@@ -62,6 +63,7 @@ abstract final class SystemNavigator {
   /// method, as the latter may cause the underlying platform to act
   /// as if the application had crashed.
   static Future<void> pop({bool? animated}) async {
+    await ServicesBinding.maybeInstance?.handleSystemNavigatorPop();
     await SystemChannels.platform.invokeMethod<void>('SystemNavigator.pop', animated);
   }
 

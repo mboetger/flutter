@@ -915,7 +915,33 @@ mixin WidgetsBinding
         );
       }
     }
-    return didCancel ? AppExitResponse.cancel : AppExitResponse.exit;
+    final AppExitResponse response = didCancel ? AppExitResponse.cancel : AppExitResponse.exit;
+    if (response == AppExitResponse.exit && disposeOnPlatformPop) {
+      _disposeUserInterface();
+    }
+    return response;
+  }
+
+  @override
+  Future<void> handleSystemNavigatorPop() async {
+    if (disposeOnPlatformPop) {
+      _disposeUserInterface();
+    }
+    await super.handleSystemNavigatorPop();
+  }
+
+  void _disposeUserInterface() {
+    if (rootElement != null) {
+      buildOwner!.buildScope(rootElement!, () {
+        attachToBuildOwner(
+          const RootWidget(debugShortDescription: '[root]'),
+        ); // child is null by default
+      });
+      buildOwner!.finalizeTree();
+      _rootElement = null;
+      // Prevent the engine from rendering subsequent empty frames during exit transition
+      _readyToProduceFrames = false;
+    }
   }
 
   @override
@@ -1610,6 +1636,14 @@ mixin WidgetsBinding
     'This feature was deprecated after v3.9.0-16.0.pre.',
   )
   Element? get renderViewElement => rootElement;
+
+  /// Whether to dispose of the widget tree when the platform requests an exit
+  /// (e.g., via [SystemNavigator.pop] or window close).
+  ///
+  /// Defaults to true. Set this to false if you are using a cached engine
+  /// and want to preserve the widget tree and its state when the platform
+  /// view is popped or detached.
+  bool disposeOnPlatformPop = true;
 
   bool _readyToProduceFrames = false;
 

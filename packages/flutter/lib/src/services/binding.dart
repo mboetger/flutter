@@ -74,6 +74,9 @@ mixin ServicesBinding on BindingBase, SchedulerBinding {
   static ServicesBinding get instance => BindingBase.checkInstance(_instance);
   static ServicesBinding? _instance;
 
+  /// The current [ServicesBinding], if one has been created, or null.
+  static ServicesBinding? get maybeInstance => _instance;
+
   /// The global singleton instance of [HardwareKeyboard], which can be used to
   /// query keyboard states.
   HardwareKeyboard get keyboard => _keyboard;
@@ -489,6 +492,13 @@ mixin ServicesBinding on BindingBase, SchedulerBinding {
   Future<ui.AppExitResponse> handleRequestAppExit() async {
     return ui.AppExitResponse.exit;
   }
+
+  /// Called when [SystemNavigator.pop] is invoked.
+  ///
+  /// This method is overridden by [WidgetsBinding] to dispose of the widget
+  /// tree when the application is exited.
+  @mustCallSuper
+  Future<void> handleSystemNavigatorPop() async {}
 
   /// Exits the application by calling the native application API method for
   /// exiting an application cleanly.
