@@ -213,9 +213,11 @@ public class MainActivityTest {
 }
 ```
 
-Update your application's **myapp/android/app/build.gradle** to make sure it
-uses androidx's version of `AndroidJUnitRunner` and has androidx libraries as a
-dependency.
+Update your application's **myapp/android/app/build.gradle** (Groovy) or
+**myapp/android/app/build.gradle.kts** (Kotlin) to make sure it uses androidx's
+version of `AndroidJUnitRunner` and has androidx libraries as a dependency.
+
+### Groovy (build.gradle)
 
 ```gradle
 android {
@@ -227,11 +229,31 @@ android {
 }
 
 dependencies {
-    testImplementation 'junit:junit:4.12'
+    testImplementation 'junit:junit:4.13.2'
 
-    // https://developer.android.com/jetpack/androidx/releases/test/#1.2.0
-    androidTestImplementation 'androidx.test:runner:1.2.0'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
+    // https://developer.android.com/jetpack/androidx/releases/test/#1.5.0
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+```
+
+### Kotlin DSL (build.gradle.kts)
+
+```kotlin
+android {
+  ...
+  defaultConfig {
+    ...
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+
+    // https://developer.android.com/jetpack/androidx/releases/test/#1.5.0
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 ```
 
