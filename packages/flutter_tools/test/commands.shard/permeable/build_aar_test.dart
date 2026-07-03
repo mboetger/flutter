@@ -194,6 +194,16 @@ void main() {
       tryToDelete(tempDir);
     });
 
+    test('supports target option', () {
+      final command = BuildAarCommand(
+        androidSdk: const _FakeAndroidSdk(),
+        fileSystem: globals.fs,
+        logger: BufferLogger.test(),
+        verboseHelp: false,
+      );
+      expect(command.argParser.options.containsKey('target'), isTrue);
+    });
+
     testUsingContext('defaults', () async {
       final String projectPath = await createProject(
         tempDir,
@@ -281,6 +291,21 @@ void main() {
       expect(buildInfo.splitDebugInfoPath, '/project-name/v1.2.3/');
       expect(buildInfo.dartObfuscation, isTrue);
       expect(buildInfo.dartDefines.contains('foo=bar'), isTrue);
+    }, overrides: <Type, Generator>{AndroidBuilder: () => fakeAndroidBuilder});
+
+    testUsingContext('supports custom target', () async {
+      final String projectPath = await createProject(
+        tempDir,
+        arguments: <String>['--no-pub', '--template=module'],
+      );
+      final String customTarget = globals.fs.path.join(projectPath, 'lib', 'custom_main.dart');
+      globals.fs.file(customTarget).createSync(recursive: true);
+
+      await runBuildAar(projectPath, arguments: <String>['--no-pub', '--target', customTarget]);
+
+      expect(fakeAndroidBuilder.capturedBuildAarCalls, hasLength(1));
+      final Invocation buildAarCall = fakeAndroidBuilder.capturedBuildAarCalls.single;
+      expect(buildAarCall.namedArguments[#target], customTarget);
     }, overrides: <Type, Generator>{AndroidBuilder: () => fakeAndroidBuilder});
   });
 
@@ -374,7 +399,7 @@ void main() {
               '-Pis-plugin=false',
               '-PbuildNumber=1.0',
               '-q',
-              '-Ptarget=${globals.fs.path.join('lib', 'main.dart')}',
+              '-Ptarget=${globals.fs.path.join(projectPath, 'lib', 'main.dart')}',
               '-Pdart-defines=${encodeDartDefinesMap(<String, String>{
                 'FLUTTER_VERSION': '0.0.0', //
                 'FLUTTER_CHANNEL': 'master',

@@ -40,6 +40,7 @@ class BuildAarCommand extends BuildSubCommand {
       );
     addTreeShakeIconsFlag();
     usesFlavorOption();
+    usesTargetOption();
     usesBuildNumberOption();
     usesOutputDir();
     usesPubOption();
@@ -70,6 +71,14 @@ class BuildAarCommand extends BuildSubCommand {
 
   @override
   late final FlutterProject project = _getProject();
+
+  @override
+  String get targetFile {
+    if (argResults?.wasParsed('target') ?? false) {
+      return stringArg('target')!;
+    }
+    return _fileSystem.path.join(project.directory.path, 'lib', 'main.dart');
+  }
 
   @override
   Future<Event> unifiedAnalyticsUsageValues(String commandPath) async {
@@ -130,14 +139,14 @@ class BuildAarCommand extends BuildSubCommand {
         ? buildNumberArg
         : '1.0';
 
-    final File targetFile = _fileSystem.file(_fileSystem.path.join('lib', 'main.dart'));
+    final File mainFile = _fileSystem.file(targetFile);
     for (final buildMode in const <String>['debug', 'profile', 'release']) {
       if (boolArg(buildMode)) {
         androidBuildInfo.add(
           AndroidBuildInfo(
             await getBuildInfo(
               forcedBuildMode: BuildMode.fromCliName(buildMode),
-              forcedTargetFile: targetFile,
+              forcedTargetFile: mainFile,
             ),
             targetArchs: targetArchitectures,
           ),
@@ -150,7 +159,7 @@ class BuildAarCommand extends BuildSubCommand {
 
     await androidBuilder?.buildAar(
       project: project,
-      target: targetFile.path,
+      target: mainFile.path,
       androidBuildInfo: androidBuildInfo,
       generateTooling: regeneratePlatformSpecificToolingIfApplicable,
       outputDirectoryPath: stringArg('output'),
