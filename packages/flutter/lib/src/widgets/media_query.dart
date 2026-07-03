@@ -501,7 +501,8 @@ class MediaQueryData {
   final EdgeInsets viewInsets;
 
   /// The parts of the display that are partially obscured by system UI,
-  /// typically by the hardware display "notches" or the system status bar.
+  /// typically by the hardware display "notches", the system status bar, the
+  /// system bottom navigation bar (on Android), or the home indicator (on iOS).
   ///
   /// If you consumed this padding (e.g. by building a widget that envelops or
   /// accounts for this padding in its layout in such a way that children are
@@ -522,7 +523,8 @@ class MediaQueryData {
   final EdgeInsets padding;
 
   /// The parts of the display that are partially obscured by system UI,
-  /// typically by the hardware display "notches" or the system status bar.
+  /// typically by the hardware display "notches", the system status bar, the
+  /// system bottom navigation bar (on Android), or the home indicator (on iOS).
   ///
   /// This value remains the same regardless of whether the system is reporting
   /// other obstructions in the same physical area of the screen. For example, a
