@@ -111,6 +111,12 @@ void addAarTask(Project project, component) {
 // only configure it if it matches the conditions in `projectsEvaluated`
 
 allprojects {
+   buildscript {
+      repositories {
+         google()
+         mavenCentral()
+      }
+   }
    apply plugin: "maven-publish"
 }
 

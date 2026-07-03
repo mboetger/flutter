@@ -108,6 +108,11 @@ class PluginHandler(
             // compile/target/min sdk values.
             pluginProject.extensions.create("flutter", FlutterExtension::class.java)
 
+            // Inject the app's buildscript repositories into the plugin's buildscript repositories.
+            // This ensures that the plugin can resolve its dependencies (like AGP) even if its own
+            // build.gradle is missing required repositories.
+            pluginProject.buildscript.repositories.addAll(project.buildscript.repositories)
+
             // Add plugin dependency to the app project. We only want to add dependency
             // for dev dependencies in non-release builds.
             project.afterEvaluate {
