@@ -30,7 +30,6 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.LocaleList;
-import android.provider.Settings;
 import android.text.InputType;
 import android.text.Selection;
 import android.util.SparseArray;
@@ -85,7 +84,6 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowAutofillManager;
-import org.robolectric.shadows.ShadowBuild;
 import org.robolectric.shadows.ShadowInputMethodManager;
 
 @Config(shadows = {TextInputPluginTest.TestImm.class, TextInputPluginTest.TestAfm.class})
@@ -1434,18 +1432,9 @@ public class TextInputPluginTest {
     verifyInputConnection(TextInputChannel.TextInputType.NONE);
   }
 
-  @SuppressWarnings("deprecation") // InputMethodSubtype
   @Test
   public void inputConnection_finishComposingTextUpdatesIMM() throws JSONException {
-    ShadowBuild.setManufacturer("samsung");
-    InputMethodSubtype inputMethodSubtype =
-        new InputMethodSubtype(0, 0, /*locale=*/ "en", "", "", false, false);
-    Settings.Secure.putString(
-        ctx.getContentResolver(),
-        Settings.Secure.DEFAULT_INPUT_METHOD,
-        "com.sec.android.inputmethod/.SamsungKeypad");
     TestImm testImm = Shadow.extract(ctx.getSystemService(Context.INPUT_METHOD_SERVICE));
-    testImm.setCurrentInputMethodSubtype(inputMethodSubtype);
     FlutterJNI mockFlutterJni = mock(FlutterJNI.class);
     View testView = new View(ctx);
     DartExecutor dartExecutor = spy(new DartExecutor(mockFlutterJni, mock(AssetManager.class)));
