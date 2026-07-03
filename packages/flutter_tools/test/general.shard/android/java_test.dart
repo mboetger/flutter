@@ -101,6 +101,36 @@ OpenJDK 64-Bit Server VM Zulu19.32+15-CA (build 19.0.2+7, mixed mode, sharing)
         },
       );
 
+      testWithoutContext('prefers JDK bundled with Android Studio over JAVA_HOME', () {
+        final AndroidStudio androidStudio = _FakeAndroidStudioWithJdk();
+        const String javaHome = '/java/home';
+        final FakePlatform platformWithJavaHome = FakePlatform(
+          environment: <String, String>{
+            'PATH': '',
+            Java.javaHomeEnvironmentVariable: javaHome,
+          },
+        );
+        final String expectedJavaBinaryPath = fs.path.join(
+          androidStudio.javaPath!,
+          'bin',
+          'java',
+        );
+
+        final Java java = Java.find(
+          config: config,
+          androidStudio: androidStudio,
+          logger: logger,
+          fileSystem: fs,
+          platform: platformWithJavaHome,
+          processManager: processManager,
+        )!;
+
+        expect(java.javaHome, androidStudio.javaPath);
+        expect(java.binaryPath, expectedJavaBinaryPath);
+        expect(java.javaSource, JavaSource.androidStudio);
+      });
+
+
       testWithoutContext('returns the java binary found on PATH if no other can be found', () {
         final AndroidStudio androidStudio = _FakeAndroidStudioWithoutJdk();
         final OperatingSystemUtils os = _FakeOperatingSystemUtilsWithJava(fileSystem);

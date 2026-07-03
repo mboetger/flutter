@@ -1505,9 +1505,10 @@ void main() {
 
         // The directory exists, but nothing is inside.
         fileSystem.directory(configuredAndroidStudioDir).createSync(recursive: true);
-        (globals.processManager as FakeProcessManager).excludedExecutables.add(
+        (globals.processManager as FakeProcessManager).excludedExecutables.addAll(<String>[
           fileSystem.path.join(configuredAndroidStudioDir, 'jbr', 'bin', 'java'),
-        );
+          fileSystem.path.join(configuredAndroidStudioDir, 'jre', 'bin', 'java'),
+        ]);
 
         const validVersions = <String>['4.0', '2.0', '3.1'];
 
