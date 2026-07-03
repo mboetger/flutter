@@ -9,6 +9,10 @@ import androidx.annotation.NonNull;
 /**
  * A {@link io.flutter.embedding.engine.plugins.FlutterPlugin} that wants to know when it is running
  * within a {@link android.content.BroadcastReceiver}.
+ *
+ * <p>Note: This interface is only supported for plugins using the v2 Android embedding. It is not
+ * supported and will not be invoked for plugins registered via the legacy v1 Android embedding
+ * (pre-1.12).
  */
 public interface BroadcastReceiverAware {
   /**

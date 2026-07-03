@@ -10,6 +10,10 @@ import androidx.annotation.NonNull;
  * {@link io.flutter.embedding.engine.plugins.FlutterPlugin} that is interested in {@link
  * android.app.Activity} lifecycle events related to a {@link
  * io.flutter.embedding.engine.FlutterEngine} running within the given {@link android.app.Activity}.
+ *
+ * <p>Note: This interface is only supported for plugins using the v2 Android embedding. It is not
+ * supported and will not be invoked for plugins registered via the legacy v1 Android embedding
+ * (pre-1.12).
  */
 public interface ActivityAware {
   /**
