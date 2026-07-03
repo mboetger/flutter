@@ -294,11 +294,14 @@ import java.util.Set;
   private void detachFromAppComponent() {
     if (isAttachedToActivity()) {
       detachFromActivity();
-    } else if (isAttachedToService()) {
+    }
+    if (isAttachedToService()) {
       detachFromService();
-    } else if (isAttachedToBroadcastReceiver()) {
+    }
+    if (isAttachedToBroadcastReceiver()) {
       detachFromBroadcastReceiver();
-    } else if (isAttachedToContentProvider()) {
+    }
+    if (isAttachedToContentProvider()) {
       detachFromContentProvider();
     }
   }
@@ -319,8 +322,6 @@ import java.util.Set;
       if (this.exclusiveActivity != null) {
         this.exclusiveActivity.detachFromFlutterEngine();
       }
-      // If we were already attached to an app component, detach from it.
-      detachFromAppComponent();
       this.exclusiveActivity = exclusiveActivity;
       attachToActivityInternal(exclusiveActivity.getAppComponent(), lifecycle);
     }
@@ -520,8 +521,9 @@ import java.util.Set;
   public void attachToService(
       @NonNull Service service, @Nullable Lifecycle lifecycle, boolean isForeground) {
     try (TraceSection e = TraceSection.scoped("FlutterEngineConnectionRegistry#attachToService")) {
-      // If we were already attached to an Android component, detach from it.
-      detachFromAppComponent();
+      if (isAttachedToService()) {
+        detachFromService();
+      }
 
       this.service = service;
       this.servicePluginBinding = new FlutterEngineServicePluginBinding(service, lifecycle);
@@ -582,8 +584,9 @@ import java.util.Set;
       @NonNull BroadcastReceiver broadcastReceiver, @NonNull Lifecycle lifecycle) {
     try (TraceSection e =
         TraceSection.scoped("FlutterEngineConnectionRegistry#attachToBroadcastReceiver")) {
-      // If we were already attached to an Android component, detach from it.
-      detachFromAppComponent();
+      if (isAttachedToBroadcastReceiver()) {
+        detachFromBroadcastReceiver();
+      }
 
       this.broadcastReceiver = broadcastReceiver;
       this.broadcastReceiverPluginBinding =
@@ -631,8 +634,9 @@ import java.util.Set;
 
     try (TraceSection e =
         TraceSection.scoped("FlutterEngineConnectionRegistry#attachToContentProvider")) {
-      // If we were already attached to an Android component, detach from it.
-      detachFromAppComponent();
+      if (isAttachedToContentProvider()) {
+        detachFromContentProvider();
+      }
 
       this.contentProvider = contentProvider;
       this.contentProviderPluginBinding =

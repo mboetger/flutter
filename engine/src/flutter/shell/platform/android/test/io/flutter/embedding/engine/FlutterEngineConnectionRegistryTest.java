@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import android.app.Activity;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -23,6 +24,8 @@ import io.flutter.embedding.engine.loader.FlutterLoader;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
+import io.flutter.embedding.engine.plugins.service.ServiceAware;
+import io.flutter.embedding.engine.plugins.service.ServicePluginBinding;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.plugin.common.PluginRegistry;
 import io.flutter.plugin.platform.PlatformViewsController;
@@ -231,6 +234,176 @@ public class FlutterEngineConnectionRegistryTest {
         binding.removeActivityResultListener(this);
       }
       return false;
+    }
+  }
+  @Test
+  public void sharingEngineBetweenServiceAndActivityDoesNotDetachService() {
+    Context context = mock(Context.class);
+    FlutterEngine flutterEngine = mock(FlutterEngine.class);
+    PlatformViewsController platformViewsController = mock(PlatformViewsController.class);
+    when(flutterEngine.getPlatformViewsController()).thenReturn(platformViewsController);
+    PlatformViewsController2 platformViewsController2 = mock(PlatformViewsController2.class);
+    when(flutterEngine.getPlatformViewsController2()).thenReturn(platformViewsController2);
+    PlatformViewsControllerDelegator platformViewsControllerDelegator =
+        mock(PlatformViewsControllerDelegator.class);
+    when(flutterEngine.getPlatformViewsControllerDelegator())
+        .thenReturn(platformViewsControllerDelegator);
+    when(flutterEngine.getDartExecutor()).thenReturn(mock(DartExecutor.class));
+    when(flutterEngine.getRenderer()).thenReturn(mock(FlutterRenderer.class));
+
+    PackageManager packageManager = mock(PackageManager.class);
+    String packageName = "io.flutter.test";
+    ApplicationInfo applicationInfo = new ApplicationInfo();
+    applicationInfo.metaData = new Bundle();
+    when(context.getPackageName()).thenReturn(packageName);
+    when(context.getPackageManager()).thenReturn(packageManager);
+    try {
+      when(packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA))
+          .thenReturn(applicationInfo);
+    } catch (PackageManager.NameNotFoundException e) {
+      fail("Mocking application info threw an exception");
+    }
+
+    FlutterLoader flutterLoader = mock(FlutterLoader.class);
+
+    FlutterEngineConnectionRegistry registry =
+        new FlutterEngineConnectionRegistry(context, flutterEngine, flutterLoader, null);
+
+    FakeMultiAwareFlutterPlugin fakePlugin = new FakeMultiAwareFlutterPlugin();
+    registry.add(fakePlugin);
+
+    // 1. Attach to Service (background)
+    Service service = mock(Service.class);
+    Lifecycle serviceLifecycle = mock(Lifecycle.class);
+    registry.attachToService(service, serviceLifecycle, true);
+
+    assertEquals(1, fakePlugin.serviceAttachmentCallCount);
+    assertEquals(0, fakePlugin.serviceDetachmentCallCount);
+    assertEquals(0, fakePlugin.activityAttachmentCallCount);
+
+    // 2. Attach to Activity (foreground)
+    ExclusiveAppComponent<Activity> appComponent = mock(ExclusiveAppComponent.class);
+    Activity activity = mock(Activity.class);
+    when(appComponent.getAppComponent()).thenReturn(activity);
+    when(activity.getIntent()).thenReturn(mock(Intent.class));
+    Lifecycle activityLifecycle = mock(Lifecycle.class);
+
+    registry.attachToActivity(appComponent, activityLifecycle);
+
+    // Verify it did NOT detach from Service and attached to Activity
+    assertEquals(1, fakePlugin.serviceAttachmentCallCount);
+    assertEquals(0, fakePlugin.serviceDetachmentCallCount); // NOT detached!
+    assertEquals(1, fakePlugin.activityAttachmentCallCount); // Attached to Activity!
+
+    // 3. Detach from Activity
+    registry.detachFromActivity();
+    assertEquals(1, fakePlugin.activityDetachmentCallCount);
+    assertEquals(0, fakePlugin.serviceDetachmentCallCount); // Still not detached from Service!
+
+    // 4. Detach from Service
+    registry.detachFromService();
+    assertEquals(1, fakePlugin.serviceDetachmentCallCount); // Now detached!
+  }
+
+  @Test
+  public void destroyDetachesAllConcurrentlyAttachedComponents() {
+    Context context = mock(Context.class);
+    FlutterEngine flutterEngine = mock(FlutterEngine.class);
+    PlatformViewsController platformViewsController = mock(PlatformViewsController.class);
+    when(flutterEngine.getPlatformViewsController()).thenReturn(platformViewsController);
+    PlatformViewsController2 platformViewsController2 = mock(PlatformViewsController2.class);
+    when(flutterEngine.getPlatformViewsController2()).thenReturn(platformViewsController2);
+    PlatformViewsControllerDelegator platformViewsControllerDelegator =
+        mock(PlatformViewsControllerDelegator.class);
+    when(flutterEngine.getPlatformViewsControllerDelegator())
+        .thenReturn(platformViewsControllerDelegator);
+    when(flutterEngine.getDartExecutor()).thenReturn(mock(DartExecutor.class));
+    when(flutterEngine.getRenderer()).thenReturn(mock(FlutterRenderer.class));
+
+    PackageManager packageManager = mock(PackageManager.class);
+    String packageName = "io.flutter.test";
+    ApplicationInfo applicationInfo = new ApplicationInfo();
+    applicationInfo.metaData = new Bundle();
+    when(context.getPackageName()).thenReturn(packageName);
+    when(context.getPackageManager()).thenReturn(packageManager);
+    try {
+      when(packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA))
+          .thenReturn(applicationInfo);
+    } catch (PackageManager.NameNotFoundException e) {
+      fail("Mocking application info threw an exception");
+    }
+
+    FlutterLoader flutterLoader = mock(FlutterLoader.class);
+
+    FlutterEngineConnectionRegistry registry =
+        new FlutterEngineConnectionRegistry(context, flutterEngine, flutterLoader, null);
+
+    FakeMultiAwareFlutterPlugin fakePlugin = new FakeMultiAwareFlutterPlugin();
+    registry.add(fakePlugin);
+
+    // Attach to Service
+    Service service = mock(Service.class);
+    Lifecycle serviceLifecycle = mock(Lifecycle.class);
+    registry.attachToService(service, serviceLifecycle, true);
+
+    // Attach to Activity
+    ExclusiveAppComponent<Activity> appComponent = mock(ExclusiveAppComponent.class);
+    Activity activity = mock(Activity.class);
+    when(appComponent.getAppComponent()).thenReturn(activity);
+    when(activity.getIntent()).thenReturn(mock(Intent.class));
+    Lifecycle activityLifecycle = mock(Lifecycle.class);
+    registry.attachToActivity(appComponent, activityLifecycle);
+
+    // Verify both are attached
+    assertEquals(1, fakePlugin.serviceAttachmentCallCount);
+    assertEquals(1, fakePlugin.activityAttachmentCallCount);
+    assertEquals(0, fakePlugin.serviceDetachmentCallCount);
+    assertEquals(0, fakePlugin.activityDetachmentCallCount);
+
+    // Destroy the registry
+    registry.destroy();
+
+    // Verify both are detached
+    assertEquals(1, fakePlugin.serviceDetachmentCallCount);
+    assertEquals(1, fakePlugin.activityDetachmentCallCount);
+  }
+
+  private static class FakeMultiAwareFlutterPlugin implements FlutterPlugin, ActivityAware, ServiceAware {
+    public int activityAttachmentCallCount = 0;
+    public int activityDetachmentCallCount = 0;
+    public int serviceAttachmentCallCount = 0;
+    public int serviceDetachmentCallCount = 0;
+
+    @Override
+    public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {}
+
+    @Override
+    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {}
+
+    @Override
+    public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
+      activityAttachmentCallCount++;
+    }
+
+    @Override
+    public void onDetachedFromActivityForConfigChanges() {}
+
+    @Override
+    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {}
+
+    @Override
+    public void onDetachedFromActivity() {
+      activityDetachmentCallCount++;
+    }
+
+    @Override
+    public void onAttachedToService(@NonNull ServicePluginBinding binding) {
+      serviceAttachmentCallCount++;
+    }
+
+    @Override
+    public void onDetachedFromService() {
+      serviceDetachmentCallCount++;
     }
   }
 }
