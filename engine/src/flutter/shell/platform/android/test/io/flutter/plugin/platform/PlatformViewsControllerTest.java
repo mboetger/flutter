@@ -1703,6 +1703,20 @@ public class PlatformViewsControllerTest {
   }
 
   @Test
+  public void checkInputConnectionProxy_returnsTrueForChildView() {
+    final PlatformViewsController platformViewsController = new PlatformViewsController();
+    final Context context = ApplicationProvider.getApplicationContext();
+    final FrameLayout parentView = new FrameLayout(context);
+    final View childView = new View(context);
+    parentView.addView(childView);
+
+    platformViewsController.contextToEmbeddedView.put(parentView.getContext(), parentView);
+
+    boolean shouldProxy = platformViewsController.checkInputConnectionProxy(childView);
+    assertTrue(shouldProxy);
+  }
+
+  @Test
   @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
   public void convertPlatformViewRenderSurfaceAsDefault() {
     final PlatformViewsController platformViewsController = new PlatformViewsController();

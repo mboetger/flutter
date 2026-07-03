@@ -957,6 +957,19 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     if (platformView == view) {
       return true;
     }
+    // Check if the view is a descendant of the platform view.
+    View parent = view;
+    while (parent != null) {
+      if (parent == platformView) {
+        return true;
+      }
+      Object parentObject = parent.getParent();
+      if (parentObject instanceof View) {
+        parent = (View) parentObject;
+      } else {
+        break;
+      }
+    }
     return platformView.checkInputConnectionProxy(view);
   }
 
