@@ -717,7 +717,11 @@ class HotRunner extends ResidentRunner {
         );
       }
     }
-    await Future.wait(operations);
+    try {
+      await Future.wait(operations).timeout(const Duration(milliseconds: 500));
+    } on TimeoutException {
+      globals.printTrace('Timing out waiting for child isolates to be killed. Proceeding.');
+    }
     globals.printTrace('Finished waiting on operations.');
     await _launchFromDevFS();
     restartTimer.stop();
