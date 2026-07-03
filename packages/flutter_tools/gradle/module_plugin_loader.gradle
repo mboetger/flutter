@@ -40,7 +40,7 @@ gradle.getGradle().projectsLoaded { g ->
     }
     g.rootProject.afterEvaluate { p ->
         p.subprojects { sp ->
-            if (sp.name != 'flutter') {
+            if (sp.name != 'flutter' && nativePlugins.any { it.name == sp.name }) {
                 sp.evaluationDependsOn(':flutter')
             }
         }
