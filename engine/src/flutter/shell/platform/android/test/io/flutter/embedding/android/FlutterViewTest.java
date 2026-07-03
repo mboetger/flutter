@@ -346,6 +346,88 @@ public class FlutterViewTest {
     validateViewportMetricPadding(viewportMetricsCaptor, 100, 100, 100, 100);
   }
 
+  @Test
+  @TargetApi(30)
+  @Config(sdk = API_LEVELS.API_30)
+  public void reportKeyboardInsetWhenFullscreen() {
+    FlutterView flutterView =
+        new FlutterView(ctx) {
+          @Override
+          public void getWindowVisibleDisplayFrame(android.graphics.Rect outRect) {
+            outRect.set(0, 0, 1080, 1920 - 800); // Keyboard height is 800
+          }
+
+          @Override
+          public View getRootView() {
+            View mockRootView = mock(View.class);
+            when(mockRootView.getHeight()).thenReturn(1920);
+            return mockRootView;
+          }
+        };
+
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+    assertEquals(0, viewportMetricsCaptor.getValue().viewInsetBottom);
+
+    // Simulate system applying window inset in fullscreen (IME inset is 0).
+    WindowInsets windowInsets =
+        new WindowInsets.Builder()
+            .setInsets(android.view.WindowInsets.Type.ime(), Insets.of(0, 0, 0, 0))
+            .build();
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    // Verify.
+    verify(flutterRenderer, times(3)).setViewportMetrics(viewportMetricsCaptor.capture());
+    // The fallback should detect the keyboard height of 800.
+    assertEquals(800, viewportMetricsCaptor.getValue().viewInsetBottom);
+  }
+
+  @Test
+  @TargetApi(28)
+  @Config(sdk = API_LEVELS.API_28)
+  public void reportKeyboardInsetWhenFullscreenLegacy() {
+    FlutterView flutterView =
+        new FlutterView(ctx) {
+          @Override
+          public void getWindowVisibleDisplayFrame(android.graphics.Rect outRect) {
+            outRect.set(0, 0, 1080, 1920 - 800); // Keyboard height is 800
+          }
+
+          @Override
+          public View getRootView() {
+            View mockRootView = mock(View.class);
+            when(mockRootView.getHeight()).thenReturn(1920);
+            return mockRootView;
+          }
+        };
+
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+    assertEquals(0, viewportMetricsCaptor.getValue().viewInsetBottom);
+
+    // Simulate system applying window inset in legacy fullscreen (systemWindowInsetBottom is 0).
+    WindowInsets windowInsets = mock(WindowInsets.class);
+    mockSystemWindowInsets(windowInsets, 0, 0, 0, 0);
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    // Verify.
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+    // The fallback should detect the keyboard height of 800.
+    assertEquals(800, viewportMetricsCaptor.getValue().viewInsetBottom);
+  }
+
   @SuppressWarnings("deprecation")
   // getSystemUiVisibility
   // This test uses the API 30+ Algorithm for window insets. This test requires API 34 or

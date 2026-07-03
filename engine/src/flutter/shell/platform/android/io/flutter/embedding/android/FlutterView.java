@@ -702,16 +702,23 @@ public class FlutterView extends FrameLayout
   // android.view.WindowInsets.Type.ime() flag to find the keyboard inset.
 
   private int guessBottomKeyboardInset(WindowInsets insets) {
-    int screenHeight = getRootView().getHeight();
+    final int screenHeight = getRootView().getHeight();
     // Magic number due to this being a heuristic. This should be replaced, but we have not
     // found a clean way to do it yet (Sept. 2018)
     final double keyboardHeightRatioHeuristic = 0.18;
-    if (insets.getSystemWindowInsetBottom() < screenHeight * keyboardHeightRatioHeuristic) {
+    int insetBottom = insets.getSystemWindowInsetBottom();
+    if (insetBottom == 0) {
+      // Fallback for fullscreen mode where the system window inset is not populated.
+      final Rect r = new Rect();
+      getWindowVisibleDisplayFrame(r);
+      insetBottom = screenHeight - r.bottom;
+    }
+    if (insetBottom < screenHeight * keyboardHeightRatioHeuristic) {
       // Is not a keyboard, so return zero as inset.
       return 0;
     } else {
       // Is a keyboard, so return the full inset.
-      return insets.getSystemWindowInsetBottom();
+      return insetBottom;
     }
   }
 
@@ -758,7 +765,18 @@ public class FlutterView extends FrameLayout
       Insets imeInsets = insets.getInsets(android.view.WindowInsets.Type.ime());
       viewportMetrics.viewInsetTop = imeInsets.top;
       viewportMetrics.viewInsetRight = imeInsets.right;
-      viewportMetrics.viewInsetBottom = imeInsets.bottom; // Typically, only bottom is non-zero
+      int imeInsetBottom = imeInsets.bottom;
+      if (imeInsetBottom == 0) {
+        // Fallback for fullscreen mode where IME insets might not be populated.
+        final Rect r = new Rect();
+        getWindowVisibleDisplayFrame(r);
+        final int screenHeight = getRootView().getHeight();
+        final int keyboardHeight = screenHeight - r.bottom;
+        if (keyboardHeight >= screenHeight * 0.18) {
+          imeInsetBottom = keyboardHeight;
+        }
+      }
+      viewportMetrics.viewInsetBottom = imeInsetBottom;
       viewportMetrics.viewInsetLeft = imeInsets.left;
 
       Insets systemGestureInsets =
