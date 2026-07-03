@@ -11,6 +11,7 @@ import android.content.ComponentCallbacks2;
 import android.content.Context;
 import android.content.MutableContextWrapper;
 import android.os.Build;
+import android.os.IBinder;
 import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -19,6 +20,8 @@ import android.view.MotionEvent.PointerProperties;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -945,10 +948,25 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
    * {@link View#checkInputConnectionProxy(View)} method. Else returns false.
    */
   public boolean checkInputConnectionProxy(@Nullable View view) {
-    // View can be null on some devices
-    // See: https://github.com/flutter/flutter/issues/36517
     if (view == null) {
       return false;
+    }
+    // Check if the view is, or is a descendant of, any of our virtual display platform views.
+    for (VirtualDisplayController vdc : vdControllers.values()) {
+      View platformView = vdc.getView();
+      if (platformView == null) {
+        continue;
+      }
+      if (platformView == view) {
+        return true;
+      }
+      ViewParent parent = view.getParent();
+      while (parent instanceof View) {
+        if (parent == platformView) {
+          return true;
+        }
+        parent = parent.getParent();
+      }
     }
     if (!contextToEmbeddedView.containsKey(view.getContext())) {
       return false;
@@ -1427,5 +1445,101 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   @VisibleForTesting
   public SparseArray<PlatformOverlayView> getOverlayLayerViews() {
     return overlayLayerViews;
+  }
+
+  public WindowManager getPlatformViewsWindowManager(WindowManager delegate) {
+    return new PlatformViewsWindowManager(delegate, this);
+  }
+
+  public static class PlatformViewsWindowManager extends SingleViewWindowManager {
+    private final PlatformViewsController platformViewsController;
+
+    PlatformViewsWindowManager(
+        WindowManager delegate, PlatformViewsController platformViewsController) {
+      super(delegate, null);
+      this.platformViewsController = platformViewsController;
+    }
+
+    @Override
+    public void addView(View view, ViewGroup.LayoutParams params) {
+      if (maybeDelegateToPresentation(view, /*remove=*/ false, /*immediate=*/ false, params)) {
+        return;
+      }
+      delegate.addView(view, params);
+    }
+
+    @Override
+    public void updateViewLayout(View view, ViewGroup.LayoutParams params) {
+      if (maybeDelegateToPresentation(view, /*remove=*/ false, /*immediate=*/ false, params)) {
+        return;
+      }
+      delegate.updateViewLayout(view, params);
+    }
+
+    @Override
+    public void removeView(View view) {
+      if (maybeDelegateToPresentation(view, /*remove=*/ true, /*immediate=*/ false, null)) {
+        return;
+      }
+      delegate.removeView(view);
+    }
+
+    @Override
+    public void removeViewImmediate(View view) {
+      if (maybeDelegateToPresentation(view, /*remove=*/ true, /*immediate=*/ true, null)) {
+        return;
+      }
+      delegate.removeViewImmediate(view);
+    }
+
+    private boolean maybeDelegateToPresentation(
+        View view, boolean remove, boolean immediate, ViewGroup.LayoutParams params) {
+      if (platformViewsController == null) {
+        return false;
+      }
+      IBinder token = null;
+      if (params instanceof WindowManager.LayoutParams) {
+        token = ((WindowManager.LayoutParams) params).token;
+      }
+      for (VirtualDisplayController vdc : platformViewsController.vdControllers.values()) {
+        if (vdc.presentation != null) {
+          if (token != null && vdc.presentation.windowTokenMatches(token)) {
+            WindowManager wm =
+                (WindowManager)
+                    vdc.presentation.getContext().getSystemService(Context.WINDOW_SERVICE);
+            if (remove) {
+              if (immediate) {
+                wm.removeViewImmediate(view);
+              } else {
+                wm.removeView(view);
+              }
+            } else {
+              if (view.getParent() == null) {
+                wm.addView(view, params);
+              } else {
+                wm.updateViewLayout(view, params);
+              }
+            }
+            return true;
+          }
+          if (vdc.presentation.containsView(view)) {
+            WindowManager wm =
+                (WindowManager)
+                    vdc.presentation.getContext().getSystemService(Context.WINDOW_SERVICE);
+            if (remove) {
+              if (immediate) {
+                wm.removeViewImmediate(view);
+              } else {
+                wm.removeView(view);
+              }
+            } else {
+              wm.updateViewLayout(view, params);
+            }
+            return true;
+          }
+        }
+      }
+      return false;
+    }
   }
 }

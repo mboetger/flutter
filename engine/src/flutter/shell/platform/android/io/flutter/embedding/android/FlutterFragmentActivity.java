@@ -966,4 +966,34 @@ public class FlutterFragmentActivity extends FragmentActivity
   protected FrameLayout provideRootLayout(Context context) {
     return new FrameLayout(context);
   }
+
+  @Override
+  public Object getSystemService(@NonNull String name) {
+    if (WINDOW_SERVICE.equals(name)) {
+      WindowManager windowManager = (WindowManager) super.getSystemService(name);
+      FlutterEngine engine = getFlutterEngine();
+      if (engine != null) {
+        io.flutter.plugin.platform.PlatformViewsController controller =
+            engine.getPlatformViewsController();
+        if (controller != null) {
+          return controller.getPlatformViewsWindowManager(windowManager);
+        }
+      }
+    }
+    return super.getSystemService(name);
+  }
+
+  @Override
+  public WindowManager getWindowManager() {
+    WindowManager windowManager = super.getWindowManager();
+    FlutterEngine engine = getFlutterEngine();
+    if (engine != null) {
+      io.flutter.plugin.platform.PlatformViewsController controller =
+          engine.getPlatformViewsController();
+      if (controller != null) {
+        return controller.getPlatformViewsWindowManager(windowManager);
+      }
+    }
+    return windowManager;
+  }
 }

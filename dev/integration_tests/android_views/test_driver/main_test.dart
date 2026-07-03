@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 import 'package:test/test.dart' hide TypeMatcher, isInstanceOf;
 
@@ -66,5 +67,56 @@ Future<void> main() async {
       // TODO(garyq): Skipped, see https://github.com/flutter/flutter/issues/88479
       skip: true,
     );
+  });
+
+  group('Fragment Integration', () {
+    setUpAll(() async {
+      final SerializableFinder fragmentListTile = find.byValueKey('FragmentIntegrationListTile');
+      await driver?.tap(fragmentListTile);
+    });
+
+    tearDownAll(() async {
+      await driver?.waitFor(find.pageBack());
+      await driver?.tap(find.pageBack());
+    });
+
+    test('Popup window works', () async {
+      final SerializableFinder triggerPopup = find.byValueKey('TriggerPopup');
+      await driver?.waitFor(triggerPopup);
+      await driver?.tap(triggerPopup);
+
+      final String popupShown = (await driver?.getText(find.byValueKey('PopupShown')))!;
+      final String popupError = (await driver?.getText(find.byValueKey('PopupError')))!;
+
+      expect(popupShown, 'PopupShown: true');
+      expect(popupError, 'PopupError: null');
+    }, timeout: Timeout.none);
+
+    test('Text input works', () async {
+      final SerializableFinder platformView = find.byValueKey('FragmentPlatformView');
+      await driver?.waitFor(platformView);
+
+      // Tap the platform view to focus the EditText.
+      await driver?.tap(platformView);
+      await Future<void>.delayed(const Duration(seconds: 1)); // Wait for keyboard/focus
+
+      // Send text via adb
+      final ProcessResult result = await Process.run('adb', <String>[
+        'shell',
+        'input',
+        'text',
+        'hello',
+      ]);
+      if (result.exitCode != 0) {
+        fail('Failed to run adb shell input: ${result.stderr}');
+      }
+
+      // Refresh status to get the text
+      final SerializableFinder refreshStatus = find.byValueKey('RefreshStatus');
+      await driver?.tap(refreshStatus);
+
+      final String editTextText = (await driver?.getText(find.byValueKey('EditTextText')))!;
+      expect(editTextText, 'EditText: hello');
+    }, timeout: Timeout.none);
   });
 }

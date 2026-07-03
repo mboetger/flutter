@@ -13,14 +13,26 @@ import android.view.View;
 
 import java.util.HashMap;
 
-import io.flutter.embedding.android.FlutterActivity;
+import io.flutter.embedding.android.FlutterFragmentActivity;
+import androidx.fragment.app.Fragment;
+import android.widget.LinearLayout;
+import android.widget.EditText;
+import android.widget.Button;
+import android.widget.PopupMenu;
+import android.view.LayoutInflater;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.content.Context;
+import io.flutter.plugin.platform.PlatformView;
+import io.flutter.plugin.platform.PlatformViewFactory;
+import io.flutter.plugin.common.StandardMessageCodec;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugins.GeneratedPluginRegistrant;
 
-public class MainActivity extends FlutterActivity implements MethodChannel.MethodCallHandler {
+public class MainActivity extends FlutterFragmentActivity implements MethodChannel.MethodCallHandler {
     final static int STORAGE_PERMISSION_CODE = 1;
 
     MethodChannel mMethodChannel;
@@ -29,8 +41,67 @@ public class MainActivity extends FlutterActivity implements MethodChannel.Metho
     // This is null when not waiting for the Android permission request;
     private MethodChannel.Result permissionResult;
 
+    private PlatformViewFragment mFragment;
+
+    public static class PlatformViewFragment extends Fragment {
+        EditText editText;
+        Button button;
+        boolean popupShown = false;
+        String popupError = null;
+
+        @Override
+        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+            Context context = getContext();
+            LinearLayout layout = new LinearLayout(context);
+            layout.setOrientation(LinearLayout.VERTICAL);
+
+            editText = new EditText(context);
+            editText.setId(View.generateViewId());
+            editText.setHint("Enter text");
+            editText.setTag("fragment_edit_text");
+            layout.addView(editText);
+
+            button = new Button(context);
+            button.setId(View.generateViewId());
+            button.setText("Show Popup");
+            button.setTag("fragment_button");
+            button.setOnClickListener(v -> {
+                try {
+                    PopupMenu popup = new PopupMenu(context, button);
+                    popup.getMenu().add("Item 1");
+                    popup.show();
+                    popupShown = true;
+                } catch (Exception e) {
+                    popupError = e.toString();
+                    popupShown = false;
+                }
+            });
+            layout.addView(button);
+
+            return layout;
+        }
+    }
+
     private View getFlutterView() {
       return findViewById(FLUTTER_VIEW_ID);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        mFragment = new PlatformViewFragment();
+        FrameLayout dummyContainer = new FrameLayout(this);
+        dummyContainer.setVisibility(View.GONE);
+        int containerId = View.generateViewId();
+        dummyContainer.setId(containerId);
+        ViewGroup rootView = findViewById(android.R.id.content);
+        rootView.addView(dummyContainer);
+
+        getSupportFragmentManager()
+            .beginTransaction()
+            .add(containerId, mFragment, "my_fragment")
+            .commit();
+        getSupportFragmentManager().executePendingTransactions();
     }
 
     @Override
@@ -40,6 +111,29 @@ public class MainActivity extends FlutterActivity implements MethodChannel.Metho
             .getPlatformViewsController()
             .getRegistry()
             .registerViewFactory("simple_view", new SimpleViewFactory(executor));
+
+        flutterEngine
+            .getPlatformViewsController()
+            .getRegistry()
+            .registerViewFactory("fragment_view", new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+                @Override
+                public PlatformView create(Context context, int id, Object args) {
+                    return new PlatformView() {
+                        @Override
+                        public View getView() {
+                            View view = mFragment.getView();
+                            if (view != null && view.getParent() != null) {
+                                ((ViewGroup) view.getParent()).removeView(view);
+                            }
+                            return view;
+                        }
+
+                        @Override
+                        public void dispose() {}
+                    };
+                }
+            });
+
         mMethodChannel = new MethodChannel(executor, "android_views_integration");
         mMethodChannel.setMethodCallHandler(this);
         GeneratedPluginRegistrant.registerWith(flutterEngine);
@@ -64,6 +158,31 @@ public class MainActivity extends FlutterActivity implements MethodChannel.Metho
                 return;
             case "synthesizeEvent":
                 synthesizeEvent(methodCall, result);
+                return;
+            case "getEditTextText":
+                if (mFragment != null && mFragment.editText != null) {
+                    result.success(mFragment.editText.getText().toString());
+                } else {
+                    result.error("error", "fragment or edittext not ready", null);
+                }
+                return;
+            case "clickPopup":
+                if (mFragment != null && mFragment.button != null) {
+                    mFragment.button.performClick();
+                    result.success(null);
+                } else {
+                    result.error("error", "fragment or button not ready", null);
+                }
+                return;
+            case "getPopupResult":
+                if (mFragment != null) {
+                    java.util.HashMap<String, Object> map = new java.util.HashMap<>();
+                    map.put("shown", mFragment.popupShown);
+                    map.put("error", mFragment.popupError);
+                    result.success(map);
+                } else {
+                    result.error("error", "fragment not ready", null);
+                }
                 return;
         }
         result.notImplemented();

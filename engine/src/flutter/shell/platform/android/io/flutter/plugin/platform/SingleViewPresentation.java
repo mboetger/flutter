@@ -103,6 +103,7 @@ class SingleViewPresentation extends Presentation {
       int viewId,
       OnFocusChangeListener focusChangeListener) {
     super(new ImmContext(outerContext), display);
+    getContext().getTheme().setTo(outerContext.getTheme());
     this.accessibilityEventsDelegate = accessibilityEventsDelegate;
     this.viewId = viewId;
     this.focusChangeListener = focusChangeListener;
@@ -129,6 +130,7 @@ class SingleViewPresentation extends Presentation {
       OnFocusChangeListener focusChangeListener,
       boolean startFocused) {
     super(new ImmContext(outerContext), display);
+    getContext().getTheme().setTo(outerContext.getTheme());
     this.accessibilityEventsDelegate = accessibilityEventsDelegate;
     this.state = state;
     this.focusChangeListener = focusChangeListener;
@@ -309,6 +311,21 @@ class SingleViewPresentation extends Presentation {
       }
       return false;
     }
+  }
+
+  /*package*/ boolean containsView(View view) {
+    return state.fakeWindowViewGroup != null && view.getParent() == state.fakeWindowViewGroup;
+  }
+
+  /*package*/ boolean windowTokenMatches(android.os.IBinder token) {
+    if (getWindow() == null) {
+      return false;
+    }
+    View decorView = getWindow().getDecorView();
+    if (decorView == null) {
+      return false;
+    }
+    return decorView.getWindowToken() == token;
   }
 
   private static class AccessibilityDelegatingFrameLayout extends FrameLayout {

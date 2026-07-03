@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_driver/driver_extension.dart';
 
+import 'fragment_integration.dart';
 import 'motion_events_page.dart';
 import 'page.dart';
 import 'wm_integrations.dart';
@@ -12,6 +13,7 @@ import 'wm_integrations.dart';
 final List<PageWidget> _allPages = <PageWidget>[
   const MotionEventsPage(),
   const WindowManagerIntegrationsPage(),
+  const FragmentIntegrationPage(),
 ];
 
 void main() {
