@@ -1194,6 +1194,14 @@ abstract class ResidentRunner extends ResidentHandlers {
     appFinished();
   }
 
+  Future<void> startEchoingDeviceLog() async {
+    await Future.wait<void>(
+      flutterDevices.map<Future<void>>(
+        (FlutterDevice? device) => device!.startEchoingDeviceLog(debuggingOptions),
+      ),
+    );
+  }
+
   Future<void> stopEchoingDeviceLog() async {
     await Future.wait<void>(
       flutterDevices.map<Future<void>>((FlutterDevice? device) => device!.stopEchoingDeviceLog()),

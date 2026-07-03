@@ -145,6 +145,8 @@ class ColdRunner extends ResidentRunner {
       return 2;
     }
 
+    await startEchoingDeviceLog();
+
     for (final FlutterDevice? device in flutterDevices) {
       final List<FlutterView> views = await device!.vmService!.getFlutterViews();
       for (final view in views) {

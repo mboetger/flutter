@@ -281,6 +281,8 @@ class HotRunner extends ResidentRunner {
       return 2;
     }
 
+    await startEchoingDeviceLog();
+
     for (final FlutterDevice? device in flutterDevices) {
       device!.developmentShaderCompiler.configureCompiler(device.targetPlatform);
     }
