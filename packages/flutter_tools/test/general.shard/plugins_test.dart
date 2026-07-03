@@ -914,6 +914,58 @@ dependencies:
         },
       );
 
+      testUsingContext(
+        'GeneratedPluginRegistrant.java is regenerated from v1 to v2 embedding if app is upgraded (issue 57120)',
+        () async {
+          androidProject.embeddingVersion = AndroidEmbeddingVersion.v1;
+
+          final File registrant = flutterProject.directory
+              .childDirectory('android')
+              .childDirectory('app')
+              .childDirectory('src')
+              .childDirectory('main')
+              .childDirectory('java')
+              .childDirectory('io')
+              .childDirectory('flutter')
+              .childDirectory('plugins')
+              .childFile('GeneratedPluginRegistrant.java');
+
+          registrant.createSync(recursive: true);
+          registrant.writeAsStringSync(r'''
+package io.flutter.plugins;
+
+import io.flutter.plugin.common.PluginRegistry;
+
+/**
+ * Generated file. Do not edit.
+ */
+public final class GeneratedPluginRegistrant {
+  public static void registerWith(PluginRegistry registry) {
+  }
+}
+''');
+
+          // Now upgrade to v2
+          androidProject.embeddingVersion = AndroidEmbeddingVersion.v2;
+
+          await injectPlugins(flutterProject, androidPlatform: true, releaseMode: false);
+
+          expect(registrant, exists);
+          final String content = registrant.readAsStringSync();
+          expect(content, contains('import io.flutter.embedding.engine.FlutterEngine;'));
+          expect(
+            content,
+            contains('public static void registerWith(@NonNull FlutterEngine flutterEngine)'),
+          );
+          expect(content, isNot(contains('PluginRegistry')));
+        },
+        overrides: <Type, Generator>{
+          FileSystem: () => fs,
+          ProcessManager: () => FakeProcessManager.any(),
+          Pub: ThrowingPub.new,
+        },
+      );
+
       // Issue: https://github.com/flutter/flutter/issues/47803
       testUsingContext(
         'exits the tool if a plugin sets an invalid android package in pubspec.yaml',
