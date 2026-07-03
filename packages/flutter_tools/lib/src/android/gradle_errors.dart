@@ -85,6 +85,7 @@ final gradleErrors = <GradleHandledError>[
   missingNdkSourcePropertiesFile,
   applyingKotlinAndroidPluginErrorHandler,
   useNewAgpDslErrorHandler,
+  gradleVersionConflictHandler,
   incompatibleKotlinVersionHandler, // This handler should always be last, as its key log output is sometimes in error messages with other root causes.
 ];
 
@@ -716,4 +717,28 @@ For instructions on how to opt out, see: $kOptOutOfNewDslDocsUrl
         return GradleBuildStatus.exit;
       },
   eventLabel: 'use-new-agp-dsl-error',
+);
+
+final RegExp _gradleVersionConflictPattern = RegExp(
+  r'Minimum supported Gradle version is ([\d\.]+)\. Current version is ([\d\.]+)\.',
+);
+
+@visibleForTesting
+final gradleVersionConflictHandler = GradleHandledError(
+  test: (String line) => _gradleVersionConflictPattern.hasMatch(line),
+  handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
+    final File gradlePropertiesFile = project.android.gradleWrapperPropertiesFile;
+    final Match? match = _gradleVersionConflictPattern.firstMatch(line);
+    final String? minVersion = match?.group(1);
+    final String? currentVersion = match?.group(2);
+    globals.printBox(
+      "${globals.logger.terminal.warningMark} Your project's Gradle version ($currentVersion) is incompatible with the version required by one of your plugins/dependencies.\n\n"
+      'To fix this issue, update the Gradle version specified in ${gradlePropertiesFile.path} '
+      'to at least $minVersion.\n'
+      'For more information, see: https://docs.gradle.org/current/userguide/gradle_wrapper.html',
+      title: _boxTitle,
+    );
+    return GradleBuildStatus.exit;
+  },
+  eventLabel: 'gradle-version-conflict',
 );

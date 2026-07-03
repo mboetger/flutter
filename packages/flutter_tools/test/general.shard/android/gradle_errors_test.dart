@@ -57,6 +57,7 @@ void main() {
           missingNdkSourcePropertiesFile,
           applyingKotlinAndroidPluginErrorHandler,
           useNewAgpDslErrorHandler,
+          gradleVersionConflictHandler,
           incompatibleKotlinVersionHandler,
         ]),
       );
@@ -1714,6 +1715,53 @@ An exception occurred applying plugin request [id: 'dev.flutter.flutter-gradle-p
       ProcessManager: () => processManager,
     },
   );
+
+  group('Gradle version mismatch in gradle-wrapper.properties', () {
+    const errorMessage = '''
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+A problem occurred configuring project ':app'.
+> Failed to apply plugin [id 'com.android.internal.version-check']
+   > Minimum supported Gradle version is 5.6.4. Current version is 5.6.2. If using the gradle wrapper, try editing the distributionUrl in /Users/rsirokov/.pub-cache/hosted/pub.dartlang.org/devicelocale-0.3.1/android/gradle/wrapper/gradle-wrapper.properties to gradle-5.6.4-all.zip
+''';
+
+    testWithoutContext('pattern', () {
+      expect(
+        gradleErrors.any(
+          (GradleHandledError handler) => formatTestErrorMessage(errorMessage, handler),
+        ),
+        isTrue,
+      );
+    });
+
+    testUsingContext(
+      'handler',
+      () async {
+        await gradleVersionConflictHandler.handler(
+          line: errorMessage,
+          project: FlutterProject.fromDirectoryTest(fileSystem.currentDirectory),
+          usesAndroidX: true,
+        );
+
+        expect(
+          testLogger.statusText,
+          contains("Your project's Gradle version (5.6.2) is incompatible"),
+        );
+        expect(testLogger.statusText, contains('update the Gradle version specified in'));
+        expect(
+          testLogger.statusText,
+          contains('/android/gradle/wrapper/gradle-wrapper.properties to at least 5.6.4.'),
+        );
+      },
+      overrides: <Type, Generator>{
+        GradleUtils: () => FakeGradleUtils(),
+        Platform: () => fakePlatform('android'),
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+      },
+    );
+  });
 }
 
 bool formatTestErrorMessage(String errorMessage, GradleHandledError error) {
