@@ -21,6 +21,7 @@ import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.INITIAL_
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.NORMAL_THEME_META_DATA_KEY;
 import static io.flutter.embedding.android.FlutterActivityLaunchConfigs.deepLinkEnabled;
 
+import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -61,7 +62,7 @@ import java.util.List;
 // are duplicated for readability purposes. Be sure to replicate any change in this class in
 // FlutterActivity, too.
 public class FlutterFragmentActivity extends FragmentActivity
-    implements FlutterEngineProvider, FlutterEngineConfigurator {
+    implements FlutterEngineProvider, FlutterEngineConfigurator, FlutterUiDisplayListener {
   private static final String TAG = "FlutterFragmentActivity";
 
   // FlutterFragment management.
@@ -373,7 +374,6 @@ public class FlutterFragmentActivity extends FragmentActivity
 
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
-    switchLaunchThemeForNormalTheme();
     // Get an existing fragment reference first before onCreate since onCreate would re-attach
     // existing fragments. This would cause FlutterFragment to reference the host activity which
     // should be aware of its child fragment.
@@ -416,13 +416,19 @@ public class FlutterFragmentActivity extends FragmentActivity
    * renders, use platform channels to instruct Android to do so at the appropriate time. This will
    * avoid any jarring visual changes during app startup.
    */
+  private boolean isThemeSwitched = false;
+
   private void switchLaunchThemeForNormalTheme() {
+    if (isThemeSwitched) {
+      return;
+    }
     try {
       Bundle metaData = getMetaData();
       if (metaData != null) {
         int normalThemeRID = metaData.getInt(NORMAL_THEME_META_DATA_KEY, -1);
         if (normalThemeRID != -1) {
           setTheme(normalThemeRID);
+          isThemeSwitched = true;
         }
       } else {
         Log.v(TAG, "Using the launch theme as normal theme.");
@@ -432,6 +438,16 @@ public class FlutterFragmentActivity extends FragmentActivity
           TAG,
           "Could not read meta-data for FlutterFragmentActivity. Using the launch theme as normal theme.");
     }
+  }
+
+  @Override
+  public void onFlutterUiDisplayed() {
+    switchLaunchThemeForNormalTheme();
+  }
+
+  @Override
+  public void onFlutterUiNoLongerDisplayed() {
+    // no-op
   }
 
   /**
@@ -669,7 +685,7 @@ public class FlutterFragmentActivity extends FragmentActivity
   @SuppressWarnings("unused")
   @Nullable
   protected FlutterEngine getFlutterEngine() {
-    return flutterFragment.getFlutterEngine();
+    return flutterFragment != null ? flutterFragment.getFlutterEngine() : null;
   }
 
   /**

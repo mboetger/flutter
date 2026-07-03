@@ -1555,7 +1555,7 @@ public class FlutterFragment extends Fragment
    */
   @Nullable
   public FlutterEngine getFlutterEngine() {
-    return delegate.getFlutterEngine();
+    return delegate != null ? delegate.getFlutterEngine() : null;
   }
 
   @Nullable

@@ -780,4 +780,46 @@ public class FlutterActivityTest {
       onCreateCalled = true;
     }
   }
+
+  @Test
+  @Config(minSdk = API_LEVELS.API_29)
+  public void themeTransition_launchThemeNotPreservedAfterOnCreate() {
+    Bundle metaData = new Bundle();
+    metaData.putInt(
+        io.flutter.embedding.android.FlutterActivityLaunchConfigs.NORMAL_THEME_META_DATA_KEY,
+        android.R.style.Theme_Black);
+    FlutterActivityWithThemes.metaData = metaData;
+
+    Intent intent = FlutterActivityWithThemes.createDefaultIntent(ctx);
+    ActivityController<FlutterActivityWithThemes> activityController =
+        Robolectric.buildActivity(FlutterActivityWithThemes.class, intent);
+    
+    activityController.get().setTheme(android.R.style.Theme_Material);
+    activityController.create();
+    
+    FlutterActivityWithThemes activity = activityController.get();
+    
+    // The reproduction assertion: we expect the activity to still use the launch theme
+    // during the splash phase (after onCreate), but it has already switched to the normal theme.
+    assertEquals(android.R.style.Theme_Material, getThemeResId(activity));
+  }
+
+  private int getThemeResId(Context context) {
+    try {
+      java.lang.reflect.Method method = android.view.ContextThemeWrapper.class.getDeclaredMethod("getThemeResId");
+      method.setAccessible(true);
+      return (Integer) method.invoke(context);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static class FlutterActivityWithThemes extends FlutterActivity {
+    static Bundle metaData;
+
+    @Override
+    protected Bundle getMetaData() throws PackageManager.NameNotFoundException {
+      return metaData != null ? metaData : super.getMetaData();
+    }
+  }
 }

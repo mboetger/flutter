@@ -630,8 +630,6 @@ public class FlutterActivity extends Activity
 
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
-    switchLaunchThemeForNormalTheme();
-
     super.onCreate(savedInstanceState);
 
     if (savedInstanceState != null) {
@@ -764,13 +762,19 @@ public class FlutterActivity extends Activity
    * renders, use platform channels to instruct Android to do so at the appropriate time. This will
    * avoid any jarring visual changes during app startup.
    */
+  private boolean isThemeSwitched = false;
+
   private void switchLaunchThemeForNormalTheme() {
+    if (isThemeSwitched) {
+      return;
+    }
     try {
       Bundle metaData = getMetaData();
       if (metaData != null) {
         int normalThemeRID = metaData.getInt(NORMAL_THEME_META_DATA_KEY, -1);
         if (normalThemeRID != -1) {
           setTheme(normalThemeRID);
+          isThemeSwitched = true;
         }
       } else {
         Log.v(TAG, "Using the launch theme as normal theme.");
@@ -1299,7 +1303,7 @@ public class FlutterActivity extends Activity
    */
   @Nullable
   protected FlutterEngine getFlutterEngine() {
-    return delegate.getFlutterEngine();
+    return delegate != null ? delegate.getFlutterEngine() : null;
   }
 
   /**
@@ -1441,6 +1445,7 @@ public class FlutterActivity extends Activity
 
   @Override
   public void onFlutterUiDisplayed() {
+    switchLaunchThemeForNormalTheme();
     // Notifies Android that we're fully drawn so that performance metrics can be collected by
     // Flutter performance tests. A few considerations:
     // * reportFullyDrawn was supported in KitKat (API 19), but has a bug around requiring

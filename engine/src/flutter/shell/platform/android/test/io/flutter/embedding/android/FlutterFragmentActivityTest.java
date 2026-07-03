@@ -461,4 +461,44 @@ public class FlutterFragmentActivityTest {
           FlutterFragmentActivityWithIntentBuilders.class, engineGroupId);
     }
   }
+
+  @Test
+  @Config(minSdk = Build.API_LEVELS.API_29)
+  public void themeTransition_launchThemeNotPreservedAfterOnCreate() {
+    Bundle metaData = new Bundle();
+    metaData.putInt(
+        io.flutter.embedding.android.FlutterActivityLaunchConfigs.NORMAL_THEME_META_DATA_KEY,
+        android.R.style.Theme_Black);
+    FlutterFragmentActivityWithThemes.metaData = metaData;
+
+    Intent intent = FlutterFragmentActivityWithThemes.createDefaultIntent(ctx);
+    org.robolectric.android.controller.ActivityController<FlutterFragmentActivityWithThemes> activityController =
+        Robolectric.buildActivity(FlutterFragmentActivityWithThemes.class, intent);
+    
+    activityController.get().setTheme(android.R.style.Theme_Material);
+    activityController.create();
+    
+    FlutterFragmentActivityWithThemes activity = activityController.get();
+    
+    assertEquals(android.R.style.Theme_Material, getThemeResId(activity));
+  }
+
+  private int getThemeResId(Context context) {
+    try {
+      java.lang.reflect.Method method = android.view.ContextThemeWrapper.class.getDeclaredMethod("getThemeResId");
+      method.setAccessible(true);
+      return (Integer) method.invoke(context);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static class FlutterFragmentActivityWithThemes extends FlutterFragmentActivity {
+    static Bundle metaData;
+
+    @Override
+    protected Bundle getMetaData() throws PackageManager.NameNotFoundException {
+      return metaData != null ? metaData : super.getMetaData();
+    }
+  }
 }
