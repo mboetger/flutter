@@ -726,6 +726,69 @@ public class FlutterActivityTest {
     }
   }
 
+  @Test
+  public void itSendsMessageInOnCreateBeforeDartStarts() {
+    Intent intent = FlutterActivityThatSendsMessageInOnCreate.createDefaultIntent(ctx);
+    ActivityController<FlutterActivityThatSendsMessageInOnCreate> activityController =
+        Robolectric.buildActivity(FlutterActivityThatSendsMessageInOnCreate.class, intent);
+
+    // This will run onCreate
+    activityController.create();
+
+    FlutterActivityThatSendsMessageInOnCreate activity = activityController.get();
+
+    assertTrue(activity.messageSent);
+    // Verify that Dart was NOT executing when the message was sent.
+    // This demonstrates the race condition where messages sent in onCreate are lost
+    // because Dart has not started yet.
+    assertFalse(activity.dartIsExecutingWhenMessageSent);
+
+    // Now we run onStart, which should start Dart.
+    activityController.start();
+    assertTrue(activity.getFlutterEngine().getDartExecutor().isExecutingDart());
+  }
+
+  static class FlutterActivityThatSendsMessageInOnCreate extends FlutterActivity {
+    boolean messageSent = false;
+    boolean dartIsExecutingWhenMessageSent = false;
+
+    @Nullable
+    @Override
+    public FlutterEngine provideFlutterEngine(@NonNull Context context) {
+      FlutterJNI flutterJNI = mock(FlutterJNI.class);
+      final boolean[] attached = {false};
+      when(flutterJNI.isAttached()).thenAnswer(invocation -> attached[0]);
+      doAnswer(
+              invocation -> {
+                attached[0] = true;
+                return null;
+              })
+          .when(flutterJNI)
+          .attachToNative();
+
+      FlutterLoader flutterLoader = mock(FlutterLoader.class);
+      when(flutterLoader.automaticallyRegisterPlugins()).thenReturn(true);
+
+      return new FlutterEngine(context, flutterLoader, flutterJNI, new String[] {}, true);
+    }
+
+    @Override
+    public String getAppBundlePath() {
+      return "dummy_app_bundle_path";
+    }
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+      super.onCreate(savedInstanceState);
+      // At this point, the delegate is attached and engine is created.
+      dartIsExecutingWhenMessageSent = getFlutterEngine().getDartExecutor().isExecutingDart();
+
+      // Send message
+      getFlutterEngine().getDartExecutor().getBinaryMessenger().send("test_channel", null);
+      messageSent = true;
+    }
+  }
+
   private static final class FakeFlutterPlugin
       implements FlutterPlugin,
           ActivityAware,

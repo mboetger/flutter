@@ -18,6 +18,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.robolectric.Shadows.shadowOf;
 
+import android.util.Log;
+import org.robolectric.shadows.ShadowLog;
+
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import io.flutter.embedding.engine.FlutterJNI;
 import io.flutter.embedding.engine.dart.DartMessenger.DartMessengerTaskQueue;
@@ -344,5 +347,46 @@ public class DartMessengerTest {
     for (int i = 0; i < count - 1; ++i) {
       assertEquals((int) ints.get(i), (int) (ints.get(i + 1)) - 1);
     }
+  }
+
+  @Test
+  public void logsWarningWhenSendingMessageBeforeIsolateIsRunning() {
+    final FlutterJNI fakeFlutterJni = mock(FlutterJNI.class);
+    final DartMessenger messenger = new DartMessenger(fakeFlutterJni);
+
+    ShadowLog.setupLogging();
+    messenger.send("foobar", null, null);
+
+    boolean foundWarning = false;
+    for (ShadowLog.LogItem log : ShadowLog.getLogs()) {
+      if (log.type == Log.WARN
+          && log.tag.equals("DartMessenger")
+          && log.msg.contains("before Dart isolate was executing")) {
+        foundWarning = true;
+        break;
+      }
+    }
+    assertTrue(foundWarning);
+  }
+
+  @Test
+  public void doesNotLogWarningWhenSendingMessageAfterIsolateIsRunning() {
+    final FlutterJNI fakeFlutterJni = mock(FlutterJNI.class);
+    final DartMessenger messenger = new DartMessenger(fakeFlutterJni);
+    messenger.setIsolateRunning(true);
+
+    ShadowLog.setupLogging();
+    messenger.send("foobar", null, null);
+
+    boolean foundWarning = false;
+    for (ShadowLog.LogItem log : ShadowLog.getLogs()) {
+      if (log.type == Log.WARN
+          && log.tag.equals("DartMessenger")
+          && log.msg.contains("before Dart isolate was executing")) {
+        foundWarning = true;
+        break;
+      }
+    }
+    assertTrue(!foundWarning);
   }
 }

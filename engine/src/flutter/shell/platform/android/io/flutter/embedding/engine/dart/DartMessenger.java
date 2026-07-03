@@ -34,6 +34,12 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
 
   @NonNull private final FlutterJNI flutterJNI;
 
+  private boolean isIsolateRunning = false;
+
+  void setIsolateRunning(boolean isRunning) {
+    this.isIsolateRunning = isRunning;
+  }
+
   /**
    * Maps a channel name to an object that contains the task queue and the handler associated with
    * the channel.
@@ -265,6 +271,13 @@ class DartMessenger implements BinaryMessenger, PlatformMessageHandler {
       @Nullable BinaryMessenger.BinaryReply callback) {
     try (TraceSection e = TraceSection.scoped("DartMessenger#send on " + channel)) {
       Log.v(TAG, "Sending message with callback over channel '" + channel + "'");
+      if (!isIsolateRunning) {
+        Log.w(
+            TAG,
+            "Called BinaryMessenger.send on channel '"
+                + channel
+                + "' before Dart isolate was executing. The message may be lost.");
+      }
       int replyId = nextReplyId++;
       if (callback != null) {
         pendingReplies.put(replyId, callback);

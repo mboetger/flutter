@@ -76,6 +76,7 @@ public class DartExecutor implements BinaryMessenger {
     // that this DartExecutor is already running.
     if (flutterJNI.isAttached()) {
       isApplicationRunning = true;
+      dartMessenger.setIsolateRunning(true);
     }
   }
 
@@ -161,6 +162,7 @@ public class DartExecutor implements BinaryMessenger {
           engineId);
 
       isApplicationRunning = true;
+      dartMessenger.setIsolateRunning(true);
     }
   }
 
@@ -188,6 +190,7 @@ public class DartExecutor implements BinaryMessenger {
           engineId);
 
       isApplicationRunning = true;
+      dartMessenger.setIsolateRunning(true);
     }
   }
 
