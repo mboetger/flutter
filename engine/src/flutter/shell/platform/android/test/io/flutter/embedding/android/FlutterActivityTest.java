@@ -26,6 +26,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.view.View;
 import android.window.BackEvent;
 import android.window.OnBackAnimationCallback;
 import android.window.OnBackInvokedCallback;
@@ -257,6 +258,31 @@ public class FlutterActivityTest {
     assertEquals(BackgroundMode.opaque, flutterActivity.getBackgroundMode());
     assertEquals(RenderMode.surface, flutterActivity.getRenderMode());
     assertEquals(TransparencyMode.opaque, flutterActivity.getTransparencyMode());
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  public void configureStatusBarForFullscreenFlutterExperience_preservesSystemUiVisibility() {
+    Intent intent = FlutterActivity.createDefaultIntent(ctx);
+    ActivityController<FlutterActivity> activityController =
+        Robolectric.buildActivity(FlutterActivity.class, intent);
+    FlutterActivity activity = activityController.get();
+
+    int initialFlags =
+        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+    activity.getWindow().getDecorView().setSystemUiVisibility(initialFlags);
+    activity.onCreate(null);
+
+    assertTrue(
+        "Expected SYSTEM_UI_FLAG_LIGHT_STATUS_BAR to be preserved",
+        (activity.getWindow().getDecorView().getSystemUiVisibility()
+                & View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
+            != 0);
+    assertTrue(
+        "Expected SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR to be preserved",
+        (activity.getWindow().getDecorView().getSystemUiVisibility()
+                & View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
+            != 0);
   }
 
   @Test

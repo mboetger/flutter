@@ -616,7 +616,10 @@ public class FlutterFragmentActivity extends FragmentActivity
     if (Build.VERSION.SDK_INT < API_LEVELS.API_35) {
       window.setStatusBarColor(0x40000000);
     }
-    window.getDecorView().setSystemUiVisibility(PlatformPlugin.DEFAULT_SYSTEM_UI);
+    window
+        .getDecorView()
+        .setSystemUiVisibility(
+            window.getDecorView().getSystemUiVisibility() | PlatformPlugin.DEFAULT_SYSTEM_UI);
   }
 
   @Override

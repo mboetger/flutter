@@ -120,6 +120,29 @@ public class FlutterFragmentActivityTest {
   }
 
   @Test
+  @SuppressWarnings("deprecation")
+  public void configureStatusBarForFullscreenFlutterExperience_preservesSystemUiVisibility() {
+    FlutterFragmentActivity activity =
+        Robolectric.buildActivity(FlutterFragmentActivityWithProvidedEngine.class).get();
+
+    int initialFlags =
+        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+    activity.getWindow().getDecorView().setSystemUiVisibility(initialFlags);
+    activity.onCreate(null);
+
+    assertTrue(
+        "Expected SYSTEM_UI_FLAG_LIGHT_STATUS_BAR to be preserved",
+        (activity.getWindow().getDecorView().getSystemUiVisibility()
+                & View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
+            != 0);
+    assertTrue(
+        "Expected SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR to be preserved",
+        (activity.getWindow().getDecorView().getSystemUiVisibility()
+                & View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
+            != 0);
+  }
+
+  @Test
   public void itRegistersPluginsAtConfigurationTime() {
     try (ActivityScenario<FlutterFragmentActivity> scenario =
         ActivityScenario.launch(FlutterFragmentActivity.class)) {
