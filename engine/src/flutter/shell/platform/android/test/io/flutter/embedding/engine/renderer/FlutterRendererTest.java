@@ -303,6 +303,13 @@ public class FlutterRendererTest {
                 new Rect(50, 60, 70, 80),
                 FlutterRenderer.DisplayFeatureType.CUTOUT,
                 FlutterRenderer.DisplayFeatureState.UNKNOWN));
+    metrics
+        .getDisplayCutouts()
+        .add(
+            new FlutterRenderer.DisplayFeature(
+                new Rect(90, 100, 110, 120),
+                FlutterRenderer.DisplayFeatureType.CUTOUT,
+                FlutterRenderer.DisplayFeatureState.CUTOUT_TOP));
 
     // Execute the behavior under test.
     flutterRenderer.setViewportMetrics(metrics);
@@ -341,17 +348,20 @@ public class FlutterRendererTest {
             anyInt(),
             anyInt());
 
-    assertArrayEquals(new int[] {10, 20, 30, 40, 50, 60, 70, 80}, boundsCaptor.getValue());
+    assertArrayEquals(
+        new int[] {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120}, boundsCaptor.getValue());
     assertArrayEquals(
         new int[] {
           FlutterRenderer.DisplayFeatureType.FOLD.encodedValue,
+          FlutterRenderer.DisplayFeatureType.CUTOUT.encodedValue,
           FlutterRenderer.DisplayFeatureType.CUTOUT.encodedValue
         },
         typeCaptor.getValue());
     assertArrayEquals(
         new int[] {
           FlutterRenderer.DisplayFeatureState.POSTURE_HALF_OPENED.encodedValue,
-          FlutterRenderer.DisplayFeatureState.UNKNOWN.encodedValue
+          FlutterRenderer.DisplayFeatureState.UNKNOWN.encodedValue,
+          FlutterRenderer.DisplayFeatureState.CUTOUT_TOP.encodedValue
         },
         stateCaptor.getValue());
   }

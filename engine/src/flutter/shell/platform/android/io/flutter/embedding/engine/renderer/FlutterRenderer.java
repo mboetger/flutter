@@ -1532,7 +1532,10 @@ public class FlutterRenderer implements TextureRegistry {
    * <p>For foldables, the state is the posture. For cutouts, this property is {@link #UNKNOWN}
    */
   public enum DisplayFeatureState {
-    /** The display feature is a cutout or this state is new and not yet known to Flutter. */
+    /**
+     * The display feature is a cutout without known directional metadata or this state is new and
+     * not yet known to Flutter.
+     */
     UNKNOWN(0),
 
     /**
@@ -1546,7 +1549,31 @@ public class FlutterRenderer implements TextureRegistry {
      * There is a non-flat angle between parts of the flexible screen or between physical display
      * panels. Corresponds to {@link androidx.window.layout.FoldingFeature.State#HALF_OPENED}
      */
-    POSTURE_HALF_OPENED(2);
+    POSTURE_HALF_OPENED(2),
+
+    /**
+     * The display feature is a cutout on the top edge of the screen. Corresponds to {@link
+     * android.view.DisplayCutout#getBoundingRectTop()}
+     */
+    CUTOUT_TOP(3),
+
+    /**
+     * The display feature is a cutout on the bottom edge of the screen. Corresponds to {@link
+     * android.view.DisplayCutout#getBoundingRectBottom()}
+     */
+    CUTOUT_BOTTOM(4),
+
+    /**
+     * The display feature is a cutout on the left edge of the screen. Corresponds to {@link
+     * android.view.DisplayCutout#getBoundingRectLeft()}
+     */
+    CUTOUT_LEFT(5),
+
+    /**
+     * The display feature is a cutout on the right edge of the screen. Corresponds to {@link
+     * android.view.DisplayCutout#getBoundingRectRight()}
+     */
+    CUTOUT_RIGHT(6);
 
     public final int encodedValue;
 

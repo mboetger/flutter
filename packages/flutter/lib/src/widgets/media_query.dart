@@ -748,7 +748,8 @@ class MediaQueryData {
   ///  display features and explains the differences between them.
   ///  * [dart:ui.DisplayFeatureState], which lists the possible states for
   ///  folding features ([dart:ui.DisplayFeatureType.fold] and
-  ///  [dart:ui.DisplayFeatureType.hinge]).
+  ///  [dart:ui.DisplayFeatureType.hinge]) and cutout features
+  ///  ([dart:ui.DisplayFeatureType.cutout]).
   final List<ui.DisplayFeature> displayFeatures;
 
   /// Whether showing the system context menu is supported.

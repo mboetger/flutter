@@ -403,7 +403,16 @@ class DisplayFeature {
 
 enum DisplayFeatureType { unknown, fold, hinge, cutout }
 
-enum DisplayFeatureState { unknown, postureFlat, postureHalfOpened, postureFlipped }
+enum DisplayFeatureState {
+  unknown,
+  postureFlat,
+  postureHalfOpened,
+  postureFlipped,
+  cutoutTop,
+  cutoutBottom,
+  cutoutLeft,
+  cutoutRight,
+}
 
 class DisplayCornerRadii {
   const DisplayCornerRadii({

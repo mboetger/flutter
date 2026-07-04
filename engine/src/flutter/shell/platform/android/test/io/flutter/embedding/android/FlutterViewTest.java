@@ -791,6 +791,51 @@ public class FlutterViewTest {
     }
   }
 
+  @Test
+  @Config(sdk = API_LEVELS.API_30)
+  @TargetApi(30)
+  public void itPopulatesDirectionalDisplayCutoutsOnApi30() {
+    try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
+      scenario.onActivity(
+          activity -> {
+            FlutterView flutterView = new FlutterView(activity);
+            FlutterRenderer flutterRenderer = mock(FlutterRenderer.class);
+            FlutterEngine flutterEngine = mock(FlutterEngine.class);
+            when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+            flutterView.attachToFlutterEngine(flutterEngine);
+
+            WindowInsets windowInsets = mock(WindowInsets.class);
+            DisplayCutout displayCutout = mock(DisplayCutout.class);
+            when(windowInsets.getDisplayCutout()).thenReturn(displayCutout);
+            Rect topRect = new Rect(100, 0, 300, 80);
+            Rect leftRect = new Rect(0, 100, 50, 300);
+            when(displayCutout.getBoundingRectTop()).thenReturn(topRect);
+            when(displayCutout.getBoundingRectLeft()).thenReturn(leftRect);
+            when(displayCutout.getBoundingRectBottom()).thenReturn(new Rect());
+            when(displayCutout.getBoundingRectRight()).thenReturn(new Rect());
+            Insets unusedInsets = Insets.of(0, 0, 0, 0);
+            when(windowInsets.getInsets(anyInt())).thenReturn(unusedInsets);
+            when(displayCutout.getWaterfallInsets()).thenReturn(unusedInsets);
+
+            ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+                ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+
+            flutterView.onApplyWindowInsets(windowInsets);
+            verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+
+            List<FlutterRenderer.DisplayFeature> cutouts =
+                viewportMetricsCaptor.getValue().getDisplayCutouts();
+            assertEquals(2, cutouts.size());
+            assertEquals(topRect, cutouts.get(0).bounds);
+            assertEquals(FlutterRenderer.DisplayFeatureType.CUTOUT, cutouts.get(0).type);
+            assertEquals(FlutterRenderer.DisplayFeatureState.CUTOUT_TOP, cutouts.get(0).state);
+            assertEquals(leftRect, cutouts.get(1).bounds);
+            assertEquals(FlutterRenderer.DisplayFeatureType.CUTOUT, cutouts.get(1).type);
+            assertEquals(FlutterRenderer.DisplayFeatureState.CUTOUT_LEFT, cutouts.get(1).state);
+          });
+    }
+  }
+
   // getDefaultDisplay
   // TODO(jesswrd): https://github.com/flutter/flutter/issues/99421
   @Test

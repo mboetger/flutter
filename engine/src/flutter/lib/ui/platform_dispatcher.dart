@@ -2664,17 +2664,23 @@ class ViewConstraints {
 /// ![Device with a cutout display feature](https://flutter.github.io/assets-for-api-docs/assets/hardware/display_feature_cutout.png)
 ///
 /// The [state] contains information about the posture for foldable features
-/// ([DisplayFeatureType.hinge] and [DisplayFeatureType.fold]). The posture is
+/// ([DisplayFeatureType.hinge] and [DisplayFeatureType.fold]) or edge association
+/// for cutout features ([DisplayFeatureType.cutout]). The posture is
 /// the shape of the display, for example [DisplayFeatureState.postureFlat] or
 /// [DisplayFeatureState.postureHalfOpened]. For [DisplayFeatureType.cutout],
-/// the state is not used and has the [DisplayFeatureState.unknown] value.
+/// the state is the screen edge the cutout is on, for example
+/// [DisplayFeatureState.cutoutTop], or [DisplayFeatureState.unknown] if unknown.
 class DisplayFeature {
   // TODO(matanlurey): have original authors document; see https://github.com/flutter/flutter/issues/151917.
   // ignore: public_member_api_docs
   const DisplayFeature({required this.bounds, required this.type, required this.state})
     : assert(
         !identical(type, DisplayFeatureType.cutout) ||
-            identical(state, DisplayFeatureState.unknown),
+            identical(state, DisplayFeatureState.unknown) ||
+            identical(state, DisplayFeatureState.cutoutTop) ||
+            identical(state, DisplayFeatureState.cutoutBottom) ||
+            identical(state, DisplayFeatureState.cutoutLeft) ||
+            identical(state, DisplayFeatureState.cutoutRight),
       );
 
   /// The area of the flutter view occupied by this display feature, measured in logical pixels.
@@ -2693,9 +2699,11 @@ class DisplayFeature {
   /// Type of display feature, e.g. hinge, fold, cutout.
   final DisplayFeatureType type;
 
-  /// Posture of display feature, which is populated only for folds and hinges.
+  /// Posture or edge of display feature.
   ///
-  /// For cutouts, this is [DisplayFeatureState.unknown]
+  /// For folds and hinges, this is the posture (e.g. [DisplayFeatureState.postureFlat]).
+  /// For cutouts, this is the screen edge the cutout is on (e.g. [DisplayFeatureState.cutoutTop]),
+  /// or [DisplayFeatureState.unknown].
   final DisplayFeatureState state;
 
   @override
@@ -2756,7 +2764,7 @@ enum DisplayFeatureType {
 }
 
 /// State of the display feature, which contains information about the posture
-/// for foldable features.
+/// for foldable features and edge association for cutouts.
 ///
 /// The posture is the shape made by the parts of the flexible screen or
 /// physical screen panels. They are inspired by and similar to
@@ -2764,11 +2772,12 @@ enum DisplayFeatureType {
 ///
 /// * For [DisplayFeatureType.fold]s & [DisplayFeatureType.hinge]s, the state is
 ///   the posture.
-/// * For [DisplayFeatureType.cutout]s, the state is not used and has the
-/// [DisplayFeatureState.unknown] value.
+/// * For [DisplayFeatureType.cutout]s, the state is the edge of the screen
+///   that the cutout is on, if known (e.g. [DisplayFeatureState.cutoutTop]).
+///   If not known, it has the [DisplayFeatureState.unknown] value.
 enum DisplayFeatureState {
-  /// The display feature is a [DisplayFeatureType.cutout] or this state is new
-  /// and not yet known to Flutter.
+  /// The display feature is a [DisplayFeatureType.cutout] without known directional metadata
+  /// or this state is new and not yet known to Flutter.
   unknown,
 
   /// The foldable device is completely open.
@@ -2781,6 +2790,18 @@ enum DisplayFeatureState {
   /// There is a non-flat angle between parts of the flexible screen or between
   /// physical screen panels such that the screens start to face each other.
   postureHalfOpened,
+
+  /// The display feature is a [DisplayFeatureType.cutout] on the top edge of the screen.
+  cutoutTop,
+
+  /// The display feature is a [DisplayFeatureType.cutout] on the bottom edge of the screen.
+  cutoutBottom,
+
+  /// The display feature is a [DisplayFeatureType.cutout] on the left edge of the screen.
+  cutoutLeft,
+
+  /// The display feature is a [DisplayFeatureType.cutout] on the right edge of the screen.
+  cutoutRight,
 }
 
 /// A set of radii for the four corners of the display.

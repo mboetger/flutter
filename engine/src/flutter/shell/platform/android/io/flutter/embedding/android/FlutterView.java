@@ -768,8 +768,6 @@ public class FlutterView extends FrameLayout
       viewportMetrics.systemGestureInsetBottom = systemGestureInsets.bottom;
       viewportMetrics.systemGestureInsetLeft = systemGestureInsets.left;
 
-      // TODO(garyq): Expose the full rects of the display cutout.
-
       // Take the max of the display cutout insets and existing padding to merge them
       DisplayCutout cutout = insets.getDisplayCutout();
       if (cutout != null) {
@@ -825,7 +823,27 @@ public class FlutterView extends FrameLayout
     // Data from the DisplayCutout bounds. Cutouts for cameras and other sensors are
     // populated here. DisplayCutout was introduced in API 28.
     List<FlutterRenderer.DisplayFeature> displayCutouts = new ArrayList<>();
-    if (Build.VERSION.SDK_INT >= API_LEVELS.API_28) {
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+      DisplayCutout cutout = insets.getDisplayCutout();
+      if (cutout != null) {
+        addCutoutIfNotEmpty(
+            displayCutouts, cutout.getBoundingRectTop(), DisplayFeatureState.CUTOUT_TOP);
+        addCutoutIfNotEmpty(
+            displayCutouts, cutout.getBoundingRectBottom(), DisplayFeatureState.CUTOUT_BOTTOM);
+        addCutoutIfNotEmpty(
+            displayCutouts, cutout.getBoundingRectLeft(), DisplayFeatureState.CUTOUT_LEFT);
+        addCutoutIfNotEmpty(
+            displayCutouts, cutout.getBoundingRectRight(), DisplayFeatureState.CUTOUT_RIGHT);
+        if (displayCutouts.isEmpty()) {
+          for (Rect bounds : cutout.getBoundingRects()) {
+            Log.v(TAG, "DisplayCutout area reported with bounds = " + bounds.toString());
+            displayCutouts.add(
+                new FlutterRenderer.DisplayFeature(
+                    bounds, DisplayFeatureType.CUTOUT, DisplayFeatureState.UNKNOWN));
+          }
+        }
+      }
+    } else if (Build.VERSION.SDK_INT >= API_LEVELS.API_28) {
       DisplayCutout cutout = insets.getDisplayCutout();
       if (cutout != null) {
         for (Rect bounds : cutout.getBoundingRects()) {
@@ -1609,6 +1627,22 @@ public class FlutterView extends FrameLayout
     // See https://github.com/flutter/flutter/issues/105203
     if (renderSurface instanceof FlutterSurfaceView) {
       ((FlutterSurfaceView) renderSurface).setVisibility(visibility);
+    }
+  }
+
+  private static void addCutoutIfNotEmpty(
+      List<FlutterRenderer.DisplayFeature> displayCutouts,
+      Rect bounds,
+      FlutterRenderer.DisplayFeatureState state) {
+    if (bounds != null && !bounds.isEmpty()) {
+      Log.v(
+          TAG,
+          "DisplayCutout area reported with bounds = "
+              + bounds.toString()
+              + " and state = "
+              + state);
+      displayCutouts.add(
+          new FlutterRenderer.DisplayFeature(bounds, DisplayFeatureType.CUTOUT, state));
     }
   }
 

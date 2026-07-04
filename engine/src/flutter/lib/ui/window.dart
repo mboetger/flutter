@@ -324,7 +324,8 @@ class FlutterView {
   ///
   /// Folding [DisplayFeature]s like the [DisplayFeatureType.hinge] and
   /// [DisplayFeatureType.fold] also have a [DisplayFeature.state] which can be
-  /// used to determine the posture the device is in.
+  /// used to determine the posture the device is in. For [DisplayFeatureType.cutout],
+  /// the state can be used to determine which screen edge the cutout is on.
   /// {@endtemplate}
   ///
   /// When this changes, [PlatformDispatcher.onMetricsChanged] is called.
