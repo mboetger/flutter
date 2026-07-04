@@ -472,12 +472,13 @@ abstract class DeviceDiscovery {
 /// A [DeviceDiscovery] implementation that uses polling to discover device adds
 /// and removals.
 abstract class PollingDeviceDiscovery extends DeviceDiscovery {
-  PollingDeviceDiscovery(this.name);
+  PollingDeviceDiscovery(this.name, {Logger? logger}) : _logger = logger;
 
   static const _pollingInterval = Duration(seconds: 4);
   static const _pollingTimeout = Duration(seconds: 30);
 
   final String name;
+  final Logger? _logger;
 
   @protected
   @visibleForTesting
@@ -494,16 +495,24 @@ abstract class PollingDeviceDiscovery extends DeviceDiscovery {
 
   Timer _initTimer(Duration? pollingTimeout, {bool initialCall = false}) {
     // Poll for devices immediately on the initial call for faster initial population.
-    return Timer(initialCall ? Duration.zero : _pollingInterval, () async {
+    late final Timer currentTimer;
+    currentTimer = Timer(initialCall ? Duration.zero : _pollingInterval, () async {
       try {
         final List<Device> devices = await pollingGetDevices(timeout: pollingTimeout);
-        deviceNotifier.updateWithNewList(devices);
+        if (_timer == currentTimer) {
+          deviceNotifier.updateWithNewList(devices);
+        }
       } on TimeoutException {
         // Do nothing on a timeout.
+      } on Object catch (error, stackTrace) {
+        _logger?.printTrace('Device discovery failed for $name: $error\n$stackTrace');
       }
-      // Subsequent timeouts after initial population should wait longer.
-      _timer = _initTimer(_pollingTimeout);
+      if (_timer == currentTimer) {
+        // Subsequent timeouts after initial population should wait longer.
+        _timer = _initTimer(_pollingTimeout);
+      }
     });
+    return currentTimer;
   }
 
   void stopPolling() {

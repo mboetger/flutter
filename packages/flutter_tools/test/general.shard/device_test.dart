@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/utils.dart';
@@ -995,6 +996,93 @@ void main() {
       expect(addedDevice.length, 1);
       expect(addedDevice.first.id, device1.id);
     });
+
+    testWithoutContext(
+      'startPolling does not cause uncaught error when pollingGetDevices throws ToolExit',
+      () {
+        FakeAsync().run((FakeAsync time) {
+          final discoverer = ThrowingPollingDeviceDiscovery(() => throwToolExit('fake tool exit'));
+          discoverer.startPolling();
+          time.elapse(const Duration(milliseconds: 4001));
+          discoverer.stopPolling();
+
+          expect(discoverer.pollCount, greaterThanOrEqualTo(2));
+        });
+      },
+    );
+
+    testWithoutContext(
+      'startPolling does not cause uncaught error when pollingGetDevices throws ProcessException',
+      () {
+        FakeAsync().run((FakeAsync time) {
+          final discoverer = ThrowingPollingDeviceDiscovery();
+          discoverer.startPolling();
+          time.elapse(const Duration(milliseconds: 4001));
+          discoverer.stopPolling();
+
+          expect(discoverer.pollCount, greaterThanOrEqualTo(2));
+        });
+      },
+    );
+
+    testWithoutContext(
+      'stopPolling while pollingGetDevices is suspended does not update deviceNotifier or reschedule timer',
+      () {
+        FakeAsync().run((FakeAsync time) {
+          final completer = Completer<List<Device>>();
+          final discoverer = DelayedPollingDeviceDiscovery(() => completer.future);
+          final addedDevices = <Device>[];
+          discoverer.onAdded.listen(addedDevices.add);
+
+          discoverer.startPolling();
+          time.elapse(Duration.zero);
+          expect(discoverer.pollCount, 1);
+
+          discoverer.stopPolling();
+          completer.complete(<Device>[FakeDevice('test', '123')]);
+          time.flushMicrotasks();
+
+          expect(addedDevices, isEmpty);
+          time.elapse(const Duration(seconds: 35));
+          expect(discoverer.pollCount, 1);
+        });
+      },
+    );
+
+    testWithoutContext(
+      'stopPolling followed by startPolling while initial poll is suspended does not cause duplicate timer loops',
+      () {
+        FakeAsync().run((FakeAsync time) {
+          var completer = Completer<List<Device>>();
+          final discoverer = DelayedPollingDeviceDiscovery(() => completer.future);
+
+          discoverer.startPolling();
+          time.elapse(Duration.zero);
+          expect(discoverer.pollCount, 1);
+
+          // Stop and immediately restart polling.
+          discoverer.stopPolling();
+          final firstCompleter = completer;
+          completer = Completer<List<Device>>();
+          discoverer.startPolling();
+          time.elapse(Duration.zero);
+          expect(discoverer.pollCount, 2);
+
+          // Complete the first poll that was aborted.
+          firstCompleter.complete(<Device>[FakeDevice('test', '1')]);
+          time.flushMicrotasks();
+
+          // Complete the second poll.
+          completer.complete(<Device>[FakeDevice('test', '2')]);
+          time.flushMicrotasks();
+
+          // Advance time by one polling interval (4 seconds) and check poll count.
+          time.elapse(const Duration(seconds: 4));
+          // If there were duplicate timer loops, pollCount would be 4 instead of 3.
+          expect(discoverer.pollCount, 3);
+        });
+      },
+    );
   });
 }
 
@@ -1097,13 +1185,20 @@ class LongPollingDeviceDiscovery extends PollingDeviceDiscovery {
 }
 
 class ThrowingPollingDeviceDiscovery extends PollingDeviceDiscovery {
-  ThrowingPollingDeviceDiscovery() : super('throw');
+  ThrowingPollingDeviceDiscovery([this.onPoll]) : super('throw');
+
+  final void Function()? onPoll;
+  int pollCount = 0;
 
   @override
   Future<List<Device>> pollingGetDevices({
     Duration? timeout,
     bool forWirelessDiscovery = false,
   }) async {
+    pollCount++;
+    if (onPoll != null) {
+      onPoll!();
+    }
     throw const ProcessException('fake-discovery', <String>[]);
   }
 
@@ -1128,6 +1223,31 @@ class TestPollingDeviceDiscovery extends PollingDeviceDiscovery {
     bool forWirelessDiscovery = false,
   }) async {
     return _devices;
+  }
+
+  @override
+  bool get supportsPlatform => true;
+
+  @override
+  bool get canListAnything => true;
+
+  @override
+  List<String> get wellKnownIds => <String>[];
+}
+
+class DelayedPollingDeviceDiscovery extends PollingDeviceDiscovery {
+  DelayedPollingDeviceDiscovery(this.onPoll) : super('delayed');
+
+  final Future<List<Device>> Function() onPoll;
+  int pollCount = 0;
+
+  @override
+  Future<List<Device>> pollingGetDevices({
+    Duration? timeout,
+    bool forWirelessDiscovery = false,
+  }) async {
+    pollCount++;
+    return onPoll();
   }
 
   @override

@@ -41,7 +41,7 @@ class AndroidDevices extends PollingDeviceDiscovery {
        _fileSystem = fileSystem,
        _platform = platform,
        _userMessages = userMessages,
-       super('Android devices');
+       super('Android devices', logger: logger);
 
   final AndroidWorkflow _androidWorkflow;
   final ProcessUtils _processUtils;
