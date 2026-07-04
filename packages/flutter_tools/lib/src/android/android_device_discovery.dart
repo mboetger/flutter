@@ -66,19 +66,27 @@ class AndroidDevices extends PollingDeviceDiscovery {
     if (_doesNotHaveAdb()) {
       return <AndroidDevice>[];
     }
+    final stopwatch = Stopwatch()..start();
+    final Duration retryTimeout = timeout ?? const Duration(seconds: 5);
     String text;
-    try {
-      text = (await _processUtils.run(<String>[
-        _androidSdk!.adbPath!,
-        'devices',
-        '-l',
-      ], throwOnError: true)).stdout.trim();
-    } on ProcessException catch (exception) {
-      throwToolExit(
-        'Unable to run "adb", check your Android SDK installation and '
-        '$kAndroidHome environment variable: ${exception.executable}\n'
-        'Error details: ${exception.message}',
-      );
+    while (true) {
+      try {
+        text = (await _processUtils.run(<String>[
+          _androidSdk!.adbPath!,
+          'devices',
+          '-l',
+        ], throwOnError: true)).stdout.trim();
+      } on ProcessException catch (exception) {
+        throwToolExit(
+          'Unable to run "adb", check your Android SDK installation and '
+          '$kAndroidHome environment variable: ${exception.executable}\n'
+          'Error details: ${exception.message}',
+        );
+      }
+      if (!_shouldRetryDeviceDiscovery(text) || stopwatch.elapsed >= retryTimeout) {
+        break;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
     final devices = <AndroidDevice>[];
     _parseADBDeviceOutput(text, devices: devices);
@@ -108,6 +116,25 @@ class AndroidDevices extends PollingDeviceDiscovery {
     return _androidSdk == null ||
         _androidSdk.adbPath == null ||
         !_processManager.canRun(_androidSdk.adbPath);
+  }
+
+  bool _shouldRetryDeviceDiscovery(String text) {
+    for (String line in text.trim().split('\n')) {
+      line = line.trim();
+      if (line.startsWith('* daemon ')) {
+        return true;
+      }
+      if (_kDeviceRegex.hasMatch(line)) {
+        final Match match = _kDeviceRegex.firstMatch(line)!;
+        final String deviceID = match[1]!;
+        final String deviceState = match[2]!;
+        if (deviceID.startsWith('emulator-') &&
+            (deviceState == 'offline' || deviceState == 'authorizing')) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   // 015d172c98400a03       device usb:340787200X product:nakasi model:Nexus_7 device:grouper

@@ -354,6 +354,43 @@ device4       unknown usb:3-7
       expect(diagnostics[1], contains('device2 is offline'));
     },
   );
+
+  testWithoutContext(
+    'AndroidDevices pollingGetDevices retries when adb daemon just started and emulator is offline (issue #65744)',
+    () async {
+      final androidDevices = AndroidDevices(
+        userMessages: UserMessages(),
+        androidWorkflow: androidWorkflow,
+        androidSdk: FakeAndroidSdk(),
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', 'devices', '-l'],
+            stdout: '''
+* daemon not running; starting now at tcp:5037
+* daemon started successfully
+List of devices attached
+emulator-5554          offline transport_id:1
+''',
+          ),
+          const FakeCommand(
+            command: <String>['adb', 'devices', '-l'],
+            stdout: '''
+List of devices attached
+emulator-5554          device product:sdk_gphone_x86 model:Android_SDK_built_for_x86 device:generic_x86 transport_id:1
+''',
+          ),
+        ]),
+        platform: FakePlatform(),
+        fileSystem: MemoryFileSystem.test(),
+      );
+
+      final List<Device> devices = await androidDevices.pollingGetDevices();
+
+      expect(devices, hasLength(1));
+      expect(devices.first.id, 'emulator-5554');
+    },
+  );
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
