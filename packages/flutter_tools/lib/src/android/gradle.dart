@@ -596,13 +596,12 @@ class AndroidGradleBuilder implements AndroidBuilder {
     if (isBuildingBundle) {
       final File bundleFile = findBundleFile(project, buildInfo, _logger, _analytics);
 
-      if ((buildInfo.mode == BuildMode.release) &&
-          !(await _isAabStrippedOfDebugSymbols(
-            project,
-            bundleFile.path,
-            androidBuildInfo.targetArchs,
-          ))) {
-        throwToolExit(failedToStripDebugSymbolsErrorMessage);
+      if (buildInfo.mode == BuildMode.release) {
+        final String? fileList = await _listArchiveFiles(project, bundleFile.path);
+        if (!_isAabStrippedOfDebugSymbols(fileList)) {
+          throwToolExit(failedToStripDebugSymbolsErrorMessage);
+        }
+        _warnIfArchiveContainsUnsupportedAbis(fileList, isBuildingBundle: true);
       }
 
       final appSize = (buildInfo.mode == BuildMode.debug)
@@ -642,6 +641,11 @@ class AndroidGradleBuilder implements AndroidBuilder {
       final File apkShaFile = apkDirectory.childFile('$filename.sha1');
       apkShaFile.writeAsStringSync(calculateSha(apkFile));
 
+      if (buildInfo.mode == BuildMode.release) {
+        final String? fileList = await _listArchiveFiles(project, apkFile.path);
+        _warnIfArchiveContainsUnsupportedAbis(fileList, isBuildingBundle: false);
+      }
+
       final appSize = (buildInfo.mode == BuildMode.debug)
           ? '' // Don't display the size when building a debug variant.
           : ' (${getSizeAsPlatformMB(apkFile.lengthSync())})';
@@ -657,63 +661,60 @@ class AndroidGradleBuilder implements AndroidBuilder {
     }
   }
 
-  // Checks whether AGP has successfully stripped debug symbols from native libraries
-  // - libflutter.so, aka the engine
-  // - lib_app.so, aka the framework dart code
-  // and moved them to the BUNDLE-METADATA directory. Block the build if this
-  // isn't successful, as it means that debug symbols are getting included in
-  // the final app that would be delivered to users.
-  Future<bool> _isAabStrippedOfDebugSymbols(
-    FlutterProject project,
-    String aabPath,
-    Iterable<AndroidArch> targetArchs,
-  ) async {
+  Future<String?> _listArchiveFiles(FlutterProject project, String archivePath) async {
     if (globals.androidSdk == null) {
-      _logger.printTrace(
-        'Failed to find android sdk when checking final appbundle for debug symbols.',
-      );
-      return false;
+      _logger.printTrace('Failed to find android sdk when checking final archive.');
+      return null;
     }
     if (!globals.androidSdk!.cmdlineToolsAvailable) {
-      _logger.printTrace(
-        'Failed to find cmdline-tools when checking final appbundle for debug symbols.',
-      );
-      return false;
+      _logger.printTrace('Failed to find cmdline-tools when checking final archive.');
+      return null;
     }
     final String? apkAnalyzerPath = globals.androidSdk!.getCmdlineToolsPath(apkAnalyzerBinaryName);
     if (apkAnalyzerPath == null) {
-      _logger.printTrace(
-        'Failed to find apkanalyzer when checking final appbundle for debug symbols.',
-      );
-      return false;
+      _logger.printTrace('Failed to find apkanalyzer when checking final archive.');
+      return null;
     }
 
     final RunResult result = await _processUtils.run(
-      <String>[apkAnalyzerPath, 'files', 'list', aabPath],
+      <String>[apkAnalyzerPath, 'files', 'list', archivePath],
       workingDirectory: project.android.hostAppGradleRoot.path,
       environment: _java?.environment,
     );
 
     if (result.exitCode != 0) {
       _logger.printTrace(
-        'apkanalyzer finished with exit code 0 when checking final appbundle for debug symbols.\n'
+        'apkanalyzer finished with exit code ${result.exitCode} when checking final archive.\n'
         'stderr was: ${result.stderr}\n'
         'and stdout was: ${result.stdout}',
       );
+      return null;
+    }
+
+    return result.stdout;
+  }
+
+  // Checks whether AGP has successfully stripped debug symbols from native libraries
+  // - libflutter.so, aka the engine
+  // - lib_app.so, aka the framework dart code
+  // and moved them to the BUNDLE-METADATA directory. Block the build if this
+  // isn't successful, as it means that debug symbols are getting included in
+  // the final app that would be delivered to users.
+  bool _isAabStrippedOfDebugSymbols(String? fileList) {
+    if (fileList == null) {
       return false;
     }
 
     // As long as libflutter.so.sym/dbg and libapp.so.sym/dbg are present for at least
     // one architecture, assume AGP succeeded in stripping.
-    if (!(result.stdout.contains('libflutter.so.sym') ||
-        result.stdout.contains('libflutter.so.dbg'))) {
+    if (!(fileList.contains('libflutter.so.sym') || fileList.contains('libflutter.so.dbg'))) {
       _logger.printTrace(
         'libflutter.so.sym or libflutter.so.dbg not present when checking final appbundle for debug symbols.',
       );
       return false;
     }
 
-    if (!(result.stdout.contains('libapp.so.sym') || result.stdout.contains('libapp.so.dbg'))) {
+    if (!(fileList.contains('libapp.so.sym') || fileList.contains('libapp.so.dbg'))) {
       _logger.printTrace(
         'libapp.so.sym or libapp.so.dbg not present when checking final appbundle for debug symbols.',
       );
@@ -721,6 +722,45 @@ class AndroidGradleBuilder implements AndroidBuilder {
     }
 
     return true;
+  }
+
+  void _warnIfArchiveContainsUnsupportedAbis(String? fileList, {required bool isBuildingBundle}) {
+    if (fileList == null || fileList.isEmpty) {
+      return;
+    }
+    final abisWithLibraries = <String>{};
+    final abisWithFlutter = <String>{};
+
+    final targetIndex = isBuildingBundle ? 1 : 0;
+    for (final String line in fileList.split('\n')) {
+      final String trimmed = line.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final List<String> parts = trimmed
+          .replaceAll(r'\', '/')
+          .split('/')
+          .where((String part) => part.isNotEmpty)
+          .toList();
+      if (parts.length > targetIndex + 2 && parts[targetIndex] == 'lib') {
+        if (parts.last.endsWith('.so')) {
+          final String abi = parts[targetIndex + 1];
+          abisWithLibraries.add(abi);
+          if (parts.last == 'libflutter.so') {
+            abisWithFlutter.add(abi);
+          }
+        }
+      }
+    }
+
+    final Iterable<String> unsupportedAbis = abisWithLibraries.difference(abisWithFlutter);
+    for (final abi in unsupportedAbis) {
+      _logger.printWarning(
+        'An APK or AAB was built that contains native libraries for $abi, '
+        'but does not contain libflutter.so for $abi. '
+        'Running this app on a $abi device will cause a crash (couldn\'t find "libflutter.so").',
+      );
+    }
   }
 
   Future<void> _performCodeSizeAnalysis(
