@@ -1167,6 +1167,55 @@ at java.base/sun.security.ssl.SSLSocketInputRecord.decode(SSLSocketInputRecord.j
 at java.base/sun.security.ssl.SSLTransport.decode(SSLTransport.java:108)'''),
         isTrue,
       );
+
+      expect(
+        sslExceptionHandler.test(r'''
+Exception in thread "main" javax.net.ssl.SSLHandshakeException: Tag mismatch!
+at java.base/sun.security.ssl.Alert.createSSLException(Alert.java:131)
+at java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:370)
+at java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:313)
+at java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:308)
+at java.base/sun.security.ssl.SSLTransport.decode(SSLTransport.java:119)
+at java.base/sun.security.ssl.SSLSocketImpl.decode(SSLSocketImpl.java:1510)
+at java.base/sun.security.ssl.SSLSocketImpl.readApplicationRecord(SSLSocketImpl.java:1481)
+at java.base/sun.security.ssl.SSLSocketImpl$AppInputStream.read(SSLSocketImpl.java:1066)
+at java.base/java.io.BufferedInputStream.read1(BufferedInputStream.java:290)
+at java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:351)
+at java.base/sun.net.www.MeteredStream.read(MeteredStream.java:141)
+at java.base/java.io.FilterInputStream.read(FilterInputStream.java:133)
+at java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3530)
+at java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3523)
+at org.gradle.wrapper.Download.downloadInternal(Download.java:84)
+at org.gradle.wrapper.Download.download(Download.java:64)
+at org.gradle.wrapper.Install$1.call(Install.java:68)
+at org.gradle.wrapper.Install$1.call(Install.java:48)
+at org.gradle.wrapper.ExclusiveFileAccessManager.access(ExclusiveFileAccessManager.java:69)
+at org.gradle.wrapper.Install.createDist(Install.java:48)
+at org.gradle.wrapper.WrapperExecutor.execute(WrapperExecutor.java:128)
+at org.gradle.wrapper.GradleWrapperMain.main(GradleWrapperMain.java:61)'''),
+        isTrue,
+      );
+
+      expect(
+        sslExceptionHandler.test(r'''
+Exception in thread "main" javax.net.ssl.SSLKeyException: Tag mismatch!
+at java.base/sun.security.ssl.Alert.createSSLException(Alert.java:131)'''),
+        isTrue,
+      );
+
+      expect(
+        sslExceptionHandler.test(r'''
+Exception in thread "main" javax.net.ssl.SSLPeerUnverifiedException: Tag mismatch!
+at java.base/sun.security.ssl.Alert.createSSLException(Alert.java:131)'''),
+        isTrue,
+      );
+
+      expect(
+        sslExceptionHandler.test(r'''
+Exception in thread "main" javax.net.ssl.SSLProtocolException: Tag mismatch!
+at java.base/sun.security.ssl.Alert.createSSLException(Alert.java:131)'''),
+        isTrue,
+      );
     });
 
     testUsingContext(

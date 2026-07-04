@@ -478,6 +478,10 @@ final incompatibleJavaAndAgpVersionsHandler = GradleHandledError(
 final sslExceptionHandler = GradleHandledError(
   test: _lineMatcher(const <String>[
     'javax.net.ssl.SSLException: Tag mismatch!',
+    'javax.net.ssl.SSLHandshakeException: Tag mismatch!',
+    'javax.net.ssl.SSLKeyException: Tag mismatch!',
+    'javax.net.ssl.SSLPeerUnverifiedException: Tag mismatch!',
+    'javax.net.ssl.SSLProtocolException: Tag mismatch!',
     'javax.crypto.AEADBadTagException: Tag mismatch!',
   ]),
   handler:

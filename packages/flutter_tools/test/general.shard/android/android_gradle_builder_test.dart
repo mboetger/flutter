@@ -364,7 +364,117 @@ void main() {
         );
 
         const fakeCmd = FakeCommand(
-          command: <String>[
+        // Trigger initial build and all 8 retries step-by-step by elapsing simulated time.
+        // Wait times are: 100ms, 200ms, 400ms, 800ms, 1600ms, 3200ms, 6400ms, 10000ms (capped!)
+        async.elapse(const Duration(milliseconds: 100));
+        async.elapse(const Duration(milliseconds: 200));
+        async.elapse(const Duration(milliseconds: 400));
+        async.elapse(const Duration(milliseconds: 800));
+        async.elapse(const Duration(milliseconds: 1600));
+        async.elapse(const Duration(milliseconds: 3200));
+        async.elapse(const Duration(milliseconds: 6400));
+        async.elapse(const Duration(milliseconds: 10000));
+        async.flushMicrotasks();
+      });
+
+      expect(logger.statusText, contains('Retrying Gradle Build: #1, wait time: 100ms'));
+      expect(logger.statusText, contains('Retrying Gradle Build: #2, wait time: 200ms'));
+      expect(logger.statusText, contains('Retrying Gradle Build: #3, wait time: 400ms'));
+      expect(logger.statusText, contains('Retrying Gradle Build: #4, wait time: 800ms'));
+      expect(logger.statusText, contains('Retrying Gradle Build: #5, wait time: 1600ms'));
+      expect(logger.statusText, contains('Retrying Gradle Build: #6, wait time: 3200ms'));
+      expect(logger.statusText, contains('Retrying Gradle Build: #7, wait time: 6400ms'));
+      expect(
+        logger.statusText,
+        contains('Retrying Gradle Build: #8, wait time: 10000ms'),
+      ); // Correctly capped!
+    }, overrides: <Type, Generator>{AndroidStudio: () => FakeAndroidStudio()});
+
+    testUsingContext('Gradle build retries when SSLHandshakeException Tag mismatch occurs', () {
+      final builder = AndroidGradleBuilder(
+        java: FakeJava(),
+        logger: logger,
+        processManager: processManager,
+        fileSystem: fileSystem,
+        artifacts: Artifacts.test(),
+        analytics: fakeAnalytics,
+        gradleUtils: FakeGradleUtils(),
+        platform: FakePlatform(),
+        androidStudio: FakeAndroidStudio(),
+      );
+
+      const fakeCmd = FakeCommand(
+        command: <String>[
+          'gradlew',
+          '-q',
+          '-Ptarget-platform=android-arm,android-arm64,android-x64',
+          '-Ptarget=lib/main.dart',
+          '-Pbase-application-name=android.app.Application',
+          '-Pdart-obfuscation=false',
+          '-Ptrack-widget-creation=false',
+          '-Ptree-shake-icons=false',
+          'assembleRelease',
+        ],
+        exitCode: 1,
+        stderr: '\nException in thread "main" javax.net.ssl.SSLHandshakeException: Tag mismatch!\n',
+      );
+
+      processManager.addCommand(fakeCmd); // Initial attempt
+      processManager.addCommand(fakeCmd); // Retry 1
+
+      fileSystem.directory('android').childFile('build.gradle').createSync(recursive: true);
+      fileSystem.directory('android').childFile('gradle.properties').createSync(recursive: true);
+      fileSystem.directory('android').childDirectory('app').childFile('build.gradle')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('apply from: irrelevant/flutter.gradle');
+
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+      project.android.appManifestFile
+        ..createSync(recursive: true)
+        ..writeAsStringSync(minimalV2EmbeddingManifest);
+
+      fakeAsync((FakeAsync async) {
+        expect(
+          builder.buildGradleApp(
+            maxRetries: 1,
+            project: project,
+            androidBuildInfo: const AndroidBuildInfo(
+              BuildInfo(
+                BuildMode.release,
+                null,
+                treeShakeIcons: false,
+                packageConfigPath: '.dart_tool/package_config.json',
+              ),
+            ),
+            target: 'lib/main.dart',
+            isBuildingBundle: false,
+            configOnly: false,
+            localGradleErrors: gradleErrors,
+          ),
+          throwsToolExit(message: 'Gradle task assembleRelease failed with exit code 1'),
+        );
+
+        async.elapse(const Duration(milliseconds: 100));
+        async.flushMicrotasks();
+      });
+
+      expect(logger.statusText, contains('Retrying Gradle Build: #1, wait time: 100ms'));
+    }, overrides: <Type, Generator>{AndroidStudio: () => FakeAndroidStudio()});
+
+    testUsingContext('Converts recognized ProcessExceptions into tools exits', () async {
+      final builder = AndroidGradleBuilder(
+        java: FakeJava(),
+        logger: logger,
+        processManager: processManager,
+        fileSystem: fileSystem,
+        artifacts: Artifacts.test(),
+        analytics: fakeAnalytics,
+        gradleUtils: FakeGradleUtils(),
+        platform: FakePlatform(),
+        androidStudio: FakeAndroidStudio(),
+      );
+      processManager.addCommand(
+        const FakeCommand(          command: <String>[
             'gradlew',
             '-q',
             '-Ptarget-platform=android-arm,android-arm64,android-x64',
