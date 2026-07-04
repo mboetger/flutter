@@ -86,6 +86,20 @@ public class FlutterFragmentActivityTest {
   }
 
   @Test
+  public void createFlutterFragment_overriddenTransparencyMode() {
+    final FlutterFragmentActivity activity =
+        new FakeFlutterFragmentActivity() {
+          @Override
+          protected TransparencyMode getTransparencyMode() {
+            return TransparencyMode.transparent;
+          }
+        };
+    assertEquals(activity.createFlutterFragment().getRenderMode(), RenderMode.texture);
+    assertEquals(activity.getBackgroundMode(), BackgroundMode.transparent);
+    assertEquals(activity.getTransparencyMode(), TransparencyMode.transparent);
+  }
+
+  @Test
   public void createFlutterFragment_customRenderMode() {
     final FlutterFragmentActivity activity =
         new FakeFlutterFragmentActivity() {

@@ -338,6 +338,19 @@ public class FlutterActivityTest {
   }
 
   @Test
+  public void itReturnsTransparentBackgroundAndTextureRenderModeWhenTransparencyModeOverridden() {
+    Intent intent = new Intent(ctx, FlutterActivityWithOverriddenTransparencyMode.class);
+    ActivityController<FlutterActivityWithOverriddenTransparencyMode> activityController =
+        Robolectric.buildActivity(FlutterActivityWithOverriddenTransparencyMode.class, intent);
+    FlutterActivityWithOverriddenTransparencyMode flutterActivity = activityController.get();
+    flutterActivity.setDelegate(new FlutterActivityAndFragmentDelegate(flutterActivity));
+
+    assertEquals(TransparencyMode.transparent, flutterActivity.getTransparencyMode());
+    assertEquals(BackgroundMode.transparent, flutterActivity.getBackgroundMode());
+    assertEquals(RenderMode.texture, flutterActivity.getRenderMode());
+  }
+
+  @Test
   public void itReturnsValueFromMetaDataWhenCallsShouldHandleDeepLinkingCase1()
       throws PackageManager.NameNotFoundException {
     Intent intent =
@@ -778,6 +791,14 @@ public class FlutterActivityTest {
     public void onCreate(@NonNull LifecycleOwner lifecycleOwner) {
       assertTrue("State was restored before onCreate", stateRestored);
       onCreateCalled = true;
+    }
+  }
+
+  private static final class FlutterActivityWithOverriddenTransparencyMode extends FlutterActivity {
+    @NonNull
+    @Override
+    public TransparencyMode getTransparencyMode() {
+      return TransparencyMode.transparent;
     }
   }
 }

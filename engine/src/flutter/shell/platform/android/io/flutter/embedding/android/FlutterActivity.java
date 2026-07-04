@@ -1257,9 +1257,14 @@ public class FlutterActivity extends Activity
   @NonNull
   @Override
   public TransparencyMode getTransparencyMode() {
-    return getBackgroundMode() == BackgroundMode.opaque
-        ? TransparencyMode.opaque
-        : TransparencyMode.transparent;
+    if (getIntent().hasExtra(EXTRA_BACKGROUND_MODE)) {
+      return BackgroundMode.valueOf(getIntent().getStringExtra(EXTRA_BACKGROUND_MODE))
+              == BackgroundMode.opaque
+          ? TransparencyMode.opaque
+          : TransparencyMode.transparent;
+    } else {
+      return TransparencyMode.opaque;
+    }
   }
 
   /**
@@ -1273,7 +1278,9 @@ public class FlutterActivity extends Activity
     if (getIntent().hasExtra(EXTRA_BACKGROUND_MODE)) {
       return BackgroundMode.valueOf(getIntent().getStringExtra(EXTRA_BACKGROUND_MODE));
     } else {
-      return BackgroundMode.opaque;
+      return getTransparencyMode() == TransparencyMode.opaque
+          ? BackgroundMode.opaque
+          : BackgroundMode.transparent;
     }
   }
 

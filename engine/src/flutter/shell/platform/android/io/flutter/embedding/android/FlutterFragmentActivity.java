@@ -515,10 +515,7 @@ public class FlutterFragmentActivity extends FragmentActivity
   protected FlutterFragment createFlutterFragment() {
     final BackgroundMode backgroundMode = getBackgroundMode();
     final RenderMode renderMode = getRenderMode();
-    final TransparencyMode transparencyMode =
-        backgroundMode == BackgroundMode.opaque
-            ? TransparencyMode.opaque
-            : TransparencyMode.transparent;
+    final TransparencyMode transparencyMode = getTransparencyMode();
     final boolean shouldDelayFirstAndroidViewDraw = renderMode == RenderMode.surface;
     final boolean shouldAutomaticallyHandleOnBackPressed = true;
 
@@ -927,6 +924,26 @@ public class FlutterFragmentActivity extends FragmentActivity
   }
 
   /**
+   * Returns the desired {@link TransparencyMode} for the {@link FlutterView} displayed in this
+   * {@code FlutterFragmentActivity}.
+   *
+   * <p>That is, {@link TransparencyMode#opaque} if {@link
+   * FlutterFragmentActivity#getBackgroundMode()} is {@link BackgroundMode#opaque} or {@link
+   * TransparencyMode#transparent} otherwise.
+   */
+  @NonNull
+  protected TransparencyMode getTransparencyMode() {
+    if (getIntent().hasExtra(EXTRA_BACKGROUND_MODE)) {
+      return BackgroundMode.valueOf(getIntent().getStringExtra(EXTRA_BACKGROUND_MODE))
+              == BackgroundMode.opaque
+          ? TransparencyMode.opaque
+          : TransparencyMode.transparent;
+    } else {
+      return TransparencyMode.opaque;
+    }
+  }
+
+  /**
    * The desired window background mode of this {@code Activity}, which defaults to {@link
    * BackgroundMode#opaque}.
    */
@@ -935,7 +952,9 @@ public class FlutterFragmentActivity extends FragmentActivity
     if (getIntent().hasExtra(EXTRA_BACKGROUND_MODE)) {
       return BackgroundMode.valueOf(getIntent().getStringExtra(EXTRA_BACKGROUND_MODE));
     } else {
-      return BackgroundMode.opaque;
+      return getTransparencyMode() == TransparencyMode.opaque
+          ? BackgroundMode.opaque
+          : BackgroundMode.transparent;
     }
   }
 
