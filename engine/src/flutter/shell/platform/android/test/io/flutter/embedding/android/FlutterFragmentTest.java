@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.view.View;
 import androidx.activity.BackEventCompat;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.OnBackPressedDispatcher;
@@ -38,6 +39,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
 import org.robolectric.annotation.Config;
 
 @RunWith(AndroidJUnit4.class)
@@ -493,5 +495,162 @@ public class FlutterFragmentTest {
     fragment.onDetach();
     verify(spyCtx, times(1)).registerComponentCallbacks(any());
     verify(spyCtx, times(1)).unregisterComponentCallbacks(any());
+  }
+
+  @Test
+  public void itAllowsSwitchingCachedEngineBetweenFragmentsWithoutCrash() {
+    // Models issue flutter/flutter#66632: an app shows a main program Fragment,
+    // and simultaneously opens a Fragment suspension layer on top (sharing the same FlutterEngine).
+    // Closing and reopening the suspension layer previously caused concurrent engine attachment
+    // and surface rendering races, leading to SIGABRT / FlutterJNI errors.
+    FlutterActivityAndFragmentDelegate mockDelegate1 =
+        mock(FlutterActivityAndFragmentDelegate.class);
+    // Hardcoding isAttached() to true isolates delegate preservation and event forwarding
+    // without needing to mock full Activity re-attachment across fragment transactions.
+    when(mockDelegate1.isAttached()).thenReturn(true);
+    TestDelegateFactory delegateFactory1 = new TestDelegateFactory(mockDelegate1);
+
+    FlutterActivityAndFragmentDelegate mockDelegate2 =
+        mock(FlutterActivityAndFragmentDelegate.class);
+    when(mockDelegate2.isAttached()).thenReturn(true);
+    TestDelegateFactory delegateFactory2 = new TestDelegateFactory(mockDelegate2);
+
+    FlutterFragment fragment1 =
+        FlutterFragment.withCachedEngine("my_cached_engine")
+            .destroyEngineWithFragment(false)
+            .build();
+    fragment1.setDelegateFactory(delegateFactory1);
+
+    FlutterFragment fragment2 =
+        FlutterFragment.withCachedEngine("my_cached_engine")
+            .destroyEngineWithFragment(false)
+            .build();
+    fragment2.setDelegateFactory(delegateFactory2);
+
+    // 1. Start main program fragment.
+    fragment1.onStart();
+    fragment1.onResume();
+    verify(mockDelegate1, times(1)).onStart();
+    verify(mockDelegate1, times(1)).onResume();
+
+    // 2. Open suspension layer fragment (evicting fragment1 from engine).
+    // When fragment2 attaches to the shared engine, ExclusiveAppComponent enforcement
+    // invokes fragment1.detachFromFlutterEngine().
+    fragment1.detachFromFlutterEngine();
+    // Verifying onDestroyView is critical: it ensures the rendering surface
+    // (FlutterView/FlutterTextureView)
+    // is cleanly detached from the engine upon eviction, preventing concurrent surface JNI
+    // callbacks and SIGABRT.
+    verify(mockDelegate1, times(1)).onDestroyView();
+    verify(mockDelegate1, times(1)).onDetach();
+    // Ensure temporary eviction from the engine does not prematurely release or destroy the
+    // delegate.
+    verify(mockDelegate1, never()).release();
+
+    fragment2.onStart();
+    fragment2.onResume();
+    verify(mockDelegate2, times(1)).onStart();
+    verify(mockDelegate2, times(1)).onResume();
+
+    // 3. Close suspension layer fragment.
+    fragment2.onPause();
+    fragment2.onStop();
+    fragment2.detachFromFlutterEngine();
+    verify(mockDelegate2, times(1)).onPause();
+    verify(mockDelegate2, times(1)).onStop();
+    verify(mockDelegate2, times(1)).onDestroyView();
+    verify(mockDelegate2, times(1)).onDetach();
+    verify(mockDelegate2, never()).release();
+
+    // 4. Re-show / re-attach main program fragment.
+    // In real Android execution, when returning to an evicted fragment whose view was destroyed
+    // (via onDestroyView), Android re-creates the view hierarchy (onCreateView), re-establishing
+    // the delegate connection. When the suspension layer is removed, the main program fragment
+    // re-attaches to the shared engine, allowing normal lifecycle event forwarding to resume
+    // without crashing or surface JNI races.
+    fragment1.onStart();
+    fragment1.onResume();
+    verify(mockDelegate1, times(2)).onStart();
+    verify(mockDelegate1, times(2)).onResume();
+  }
+
+  @Test
+  public void
+      itReproducesIssue68269_surfaceModeWithCachedEngineShowsRouteBelowPreviousWhenUsingHybridComposition() {
+    // Reproduces issue flutter/flutter#68269:
+    // In add2app with a cached FlutterEngine and FlutterFragment using RenderMode.surface,
+    // navigating from a previous route (Fragment 1) to a new route with WebView / Hybrid
+    // Composition
+    // (Fragment 2) causes the new route to be visually shown BELOW the previous route, even though
+    // gestures and button clicks still go to the WebView.
+    //
+    // Root cause:
+    // 1. In RenderMode.surface, FlutterFragment defaults to TransparencyMode.transparent, which
+    //    calls setZOrderOnTop(true) on Fragment 1's FlutterSurfaceView.
+    // 2. When Fragment 2 attaches to the cached engine, Fragment 1 is detached from the engine.
+    //    However, detaching does not change the visibility of Fragment 1's FlutterSurfaceView.
+    // 3. When Hybrid Composition (SurfaceAndroidWebView) initializes in Fragment 2,
+    //    PlatformViewsController converts Fragment 2's FlutterView to use FlutterImageView
+    //    (a standard Android View in the window hierarchy).
+    // 4. Because Fragment 1's FlutterSurfaceView remains View.VISIBLE with setZOrderOnTop(true),
+    //    SurfaceFlinger composites Fragment 1's surface above all window views, visually covering
+    //    Fragment 2's WebView and FlutterImageView, while touch events still go to Fragment 2.
+    Context spyCtx = spy(ctx);
+    FlutterJNI flutterJNI = mock(FlutterJNI.class);
+    when(flutterJNI.isAttached()).thenReturn(true);
+
+    FlutterEngine flutterEngine =
+        new FlutterEngine(spyCtx, new FlutterLoader(), flutterJNI, null, false);
+    FlutterEngineCache.getInstance().put("my_cached_engine_68269", flutterEngine);
+
+    FragmentActivity activity = Robolectric.buildActivity(FragmentActivity.class).setup().get();
+
+    // 1. Create Fragment 1 (representing Route 1 / previous route in add2app).
+    FlutterFragment fragment1 =
+        spy(
+            FlutterFragment.withCachedEngine("my_cached_engine_68269")
+                .renderMode(RenderMode.surface)
+                .destroyEngineWithFragment(false)
+                .build());
+    when(fragment1.getContext()).thenReturn(spyCtx);
+    when(fragment1.getActivity()).thenReturn(activity);
+    FlutterActivityAndFragmentDelegate delegate1 =
+        new FlutterActivityAndFragmentDelegate(fragment1);
+    fragment1.setDelegateFactory(new TestDelegateFactory(delegate1));
+
+    fragment1.onAttach(spyCtx);
+    FlutterView flutterView1 = (FlutterView) delegate1.onCreateView(null, null, null, 0, false);
+    FlutterSurfaceView surfaceView1 = (FlutterSurfaceView) flutterView1.renderSurface;
+    assertEquals(View.VISIBLE, surfaceView1.getVisibility());
+
+    // 2. Create Fragment 2 (representing Route 2 with WebView / Hybrid Composition in add2app).
+    FlutterFragment fragment2 =
+        spy(
+            FlutterFragment.withCachedEngine("my_cached_engine_68269")
+                .renderMode(RenderMode.surface)
+                .destroyEngineWithFragment(false)
+                .build());
+    when(fragment2.getContext()).thenReturn(spyCtx);
+    when(fragment2.getActivity()).thenReturn(activity);
+    FlutterActivityAndFragmentDelegate delegate2 =
+        new FlutterActivityAndFragmentDelegate(fragment2);
+    fragment2.setDelegateFactory(new TestDelegateFactory(delegate2));
+
+    // When Fragment 2 attaches to the shared engine in add2app, ExclusiveAppComponent enforcement
+    // detaches Fragment 1 from the engine.
+    fragment1.detachFromFlutterEngine();
+
+    fragment2.onAttach(spyCtx);
+    FlutterView flutterView2 = (FlutterView) delegate2.onCreateView(null, null, null, 0, false);
+
+    // When SurfaceAndroidWebView (Hybrid Composition) is displayed in Route 2,
+    // PlatformViewsController converts Fragment 2's FlutterView to use FlutterImageView.
+    flutterView2.convertToImageView();
+
+    // Verify that when Fragment 1 is detached from the engine (evicted by Fragment 2),
+    // its underlying FlutterSurfaceView (which has setZOrderOnTop(true)) does NOT remain visible
+    // covering Fragment 2's WebView.
+    // This assertion FAILS (actual: VISIBLE) reproducing the bug in flutter/flutter#68269.
+    assertEquals(View.GONE, surfaceView1.getVisibility());
   }
 }

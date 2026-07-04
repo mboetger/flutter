@@ -10,6 +10,7 @@ import android.graphics.Region;
 import android.util.AttributeSet;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
@@ -192,6 +193,7 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
     this.flutterRenderer = flutterRenderer;
     this.surfaceHolderCallbackCompat.onAttachToRenderer(flutterRenderer);
 
+    setVisibility(View.VISIBLE);
     resume();
   }
 
@@ -214,6 +216,7 @@ public class FlutterSurfaceView extends SurfaceView implements RenderSurface {
         disconnectSurfaceFromRenderer();
       }
 
+      setVisibility(View.GONE);
       surfaceHolderCallbackCompat.onDetachFromRenderer();
       flutterRenderer = null;
 

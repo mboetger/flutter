@@ -9,6 +9,7 @@ import android.graphics.SurfaceTexture;
 import android.util.AttributeSet;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
@@ -167,6 +168,7 @@ public class FlutterTextureView extends TextureView implements RenderSurface {
 
     this.flutterRenderer = flutterRenderer;
 
+    setVisibility(View.VISIBLE);
     resume();
   }
 
@@ -188,6 +190,7 @@ public class FlutterTextureView extends TextureView implements RenderSurface {
         disconnectSurfaceFromRenderer();
       }
 
+      setVisibility(View.GONE);
       flutterRenderer = null;
     } else {
       Log.w(TAG, "detachFromRenderer() invoked when no FlutterRenderer was attached.");
