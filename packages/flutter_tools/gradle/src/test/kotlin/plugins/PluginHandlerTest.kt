@@ -216,6 +216,8 @@ class PluginHandlerTest {
         every { project.dependencies.add(any(), any()) } returns mockk()
         every { project.extensions.findByType(BaseExtension::class.java)!!.compileSdkVersion } returns "android-35"
         every { pluginProject.extensions.findByType(BaseExtension::class.java)!!.compileSdkVersion } returns "android-35"
+        every { project.extensions.findByType(BaseExtension::class.java)!!.buildToolsVersion } returns "35.0.0"
+        every { pluginProject.extensions.findByType(BaseExtension::class.java)!!.buildToolsVersion } returns "35.0.0"
 
         val pluginHandler = PluginHandler(project)
         mockkObject(NativePluginLoaderReflectionBridge)
@@ -312,6 +314,8 @@ class PluginHandlerTest {
         every { project.dependencies.add(any(), any()) } returns mockk()
         every { project.extensions.findByType(BaseExtension::class.java)!!.compileSdkVersion } returns "android-35"
         every { pluginProject.extensions.findByType(BaseExtension::class.java)!!.compileSdkVersion } returns "android-35"
+        every { project.extensions.findByType(BaseExtension::class.java)!!.buildToolsVersion } returns "35.0.0"
+        every { pluginProject.extensions.findByType(BaseExtension::class.java)!!.buildToolsVersion } returns "35.0.0"
 
         val pluginHandler = PluginHandler(project)
         mockkObject(NativePluginLoaderReflectionBridge)
@@ -452,8 +456,14 @@ class PluginHandlerTest {
         every { pluginProject.configurations.named(any<String>()) } returns mockk()
         every { pluginProject.dependencies.add(any(), any()) } returns mockk()
         every { project.dependencies.add(any(), any()) } returns mockk()
-        every { project.extensions.findByType(BaseExtension::class.java)!!.compileSdkVersion } returns "android-35"
-        every { pluginProject.extensions.findByType(BaseExtension::class.java)!!.compileSdkVersion } returns "android-35"
+        val mockProjectBaseExtension = mockk<BaseExtension>(relaxed = true)
+        val mockPluginBaseExtension = mockk<BaseExtension>(relaxed = true)
+        every { project.extensions.findByType(BaseExtension::class.java) } returns mockProjectBaseExtension
+        every { pluginProject.extensions.findByType(BaseExtension::class.java) } returns mockPluginBaseExtension
+        every { mockProjectBaseExtension.compileSdkVersion } returns "android-35"
+        every { mockPluginBaseExtension.compileSdkVersion } returns "android-35"
+        every { mockProjectBaseExtension.buildToolsVersion } returns "35.0.0"
+        every { mockPluginBaseExtension.buildToolsVersion } returns "35.0.0"
     }
 
     private fun setupPluginMocks(project: Project) {
@@ -462,5 +472,64 @@ class PluginHandlerTest {
         every { project.extraProperties } returns mockk()
         every { project.extensions.findByType(FlutterExtension::class.java) } returns FlutterExtension()
         every { project.file(any()) } returns mockk()
+    }
+
+    @Test
+    fun `configurePlugins overrides plugin compileSdkVersion and buildToolsVersion when lower than project`(
+        @TempDir tempDir: Path
+    ) {
+        val project = mockk<Project>()
+        val pluginProject = mockk<Project>()
+        setupBasicMocks(project, pluginProject, mockk(), tempDir)
+        setupPluginMocks(project)
+
+        val mockProjectBaseExt = mockk<BaseExtension>(relaxed = true)
+        val mockPluginBaseExt = mockk<BaseExtension>(relaxed = true)
+        every { project.extensions.findByType(BaseExtension::class.java) } returns mockProjectBaseExt
+        every { pluginProject.extensions.findByType(BaseExtension::class.java) } returns mockPluginBaseExt
+
+        every { mockProjectBaseExt.compileSdkVersion } returns "android-36"
+        every { mockPluginBaseExt.compileSdkVersion } returns "android-30"
+        every { mockProjectBaseExt.buildToolsVersion } returns "36.0.0"
+        every { mockPluginBaseExt.buildToolsVersion } returns "30.0.3"
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(EXAMPLE_ENGINE_VERSION)
+
+        val capturePluginActionSlot = mutableListOf<Action<Project>>()
+        verify { pluginProject.afterEvaluate(capture(capturePluginActionSlot)) }
+        capturePluginActionSlot[0].execute(pluginProject)
+
+        verify { mockPluginBaseExt.compileSdkVersion = "android-36" }
+        verify { mockPluginBaseExt.buildToolsVersion = "36.0.0" }
+    }
+
+    @Test
+    fun `configurePlugins logs warning when plugin compileSdkVersion is higher than project`(
+        @TempDir tempDir: Path
+    ) {
+        val project = mockk<Project>()
+        val pluginProject = mockk<Project>()
+        setupBasicMocks(project, pluginProject, mockk(), tempDir)
+        setupPluginMocks(project)
+
+        val mockProjectBaseExt = mockk<BaseExtension>(relaxed = true)
+        val mockPluginBaseExt = mockk<BaseExtension>(relaxed = true)
+        every { project.extensions.findByType(BaseExtension::class.java) } returns mockProjectBaseExt
+        every { pluginProject.extensions.findByType(BaseExtension::class.java) } returns mockPluginBaseExt
+
+        val mockLogger = mockk<Logger>(relaxed = true)
+        every { project.logger } returns mockLogger
+        every { mockProjectBaseExt.compileSdkVersion } returns "android-30"
+        every { mockPluginBaseExt.compileSdkVersion } returns "android-36"
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(EXAMPLE_ENGINE_VERSION)
+
+        val capturePluginActionSlot = mutableListOf<Action<Project>>()
+        verify { pluginProject.afterEvaluate(capture(capturePluginActionSlot)) }
+        capturePluginActionSlot[0].execute(pluginProject)
+
+        verify { mockLogger.quiet(match { it.contains("requires Android SDK version 36 or higher") }) }
     }
 }

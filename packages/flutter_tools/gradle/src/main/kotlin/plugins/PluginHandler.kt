@@ -14,6 +14,7 @@ import com.flutter.gradle.FlutterPluginUtils.getLegacyAndroidExtension
 import com.flutter.gradle.FlutterPluginUtils.isBuiltAsApp
 import com.flutter.gradle.FlutterPluginUtils.supportsBuildMode
 import com.flutter.gradle.NativePluginLoaderReflectionBridge
+import com.flutter.gradle.VersionUtils
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
@@ -123,16 +124,31 @@ class PluginHandler(
                 // Checks if there is a mismatch between the plugin compileSdkVersion and the project compileSdkVersion.
                 val projectCompileSdkVersion: String = getCompileSdkFromProject(project)
                 val pluginCompileSdkVersion: String = getCompileSdkFromProject(pluginProject)
-                // TODO(gmackall): This is doing a string comparison, which is odd and also can be wrong
-                //                 when comparing preview versions (against non preview, and also in the
-                //                 case of alphabet reset which happened with "Baklava".
-                if (pluginCompileSdkVersion > projectCompileSdkVersion) {
+                if (VersionUtils.mostRecentSemanticVersion(pluginCompileSdkVersion, projectCompileSdkVersion) == pluginCompileSdkVersion &&
+                    pluginCompileSdkVersion != projectCompileSdkVersion
+                ) {
                     project.logger.quiet(
                         "Warning: The plugin $pluginName requires Android SDK version $pluginCompileSdkVersion or higher."
                     )
                     project.logger.quiet(
                         "For more information about build configuration, see ${WEBSITE_DEPLOYMENT_ANDROID_BUILD_CONFIG}."
                     )
+                } else if (VersionUtils.mostRecentSemanticVersion(pluginCompileSdkVersion, projectCompileSdkVersion) ==
+                    projectCompileSdkVersion &&
+                    pluginCompileSdkVersion != projectCompileSdkVersion
+                ) {
+                    getLegacyAndroidExtension(pluginProject).compileSdkVersion =
+                        getLegacyAndroidExtension(project).compileSdkVersion
+                }
+
+                val projectBuildToolsVersion: String? = getLegacyAndroidExtension(project).buildToolsVersion
+                val pluginBuildToolsVersion: String? = getLegacyAndroidExtension(pluginProject).buildToolsVersion
+                if (projectBuildToolsVersion != null &&
+                    pluginBuildToolsVersion != null &&
+                    VersionUtils.mostRecentSemanticVersion(pluginBuildToolsVersion, projectBuildToolsVersion) == projectBuildToolsVersion &&
+                    pluginBuildToolsVersion != projectBuildToolsVersion
+                ) {
+                    getLegacyAndroidExtension(pluginProject).buildToolsVersion = projectBuildToolsVersion
                 }
 
                 getLegacyAndroidExtension(project).buildTypes.forEach { buildType ->
