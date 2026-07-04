@@ -16,9 +16,11 @@ import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/project.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
 import '../../src/context.dart';
+import '../../src/fakes.dart';
 
 const kModulePubspec = '''
 name: test
@@ -274,6 +276,128 @@ void main() {
         ]),
       );
     });
+  });
+
+  group('locateApkFile', () {
+    late MemoryFileSystem fileSystem;
+
+    setUp(() {
+      fileSystem = MemoryFileSystem.test();
+    });
+
+    testWithoutContext('returns signed APK when it exists', () {
+      final File signedApk = fileSystem.file('/build/app-release.apk')..createSync(recursive: true);
+      expect(locateApkFile(signedApk).path, '/build/app-release.apk');
+    });
+
+    testWithoutContext('falls back to -unsigned.apk', () {
+      final File signedApk = fileSystem.file('/build/app-release.apk');
+      fileSystem.file('/build/app-release-unsigned.apk').createSync(recursive: true);
+      expect(locateApkFile(signedApk).path, '/build/app-release-unsigned.apk');
+    });
+
+    testWithoutContext('falls back to replacing mode with -unsigned.apk', () {
+      final File signedApk = fileSystem.file('/build/app-flavor1-release.apk');
+      fileSystem.file('/build/app-flavor1-unsigned.apk').createSync(recursive: true);
+      expect(locateApkFile(signedApk).path, '/build/app-flavor1-unsigned.apk');
+    });
+
+    testWithoutContext('falls back to app-unsigned.apk', () {
+      final File signedApk = fileSystem.file('/build/app-arm64-v8a-release.apk');
+      fileSystem.file('/build/app-unsigned.apk').createSync(recursive: true);
+      expect(locateApkFile(signedApk).path, '/build/app-unsigned.apk');
+    });
+  });
+
+  group('findApkFilesModule with unsigned APKs', () {
+    late MemoryFileSystem fileSystem;
+    late BufferLogger logger;
+    late FakeAnalytics analytics;
+
+    setUp(() {
+      fileSystem = MemoryFileSystem.test();
+      logger = BufferLogger.test();
+      analytics = getInitializedFakeAnalyticsInstance(
+        fs: fileSystem,
+        fakeFlutterVersion: FakeFlutterVersion(),
+      );
+    });
+
+    testWithoutContext(
+      'Finds unsigned APK without flavor in release mode (app-release-unsigned.apk)',
+      () {
+        fileSystem.currentDirectory.childFile('pubspec.yaml').writeAsStringSync(kModulePubspec);
+        final FlutterProject project = FlutterProject.fromDirectoryTest(
+          fileSystem.currentDirectory,
+        );
+        final Directory apkDirectory = getApkDirectory(project);
+        apkDirectory.childFile('app-release-unsigned.apk').createSync(recursive: true);
+
+        final Iterable<String> apks = findApkFilesModule(
+          project,
+          const AndroidBuildInfo(
+            BuildInfo(
+              BuildMode.release,
+              '',
+              treeShakeIcons: false,
+              packageConfigPath: '.dart_tool/package_config.json',
+            ),
+          ),
+          logger,
+          analytics,
+        );
+        expect(apks, contains('/build/host/outputs/apk/app-release-unsigned.apk'));
+      },
+    );
+
+    testWithoutContext('Finds unsigned APK named app-unsigned.apk in release mode', () {
+      fileSystem.currentDirectory.childFile('pubspec.yaml').writeAsStringSync(kModulePubspec);
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+      final Directory apkDirectory = getApkDirectory(project);
+      apkDirectory.childFile('app-unsigned.apk').createSync(recursive: true);
+
+      final Iterable<String> apks = findApkFilesModule(
+        project,
+        const AndroidBuildInfo(
+          BuildInfo(
+            BuildMode.release,
+            '',
+            treeShakeIcons: false,
+            packageConfigPath: '.dart_tool/package_config.json',
+          ),
+        ),
+        logger,
+        analytics,
+      );
+      expect(apks, contains('/build/host/outputs/apk/app-unsigned.apk'));
+    });
+
+    testWithoutContext(
+      'Finds unsigned APK with flavor in release mode (app-flavor1-release-unsigned.apk)',
+      () {
+        fileSystem.currentDirectory.childFile('pubspec.yaml').writeAsStringSync(kModulePubspec);
+        final FlutterProject project = FlutterProject.fromDirectoryTest(
+          fileSystem.currentDirectory,
+        );
+        final Directory apkDirectory = getApkDirectory(project);
+        apkDirectory.childFile('app-flavor1-release-unsigned.apk').createSync(recursive: true);
+
+        final Iterable<String> apks = findApkFilesModule(
+          project,
+          const AndroidBuildInfo(
+            BuildInfo(
+              BuildMode.release,
+              'flavor1',
+              treeShakeIcons: false,
+              packageConfigPath: '.dart_tool/package_config.json',
+            ),
+          ),
+          logger,
+          analytics,
+        );
+        expect(apks, contains('/build/host/outputs/apk/app-flavor1-release-unsigned.apk'));
+      },
+    );
   });
 
   group('gradle build', () {

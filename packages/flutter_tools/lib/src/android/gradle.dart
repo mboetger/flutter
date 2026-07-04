@@ -627,7 +627,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     final Directory apkDirectory = getApkDirectory(project);
 
     // Generate sha1 for every generated APKs.
-    for (final File apkFile in apkFilesPaths.map(apkDirectory.childFile)) {
+    for (final File apkFile in apkFilesPaths.map(apkDirectory.childFile).map(locateApkFile)) {
       if (!apkFile.existsSync()) {
         _exitWithExpectedFileNotFound(
           project: project,
@@ -1099,6 +1099,29 @@ bool isAppUsingAndroidX(Directory androidDirectory) {
   return properties.readAsStringSync().contains('android.useAndroidX=true');
 }
 
+/// Locates an APK file, checking for unsigned variants if the signed APK does not exist.
+File locateApkFile(File apkFile) {
+  if (apkFile.existsSync()) {
+    return apkFile;
+  }
+  final Directory dir = apkFile.parent;
+  final File unsignedApk = dir.childFile(apkFile.basename.replaceFirst('.apk', '-unsigned.apk'));
+  if (unsignedApk.existsSync()) {
+    return unsignedApk;
+  }
+  final File baseUnsignedApk = dir.childFile(
+    apkFile.basename.replaceFirst(RegExp(r'-[^-]+\.apk$'), '-unsigned.apk'),
+  );
+  if (baseUnsignedApk.existsSync()) {
+    return baseUnsignedApk;
+  }
+  final File appUnsignedApk = dir.childFile('app-unsigned.apk');
+  if (appUnsignedApk.existsSync()) {
+    return appUnsignedApk;
+  }
+  return apkFile;
+}
+
 /// Returns the APK files for a given [FlutterProject] and [AndroidBuildInfo].
 @visibleForTesting
 Iterable<String> findApkFilesModule(
@@ -1110,20 +1133,22 @@ Iterable<String> findApkFilesModule(
   final Iterable<String> apkFileNames = _apkFilesFor(androidBuildInfo);
   final Directory apkDirectory = getApkDirectory(project);
   final Iterable<File> apks = apkFileNames.expand<File>((String apkFileName) {
-    File apkFile = apkDirectory.childFile(apkFileName);
+    File apkFile = locateApkFile(apkDirectory.childFile(apkFileName));
     if (apkFile.existsSync()) {
       return <File>[apkFile];
     }
     final BuildInfo buildInfo = androidBuildInfo.buildInfo;
     final String modeName = camelCase(buildInfo.modeName);
-    apkFile = apkDirectory.childDirectory(modeName).childFile(apkFileName);
+    apkFile = locateApkFile(apkDirectory.childDirectory(modeName).childFile(apkFileName));
     if (apkFile.existsSync()) {
       return <File>[apkFile];
     }
     final String? flavor = buildInfo.flavor;
     if (flavor != null) {
       // Android Studio Gradle plugin v3 adds flavor to path.
-      apkFile = apkDirectory.childDirectory(flavor).childDirectory(modeName).childFile(apkFileName);
+      apkFile = locateApkFile(
+        apkDirectory.childDirectory(flavor).childDirectory(modeName).childFile(apkFileName),
+      );
       if (apkFile.existsSync()) {
         return <File>[apkFile];
       }

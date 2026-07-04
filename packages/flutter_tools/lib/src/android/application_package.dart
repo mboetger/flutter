@@ -131,7 +131,7 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
         // to the buildmode of the apk.
         apkDirectory = apkDirectory.childDirectory(buildInfo.mode.cliName);
       }
-      apkFile = apkDirectory.childFile(filename);
+      apkFile = locateApkFile(apkDirectory.childFile(filename));
       if (apkFile.existsSync()) {
         // Grab information from the .apk. The gradle build script might alter
         // the application Id, so we need to look at what was actually built.
@@ -154,7 +154,9 @@ class AndroidApk extends ApplicationPackage implements PrebuiltApplicationPackag
       // command will grab a new AndroidApk after building, to get the updated
       // IDs.
     } else {
-      apkFile = fileSystem.file(fileSystem.path.join(getAndroidBuildDirectory(), filename));
+      apkFile = locateApkFile(
+        fileSystem.file(fileSystem.path.join(getAndroidBuildDirectory(), filename)),
+      );
     }
 
     final File manifest = androidProject.appManifestFile;
