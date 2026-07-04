@@ -5,6 +5,7 @@
 package io.flutter.embedding.android;
 
 import static android.content.ComponentCallbacks2.*;
+import static android.os.Looper.getMainLooper;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -21,6 +22,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.robolectric.Shadows.shadowOf;
 
 import android.app.Activity;
 import android.content.Context;
@@ -668,6 +670,7 @@ public class FlutterActivityAndFragmentDelegateTest {
 
             // Flutter is detached from the surrounding Activity in onDetach.
             delegate.onDetach();
+            shadowOf(getMainLooper()).idle();
 
             // Verify that the ActivityControlSurface was told to detach from the Activity.
             verify(mockFlutterEngine.getActivityControlSurface(), times(1)).detachFromActivity();
@@ -705,6 +708,7 @@ public class FlutterActivityAndFragmentDelegateTest {
 
     // Flutter is detached from the surrounding Activity in onDetach.
     delegate.onDetach();
+    shadowOf(getMainLooper()).idle();
 
     // Verify that the ActivityControlSurface was NOT told to attach or detach to an Activity.
     verify(mockFlutterEngine.getActivityControlSurface(), never())
@@ -1267,6 +1271,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             delegate.onStop();
             delegate.onDestroyView();
             delegate.onDetach();
+            shadowOf(getMainLooper()).idle();
 
             // --- Verify that the cached engine was destroyed ---
             verify(mockFlutterEngine, times(1)).destroy();
@@ -1297,6 +1302,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             delegate.onStop();
             delegate.onDestroyView();
             delegate.onDetach();
+            shadowOf(getMainLooper()).idle();
 
             // --- Verify that the cached engine was destroyed ---
             verify(mockFlutterEngine, never()).destroy();
@@ -1334,6 +1340,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             delegate.onStop();
             delegate.onDestroyView();
             delegate.onDetach();
+            shadowOf(getMainLooper()).idle();
 
             // --- Verify that the cached engine was destroyed ---
             verify(cachedEngine, times(1)).destroy();
@@ -1372,6 +1379,7 @@ public class FlutterActivityAndFragmentDelegateTest {
             delegate.onStop();
             delegate.onDestroyView();
             delegate.onDetach();
+            shadowOf(getMainLooper()).idle();
 
             // --- Verify that the cached engine was NOT destroyed ---
             verify(cachedEngine, never()).destroy();
