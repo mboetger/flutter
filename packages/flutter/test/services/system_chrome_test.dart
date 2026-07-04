@@ -427,4 +427,21 @@ void main() {
       FlutterError.onError = originalOnError;
     }
   });
+
+  test('setSplashScreenFadeEnabled control test', () async {
+    final log = <MethodCall>[];
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        log.add(methodCall);
+        return null;
+      },
+    );
+
+    await SystemChrome.setSplashScreenFadeEnabled(false);
+
+    expect(log, hasLength(1));
+    expect(log.single, isMethodCall('SystemChrome.setSplashScreenFadeEnabled', arguments: false));
+  });
 }

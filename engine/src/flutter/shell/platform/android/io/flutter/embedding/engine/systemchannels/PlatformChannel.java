@@ -136,7 +136,11 @@ public class PlatformChannel {
                   result.error("error", exception.getMessage(), null);
                 }
                 break;
+              case "SystemChrome.setSplashScreenFadeEnabled":
+                result.success(null);
+                break;
               case "SystemNavigator.setFrameworkHandlesBack":
+
                 {
                   boolean frameworkHandlesBack = (boolean) arguments;
                   platformMessageHandler.setFrameworkHandlesBack(frameworkHandlesBack);

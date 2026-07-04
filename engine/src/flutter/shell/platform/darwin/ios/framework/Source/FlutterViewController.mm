@@ -656,6 +656,15 @@ static UIView* GetViewOrPlaceholder(UIView* existing_view) {
   self.splashScreenManager.splashScreenView = view;
 }
 
+- (BOOL)fadeSplashScreen {
+  return self.splashScreenManager.fadeSplashScreen;
+}
+
+- (void)setFadeSplashScreen:(BOOL)fade {
+  self.splashScreenManager.fadeSplashScreen = fade;
+}
+
+
 - (void)setFlutterViewDidRenderCallback:(void (^)(void))callback {
   _flutterViewRenderedCallback = callback;
 }

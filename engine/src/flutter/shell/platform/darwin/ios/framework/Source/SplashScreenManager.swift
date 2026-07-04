@@ -17,6 +17,15 @@ public final class SplashScreenManager: NSObject {
   private let bundle: Bundle
 
   private var _splashScreenView: UIView?
+  private var _fadeSplashScreen: Bool = true
+
+  /// Whether the splash screen should fade out when removed.
+  ///
+  /// Defaults to `true`, unless `FLTFadeSplashScreen` is set to `false` in the bundle's Info.plist.
+  @objc public var fadeSplashScreen: Bool {
+    get { return _fadeSplashScreen }
+    set { _fadeSplashScreen = newValue }
+  }
 
   /// The current splash screen view.
   ///
@@ -42,6 +51,11 @@ public final class SplashScreenManager: NSObject {
   /// The bundle is used to look up the launch storyboard name and resources.
   @objc public init(bundle: Bundle = .main) {
     self.bundle = bundle
+    if let fade = bundle.object(forInfoDictionaryKey: "FLTFadeSplashScreen") as? Bool {
+      _fadeSplashScreen = fade
+    } else {
+      _fadeSplashScreen = true
+    }
     super.init()
   }
 
@@ -89,11 +103,19 @@ public final class SplashScreenManager: NSObject {
     return objects.first as? UIView
   }
 
-  /// Removes the splash screen with a fade-out animation.
+  /// Removes the splash screen with or without a fade-out animation depending on `fadeSplashScreen`.
   ///
-  /// The completion block is invoked after the animation completes and the view is removed from its
-  /// superview.
+  /// The completion block is invoked after the view is removed from its superview.
   @objc public func removeSplashScreen(completion: (() -> Void)?) {
+    removeSplashScreen(animated: fadeSplashScreen, completion: completion)
+  }
+
+  /// Removes the splash screen with or without a fade-out animation.
+  ///
+  /// - Parameters:
+  ///   - animated: Whether to perform a fade-out animation before removal.
+  ///   - completion: A block invoked after the view is removed from its superview.
+  @objc public func removeSplashScreen(animated: Bool, completion: (() -> Void)?) {
     // If no splash screen, bail out immediately and invoke the completion handler.
     guard let splashScreen = _splashScreenView else {
       completion?()
@@ -101,12 +123,17 @@ public final class SplashScreenManager: NSObject {
     }
 
     _splashScreenView = nil
-    UIView.animate(
-      withDuration: Self.defaultAnimationDuration,
-      animations: {
-        splashScreen.alpha = 0
+    if animated {
+      UIView.animate(
+        withDuration: Self.defaultAnimationDuration,
+        animations: {
+          splashScreen.alpha = 0
+        }
+      ) { _ in
+        splashScreen.removeFromSuperview()
+        completion?()
       }
-    ) { _ in
+    } else {
       splashScreen.removeFromSuperview()
       completion?()
     }

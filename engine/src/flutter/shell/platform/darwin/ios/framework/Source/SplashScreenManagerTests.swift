@@ -89,6 +89,38 @@ class SplashScreenManagerTests: XCTestCase {
     XCTAssertNil(manager.splashScreenView)
   }
 
+  /// Verifies `fadeSplashScreen` defaults to true when no Info.plist key is specified.
+  func testFadeSplashScreenDefaultIsTrue() {
+    let manager = SplashScreenManager()
+    XCTAssertTrue(manager.fadeSplashScreen)
+  }
+
+  /// Verifies `fadeSplashScreen` is configured from `FLTFadeSplashScreen` in Info.plist.
+  func testFadeSplashScreenFromInfoPlist() {
+    let mockBundle = MockBundle(path: "")
+    mockBundle.mockInfoDictionary = ["FLTFadeSplashScreen": false]
+    let manager = SplashScreenManager(bundle: mockBundle)
+    XCTAssertFalse(manager.fadeSplashScreen)
+  }
+
+  /// Verifies that `removeSplashScreen` can remove the splash screen synchronously without fading
+  /// when `fadeSplashScreen` is set to false (resolving issue flutter/flutter#63156).
+  func testRemoveSplashScreenCanDisableFading() {
+    let manager = SplashScreenManager()
+    manager.fadeSplashScreen = false
+    let view = UIView()
+    manager.splashScreenView = view
+
+    var completionCalled = false
+    manager.removeSplashScreen {
+      completionCalled = true
+    }
+
+    XCTAssertTrue(completionCalled)
+    XCTAssertNil(manager.splashScreenView)
+  }
+
+
   /// Verifies `installSplashScreenView` adds the view to the parent view parent bounds as frame.
   func testInstallSplashScreenView() {
     let manager = SplashScreenManager()

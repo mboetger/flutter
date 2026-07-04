@@ -220,6 +220,15 @@ FLUTTER_DARWIN_EXPORT
 - (BOOL)loadDefaultSplashScreenView;
 
 /**
+ * Whether to animate the splash screen fade-out transition when removing it.
+ *
+ * Defaults to `YES`, unless the `FLTFadeSplashScreen` key in the main bundle's `Info.plist`
+ * is set to `NO` or modified programmatically.
+ */
+@property(assign, nonatomic) BOOL fadeSplashScreen;
+
+
+/**
  * Controls whether the created view will be opaque or not.
  *
  * Default is `YES`.  Note that setting this to `NO` may negatively impact performance

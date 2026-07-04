@@ -578,4 +578,29 @@ FLUTTER_ASSERT_ARC
   [bundleMock stopMocking];
 }
 
+- (void)testSetSplashScreenFadeEnabled {
+  FlutterEngine* engine = [[FlutterEngine alloc] initWithName:@"test" project:nil];
+  [engine runWithEntrypoint:nil];
+  FlutterViewController* flutterViewController =
+      [[FlutterViewController alloc] initWithEngine:engine nibName:nil bundle:nil];
+  XCTAssertTrue(flutterViewController.fadeSplashScreen);
+
+  FlutterPlatformPlugin* plugin = [engine platformPlugin];
+
+  XCTestExpectation* setSplashScreenFadeCalled =
+      [self expectationWithDescription:@"setSplashScreenFadeEnabled"];
+  FlutterResult resultSet = ^(id result) {
+    [setSplashScreenFadeCalled fulfill];
+  };
+  FlutterMethodCall* methodCallSet =
+      [FlutterMethodCall methodCallWithMethodName:@"SystemChrome.setSplashScreenFadeEnabled"
+                                        arguments:@NO];
+  [plugin handleMethodCall:methodCallSet result:resultSet];
+  [self waitForExpectationsWithTimeout:1 handler:nil];
+  XCTAssertFalse(flutterViewController.fadeSplashScreen);
+
+  [flutterViewController deregisterNotifications];
+}
+
 @end
+

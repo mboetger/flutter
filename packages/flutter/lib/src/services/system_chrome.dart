@@ -665,6 +665,29 @@ abstract final class SystemChrome {
     await SystemChannels.platform.invokeMethod<void>('SystemChrome.restoreSystemUIOverlays');
   }
 
+  /// Specifies whether the native launch splash screen should fade out when
+  /// transitioning to the Flutter application root widget.
+  ///
+  /// By default, some platforms (such as iOS) animate the transition from the
+  /// native launch splash screen to the Flutter root widget with a fade-out
+  /// animation. If this method is called with `enabled` set to `false`, the
+  /// native splash screen will be removed immediately without any fading
+  /// animation when the first frame is rendered.
+  ///
+  /// On platforms where splash screen fade animations are not managed by the
+  /// engine (such as Android 12+, Web, or Desktop), calling this method is a
+  /// no-op.
+  ///
+  /// On iOS, this behavior can also be configured declaratively by setting
+  /// the boolean key `FLTFadeSplashScreen` to `NO` in the application's
+  /// `Info.plist`.
+  static Future<void> setSplashScreenFadeEnabled(bool enabled) async {
+    await SystemChannels.platform.invokeMethod<void>(
+      'SystemChrome.setSplashScreenFadeEnabled',
+      enabled,
+    );
+  }
+
   /// Specifies the style to use for the system overlays (e.g. the status bar on
   /// Android or iOS, the system navigation bar on Android) that are visible (if any).
   ///

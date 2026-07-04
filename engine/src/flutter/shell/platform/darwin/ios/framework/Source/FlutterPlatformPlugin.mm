@@ -137,6 +137,9 @@ static void SetStatusBarStyleForSharedApplication(UIStatusBarStyle style) {
   } else if ([method isEqualToString:@"SystemChrome.setSystemUIOverlayStyle"]) {
     [self setSystemChromeSystemUIOverlayStyle:args];
     result(nil);
+  } else if ([method isEqualToString:@"SystemChrome.setSplashScreenFadeEnabled"]) {
+    [self setSystemChromeSplashScreenFadeEnabled:args];
+    result(nil);
   } else if ([method isEqualToString:@"SystemNavigator.pop"]) {
     NSNumber* isAnimated = args;
     [self popSystemNavigator:isAnimated.boolValue];
@@ -355,6 +358,11 @@ static void SetStatusBarStyleForSharedApplication(UIStatusBarStyle style) {
 - (void)restoreSystemChromeSystemUIOverlays {
   // Nothing to do on iOS.
 }
+
+- (void)setSystemChromeSplashScreenFadeEnabled:(NSNumber*)enabled {
+  [self.engine viewController].fadeSplashScreen = enabled.boolValue;
+}
+
 
 - (void)setSystemChromeSystemUIOverlayStyle:(NSDictionary*)message {
   NSString* brightness = message[@"statusBarBrightness"];
