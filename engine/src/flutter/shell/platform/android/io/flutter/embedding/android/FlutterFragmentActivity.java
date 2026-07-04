@@ -373,6 +373,8 @@ public class FlutterFragmentActivity extends FragmentActivity
 
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
+    SplashScreenWindowConfig windowConfig = new SplashScreenWindowConfig(getWindow());
+
     switchLaunchThemeForNormalTheme();
     // Get an existing fragment reference first before onCreate since onCreate would re-attach
     // existing fragments. This would cause FlutterFragment to reference the host activity which
@@ -380,6 +382,8 @@ public class FlutterFragmentActivity extends FragmentActivity
     flutterFragment = retrieveExistingFlutterFragmentIfPossible();
 
     super.onCreate(savedInstanceState);
+
+    windowConfig.restore(getWindow());
 
     configureWindowForTransparency();
     setContentView(createFragmentContainer());

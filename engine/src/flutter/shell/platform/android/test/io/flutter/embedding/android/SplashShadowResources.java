@@ -41,7 +41,7 @@ public class SplashShadowResources extends ShadowResources {
     if (id == SPLASH_DRAWABLE_ID) {
       return new ColorDrawable(Color.BLUE);
     }
-    return reflector(Resources.class, resources).getDrawable(id);
+    return reflector(ResourcesReflector.class, resources).getDrawable(id);
   }
 
   @Implementation
@@ -55,6 +55,6 @@ public class SplashShadowResources extends ShadowResources {
       }
       return new ColorDrawable(Color.GRAY);
     }
-    return reflector(Resources.class, resources).getDrawable(id, theme);
+    return reflector(ResourcesReflector.class, resources).getDrawable(id, theme);
   }
 }

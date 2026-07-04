@@ -19,11 +19,13 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.robolectric.Shadows.shadowOf;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.window.BackEvent;
@@ -257,6 +259,70 @@ public class FlutterActivityTest {
     assertEquals(BackgroundMode.opaque, flutterActivity.getBackgroundMode());
     assertEquals(RenderMode.surface, flutterActivity.getRenderMode());
     assertEquals(TransparencyMode.opaque, flutterActivity.getTransparencyMode());
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  public void configureStatusBarForFullscreenFlutterExperience_preservesSystemUiVisibility() {
+    Intent intent = FlutterActivity.createDefaultIntent(ctx);
+    ActivityController<FlutterActivity> activityController =
+        Robolectric.buildActivity(FlutterActivity.class, intent);
+    FlutterActivity activity = activityController.get();
+
+    int initialFlags =
+        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+    activity.getWindow().getDecorView().setSystemUiVisibility(initialFlags);
+    activity.onCreate(null);
+
+    assertTrue(
+        "Expected SYSTEM_UI_FLAG_LIGHT_STATUS_BAR to be preserved",
+        (activity.getWindow().getDecorView().getSystemUiVisibility()
+                & View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
+            != 0);
+    assertTrue(
+        "Expected SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR to be preserved",
+        (activity.getWindow().getDecorView().getSystemUiVisibility()
+                & View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
+            != 0);
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  public void switchLaunchThemeForNormalTheme_resetsWindowFlagsDuringSplashInitialization()
+      throws PackageManager.NameNotFoundException {
+    Intent intent = FlutterActivity.createDefaultIntent(ctx);
+    ActivityController<FlutterActivity> activityController =
+        Robolectric.buildActivity(FlutterActivity.class, intent);
+    FlutterActivity activity = activityController.get();
+
+    // Set up LaunchTheme behavior: start with fullscreen window flags and status bar settings.
+    int launchThemeFlags = View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+    activity.getWindow().getDecorView().setSystemUiVisibility(launchThemeFlags);
+
+    // Inject normal theme resource id into activity metadata (simulating NormalTheme without
+    // fullscreen).
+    PackageManager pm = ctx.getPackageManager();
+    ActivityInfo activityInfo =
+        pm.getActivityInfo(activity.getComponentName(), PackageManager.GET_META_DATA);
+    activityInfo.metaData = new Bundle();
+    activityInfo.metaData.putInt(
+        FlutterActivityLaunchConfigs.NORMAL_THEME_META_DATA_KEY, android.R.style.Theme_Light);
+    shadowOf(pm).addOrUpdateActivity(activityInfo);
+
+    // Trigger onCreate where Flutter initialization and theme switching occur.
+    activity.onCreate(null);
+
+    // Expected behavior without bug: window flags (like fullscreen and status bar settings) from
+    // LaunchTheme
+    // should not be reset when transitioning to NormalTheme during Flutter experience/splash
+    // initialization.
+    // When the bug is present, switchLaunchThemeForNormalTheme() calls setTheme(NormalTheme),
+    // causing window
+    // flags/themes to reset.
+    assertEquals(
+        "Expected window flags from LaunchTheme to be preserved during Flutter initialization",
+        launchThemeFlags,
+        activity.getWindow().getDecorView().getSystemUiVisibility() & launchThemeFlags);
   }
 
   @Test

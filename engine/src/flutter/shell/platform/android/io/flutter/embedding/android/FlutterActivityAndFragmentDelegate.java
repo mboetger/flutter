@@ -738,6 +738,10 @@ import java.util.Set;
 
   @Override
   public void detachFromFlutterEngine() {
+    if (host == null) {
+      return;
+    }
+
     if (host.shouldDestroyEngineWithHost()) {
       // The host owns the engine and should never have its engine taken by another exclusive
       // activity.
@@ -816,6 +820,53 @@ import java.util.Set;
 
       flutterEngine = null;
     }
+    boolean isChangingConfigurations =
+        host.getActivity() != null && host.getActivity().isChangingConfigurations();
+    boolean shouldAttachEngineToActivity = host.shouldAttachEngineToActivity();
+    boolean shouldDestroyEngineWithHost = host.shouldDestroyEngineWithHost();
+    String cachedEngineId = host.getCachedEngineId();
+
+    // Postpone tearing down the engine and detaching from activity/plugins so that any
+    // method calls sent from Dart in response to AppLifecycleState.detached can be received
+    // and handled before the engine or plugins are destroyed.
+    new Handler(Looper.getMainLooper())
+        .post(
+            new Runnable() {
+              @Override
+              public void run() {
+                if (shouldAttachEngineToActivity && flutterEngine != null) {
+                  // Notify plugins that they are no longer attached to an Activity.
+                  Log.v(TAG, "Detaching FlutterEngine from the Activity that owns this Fragment.");
+                  if (isChangingConfigurations) {
+                    flutterEngine.getActivityControlSurface().detachFromActivityForConfigChanges();
+                  } else {
+                    flutterEngine.getActivityControlSurface().detachFromActivity();
+                  }
+                }
+
+                // Null out the platformPlugin and sensitiveContentPlugin to avoid a possible
+                // retain cycle between the plugins, this Fragment, and this Fragment's Activity.
+                if (platformPlugin != null) {
+                  platformPlugin.destroy();
+                  platformPlugin = null;
+                }
+                if (sensitiveContentPlugin != null) {
+                  sensitiveContentPlugin.destroy();
+                  sensitiveContentPlugin = null;
+                }
+
+                // Destroy our FlutterEngine if we're not set to retain it.
+                if (shouldDestroyEngineWithHost && flutterEngine != null) {
+                  flutterEngine.destroy();
+
+                  if (cachedEngineId != null) {
+                    FlutterEngineCache.getInstance().remove(cachedEngineId);
+                  }
+
+                  flutterEngine = null;
+                }
+              }
+            });
 
     isAttached = false;
   }

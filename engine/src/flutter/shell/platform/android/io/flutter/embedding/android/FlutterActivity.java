@@ -630,9 +630,13 @@ public class FlutterActivity extends Activity
 
   @Override
   protected void onCreate(@Nullable Bundle savedInstanceState) {
+    SplashScreenWindowConfig windowConfig = new SplashScreenWindowConfig(getWindow());
+
     switchLaunchThemeForNormalTheme();
 
     super.onCreate(savedInstanceState);
+
+    windowConfig.restore(getWindow());
 
     if (savedInstanceState != null) {
       boolean frameworkHandlesBack =

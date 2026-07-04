@@ -15,10 +15,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.robolectric.Shadows.shadowOf;
 
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
@@ -43,6 +45,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
+import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 
 @RunWith(AndroidJUnit4.class)
@@ -209,6 +212,45 @@ public class FlutterFragmentActivityTest {
       }
     }
     assertTrue(foundCustomView);
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  public void switchLaunchThemeForNormalTheme_resetsWindowFlagsDuringSplashInitialization()
+      throws PackageManager.NameNotFoundException {
+    Intent intent = FlutterFragmentActivity.createDefaultIntent(ctx);
+    ActivityController<FlutterFragmentActivity> activityController =
+        Robolectric.buildActivity(FlutterFragmentActivity.class, intent);
+    FlutterFragmentActivity activity = activityController.get();
+
+    // Set up LaunchTheme behavior: start with fullscreen window flags and status bar settings.
+    int launchThemeFlags = View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+    activity.getWindow().getDecorView().setSystemUiVisibility(launchThemeFlags);
+
+    // Inject normal theme resource id into activity metadata (simulating NormalTheme without
+    // fullscreen).
+    PackageManager pm = ctx.getPackageManager();
+    ActivityInfo activityInfo =
+        pm.getActivityInfo(activity.getComponentName(), PackageManager.GET_META_DATA);
+    activityInfo.metaData = new Bundle();
+    activityInfo.metaData.putInt(
+        FlutterActivityLaunchConfigs.NORMAL_THEME_META_DATA_KEY, android.R.style.Theme_Light);
+    shadowOf(pm).addOrUpdateActivity(activityInfo);
+
+    // Trigger onCreate where Flutter initialization and theme switching occur.
+    activity.onCreate(null);
+
+    // Expected behavior without bug: window flags (like fullscreen and status bar settings) from
+    // LaunchTheme
+    // should not be reset when transitioning to NormalTheme during Flutter experience/splash
+    // initialization.
+    // When the bug is present, switchLaunchThemeForNormalTheme() calls setTheme(NormalTheme),
+    // causing window
+    // flags/themes to reset.
+    assertEquals(
+        "Expected window flags from LaunchTheme to be preserved during Flutter initialization",
+        launchThemeFlags,
+        activity.getWindow().getDecorView().getSystemUiVisibility() & launchThemeFlags);
   }
 
   @Test
