@@ -659,6 +659,30 @@ void main() {
     openChannelForTesting = null;
   });
 
+  testUsingContext(
+    'createVmServiceDelegate configures pingInterval on WebSocket to prevent premature disconnection on virtual devices (VS Code without debugging)',
+    () async {
+      final fakeWebSocket = FakeWebSocket();
+      openChannelForTesting =
+          (
+            String url, {
+            io.CompressionOptions compression = io.CompressionOptions.compressionDefault,
+            required Logger logger,
+          }) async {
+            return fakeWebSocket;
+          };
+      addTearDown(() => openChannelForTesting = null);
+
+      final vm_service.VmService service = await createVmServiceDelegate(
+        Uri.parse('ws://localhost:8181/ws'),
+        logger: BufferLogger.test(),
+      );
+      addTearDown(() => service.dispose());
+
+      expect(fakeWebSocket.pingInterval, isNotNull);
+    },
+  );
+
   testWithoutContext(
     'RPCErrorExtension detects DWDS-specific unregistered service extension errors',
     () {
@@ -737,4 +761,36 @@ Future<io.WebSocket> failingWebSocketConnector(
   Logger? logger,
 }) {
   throw const io.SocketException('Failed WebSocket connection');
+}
+
+class FakeWebSocket extends Fake implements io.WebSocket {
+  FakeWebSocket() : _controller = StreamController<dynamic>.broadcast();
+
+  final StreamController<dynamic> _controller;
+
+  @override
+  Duration? pingInterval;
+
+  @override
+  StreamSubscription<dynamic> listen(
+    void Function(dynamic)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return _controller.stream.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+
+  @override
+  void add(dynamic data) {}
+
+  @override
+  Future<void> close([int? code, String? reason]) async {
+    await _controller.close();
+  }
 }
