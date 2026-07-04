@@ -494,4 +494,81 @@ public class FlutterFragmentTest {
     verify(spyCtx, times(1)).registerComponentCallbacks(any());
     verify(spyCtx, times(1)).unregisterComponentCallbacks(any());
   }
+
+  @Test
+  public void itAllowsSwitchingCachedEngineBetweenFragmentsWithoutCrash() {
+    // Models issue flutter/flutter#66632: an app shows a main program Fragment,
+    // and simultaneously opens a Fragment suspension layer on top (sharing the same FlutterEngine).
+    // Closing and reopening the suspension layer previously caused concurrent engine attachment
+    // and surface rendering races, leading to SIGABRT / FlutterJNI errors.
+    FlutterActivityAndFragmentDelegate mockDelegate1 =
+        mock(FlutterActivityAndFragmentDelegate.class);
+    // Hardcoding isAttached() to true isolates delegate preservation and event forwarding
+    // without needing to mock full Activity re-attachment across fragment transactions.
+    when(mockDelegate1.isAttached()).thenReturn(true);
+    TestDelegateFactory delegateFactory1 = new TestDelegateFactory(mockDelegate1);
+
+    FlutterActivityAndFragmentDelegate mockDelegate2 =
+        mock(FlutterActivityAndFragmentDelegate.class);
+    when(mockDelegate2.isAttached()).thenReturn(true);
+    TestDelegateFactory delegateFactory2 = new TestDelegateFactory(mockDelegate2);
+
+    FlutterFragment fragment1 =
+        FlutterFragment.withCachedEngine("my_cached_engine")
+            .destroyEngineWithFragment(false)
+            .build();
+    fragment1.setDelegateFactory(delegateFactory1);
+
+    FlutterFragment fragment2 =
+        FlutterFragment.withCachedEngine("my_cached_engine")
+            .destroyEngineWithFragment(false)
+            .build();
+    fragment2.setDelegateFactory(delegateFactory2);
+
+    // 1. Start main program fragment.
+    fragment1.onStart();
+    fragment1.onResume();
+    verify(mockDelegate1, times(1)).onStart();
+    verify(mockDelegate1, times(1)).onResume();
+
+    // 2. Open suspension layer fragment (evicting fragment1 from engine).
+    // When fragment2 attaches to the shared engine, ExclusiveAppComponent enforcement
+    // invokes fragment1.detachFromFlutterEngine().
+    fragment1.detachFromFlutterEngine();
+    // Verifying onDestroyView is critical: it ensures the rendering surface
+    // (FlutterView/FlutterTextureView)
+    // is cleanly detached from the engine upon eviction, preventing concurrent surface JNI
+    // callbacks and SIGABRT.
+    verify(mockDelegate1, times(1)).onDestroyView();
+    verify(mockDelegate1, times(1)).onDetach();
+    // Ensure temporary eviction from the engine does not prematurely release or destroy the
+    // delegate.
+    verify(mockDelegate1, never()).release();
+
+    fragment2.onStart();
+    fragment2.onResume();
+    verify(mockDelegate2, times(1)).onStart();
+    verify(mockDelegate2, times(1)).onResume();
+
+    // 3. Close suspension layer fragment.
+    fragment2.onPause();
+    fragment2.onStop();
+    fragment2.detachFromFlutterEngine();
+    verify(mockDelegate2, times(1)).onPause();
+    verify(mockDelegate2, times(1)).onStop();
+    verify(mockDelegate2, times(1)).onDestroyView();
+    verify(mockDelegate2, times(1)).onDetach();
+    verify(mockDelegate2, never()).release();
+
+    // 4. Re-show / re-attach main program fragment.
+    // In real Android execution, when returning to an evicted fragment whose view was destroyed
+    // (via onDestroyView), Android re-creates the view hierarchy (onCreateView), re-establishing
+    // the delegate connection. When the suspension layer is removed, the main program fragment
+    // re-attaches to the shared engine, allowing normal lifecycle event forwarding to resume
+    // without crashing or surface JNI races.
+    fragment1.onStart();
+    fragment1.onResume();
+    verify(mockDelegate1, times(2)).onStart();
+    verify(mockDelegate1, times(2)).onResume();
+  }
 }
