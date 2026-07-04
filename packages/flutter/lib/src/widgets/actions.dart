@@ -17,6 +17,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import 'basic.dart';
+import 'binding.dart';
 import 'focus_manager.dart';
 import 'focus_scope.dart';
 import 'framework.dart';
@@ -1590,6 +1591,33 @@ class DismissIntent extends Intent {
 ///
 /// This is an abstract class that serves as a base class for dismiss actions.
 abstract class DismissAction extends Action<DismissIntent> {}
+
+/// An [Intent] that pops the current route.
+///
+/// The [WidgetsApp.defaultShortcuts] binds this intent to the
+/// [LogicalKeyboardKey.goBack] and [LogicalKeyboardKey.browserBack] keys as a
+/// fallback after [DismissIntent].
+///
+/// See also:
+///  - [DismissRouteAction] which listens for this intent to pop the route.
+class DismissRouteIntent extends Intent {
+  /// Creates an intent that pops the current route.
+  const DismissRouteIntent();
+}
+
+/// An [Action] that pops the current route.
+///
+/// By default, this action is bound to [DismissRouteIntent] in
+/// [WidgetsApp.defaultActions] and calls [WidgetsBinding.handlePopRoute].
+class DismissRouteAction extends Action<DismissRouteIntent> {
+  /// Creates a [DismissRouteAction].
+  DismissRouteAction();
+
+  @override
+  Object invoke(DismissRouteIntent intent) {
+    return WidgetsBinding.instance.handlePopRoute();
+  }
+}
 
 /// An [Intent] that evaluates a series of specified [orderedIntents] for
 /// execution.

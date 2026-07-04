@@ -1108,8 +1108,6 @@ mixin WidgetsBinding
   /// Developers can manually set this by calling the method directly or by
   /// using [NavigationNotification].
   /// {@endtemplate}
-  @protected
-  @visibleForTesting
   Future<bool> handlePopRoute() async {
     for (final observer in List<WidgetsBindingObserver>.of(_observers)) {
       try {

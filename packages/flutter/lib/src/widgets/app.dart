@@ -1270,6 +1270,12 @@ class WidgetsApp extends StatefulWidget {
 
     // Dismissal
     SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+    SingleActivator(LogicalKeyboardKey.goBack): PrioritizedIntents(
+      orderedIntents: <Intent>[DismissIntent(), DismissRouteIntent()],
+    ),
+    SingleActivator(LogicalKeyboardKey.browserBack): PrioritizedIntents(
+      orderedIntents: <Intent>[DismissIntent(), DismissRouteIntent()],
+    ),
 
     // Keyboard traversal.
     SingleActivator(LogicalKeyboardKey.tab): NextFocusIntent(),
@@ -1319,6 +1325,12 @@ class WidgetsApp extends StatefulWidget {
 
     // Dismissal
     SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+    SingleActivator(LogicalKeyboardKey.goBack): PrioritizedIntents(
+      orderedIntents: <Intent>[DismissIntent(), DismissRouteIntent()],
+    ),
+    SingleActivator(LogicalKeyboardKey.browserBack): PrioritizedIntents(
+      orderedIntents: <Intent>[DismissIntent(), DismissRouteIntent()],
+    ),
 
     // Keyboard traversal.
     SingleActivator(LogicalKeyboardKey.tab): NextFocusIntent(),
@@ -1349,6 +1361,12 @@ class WidgetsApp extends StatefulWidget {
 
     // Dismissal
     SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+    SingleActivator(LogicalKeyboardKey.goBack): PrioritizedIntents(
+      orderedIntents: <Intent>[DismissIntent(), DismissRouteIntent()],
+    ),
+    SingleActivator(LogicalKeyboardKey.browserBack): PrioritizedIntents(
+      orderedIntents: <Intent>[DismissIntent(), DismissRouteIntent()],
+    ),
 
     // Keyboard traversal
     SingleActivator(LogicalKeyboardKey.tab): NextFocusIntent(),
@@ -1415,6 +1433,7 @@ class WidgetsApp extends StatefulWidget {
     ScrollIntent: ScrollAction(),
     PrioritizedIntents: PrioritizedAction(),
     VoidCallbackIntent: VoidCallbackAction(),
+    DismissRouteIntent: DismissRouteAction(),
   };
 
   @override
