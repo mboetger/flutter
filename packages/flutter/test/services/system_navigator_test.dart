@@ -30,6 +30,14 @@ void main() {
       isMethodCall('SystemNavigator.pop', arguments: null),
     ]);
 
+    await verify(() => SystemNavigator.setFrameworkHandlesBack(true), <Object>[
+      isMethodCall('SystemNavigator.setFrameworkHandlesBack', arguments: true),
+    ]);
+
+    await verify(() => SystemNavigator.setFrameworkHandlesBack(false), <Object>[
+      isMethodCall('SystemNavigator.setFrameworkHandlesBack', arguments: false),
+    ]);
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
       null,
