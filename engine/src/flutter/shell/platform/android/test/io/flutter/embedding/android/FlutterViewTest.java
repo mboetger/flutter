@@ -572,6 +572,48 @@ public class FlutterViewTest {
   }
 
   @SuppressWarnings("deprecation")
+  // getSystemUiVisibility, getWindowSystemUiVisibility required to test pre api 30 behavior.
+  @Test
+  @Config(minSdk = API_LEVELS.API_28, maxSdk = API_LEVELS.API_29, qualifiers = "port")
+  public void systemInsetHandlesFullscreenWithDisplayCutoutLegacy() {
+    FlutterView flutterView = spy(new FlutterView(ctx));
+    assertEquals(0, flutterView.getSystemUiVisibility());
+    when(flutterView.getWindowSystemUiVisibility())
+        .thenReturn(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
+    when(flutterView.getContext()).thenReturn(ctx);
+
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+    assertEquals(0, viewportMetricsCaptor.getValue().viewPaddingTop);
+
+    // Then we simulate the system applying a window inset with a display cutout.
+    WindowInsets windowInsets = mock(WindowInsets.class);
+    DisplayCutout displayCutout = mock(DisplayCutout.class);
+    mockSystemWindowInsets(windowInsets, 0, 100, 0, 100);
+    mockSystemGestureInsetsIfNeed(windowInsets);
+    when(windowInsets.getDisplayCutout()).thenReturn(displayCutout);
+    when(displayCutout.getBoundingRects()).thenReturn(Collections.emptyList());
+    when(displayCutout.getSafeInsetTop()).thenReturn(120);
+    when(displayCutout.getSafeInsetLeft()).thenReturn(0);
+    when(displayCutout.getSafeInsetRight()).thenReturn(0);
+    when(displayCutout.getSafeInsetBottom()).thenReturn(0);
+
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+    // In true fullscreen with system chrome hidden (legacy algorithm / pre-API 30),
+    // the safe area padding should still respect the DisplayCutout safe inset (120).
+    // Currently on pre-API 30, DisplayCutout is ignored and viewPaddingTop becomes 0.
+    validateViewportMetricPadding(viewportMetricsCaptor, 0, 120, 0, 0);
+  }
+
+  @SuppressWarnings("deprecation")
   // getSystemUiVisibility, getWindowSystemUiVisibility required to test interop with api 30
   // behavior.
   // This test uses the API 30+ Algorithm for window insets. The legacy algorithm is
