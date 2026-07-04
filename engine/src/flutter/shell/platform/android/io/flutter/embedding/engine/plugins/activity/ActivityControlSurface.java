@@ -11,6 +11,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.Lifecycle;
 import io.flutter.embedding.android.ExclusiveAppComponent;
+import io.flutter.embedding.android.FlutterView;
 
 /**
  * Control surface through which an {@link android.app.Activity} attaches to a {@link
@@ -132,4 +133,51 @@ public interface ActivityControlSurface {
    * in the {@link android.app.Activity} or {@code Fragment}.
    */
   void onRestoreInstanceState(@Nullable Bundle bundle);
+
+  /**
+   * Called by {@link io.flutter.embedding.android.FlutterView} when it attaches to the {@link
+   * io.flutter.embedding.engine.FlutterEngine} associated with this {@code ActivityControlSurface}.
+   */
+  default void attachToFlutterView(@NonNull FlutterView flutterView) {}
+
+  /**
+   * Called by {@link io.flutter.embedding.android.FlutterView} when it detaches from the {@link
+   * io.flutter.embedding.engine.FlutterEngine} associated with this {@code ActivityControlSurface}.
+   */
+  default void detachFromFlutterView() {}
+
+  /**
+   * Returns true if an {@link android.app.Activity} is currently attached to this {@code
+   * ActivityControlSurface}.
+   */
+  default boolean isAttachedToActivity() {
+    return false;
+  }
+
+  /**
+   * Returns the {@link android.app.Activity} that is currently attached to this {@code
+   * ActivityControlSurface}, or null if no {@link android.app.Activity} is attached.
+   */
+  @Nullable
+  default Activity getAttachedActivity() {
+    return null;
+  }
+
+  /**
+   * Returns true if a {@link io.flutter.embedding.android.FlutterView} is currently attached to
+   * this {@code ActivityControlSurface}.
+   */
+  default boolean isAttachedToFlutterView() {
+    return false;
+  }
+
+  /**
+   * Returns the {@link io.flutter.embedding.android.FlutterView} that is currently attached to this
+   * {@code ActivityControlSurface}, or null if no {@link io.flutter.embedding.android.FlutterView}
+   * is attached.
+   */
+  @Nullable
+  default FlutterView getAttachedFlutterView() {
+    return null;
+  }
 }

@@ -1171,6 +1171,10 @@ public class FlutterView extends FrameLayout
       detachFromFlutterEngine();
     }
 
+    if (flutterEngine.getActivityControlSurface() != null) {
+      flutterEngine.getActivityControlSurface().attachToFlutterView(this);
+    }
+
     this.flutterEngine = flutterEngine;
 
     // Instruct our FlutterRenderer that we are now its designated RenderSurface.
@@ -1342,6 +1346,9 @@ public class FlutterView extends FrameLayout
     releaseImageView();
 
     previousRenderSurface = null;
+    if (flutterEngine.getActivityControlSurface() != null) {
+      flutterEngine.getActivityControlSurface().detachFromFlutterView();
+    }
     flutterEngine = null;
   }
 

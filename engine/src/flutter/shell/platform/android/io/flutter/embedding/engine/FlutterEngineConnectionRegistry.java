@@ -16,6 +16,7 @@ import androidx.annotation.Nullable;
 import androidx.lifecycle.Lifecycle;
 import io.flutter.Log;
 import io.flutter.embedding.android.ExclusiveAppComponent;
+import io.flutter.embedding.android.FlutterView;
 import io.flutter.embedding.engine.loader.FlutterLoader;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.PluginRegistry;
@@ -33,6 +34,7 @@ import io.flutter.embedding.engine.plugins.service.ServiceAware;
 import io.flutter.embedding.engine.plugins.service.ServiceControlSurface;
 import io.flutter.embedding.engine.plugins.service.ServicePluginBinding;
 import io.flutter.util.TraceSection;
+import io.flutter.util.ViewUtils;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -70,6 +72,7 @@ import java.util.Set;
   @Nullable private ExclusiveAppComponent<Activity> exclusiveActivity;
   @Nullable private FlutterEngineActivityPluginBinding activityPluginBinding;
   private boolean isWaitingForActivityReattachment = false;
+  @Nullable private FlutterView flutterView;
 
   // ServiceAware
   @NonNull
@@ -120,6 +123,7 @@ import java.util.Set;
     // that the plugins have an opportunity to clean up references as a result of component
     // detachment.
     detachFromAppComponent();
+    this.flutterView = null;
 
     // Remove all registered plugins.
     removeAll();
@@ -304,12 +308,44 @@ import java.util.Set;
   }
 
   // -------- Start ActivityControlSurface -------
-  private boolean isAttachedToActivity() {
+  @Override
+  public boolean isAttachedToActivity() {
     return exclusiveActivity != null;
   }
 
-  private Activity attachedActivity() {
+  @Override
+  @Nullable
+  public Activity getAttachedActivity() {
     return exclusiveActivity != null ? exclusiveActivity.getAppComponent() : null;
+  }
+
+  @Override
+  public boolean isAttachedToFlutterView() {
+    return flutterView != null;
+  }
+
+  @Override
+  @Nullable
+  public FlutterView getAttachedFlutterView() {
+    return flutterView;
+  }
+
+  @Override
+  public void attachToFlutterView(@NonNull FlutterView flutterView) {
+    if (isAttachedToActivity()) {
+      Activity viewActivity = ViewUtils.getActivity(flutterView.getContext());
+      Activity attachedActivity = getAttachedActivity();
+      if (viewActivity != null && attachedActivity != null && viewActivity != attachedActivity) {
+        throw new IllegalStateException(
+            "Cannot attach a FlutterView to a FlutterEngine when an Activity from a different FlutterView is already attached.");
+      }
+    }
+    this.flutterView = flutterView;
+  }
+
+  @Override
+  public void detachFromFlutterView() {
+    this.flutterView = null;
   }
 
   @Override
@@ -321,6 +357,14 @@ import java.util.Set;
       }
       // If we were already attached to an app component, detach from it.
       detachFromAppComponent();
+      if (flutterView != null) {
+        Activity viewActivity = ViewUtils.getActivity(flutterView.getContext());
+        Activity newActivity = exclusiveActivity.getAppComponent();
+        if (viewActivity != null && newActivity != null && viewActivity != newActivity) {
+          throw new IllegalStateException(
+              "Cannot attach an Activity to a FlutterEngine when a FlutterView from a different Activity is already attached.");
+        }
+      }
       this.exclusiveActivity = exclusiveActivity;
       attachToActivityInternal(exclusiveActivity.getAppComponent(), lifecycle);
     }
