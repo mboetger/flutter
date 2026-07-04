@@ -205,7 +205,10 @@ class AndroidAot extends AotElfBase {
   ];
 
   @override
-  List<Source> get outputs => <Source>[Source.pattern('{BUILD_DIR}/$_androidAbiName/app.so')];
+  List<Source> get outputs => <Source>[
+    Source.pattern('{BUILD_DIR}/$_androidAbiName/app.so'),
+    Source.pattern('{BUILD_DIR}/$_androidAbiName/app.*.map.json', optional: true),
+  ];
 
   @override
   List<String> get depfiles => <String>['flutter_$name.d'];
@@ -268,6 +271,13 @@ class AndroidAot extends AotElfBase {
     if (snapshotExitCode != 0) {
       throw Exception('AOT snapshotter exited with code $snapshotExitCode');
     }
+    final String mapFile = environment.fileSystem.path.join(
+      output.path,
+      'app.${targetPlatform.getName()}.map.json',
+    );
+    if (environment.fileSystem.file(mapFile).existsSync()) {
+      outputs.add(environment.fileSystem.file(mapFile));
+    }
     if (environment.defines[kDeferredComponents] == 'true') {
       // Parse the manifest for .so paths
       final List<LoadingUnit> loadingUnits = LoadingUnit.parseLoadingUnitManifest(
@@ -320,11 +330,17 @@ class AndroidAotBundle extends Target {
   BuildMode get buildMode => dependency.buildMode;
 
   @override
-  List<Source> get inputs => <Source>[Source.pattern('{BUILD_DIR}/$_androidAbiName/app.so')];
+  List<Source> get inputs => <Source>[
+    Source.pattern('{BUILD_DIR}/$_androidAbiName/app.so'),
+    Source.pattern('{BUILD_DIR}/$_androidAbiName/app.*.map.json', optional: true),
+  ];
 
   // flutter.gradle has been updated to correctly consume it.
   @override
-  List<Source> get outputs => <Source>[Source.pattern('{OUTPUT_DIR}/$_androidAbiName/app.so')];
+  List<Source> get outputs => <Source>[
+    Source.pattern('{OUTPUT_DIR}/$_androidAbiName/app.so'),
+    Source.pattern('{OUTPUT_DIR}/$_androidAbiName/app.*.map.json', optional: true),
+  ];
 
   @override
   List<String> get depfiles => <String>['flutter_$name.d'];
@@ -349,6 +365,15 @@ class AndroidAotBundle extends Target {
       final File destinationFile = outputDirectory.childFile('manifest.json');
       manifestFile.copySync(destinationFile.path);
       inputs.add(manifestFile);
+      outputs.add(destinationFile);
+    }
+    final File mapFile = buildDir.childFile('app.${targetPlatform.getName()}.map.json');
+    if (mapFile.existsSync()) {
+      final File destinationFile = outputDirectory.childFile(
+        'app.${targetPlatform.getName()}.map.json',
+      );
+      mapFile.copySync(destinationFile.path);
+      inputs.add(mapFile);
       outputs.add(destinationFile);
     }
     environment.depFileService.writeToFile(

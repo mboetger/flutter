@@ -17,6 +17,10 @@ import com.flutter.gradle.FlutterPluginUtils.readPropertiesIfExist
 import com.flutter.gradle.plugins.PluginHandler
 import com.flutter.gradle.tasks.CopyFlutterJniLibsTask
 import com.flutter.gradle.tasks.FlutterTask
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -378,6 +382,7 @@ class FlutterPlugin : Plugin<Project> {
                         variantOutput.processResources
                     }
                 processResources.dependsOn(copyFlutterAssetsTask)
+                mergeDartObfuscationSymbols(projectToAddTasksTo, variant)
 
                 // Copy the output APKs into a known location, so `flutter run` or `flutter build apk`
                 // can discover them. By default, this is `<app-dir>/build/app/outputs/flutter-apk/<filename>.apk`.
@@ -389,6 +394,7 @@ class FlutterPlugin : Plugin<Project> {
                 //   * `build-mode` can be `release|debug|profile`.
                 variant.outputs.forEach { output ->
                     assembleTask.doLast {
+                        performDartObfuscationSymbolsMerge(projectToAddTasksTo, variant)
                         // TODO(gmackall): Migrate to AGPs variant api.
                         //    https://github.com/flutter/flutter/issues/166550
                         @Suppress("DEPRECATION")
@@ -498,6 +504,10 @@ class FlutterPlugin : Plugin<Project> {
                             .findByPath(":$hostAppProjectName:merge${FlutterPluginUtils.capitalize(appProjectVariant.name)}Assets")
                     check(mergeAssets != null)
                     mergeAssets.dependsOn(copyFlutterAssetsTask)
+                    mergeDartObfuscationSymbols(appProject, appProjectVariant)
+                    appAssembleTask.doLast {
+                        performDartObfuscationSymbolsMerge(appProject, appProjectVariant)
+                    }
                 }
             }
         }
@@ -539,6 +549,151 @@ class FlutterPlugin : Plugin<Project> {
          */
         private fun flutterCompileTaskName(variantName: String): String =
             FlutterPluginUtils.toCamelCase(listOf("compile", FLUTTER_BUILD_PREFIX, variantName))
+
+        private fun mergeDartObfuscationSymbols(
+            project: Project,
+            @Suppress("DEPRECATION") variant: com.android.build.gradle.api.BaseVariant
+        ) {
+            val variantNameCap = FlutterPluginUtils.capitalize(variant.name)
+            try {
+                val provider = variant.mappingFileProvider
+                if (provider != null) {
+                    val fileCollection = provider.get()
+                    if (fileCollection != null) {
+                        fileCollection.buildDependencies.getDependencies(null).forEach { task ->
+                            task.doLast {
+                                performDartObfuscationSymbolsMerge(project, variant)
+                            }
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {}
+
+            project.tasks.configureEach {
+                val task = this
+                val name = task.name
+                if (name.contains("R8", ignoreCase = true) ||
+                    name.contains("Proguard", ignoreCase = true) ||
+                    name.contains("Minify", ignoreCase = true) ||
+                    name.contains("Mapping", ignoreCase = true) ||
+                    name.contains("Shrink", ignoreCase = true) ||
+                    name.contains("Assemble", ignoreCase = true) ||
+                    name.contains("Bundle", ignoreCase = true) ||
+                    name.contains("Package", ignoreCase = true)) {
+                    task.doLast {
+                        performDartObfuscationSymbolsMerge(project, variant)
+                    }
+                }
+            }
+        }
+
+        private fun performDartObfuscationSymbolsMerge(
+            project: Project,
+            @Suppress("DEPRECATION") variant: com.android.build.gradle.api.BaseVariant
+        ) {
+            val mappingFiles = mutableListOf<File>()
+            try {
+                val provider = variant.mappingFileProvider
+                if (provider != null) {
+                    val fileCollection = provider.get()
+                    if (fileCollection != null) {
+                        mappingFiles.addAll(fileCollection.files)
+                    }
+                }
+            } catch (ignored: Exception) {}
+            if (mappingFiles.isEmpty()) {
+                try {
+                    val mappingFile = variant.mappingFile
+                    if (mappingFile != null) {
+                        mappingFiles.add(mappingFile)
+                    }
+                } catch (ignored: Exception) {}
+            }
+            if (mappingFiles.isEmpty()) {
+                val defaultMappingFile = project.file(
+                    project.layout.buildDirectory.file("outputs/mapping/${variant.name}/mapping.txt")
+                )
+                if (defaultMappingFile.exists() && defaultMappingFile.isFile) {
+                    mappingFiles.add(defaultMappingFile)
+                }
+            }
+            val validMappingFiles = mappingFiles.filter { it.exists() && it.isFile }
+            if (validMappingFiles.isEmpty()) {
+                return
+            }
+
+            val intermediateDir = project.file(
+                project.layout.buildDirectory.dir("${FlutterPluginConstants.INTERMEDIATES_DIR}/flutter/${variant.name}/")
+            )
+            var dartMapFiles = if (intermediateDir.exists() && intermediateDir.isDirectory) {
+                intermediateDir.walkTopDown().filter { file ->
+                    file.isFile && file.name.endsWith(".map.json")
+                }.toList()
+            } else {
+                emptyList()
+            }
+            if (dartMapFiles.isEmpty()) {
+                val buildDir = project.layout.buildDirectory.get().asFile
+                if (buildDir.exists() && buildDir.isDirectory) {
+                    dartMapFiles = buildDir.walkTopDown().filter { file ->
+                        file.isFile && file.name.endsWith(".map.json")
+                    }.toList()
+                }
+            }
+            if (dartMapFiles.isEmpty()) {
+                try {
+                    val flutterSourceDir = FlutterPluginUtils.getFlutterSourceDirectory(project)
+                    val dartToolDir = File(flutterSourceDir, ".dart_tool")
+                    if (dartToolDir.exists() && dartToolDir.isDirectory) {
+                        dartMapFiles = dartToolDir.walkTopDown().filter { file ->
+                            file.isFile && file.name.endsWith(".map.json")
+                        }.toList()
+                    }
+                } catch (ignored: Exception) {}
+            }
+            if (dartMapFiles.isEmpty()) {
+                return
+            }
+
+            val symbolPairs = mutableSetOf<Pair<String, String>>()
+            for (file in dartMapFiles) {
+                try {
+                    val content = file.readText()
+                    val jsonElement = Json.parseToJsonElement(content) as? JsonArray
+                    if (jsonElement != null) {
+                        for (i in 0 until jsonElement.size step 2) {
+                            if (i + 1 < jsonElement.size) {
+                                val original = jsonElement[i].jsonPrimitive.contentOrNull
+                                val obfuscated = jsonElement[i + 1].jsonPrimitive.contentOrNull
+                                if (original != null && obfuscated != null && original.isNotEmpty() && obfuscated.isNotEmpty() && original != obfuscated) {
+                                    symbolPairs.add(Pair(original, obfuscated))
+                                }
+                            }
+                        }
+                    }
+                } catch (ignored: Exception) {}
+            }
+            if (symbolPairs.isEmpty()) {
+                return
+            }
+
+            val sb = StringBuilder()
+            sb.appendLine()
+            sb.appendLine("# Dart obfuscation symbols")
+            for ((original, obfuscated) in symbolPairs.sortedBy { it.first }) {
+                sb.appendLine("$original -> $obfuscated:")
+            }
+            val appendText = sb.toString()
+
+            for (mappingFile in validMappingFiles) {
+                try {
+                    val content = mappingFile.readText()
+                    if (!content.contains("# Dart obfuscation symbols")) {
+                        mappingFile.appendText(appendText)
+                    }
+                } catch (ignored: Exception) {}
+            }
+        }
 
         /**
          * Configures flutter default abi support respecting flutter command line flags.

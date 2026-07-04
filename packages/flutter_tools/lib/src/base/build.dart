@@ -233,6 +233,17 @@ class AOTSnapshotter {
       _fileSystem.directory(splitDebugInfo).createSync(recursive: true);
     }
 
+    final bool isObfuscated =
+        dartObfuscation ||
+        extraGenSnapshotOptions.contains('--obfuscate') ||
+        genSnapshotArgs.contains('--obfuscate');
+    final bool hasSaveObfuscationMap =
+        extraGenSnapshotOptions.any(
+          (String option) => option.startsWith('--save-obfuscation-map='),
+        ) ||
+        genSnapshotArgs.any((String option) => option.startsWith('--save-obfuscation-map='));
+    final String mapFilename = _fileSystem.path.join(outputDir.path, 'app.$archName.map.json');
+
     // Debugging information.
     genSnapshotArgs.addAll(<String>[
       if (shouldSplitDebugInfo) ...<String>[
@@ -240,7 +251,11 @@ class AOTSnapshotter {
         '--resolve-dwarf-paths',
         '--save-debugging-info=${_fileSystem.path.join(splitDebugInfo!, debugFilename)}',
       ],
-      if (dartObfuscation) '--obfuscate',
+      if (dartObfuscation &&
+          !genSnapshotArgs.contains('--obfuscate') &&
+          !extraGenSnapshotOptions.contains('--obfuscate'))
+        '--obfuscate',
+      if (isObfuscated && !hasSaveObfuscationMap) '--save-obfuscation-map=$mapFilename',
     ]);
 
     genSnapshotArgs.add(mainPath);
@@ -254,6 +269,11 @@ class AOTSnapshotter {
     if (genSnapshotExitCode != 0) {
       _logger.printError('Dart snapshot generator failed with exit code $genSnapshotExitCode');
       return genSnapshotExitCode;
+    }
+    if (shouldSplitDebugInfo && _fileSystem.file(mapFilename).existsSync()) {
+      _fileSystem
+          .file(mapFilename)
+          .copySync(_fileSystem.path.join(splitDebugInfo!, 'app.$archName.map.json'));
     }
 
     if (targetingApplePlatform) {
