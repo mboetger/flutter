@@ -29,6 +29,7 @@ import android.view.inputmethod.InputContentInfo;
 import android.view.inputmethod.InputMethodManager;
 import androidx.annotation.NonNull;
 import androidx.core.view.inputmethod.InputConnectionCompat;
+import io.flutter.FlutterInjector;
 import io.flutter.Log;
 import io.flutter.embedding.engine.FlutterJNI;
 import io.flutter.embedding.engine.systemchannels.ScribeChannel;
@@ -114,7 +115,7 @@ public class InputConnectionAdaptor extends BaseInputConnection
         keyboardDelegate,
         editable,
         editorInfo,
-        new FlutterJNI());
+        FlutterInjector.instance().getFlutterJNIFactory().provideFlutterJNI());
   }
 
   private ExtractedText getExtractedText(ExtractedTextRequest request) {

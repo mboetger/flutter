@@ -126,9 +126,14 @@ public class FlutterJNI {
    * tests.
    */
   public static class Factory {
+    private FlutterJNI flutterJNI;
+
     /** @return a {@link FlutterJNI} instance. */
     public FlutterJNI provideFlutterJNI() {
-      return new FlutterJNI();
+      if (flutterJNI == null) {
+        flutterJNI = new FlutterJNI();
+      }
+      return flutterJNI;
     }
   }
 
