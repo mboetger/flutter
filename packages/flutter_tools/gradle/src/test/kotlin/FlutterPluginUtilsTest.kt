@@ -523,6 +523,94 @@ class FlutterPluginUtilsTest {
         assertEquals("release", result)
     }
 
+    @Test
+    fun `buildModeFor returns mode from project property FLUTTER_BUILD_MODE`() {
+        val buildType = mockk<BuildType>()
+        val project = mockk<Project>()
+        every { buildType.name } returns "staging"
+        every { buildType.isDebuggable } returns false
+        every { project.findProperty("FLUTTER_BUILD_MODE") } returns "profile"
+        every { project.findProperty("flutter.buildMode") } returns null
+        every { project.findProperty("buildMode") } returns null
+        every { project.findProperty("flutterBuildMode") } returns null
+
+        val result = FlutterPluginUtils.buildModeFor(buildType, project)
+        assertEquals("profile", result)
+    }
+
+    @Test
+    fun `buildModeFor returns mode from project property flutter_buildMode`() {
+        val buildType = mockk<BuildType>()
+        val project = mockk<Project>()
+        every { buildType.name } returns "staging"
+        every { buildType.isDebuggable } returns false
+        every { project.findProperty("FLUTTER_BUILD_MODE") } returns null
+        every { project.findProperty("flutter.buildMode") } returns "debug"
+        every { project.findProperty("buildMode") } returns null
+        every { project.findProperty("flutterBuildMode") } returns null
+
+        val result = FlutterPluginUtils.buildModeFor(buildType, project)
+        assertEquals("debug", result)
+    }
+
+    @Test
+    fun `buildModeFor returns mode from buildType extra property`() {
+        val buildType = mockk<BuildType>(moreInterfaces = arrayOf(org.gradle.api.plugins.ExtensionAware::class))
+        val ext = mockk<org.gradle.api.plugins.ExtraPropertiesExtension>()
+        every { buildType.name } returns "staging"
+        every { buildType.isDebuggable } returns false
+        every { (buildType as org.gradle.api.plugins.ExtensionAware).extensions.extraProperties } returns ext
+        every { ext.has("FLUTTER_BUILD_MODE") } returns true
+        every { ext.get("FLUTTER_BUILD_MODE") } returns "profile"
+
+        val result = FlutterPluginUtils.buildModeFor(buildType, null)
+        assertEquals("profile", result)
+    }
+
+    @Test
+    fun `buildModeFor reads local_properties for custom build types`(
+        @TempDir tempDir: Path
+    ) {
+        val buildType = mockk<BuildType>()
+        val project = mockk<Project>()
+        every { buildType.name } returns "staging"
+        every { buildType.isDebuggable } returns false
+        every { project.findProperty(any()) } returns null
+
+        val projectDir = tempDir.resolve("app").toFile()
+        projectDir.mkdirs()
+        every { project.projectDir } returns projectDir
+        every { project.rootProject } returns project
+
+        val localProps = File(projectDir.parentFile, "local.properties")
+        localProps.writeText("flutter.buildMode=profile")
+
+        val result = FlutterPluginUtils.buildModeFor(buildType, project)
+        assertEquals("profile", result)
+    }
+
+    @Test
+    fun `buildModeFor ignores local_properties for standard build types`(
+        @TempDir tempDir: Path
+    ) {
+        val buildType = mockk<BuildType>()
+        val project = mockk<Project>()
+        every { buildType.name } returns "release"
+        every { buildType.isDebuggable } returns false
+        every { project.findProperty(any()) } returns null
+
+        val projectDir = tempDir.resolve("app").toFile()
+        projectDir.mkdirs()
+        every { project.projectDir } returns projectDir
+        every { project.rootProject } returns project
+
+        val localProps = File(projectDir.parentFile, "local.properties")
+        localProps.writeText("flutter.buildMode=debug")
+
+        val result = FlutterPluginUtils.buildModeFor(buildType, project)
+        assertEquals("release", result)
+    }
+
     // supportsBuildMode
     @Test
     fun `supportsBuildMode returns true if project should not use local engine`() {

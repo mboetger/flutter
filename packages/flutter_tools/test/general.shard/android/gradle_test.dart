@@ -370,6 +370,31 @@ flutter:
       );
     });
 
+    testUsingAndroidContext('writes flutter.buildMode to local.properties', () async {
+      const manifest = '''
+name: test
+version: 1.0.0+1
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+''';
+      const buildInfo = BuildInfo(
+        BuildMode.profile,
+        null,
+        treeShakeIcons: false,
+        packageConfigPath: '.dart_tool/package_config.json',
+      );
+      await checkBuildVersion(
+        manifest: manifest,
+        buildInfo: buildInfo,
+        expectedBuildName: '1.0.0',
+        expectedBuildNumber: '1',
+      );
+      final File localPropertiesFile = globals.fs.file('path/to/project/android/local.properties');
+      expect(propertyFor('flutter.buildMode', localPropertiesFile), 'profile');
+    });
+
     testUsingAndroidContext('extract build name from pubspec.yaml', () async {
       const manifest = '''
 name: test

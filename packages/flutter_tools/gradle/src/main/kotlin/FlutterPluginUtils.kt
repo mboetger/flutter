@@ -21,10 +21,12 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.UnknownTaskException
 import org.gradle.api.logging.Logger
+import org.gradle.api.plugins.ExtensionAware
 import org.gradle.kotlin.dsl.register
 import java.io.File
 import java.io.IOException
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import java.util.Properties
 
 /**
@@ -454,14 +456,119 @@ object FlutterPluginUtils {
      * @return "debug", "profile", or "release" (fall-back).
      */
     @JvmStatic
+    @JvmOverloads
     @JvmName("buildModeFor")
-    internal fun buildModeFor(buildType: BuildType): String {
+    internal fun buildModeFor(
+        buildType: BuildType,
+        project: Project? = null
+    ): String {
+        val customMode = getCustomBuildMode(buildType, project)
+        if (customMode != null) {
+            return customMode
+        }
         if (buildType.name == "profile") {
             return "profile"
         } else if (buildType.isDebuggable) {
             return "debug"
         }
         return "release"
+    }
+
+    private fun parseCustomBuildMode(value: Any?): String? {
+        val str = value?.toString()?.trim()?.lowercase(Locale.US) ?: return null
+        if (str.isEmpty()) return null
+        return when {
+            str == "debug" || str == "profile" || str == "release" -> str
+            str.contains("release") -> "release"
+            str.contains("profile") -> "profile"
+            str.contains("debug") -> "debug"
+            else -> null
+        }
+    }
+
+    private fun getCustomBuildMode(
+        buildType: BuildType,
+        project: Project?
+    ): String? {
+        val propertyKeys = listOf("FLUTTER_BUILD_MODE", "flutter.buildMode", "buildMode", "flutterBuildMode")
+
+        // 1. Check Gradle project properties (e.g. -PFLUTTER_BUILD_MODE=profile or in gradle.properties).
+        if (project != null) {
+            for (key in propertyKeys) {
+                val mode =
+                    try {
+                        parseCustomBuildMode(project.findProperty(key))
+                    } catch (e: Throwable) {
+                        null
+                    }
+                if (mode != null) {
+                    return mode
+                }
+            }
+        }
+
+        // 2. Check environment variables (e.g. FLUTTER_BUILD_MODE=profile).
+        for (key in propertyKeys) {
+            val mode =
+                try {
+                    parseCustomBuildMode(System.getenv(key))
+                } catch (e: Throwable) {
+                    null
+                }
+            if (mode != null) {
+                return mode
+            }
+        }
+
+        // 3. Check build type extra properties/extensions (e.g. ext.FLUTTER_BUILD_MODE = "profile").
+        val extraProperties =
+            try {
+                (buildType as? ExtensionAware)?.extensions?.extraProperties
+            } catch (e: Throwable) {
+                null
+            }
+        if (extraProperties != null) {
+            for (key in propertyKeys) {
+                val mode =
+                    try {
+                        if (extraProperties.has(key)) parseCustomBuildMode(extraProperties.get(key)) else null
+                    } catch (e: Throwable) {
+                        null
+                    }
+                if (mode != null) {
+                    return mode
+                }
+            }
+        }
+
+        // 4. For custom build types (not debug, profile, or release), check local.properties.
+        val standardModes = setOf("debug", "profile", "release")
+        if (project != null && !standardModes.contains(buildType.name.lowercase(Locale.US))) {
+            try {
+                val localPropsFile = File(project.projectDir.parentFile, "local.properties")
+                val localProps = readPropertiesIfExist(localPropsFile)
+                for (key in propertyKeys) {
+                    val mode = parseCustomBuildMode(localProps.getProperty(key))
+                    if (mode != null) {
+                        return mode
+                    }
+                }
+                if (project.rootProject.projectDir != project.projectDir.parentFile) {
+                    val rootLocalPropsFile = File(project.rootProject.projectDir, "local.properties")
+                    val rootLocalProps = readPropertiesIfExist(rootLocalPropsFile)
+                    for (key in propertyKeys) {
+                        val mode = parseCustomBuildMode(rootLocalProps.getProperty(key))
+                        if (mode != null) {
+                            return mode
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                // Ignore exceptions when reading local.properties on mocks or invalid projects
+            }
+        }
+
+        return null
     }
 
     /**
@@ -837,7 +944,7 @@ object FlutterPluginUtils {
         pluginHandler: PluginHandler,
         engineVersion: String
     ) {
-        val flutterBuildMode: String = buildModeFor(buildType)
+        val flutterBuildMode: String = buildModeFor(buildType, project)
         if (!supportsBuildMode(project, flutterBuildMode)) {
             project.logger.quiet(
                 "Project does not support Flutter build mode: $flutterBuildMode, " +

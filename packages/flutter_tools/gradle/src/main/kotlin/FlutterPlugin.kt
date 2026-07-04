@@ -410,7 +410,7 @@ class FlutterPlugin : Plugin<Project> {
                         if (variant.flavorName != null && variant.flavorName.isNotEmpty()) {
                             filename += "-${FlutterPluginUtils.lowercase(variant.flavorName)}"
                         }
-                        filename += "-${FlutterPluginUtils.buildModeFor(variant.buildType)}"
+                        filename += "-${FlutterPluginUtils.buildModeFor(variant.buildType, projectToAddTasksTo)}"
                         projectToAddTasksTo.copy {
                             from(File("$outputDirectoryStr/${output.outputFileName}"))
                             into(projectToAddTasksTo.layout.buildDirectory.dir("outputs/flutter-apk"))
@@ -481,8 +481,8 @@ class FlutterPlugin : Plugin<Project> {
                     //    variant is `debug`.
                     // 3. Otherwise, the equivalent Flutter variant is `release`.
                     val variantBuildMode: String =
-                        FlutterPluginUtils.buildModeFor(libraryVariant.buildType)
-                    if (FlutterPluginUtils.buildModeFor(appProjectVariant.buildType) != variantBuildMode) {
+                        FlutterPluginUtils.buildModeFor(libraryVariant.buildType, projectToAddTasksTo)
+                    if (FlutterPluginUtils.buildModeFor(appProjectVariant.buildType, appProject) != variantBuildMode) {
                         return@applicationVariantAll
                     }
                     copyFlutterAssetsTask = copyFlutterAssetsTask ?: addFlutterDeps(
@@ -696,7 +696,7 @@ class FlutterPlugin : Plugin<Project> {
             val isUsedAsSubproject: Boolean =
                 packageAssets != null && cleanPackageAssets != null && !isBuildingAar
 
-            val variantBuildMode: String = FlutterPluginUtils.buildModeFor(variant.buildType)
+            val variantBuildMode: String = FlutterPluginUtils.buildModeFor(variant.buildType, project)
             val flavorValue: String = variant.flavorName
             val taskName: String = flutterCompileTaskName(variant.name)
             // The task provider below will shadow a lot of the variable names, so provide this reference
