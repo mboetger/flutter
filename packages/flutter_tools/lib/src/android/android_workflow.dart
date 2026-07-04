@@ -572,8 +572,9 @@ class AndroidLicenseValidator extends DoctorValidator {
 
   String _messageForSdkManagerError(List<String> androidSdkStderr, int exitCode) {
     final String sdkManagerPath = _androidSdk!.sdkManagerPath!;
+    final String stderr = androidSdkStderr.join();
 
-    final bool failedDueToJdkIncompatibility = androidSdkStderr.join().contains(
+    final bool failedDueToJdkIncompatibility = stderr.contains(
       RegExp(
         r'java\.lang\.UnsupportedClassVersionError.*SdkManagerCli '
         r'has been compiled by a more recent version of the Java Runtime',
@@ -582,11 +583,27 @@ class AndroidLicenseValidator extends DoctorValidator {
 
     if (failedDueToJdkIncompatibility) {
       return 'Android sdkmanager tool was found, but failed to run ($sdkManagerPath): "exited code $exitCode".\n'
-          'It appears the version of the Java binary used (${_java!.binaryPath}) is '
+          'It appears the version of the Java binary used (${_java?.binaryPath ?? 'unknown'}) is '
           'too out-of-date and is incompatible with the Android sdkmanager tool.\n'
           'If the Java binary came bundled with Android Studio, consider updating '
           'your installation of Android studio. Alternatively, you can uninstall '
           'the Android SDK command-line tools and install an earlier version. ';
+    }
+
+    final bool failedDueToJaxb =
+        (stderr.contains('NoClassDefFoundError') || stderr.contains('ClassNotFoundException')) &&
+        (stderr.contains('javax/xml/bind') || stderr.contains('javax.xml.bind'));
+
+    if (failedDueToJaxb) {
+      return 'Android sdkmanager tool was found, but failed to run ($sdkManagerPath): "exited code $exitCode".\n'
+          'It appears the version of the Android SDK command-line tools is '
+          'incompatible with the version of the Java binary used (${_java?.binaryPath ?? 'unknown'}).\n'
+          'This error occurs because older versions of the command-line tools '
+          'rely on javax/xml/bind (JAXB), which was included in Java 1.8 but '
+          'removed in newer Java versions.\n'
+          'Consider updating your Android SDK command-line tools to a newer '
+          'version. Alternatively, you can use Java 1.8 or configure Flutter to '
+          'use a compatible Java binary with `flutter config --jdk-dir=<path>`. ';
     }
 
     return _userMessages.androidCannotRunSdkManager(

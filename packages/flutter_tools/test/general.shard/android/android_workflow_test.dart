@@ -714,6 +714,57 @@ Android sdkmanager tool was found, but failed to run
     },
   );
 
+  testWithoutContext(
+    'Asks user to update Java or command-line tools when sdkmanager fails with NoClassDefFoundError for javax.xml.bind (Java > 8 incompatibility)',
+    () async {
+      const sdkManagerPath = '/foo/bar/sdkmanager';
+      sdk.sdkManagerPath = sdkManagerPath;
+      final logger = BufferLogger.test();
+      processManager.addCommand(
+        FakeCommand(
+          command: const <String>[sdkManagerPath, '--licenses'],
+          exitCode: 1,
+          stderr: r'''
+Exception in thread "main" java.lang.NoClassDefFoundError: javax/xml/bind/annotation/XmlSchema
+        at com.android.repository.api.SchemaModule$SchemaModuleVersion.<init>(SchemaModule.java:156)
+        at com.android.repository.api.SchemaModule.<init>(SchemaModule.java:75)
+        at com.android.sdklib.repository.AndroidSdkHandler.<clinit>(AndroidSdkHandler.java:81)
+        at com.android.sdklib.tool.sdkmanager.SdkManagerCli.main(SdkManagerCli.java:73)
+        at com.android.sdklib.tool.sdkmanager.SdkManagerCli.main(SdkManagerCli.java:48)
+Caused by: java.lang.ClassNotFoundException: javax.xml.bind.annotation.XmlSchema
+        at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:581)
+        at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:178)
+        at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:522)
+        ... 5 more
+''',
+          stdin: IgnoringStdin(),
+        ),
+      );
+
+      final licenseValidator = AndroidLicenseValidator(
+        java: FakeJava(),
+        androidSdk: sdk,
+        processManager: processManager,
+        platform: FakePlatform(environment: <String, String>{'HOME': '/home/me'}),
+        stdio: stdio,
+        logger: logger,
+        userMessages: UserMessages(),
+      );
+
+      await expectLater(
+        licenseValidator.runLicenseManager(),
+        throwsToolExit(
+          message: RegExp(
+            r'.*(consider updating.*command-line tools|incompatible with the Android sdkmanager|version of the Java binary|Java.*1\.8|javax/xml/bind).*',
+            caseSensitive: false,
+          ),
+        ),
+      );
+      expect(processManager, hasNoRemainingExpectations);
+      expect(stdio.stderr.getAndClear(), contains('NoClassDefFoundError'));
+    },
+  );
+
   testUsingContext('Mentions that JDK is provided by latest Android Studio Installation', () async {
     // Mock a pass through scenario to reach _checkJavaVersion()
     sdk
