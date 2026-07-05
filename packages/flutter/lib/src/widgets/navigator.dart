@@ -5947,7 +5947,6 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin, Res
   @override
   Widget build(BuildContext context) {
     assert(!_debugLocked);
-    assert(_history.isNotEmpty);
 
     // Hides the HeroControllerScope for the widget subtree so that the other
     // nested navigator underneath will not pick up the hero controller above
