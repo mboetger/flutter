@@ -865,7 +865,10 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     // Notify platform views that they are now attached to a FlutterView.
     for (int index = 0; index < platformViews.size(); index++) {
       final PlatformView view = platformViews.valueAt(index);
-      view.onFlutterViewAttached(flutterView);
+      try {
+        view.onFlutterViewAttached(flutterView);
+      } catch (AbstractMethodError ignore) {
+      }
     }
   }
 
@@ -896,7 +899,10 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     // Notify that the platform view have been detached from FlutterView.
     for (int index = 0; index < platformViews.size(); index++) {
       final PlatformView view = platformViews.valueAt(index);
-      view.onFlutterViewDetached();
+      try {
+        view.onFlutterViewDetached();
+      } catch (AbstractMethodError ignore) {
+      }
     }
   }
 
@@ -906,7 +912,10 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
       // There is currently no FlutterView that we are attached to.
       return;
     }
-    view.onFlutterViewAttached(flutterView);
+    try {
+      view.onFlutterViewAttached(flutterView);
+    } catch (AbstractMethodError ignore) {
+    }
   }
 
   @Override

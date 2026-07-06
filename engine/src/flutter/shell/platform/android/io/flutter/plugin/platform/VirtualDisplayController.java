@@ -247,7 +247,10 @@ class VirtualDisplayController {
     if (presentation == null || presentation.getView() == null) {
       return;
     }
-    presentation.getView().onFlutterViewAttached(flutterView);
+    try {
+      presentation.getView().onFlutterViewAttached(flutterView);
+    } catch (AbstractMethodError ignore) {
+    }
   }
 
   /** See {@link PlatformView#onFlutterViewDetached()} */
@@ -255,21 +258,30 @@ class VirtualDisplayController {
     if (presentation == null || presentation.getView() == null) {
       return;
     }
-    presentation.getView().onFlutterViewDetached();
+    try {
+      presentation.getView().onFlutterViewDetached();
+    } catch (AbstractMethodError ignore) {
+    }
   }
 
   /*package*/ void onInputConnectionLocked() {
     if (presentation == null || presentation.getView() == null) {
       return;
     }
-    presentation.getView().onInputConnectionLocked();
+    try {
+      presentation.getView().onInputConnectionLocked();
+    } catch (AbstractMethodError ignore) {
+    }
   }
 
   /*package*/ void onInputConnectionUnlocked() {
     if (presentation == null || presentation.getView() == null) {
       return;
     }
-    presentation.getView().onInputConnectionUnlocked();
+    try {
+      presentation.getView().onInputConnectionUnlocked();
+    } catch (AbstractMethodError ignore) {
+    }
   }
 
   public View getView() {
@@ -299,6 +311,7 @@ class VirtualDisplayController {
     virtualDisplay.release();
     final DisplayManager displayManager =
         (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
+    renderTarget.resize(width, height);
     int flags = 0;
     virtualDisplay =
         displayManager.createVirtualDisplay(
