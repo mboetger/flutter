@@ -30,10 +30,14 @@ void configureProject(Project project, String outputDir) {
         }
     }
 
+    String repoUrl = "${outputDir}/outputs/repo"
+    if (!outputDir.endsWith("build/host") && !outputDir.endsWith("build\\host") && !outputDir.endsWith("build/host/") && !outputDir.endsWith("build\\host\\")) {
+        repoUrl = "${outputDir}"
+    }
     project.publishing {
         repositories {
             maven {
-                url = project.file("${outputDir}/outputs/repo").toURI()
+                url = project.file(repoUrl).toURI()
             }
         }
     }

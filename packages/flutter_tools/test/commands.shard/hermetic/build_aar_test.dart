@@ -165,4 +165,72 @@ flutter:
       Analytics: () => fakeAnalytics,
     },
   );
+
+  testUsingContext(
+    'will build an AAR for a module with --output-dir without host/outputs/repo',
+    () async {
+      fs.file('pubspec.yaml').writeAsStringSync('''
+name: foo_bar
+
+flutter:
+  module:
+    foo: bar
+''');
+      final Directory dotAndroidDir = fs.directory('.android')..createSync(recursive: true);
+      dotAndroidDir.childFile('gradlew').createSync();
+
+      processManager.addCommands(<FakeCommand>[
+        const FakeCommand(command: <String>['chmod', '755', 'flutter/bin/cache/artifacts']),
+        const FakeCommand(command: <String>['which', 'java']),
+        ...<String>['Debug', 'Profile', 'Release'].map(
+          (String buildMode) => FakeCommand(
+            command: <Pattern>[
+              '/.android/gradlew',
+              '-I=/flutter/packages/flutter_tools/gradle/aar_init_script.gradle',
+              ...List<RegExp>.filled(1, RegExp(r'-P[a-zA-Z-]+=.*')),
+              '-Poutput-dir=/custom/repo',
+              ...List<RegExp>.filled(2, RegExp(r'-P[a-zA-Z-]+=.*')),
+              '-q',
+              ...List<RegExp>.filled(6, RegExp(r'-P[a-zA-Z-]+=.*')),
+              'assembleAar$buildMode',
+            ],
+            onRun: (_) => fs.directory('/custom/repo').createSync(recursive: true),
+          ),
+        ),
+      ]);
+
+      cache.getArtifactDirectory('gradle_wrapper').createSync(recursive: true);
+
+      final command = BuildCommand(
+        androidSdk: FakeAndroidSdk(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        fileSystem: fs,
+        logger: logger,
+        osUtils: FakeOperatingSystemUtils(),
+        config: FakeConfig(),
+        platform: FakePlatform(),
+        fileSystemUtils: FakeFileSystemUtils(),
+        terminal: FakeTerminal(),
+        plistParser: FakePlistParser(),
+        processUtils: FakeProcessUtils(),
+        processManager: FakeProcessManager.any(),
+        templateRenderer: FakeTemplateRenderer(),
+        xcode: FakeXcode(),
+        artifacts: FakeArtifacts(),
+        cache: FakeCache(),
+        flutterVersion: FakeFlutterVersion(),
+      );
+
+      await createTestCommandRunner(
+        command,
+      ).run(const <String>['build', 'aar', '--no-pub', '--output-dir', '/custom/repo']);
+      expect(processManager, hasNoRemainingExpectations);
+    },
+    overrides: <Type, Generator>{
+      FileSystem: () => fs,
+      Platform: () => platform,
+      ProcessManager: () => processManager,
+      Analytics: () => fakeAnalytics,
+    },
+  );
 }

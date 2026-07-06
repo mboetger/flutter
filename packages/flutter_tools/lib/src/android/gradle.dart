@@ -103,7 +103,10 @@ final apkAnalyzerBinaryName = globals.platform.isWindows ? 'apkanalyzer.bat' : '
 
 /// The directory where the repo is generated.
 /// Only applicable to AARs.
-Directory getRepoDirectory(Directory buildDirectory) {
+Directory getRepoDirectory(Directory buildDirectory, {bool isCustomOutput = false}) {
+  if (isCustomOutput) {
+    return buildDirectory;
+  }
   return buildDirectory.childDirectory('outputs').childDirectory('repo');
 }
 
@@ -197,10 +200,11 @@ class AndroidGradleBuilder implements AndroidBuilder {
     String? outputDirectoryPath,
     required String buildNumber,
   }) async {
+    final isCustomOutput = outputDirectoryPath != null;
     Directory outputDirectory = _fileSystem.directory(
       outputDirectoryPath ?? project.android.buildDirectory,
     );
-    if (project.isModule) {
+    if (!isCustomOutput && project.isModule) {
       // Module projects artifacts are located in `build/host`.
       outputDirectory = outputDirectory.childDirectory('host');
     }
@@ -213,6 +217,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
         target: target,
         outputDirectory: outputDirectory,
         buildNumber: buildNumber,
+        isCustomOutput: isCustomOutput,
       );
     }
     printHowToConsumeAar(
@@ -220,7 +225,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
         return androidBuildInfo.buildInfo.modeName;
       }).toSet(),
       androidPackage: project.manifest.androidPackage,
-      repoDirectory: getRepoDirectory(outputDirectory),
+      repoDirectory: getRepoDirectory(outputDirectory, isCustomOutput: isCustomOutput),
       buildNumber: buildNumber,
       logger: _logger,
       fileSystem: _fileSystem,
@@ -775,6 +780,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     required String target,
     required Directory outputDirectory,
     required String buildNumber,
+    bool isCustomOutput = false,
   }) async {
     final FlutterManifest manifest = project.manifest;
     if (!manifest.isModule) {
@@ -841,7 +847,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
 
       // Copy the local engine repo in the output directory.
       try {
-        copyDirectory(localEngineRepo, getRepoDirectory(outputDirectory));
+        copyDirectory(
+          localEngineRepo,
+          getRepoDirectory(outputDirectory, isCustomOutput: isCustomOutput),
+        );
       } on FileSystemException catch (error, st) {
         throwToolExit(
           'Failed to copy the local engine ${localEngineRepo.path} repo '
@@ -889,7 +898,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
         exitCode: result.exitCode,
       );
     }
-    final Directory repoDirectory = getRepoDirectory(outputDirectory);
+    final Directory repoDirectory = getRepoDirectory(
+      outputDirectory,
+      isCustomOutput: isCustomOutput,
+    );
     if (!repoDirectory.existsSync()) {
       _logger.printStatus(result.stdout, wrap: false);
       _logger.printError(result.stderr, wrap: false);
