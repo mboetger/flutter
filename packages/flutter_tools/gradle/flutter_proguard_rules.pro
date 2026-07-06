@@ -12,3 +12,10 @@
 # See https://github.com/flutter/flutter/issues/154580.
 -if class * implements io.flutter.embedding.engine.plugins.FlutterPlugin
 -keep,allowshrinking,allowobfuscation class <1>
+
+# Keep ContentProvider and FileProvider implementations referenced in AndroidManifest.xml
+# so that ProGuard/R8 does not strip them in release builds.
+# See https://github.com/flutter/flutter/issues/74841.
+-keep public class * extends android.content.ContentProvider
+-keep public class * extends androidx.core.content.FileProvider
+
