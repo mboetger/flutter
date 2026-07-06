@@ -1152,6 +1152,17 @@ abstract class State<T extends StatefulWidget> with Diagnosticable {
   /// will, as a result of whatever state change was detected, change its result
   /// meaningfully.
   ///
+  /// Unlike continuous-rendering engines that repaint at the display's refresh
+  /// rate (e.g., 60 Hz or 120 Hz) regardless of visual changes, Flutter uses an
+  /// on-demand rendering model. Calling [setState] notifies the framework that
+  /// the widget tree is dirty and schedules a frame. If [setState] is called
+  /// periodically (for example, once every 200ms via a [Timer]), the framework
+  /// will only schedule and render frames at that specific rate (e.g., 5 frames
+  /// per second). Idling between state changes is intentional and conserves
+  /// CPU and battery life. Furthermore, if [setState] is called multiple times
+  /// within a single frame interval, the framework coalesces those updates into
+  /// a single [build].
+  ///
   /// See also:
   ///
   ///  * [StatefulWidget], the API documentation for which has a section on
