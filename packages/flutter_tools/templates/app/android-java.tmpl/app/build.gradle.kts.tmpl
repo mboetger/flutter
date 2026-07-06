@@ -33,6 +33,9 @@ android {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
+            // Note: If you configure App Links (assetlinks.json) on a web server
+            // with a release certificate fingerprint, domain verification will fail
+            // until you configure your release signing config here.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
