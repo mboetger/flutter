@@ -34,6 +34,7 @@ import android.view.ViewGroup;
 import android.view.ViewStructure;
 import android.view.WindowInsets;
 import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
 import android.view.autofill.AutofillValue;
 import android.view.inputmethod.EditorInfo;
@@ -1075,7 +1076,8 @@ public class FlutterView extends FrameLayout
    * @param currentView The root view.
    * @return A descendant of currentView or currentView itself.
    */
-  @SuppressLint("DiscouragedPrivateApi")
+  @SuppressWarnings("deprecation")
+  @SuppressLint({"DiscouragedPrivateApi", "DeprecatedSinceApi"})
   private View findViewByAccessibilityIdRootedAtCurrentView(int accessibilityId, View currentView) {
     Method getAccessibilityViewIdMethod;
     try {
@@ -1090,6 +1092,17 @@ public class FlutterView extends FrameLayout
       }
     } catch (IllegalAccessException | InvocationTargetException ignored) {
       return null;
+    }
+    AccessibilityNodeProvider provider = currentView.getAccessibilityNodeProvider();
+    if (provider != null) {
+      try {
+        AccessibilityNodeInfo nodeInfo = provider.createAccessibilityNodeInfo(accessibilityId);
+        if (nodeInfo != null) {
+          nodeInfo.recycle();
+          return currentView;
+        }
+      } catch (Exception ignored) {
+      }
     }
     if (currentView instanceof ViewGroup) {
       for (int i = 0; i < ((ViewGroup) currentView).getChildCount(); i++) {

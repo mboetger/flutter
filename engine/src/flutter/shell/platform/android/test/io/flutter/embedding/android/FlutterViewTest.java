@@ -46,6 +46,8 @@ import android.view.Surface;
 import android.view.View;
 import android.view.ViewStructure;
 import android.view.WindowInsets;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
 import android.view.autofill.AutofillValue;
 import android.widget.FrameLayout;
 import androidx.core.util.Consumer;
@@ -1060,6 +1062,75 @@ public class FlutterViewTest {
     Integer accessibilityViewId = (Integer) getAccessibilityViewIdMethod.invoke(childView2);
 
     assertEquals(childView2, flutterView.findViewByAccessibilityIdTraversal(accessibilityViewId));
+  }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_28)
+  @SuppressWarnings("deprecation")
+  public void findViewByAccessibilityIdTraversal_returnsEmbeddedViewWithVirtualNodesOnAndroid28() {
+    FlutterView flutterView = new FlutterView(ctx);
+
+    // Simulate an embedded platform view (e.g. WebView in SurfaceAndroidWebView / Hybrid
+    // Composition)
+    // that generates virtual accessibility nodes for its internal contents (e.g. HTML input
+    // fields).
+    final int virtualNodeId = 5678;
+    View embeddedView =
+        new View(ctx) {
+          @Override
+          public AccessibilityNodeProvider getAccessibilityNodeProvider() {
+            return new AccessibilityNodeProvider() {
+              @Override
+              public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualViewId) {
+                if (virtualViewId == virtualNodeId) {
+                  AccessibilityNodeInfo nodeInfo = AccessibilityNodeInfo.obtain();
+                  nodeInfo.setViewIdResourceName("com.example:id/my_html_input");
+                  return nodeInfo;
+                }
+                return null;
+              }
+            };
+          }
+        };
+
+    flutterView.addView(embeddedView);
+
+    // On Android 28 and below, findViewByAccessibilityIdTraversal must locate the embedded view
+    // responsible for the virtual accessibility node so that uiautomatorviewer and accessibility
+    // services can retrieve node information such as resourceId / view ID resource name.
+    assertEquals(embeddedView, flutterView.findViewByAccessibilityIdTraversal(virtualNodeId));
+  }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_29)
+  @SuppressWarnings("deprecation")
+  public void findViewByAccessibilityIdTraversal_returnsNullForEmbeddedViewOnAndroid29() {
+    FlutterView flutterView = new FlutterView(ctx);
+
+    final int virtualNodeId = 5678;
+    View embeddedView =
+        new View(ctx) {
+          @Override
+          public AccessibilityNodeProvider getAccessibilityNodeProvider() {
+            return new AccessibilityNodeProvider() {
+              @Override
+              public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualViewId) {
+                if (virtualViewId == virtualNodeId) {
+                  AccessibilityNodeInfo nodeInfo = AccessibilityNodeInfo.obtain();
+                  nodeInfo.setViewIdResourceName("com.example:id/my_html_input");
+                  return nodeInfo;
+                }
+                return null;
+              }
+            };
+          }
+        };
+
+    flutterView.addView(embeddedView);
+
+    // On Android Q (API 29) and above, Android does not call findViewByAccessibilityIdTraversal
+    // on the root view; instead, it directly queries each view's AccessibilityNodeProvider.
+    assertNull(flutterView.findViewByAccessibilityIdTraversal(virtualNodeId));
   }
 
   @Test
