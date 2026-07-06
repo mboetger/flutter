@@ -1670,6 +1670,90 @@ void main() {
     expect(tester.takeException(), null);
   });
 
+  testWidgets('PageView animateToPage works when adding child dynamically inside setState', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for https://github.com/flutter/flutter/issues/71189.
+    final controller = PageController();
+    addTearDown(controller.dispose);
+
+    late StateSetter setStateCallback;
+    var pageCount = 1;
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            setStateCallback = setState;
+            return PageView(
+              physics: const NeverScrollableScrollPhysics(),
+              controller: controller,
+              children: List<Widget>.generate(pageCount, (int index) => Text('Page $index')),
+            );
+          },
+        ),
+      ),
+    );
+
+    expect(controller.page, 0.0);
+    expect(find.text('Page 0'), findsOneWidget);
+    expect(find.text('Page 1'), findsNothing);
+
+    setStateCallback(() {
+      pageCount = 2;
+      controller.animateToPage(
+        1,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
+    await tester.pumpAndSettle();
+
+    expect(controller.page, 1.0);
+    expect(find.text('Page 1'), findsOneWidget);
+  }, variant: TargetPlatformVariant.all());
+
+  testWidgets('PageView jumpToPage works when adding child dynamically inside setState', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for https://github.com/flutter/flutter/issues/71189.
+    final controller = PageController();
+    addTearDown(controller.dispose);
+
+    late StateSetter setStateCallback;
+    var pageCount = 1;
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            setStateCallback = setState;
+            return PageView(
+              physics: const NeverScrollableScrollPhysics(),
+              controller: controller,
+              children: List<Widget>.generate(pageCount, (int index) => Text('Page $index')),
+            );
+          },
+        ),
+      ),
+    );
+
+    expect(controller.page, 0.0);
+    expect(find.text('Page 0'), findsOneWidget);
+    expect(find.text('Page 1'), findsNothing);
+
+    setStateCallback(() {
+      pageCount = 2;
+      controller.jumpToPage(1);
+    });
+    await tester.pumpAndSettle();
+
+    expect(controller.page, 1.0);
+    expect(find.text('Page 1'), findsOneWidget);
+  }, variant: TargetPlatformVariant.all());
+
   testWidgets('PageView respects scrollCacheExtent', (WidgetTester tester) async {
     final controller = PageController();
     addTearDown(controller.dispose);
