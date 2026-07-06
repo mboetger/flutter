@@ -36,7 +36,7 @@ on an Android device or emulator.
 - [`platform_view/virtual_display_platform_view`](#platform_viewvirtual_display_platform_view)
 - [`platform_view_tap_color_change`](#platform_view_tap_color_change)
 - [`system_ui_mode_transitions`](#system_ui_mode_transitions)
-
+- [`spawn_engine_works`](#spawn_engine_works)
 ### `flutter_rendered_blue_rectangle`
 
 This app displays a full screen blue rectangle. It mostly serves as a test that
@@ -165,7 +165,21 @@ $ flutter run lib/system_ui_mode_transitions_main.dart
 
 # Run the test
 $ flutter drive lib/system_ui_mode_transitions_main.dart
-```
+### `spawn_engine_works`
+
+This app tests spawning an engine from a spawner/group on Android and destroying
+the spawner engine while ensuring the spawned engine still works. When launched,
+the initial spawner engine sends a request over a MethodChannel to the native
+embedder (`MainActivity`) to spawn a new engine and destroy the spawner engine.
+The spawned engine then renders text with a bogus font (testing font fallback)
+and verifies its engine ID is greater than 1.
+
+```sh
+# Run the app
+$ flutter run lib/spawn_engine_works_main.dart
+
+# Run the test
+$ flutter drive lib/spawn_engine_works_main.dart```
 
 ## Deflaking
 

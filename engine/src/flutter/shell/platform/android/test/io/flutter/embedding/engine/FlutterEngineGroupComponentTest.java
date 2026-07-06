@@ -5,6 +5,7 @@
 package io.flutter.embedding.engine;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.nullable;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -357,5 +359,74 @@ public class FlutterEngineGroupComponentTest {
         waitForRestorationData, secondEngine.getRestorationChannel().waitForRestorationData);
     assertEquals(controller, secondEngine.getPlatformViewsController());
     assertEquals(0, GeneratedPluginRegistrant.getRegisteredEngines().size());
+  }
+
+  @Test
+  public void spawnedEngineStillWorksAfterSpawnerDestroyed() {
+    FlutterEngine firstEngine =
+        engineGroupUnderTest.createAndRunEngine(
+            new FlutterEngineGroup.Options(ctx).setDartEntrypoint(mock(DartEntrypoint.class)));
+    assertEquals(1, engineGroupUnderTest.activeEngines.size());
+
+    when(mockFlutterJNI.isAttached()).thenReturn(true);
+    FlutterJNI secondMockFlutterJNI = mock(FlutterJNI.class);
+    when(secondMockFlutterJNI.isAttached()).thenReturn(true);
+    doReturn(secondMockFlutterJNI)
+        .when(mockFlutterJNI)
+        .spawn(
+            nullable(String.class),
+            nullable(String.class),
+            nullable(String.class),
+            nullable(List.class),
+            eq(2L));
+
+    FlutterEngine secondEngine =
+        engineGroupUnderTest.createAndRunEngine(
+            new FlutterEngineGroup.Options(ctx).setDartEntrypoint(mock(DartEntrypoint.class)));
+
+    assertEquals(2, engineGroupUnderTest.activeEngines.size());
+    assertTrue(secondEngine.getDartExecutor().isExecutingDart());
+
+    // Destroy the spawner engine (firstEngine).
+    firstEngine.destroy();
+
+    // Verify firstEngine is destroyed and removed from activeEngines.
+    assertEquals(1, engineGroupUnderTest.activeEngines.size());
+    assertEquals(secondEngine, engineGroupUnderTest.activeEngines.get(0));
+    verify(mockFlutterJNI, times(1)).detachFromNativeAndReleaseResources();
+
+    // Verify secondEngine is NOT destroyed and continues to function.
+    verify(secondMockFlutterJNI, never()).detachFromNativeAndReleaseResources();
+    assertTrue(secondEngine.getDartExecutor().isExecutingDart());
+    assertNotNull(secondEngine.getRenderer());
+    assertNotNull(secondEngine.getPlatformViewsController());
+
+    // Verify that the surviving spawned engine can spawn subsequent engines in the group.
+    FlutterJNI thirdMockFlutterJNI = mock(FlutterJNI.class);
+    when(thirdMockFlutterJNI.isAttached()).thenReturn(true);
+    doReturn(thirdMockFlutterJNI)
+        .when(secondMockFlutterJNI)
+        .spawn(
+            nullable(String.class),
+            nullable(String.class),
+            nullable(String.class),
+            nullable(List.class),
+            eq(3L));
+
+    FlutterEngine thirdEngine =
+        engineGroupUnderTest.createAndRunEngine(
+            new FlutterEngineGroup.Options(ctx).setDartEntrypoint(mock(DartEntrypoint.class)));
+    assertEquals(2, engineGroupUnderTest.activeEngines.size());
+    assertTrue(thirdEngine.getDartExecutor().isExecutingDart());
+
+    // Destroy the remaining spawned engines and verify clean shutdown.
+    thirdEngine.destroy();
+    assertEquals(1, engineGroupUnderTest.activeEngines.size());
+    assertEquals(secondEngine, engineGroupUnderTest.activeEngines.get(0));
+    verify(thirdMockFlutterJNI, times(1)).detachFromNativeAndReleaseResources();
+
+    secondEngine.destroy();
+    assertEquals(0, engineGroupUnderTest.activeEngines.size());
+    verify(secondMockFlutterJNI, times(1)).detachFromNativeAndReleaseResources();
   }
 }
