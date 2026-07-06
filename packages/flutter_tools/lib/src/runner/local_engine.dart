@@ -137,16 +137,37 @@ class LocalEngineLocator {
     // When the local engine is an absolute path to a variant inside the
     // out directory, parse the engine source.
     // --local-engine /path/to/cache/builder/src/out/host_debug_unopt
-    if (_fileSystem.path.isAbsolute(buildPath)) {
-      final Directory buildDirectory = _fileSystem.directory(buildPath);
-      final Directory outDirectory = buildDirectory.parent;
-      final Directory srcDirectory = outDirectory.parent;
-      if (buildDirectory.existsSync() &&
-          outDirectory.basename == 'out' &&
-          srcDirectory.basename == 'src') {
-        _logger.printTrace('Parsed engine source from local engine as ${srcDirectory.path}.');
-        return srcDirectory.path;
+    final List<String> buildPaths = buildPath
+        .split(',')
+        .map((String e) => e.trim())
+        .where((String e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+    if (buildPaths.isEmpty) {
+      return null;
+    }
+    String? resolvedSrcPath;
+    for (final path in buildPaths) {
+      if (_fileSystem.path.isAbsolute(path)) {
+        final Directory buildDirectory = _fileSystem.directory(path);
+        final Directory outDirectory = buildDirectory.parent;
+        final Directory srcDirectory = outDirectory.parent;
+        if (buildDirectory.existsSync() &&
+            outDirectory.basename == 'out' &&
+            srcDirectory.basename == 'src') {
+          if (resolvedSrcPath != null && resolvedSrcPath != srcDirectory.path) {
+            throwToolExit(
+              'All --local-engine paths must point to the same engine source tree.',
+              exitCode: 2,
+            );
+          }
+          resolvedSrcPath = srcDirectory.path;
+        }
       }
+    }
+    if (resolvedSrcPath != null) {
+      _logger.printTrace('Parsed engine source from local engine as $resolvedSrcPath.');
+      return resolvedSrcPath;
     }
     return null;
   }
@@ -217,18 +238,32 @@ class LocalEngineLocator {
     String? engineBuildPath;
     String? engineHostBuildPath;
     if (localEngine != null) {
-      engineBuildPath = _fileSystem.path.normalize(
-        _fileSystem.path.join(engineSourcePath, 'out', localEngine),
-      );
-      if (!_fileSystem.isDirectorySync(engineBuildPath)) {
-        throwToolExit(_runnerNoEngineBuild(engineBuildPath), exitCode: 2);
+      final List<String> localEngines = localEngine
+          .split(',')
+          .map((String e) => e.trim())
+          .where((String e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+      if (localEngines.isEmpty) {
+        throwToolExit(_runnerNoEngineBuild(localEngine), exitCode: 2);
       }
+      final engineBuildPaths = <String>[];
+      for (final engineName in localEngines) {
+        final String path = _fileSystem.path.normalize(
+          _fileSystem.path.join(engineSourcePath, 'out', engineName),
+        );
+        if (!_fileSystem.isDirectorySync(path)) {
+          throwToolExit(_runnerNoEngineBuild(path), exitCode: 2);
+        }
+        engineBuildPaths.add(path);
+      }
+      engineBuildPath = engineBuildPaths.join(',');
 
       if (localHostEngine == null) {
         throwToolExit(_runnerLocalEngineRequiresHostEngine);
       }
       engineHostBuildPath = _fileSystem.path.normalize(
-        _fileSystem.path.join(_fileSystem.path.dirname(engineBuildPath), localHostEngine),
+        _fileSystem.path.join(_fileSystem.path.dirname(engineBuildPaths.first), localHostEngine),
       );
       if (!_fileSystem.isDirectorySync(engineHostBuildPath)) {
         throwToolExit(_runnerNoEngineBuild(engineHostBuildPath), exitCode: 2);

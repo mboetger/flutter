@@ -173,7 +173,7 @@ class FlutterCommandRunner extends CommandRunner<void> {
           'if any.',
     );
 
-    argParser.addOption(
+    argParser.addMultiOption(
       FlutterGlobalOptions.kLocalEngineOption,
       hide: !verboseHelp,
       help:
@@ -417,7 +417,12 @@ class FlutterCommandRunner extends CommandRunner<void> {
     // Set up the tooling configuration.
     final EngineBuildPaths? engineBuildPaths = await globals.localEngineLocator?.findEnginePath(
       engineSourcePath: topLevelResults[FlutterGlobalOptions.kLocalEngineSrcPathOption] as String?,
-      localEngine: topLevelResults[FlutterGlobalOptions.kLocalEngineOption] as String?,
+      localEngine:
+          ((topLevelResults[FlutterGlobalOptions.kLocalEngineOption] as List<String>?)
+                  ?.isNotEmpty ??
+              false)
+          ? (topLevelResults[FlutterGlobalOptions.kLocalEngineOption] as List<String>).join(',')
+          : null,
       localHostEngine: topLevelResults[FlutterGlobalOptions.kLocalEngineHostOption] as String?,
       localWebSdk: topLevelResults[FlutterGlobalOptions.kLocalWebSDKOption] as String?,
       packagePath: topLevelResults[FlutterGlobalOptions.kPackagesOption] as String?,

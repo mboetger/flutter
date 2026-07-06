@@ -266,8 +266,23 @@ class LocalEngineInfo {
   /// (platform), see [localHostName].
   final String hostOutPath;
 
+  /// The list of target engine build paths when multiple local engines are specified.
+  List<String> get targetOutPaths => targetOutPath
+      .split(',')
+      .map((String path) => path.trim())
+      .where((String path) => path.isNotEmpty)
+      .toList();
+
+  /// Safely derives the engine source root (e.g. /path/to/engine/src) using the first target path.
+  String get engineSourcePath =>
+      globals.fs.path.dirname(globals.fs.path.dirname(targetOutPaths.first));
+
   /// The name of the target (device) platform, i.e. `android_debug_unopt`.
-  String get localTargetName => globals.fs.path.basename(targetOutPath);
+  ///
+  /// For multi-engine builds, this returns the basename of the primary (first)
+  /// target path, which ensures compatibility with single-architecture desktop
+  /// and iOS builds as well as legacy tools and CMake scripts.
+  String get localTargetName => globals.fs.path.basename(targetOutPaths.first);
 
   /// The name of the host (build) platform, e.g. `host_debug_unopt`.
   String get localHostName => globals.fs.path.basename(hostOutPath);
@@ -1071,29 +1086,22 @@ class CachedLocalEngineArtifacts implements Artifacts {
       case Artifact.genSnapshotArm64:
       case Artifact.genSnapshotRiscv64:
       case Artifact.genSnapshotX64:
-        return _genSnapshotPath(artifact);
+        return _genSnapshotPath(artifact, platform: platform);
       case Artifact.flutterTester:
         return _flutterTesterPath(platform!);
       case Artifact.isolateSnapshotData:
       case Artifact.vmSnapshotData:
-        return _fileSystem.path.join(
-          localEngineInfo.targetOutPath,
-          'gen',
-          'flutter',
-          'lib',
-          'snapshot',
-          artifactFileName,
+        return _findFirstFileInTargetOutPaths(
+          _fileSystem.path.join('gen', 'flutter', 'lib', 'snapshot', artifactFileName),
         );
       case Artifact.icuData:
       case Artifact.flutterXcframework:
       case Artifact.flutterMacOSXcframework:
-        return _fileSystem.path.join(localEngineInfo.targetOutPath, artifactFileName);
+        return _findFirstFileInTargetOutPaths(artifactFileName!);
       case Artifact.platformKernelDill:
         if (platform == TargetPlatform.fuchsia_x64 || platform == TargetPlatform.fuchsia_arm64) {
-          return _fileSystem.path.join(
-            localEngineInfo.targetOutPath,
-            'flutter_runner_patched_sdk',
-            artifactFileName,
+          return _findFirstFileInTargetOutPaths(
+            _fileSystem.path.join('flutter_runner_patched_sdk', artifactFileName),
           );
         }
         return _fileSystem.path.join(_getFlutterPatchedSdkPath(mode), artifactFileName);
@@ -1101,29 +1109,42 @@ class CachedLocalEngineArtifacts implements Artifacts {
         return _fileSystem.path.join(_getFlutterPatchedSdkPath(mode), 'lib', artifactFileName);
       case Artifact.flutterFramework:
         return _getIosFrameworkPath(
-          localEngineInfo.targetOutPath,
+          _getEnginePathForPlatform(platform),
           environmentType,
           _fileSystem,
           _platform,
         );
       case Artifact.flutterFrameworkDsym:
         return _getIosFrameworkDsymPath(
-          localEngineInfo.targetOutPath,
+          _getEnginePathForPlatform(platform),
           environmentType,
           _fileSystem,
           _platform,
         );
       case Artifact.flutterMacOSFramework:
-        return _getMacOSFrameworkPath(localEngineInfo.targetOutPath, _fileSystem, _platform);
+        return _getMacOSFrameworkPath(_getEnginePathForPlatform(platform), _fileSystem, _platform);
       case Artifact.flutterMacOSFrameworkDsym:
-        return _getMacOSFrameworkDsymPath(localEngineInfo.targetOutPath, _fileSystem, _platform);
+        return _getMacOSFrameworkDsymPath(
+          _getEnginePathForPlatform(platform),
+          _fileSystem,
+          _platform,
+        );
       case Artifact.flutterPatchedSdkPath:
         // When using local engine always use [BuildMode.debug] regardless of
         // what was specified in [mode] argument because local engine will
         // have only one flutter_patched_sdk in standard location, that
         // is happen to be what debug(non-release) mode is using.
         if (platform == TargetPlatform.fuchsia_x64 || platform == TargetPlatform.fuchsia_arm64) {
-          return _fileSystem.path.join(localEngineInfo.targetOutPath, 'flutter_runner_patched_sdk');
+          for (final String path in localEngineInfo.targetOutPaths) {
+            final String fullPath = _fileSystem.path.join(path, 'flutter_runner_patched_sdk');
+            if (_fileSystem.directory(fullPath).existsSync()) {
+              return fullPath;
+            }
+          }
+          return _fileSystem.path.join(
+            localEngineInfo.targetOutPaths.first,
+            'flutter_runner_patched_sdk',
+          );
         }
         return _getFlutterPatchedSdkPath(BuildMode.debug);
       case Artifact.skyEnginePath:
@@ -1133,7 +1154,7 @@ class CachedLocalEngineArtifacts implements Artifacts {
         final modeName = mode!.isRelease ? 'release' : mode.toString();
         final dartBinaries = 'dart_binaries-$modeName-$hostPlatform';
         return _fileSystem.path.join(
-          localEngineInfo.targetOutPath,
+          _getEnginePathForPlatform(platform),
           'host_bundle',
           dartBinaries,
           'kernel_compiler.dart.snapshot',
@@ -1142,7 +1163,7 @@ class CachedLocalEngineArtifacts implements Artifacts {
         final jitOrAot = mode!.isJit ? '_jit' : '_aot';
         final productOrNo = mode.isRelease ? '_product' : '';
         return _fileSystem.path.join(
-          localEngineInfo.targetOutPath,
+          _getEnginePathForPlatform(platform),
           'flutter$jitOrAot${productOrNo}_runner-0.far',
         );
       case Artifact.fontSubset:
@@ -1168,14 +1189,22 @@ class CachedLocalEngineArtifacts implements Artifacts {
 
   @override
   String getEngineType(TargetPlatform platform, [BuildMode? mode]) {
-    return _fileSystem.path.basename(localEngineInfo.targetOutPath);
+    return localEngineInfo.targetOutPaths
+        .map((String path) => _fileSystem.path.basename(path))
+        .join(',');
   }
 
   String _getFlutterPatchedSdkPath(BuildMode? buildMode) {
-    return _fileSystem.path.join(
-      localEngineInfo.targetOutPath,
-      buildMode == BuildMode.release ? 'flutter_patched_sdk_product' : 'flutter_patched_sdk',
-    );
+    final subPath = buildMode == BuildMode.release
+        ? 'flutter_patched_sdk_product'
+        : 'flutter_patched_sdk';
+    for (final String path in localEngineInfo.targetOutPaths) {
+      final String fullPath = _fileSystem.path.join(path, subPath);
+      if (_fileSystem.directory(fullPath).existsSync()) {
+        return fullPath;
+      }
+    }
+    return _fileSystem.path.join(localEngineInfo.targetOutPaths.first, subPath);
   }
 
   String _getDartSdkPath() {
@@ -1199,7 +1228,55 @@ class CachedLocalEngineArtifacts implements Artifacts {
     );
   }
 
-  String _genSnapshotPath(Artifact artifact) {
+  String _getEnginePathForPlatform(TargetPlatform? platform) {
+    final List<String> paths = localEngineInfo.targetOutPaths;
+    if (platform == null || paths.length == 1) {
+      return paths.first;
+    }
+    for (final path in paths) {
+      if (platform == TargetPlatform.android_arm64 && path.contains('arm64')) {
+        return path;
+      }
+      if (platform == TargetPlatform.android_x64 && path.contains('x64')) {
+        return path;
+      }
+      if (platform == TargetPlatform.android_arm &&
+          !path.contains('arm64') &&
+          !path.contains('x64')) {
+        return path;
+      }
+      if ((platform == TargetPlatform.linux_arm64 ||
+              platform == TargetPlatform.windows_arm64 ||
+              platform == TargetPlatform.fuchsia_arm64 ||
+              platform == TargetPlatform.darwin ||
+              platform == TargetPlatform.ios) &&
+          path.contains('arm64')) {
+        return path;
+      }
+      if ((platform == TargetPlatform.linux_x64 ||
+              platform == TargetPlatform.windows_x64 ||
+              platform == TargetPlatform.fuchsia_x64) &&
+          path.contains('x64')) {
+        return path;
+      }
+      if (platform == TargetPlatform.linux_riscv64 && path.contains('riscv64')) {
+        return path;
+      }
+    }
+    return paths.first;
+  }
+
+  String _findFirstFileInTargetOutPaths(String subPath) {
+    for (final String path in localEngineInfo.targetOutPaths) {
+      final String fullPath = _fileSystem.path.join(path, subPath);
+      if (_fileSystem.file(fullPath).existsSync()) {
+        return fullPath;
+      }
+    }
+    return _fileSystem.path.join(localEngineInfo.targetOutPaths.first, subPath);
+  }
+
+  String _genSnapshotPath(Artifact artifact, {TargetPlatform? platform}) {
     const clangDirs = <String>[
       '.',
       'universal',
@@ -1210,14 +1287,23 @@ class CachedLocalEngineArtifacts implements Artifacts {
       'clang_riscv64',
     ];
     final String genSnapshotName = artifact.getFileName(_platform);
+    final String targetOutPath = _getEnginePathForPlatform(platform);
     for (final clangDir in clangDirs) {
       final String genSnapshotPath = _fileSystem.path.join(
-        localEngineInfo.targetOutPath,
+        targetOutPath,
         clangDir,
         genSnapshotName,
       );
       if (_processManager.canRun(genSnapshotPath)) {
         return genSnapshotPath;
+      }
+    }
+    for (final String path in localEngineInfo.targetOutPaths) {
+      for (final clangDir in clangDirs) {
+        final String genSnapshotPath = _fileSystem.path.join(path, clangDir, genSnapshotName);
+        if (_processManager.canRun(genSnapshotPath)) {
+          return genSnapshotPath;
+        }
       }
     }
     throw Exception('Unable to find $genSnapshotName');
@@ -1570,7 +1656,8 @@ FileSystemEntity _resolveWebArtifact(
 }
 
 String _getFlutterPrebuiltsPath(String baseOutPath, FileSystem fileSystem) {
-  final String engineSrcPath = fileSystem.path.dirname(fileSystem.path.dirname(baseOutPath));
+  final String firstPath = baseOutPath.split(',').first.trim();
+  final String engineSrcPath = fileSystem.path.dirname(fileSystem.path.dirname(firstPath));
   return fileSystem.path.join(engineSrcPath, 'flutter', 'prebuilts');
 }
 

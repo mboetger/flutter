@@ -286,9 +286,8 @@ void _writeGeneratedFlutterConfig(
   };
   final LocalEngineInfo? localEngineInfo = globals.artifacts?.localEngineInfo;
   if (localEngineInfo != null) {
-    final String targetOutPath = localEngineInfo.targetOutPath;
     // Get the engine source root $ENGINE/src/out/foo_bar_baz -> $ENGINE/src
-    environment['FLUTTER_ENGINE'] = globals.fs.path.dirname(globals.fs.path.dirname(targetOutPath));
+    environment['FLUTTER_ENGINE'] = localEngineInfo.engineSourcePath;
     environment['LOCAL_ENGINE'] = localEngineInfo.localTargetName;
     environment['LOCAL_ENGINE_HOST'] = localEngineInfo.localHostName;
   }

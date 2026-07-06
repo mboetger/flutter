@@ -230,14 +230,22 @@ class FlutterPlugin : Plugin<Project> {
         FlutterPluginUtils.forceNdkDownload(project, flutterRootPath)
 
         if (FlutterPluginUtils.shouldProjectUseLocalEngine(project)) {
-            // This is required to pass the local engine to flutter build aot.
             val engineOutPath: String = project.properties["local-engine-out"] as String
-            val engineOut: File = project.file(engineOutPath)
-            if (!engineOut.isDirectory) {
-                throw GradleException("local-engine-out must point to a local engine build")
+            val engineOutPaths: List<String> = engineOutPath.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            if (engineOutPaths.isEmpty()) {
+                throw GradleException("local-engine-out must point to at least one valid local engine build")
             }
-            localEngine = engineOut.name
-            localEngineSrcPath = engineOut.parentFile.parent
+            engineOutPaths.forEach { path ->
+                val engineOut: File = project.file(path)
+                if (!engineOut.isDirectory) {
+                    throw GradleException("local-engine-out must point to a local engine build")
+                }
+            }
+            localEngine = engineOutPaths.map { project.file(it).name }.joinToString(",")
+            localEngineSrcPath = project.file(engineOutPaths.first()).parentFile.parent
+            if (!engineOutPaths.all { project.file(it).parentFile.parent == localEngineSrcPath }) {
+                throw GradleException("All local-engine-out paths must belong to the same engine source tree")
+            }
 
             val engineHostOutPath: String = project.properties["local-engine-host-out"] as String
             val engineHostOut: File = project.file(engineHostOutPath)

@@ -209,10 +209,7 @@ Future<List<String>> _xcodeBuildSettingsLines({
 
   final LocalEngineInfo? localEngineInfo = globals.artifacts?.localEngineInfo;
   if (localEngineInfo != null) {
-    final String engineOutPath = localEngineInfo.targetOutPath;
-    xcodeBuildSettings.add(
-      'FLUTTER_ENGINE=${globals.fs.path.dirname(globals.fs.path.dirname(engineOutPath))}',
-    );
+    xcodeBuildSettings.add('FLUTTER_ENGINE=${localEngineInfo.engineSourcePath}');
 
     final String localEngineName = localEngineInfo.localTargetName;
     xcodeBuildSettings.add('LOCAL_ENGINE=$localEngineName');

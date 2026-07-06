@@ -511,9 +511,21 @@ class AndroidGradleBuilder implements AndroidBuilder {
       options.add('-Plocal-engine-build-mode=${buildInfo.modeName}');
       options.add('-Plocal-engine-out=${localEngineInfo.targetOutPath}');
       options.add('-Plocal-engine-host-out=${localEngineInfo.hostOutPath}');
-      options.add(
-        '-Ptarget-platform=${_getTargetPlatformByLocalEnginePath(localEngineInfo.targetOutPath)}',
-      );
+      final String targetPlatforms;
+      if (localEngineInfo.targetOutPath.contains(',')) {
+        targetPlatforms = localEngineInfo.targetOutPath
+            .split(',')
+            .map((String path) => _getTargetPlatformByLocalEnginePath(path.trim()))
+            .join(',');
+      } else if (androidBuildInfo.targetArchs.isNotEmpty &&
+          !_isDefaultTargetArchs(androidBuildInfo.targetArchs)) {
+        targetPlatforms = androidBuildInfo.targetArchs
+            .map((AndroidArch e) => e.platformName)
+            .join(',');
+      } else {
+        targetPlatforms = _getTargetPlatformByLocalEnginePath(localEngineInfo.targetOutPath);
+      }
+      options.add('-Ptarget-platform=$targetPlatforms');
     } else if (androidBuildInfo.targetArchs.isNotEmpty) {
       final String targetPlatforms = androidBuildInfo.targetArchs
           .map((AndroidArch e) => e.platformName)
@@ -848,9 +860,21 @@ class AndroidGradleBuilder implements AndroidBuilder {
           'in ${outputDirectory.path}: $error, $st',
         );
       }
-      command.add(
-        '-Ptarget-platform=${_getTargetPlatformByLocalEnginePath(localEngineInfo.targetOutPath)}',
-      );
+      final String targetPlatforms;
+      if (localEngineInfo.targetOutPath.contains(',')) {
+        targetPlatforms = localEngineInfo.targetOutPath
+            .split(',')
+            .map((String path) => _getTargetPlatformByLocalEnginePath(path.trim()))
+            .join(',');
+      } else if (androidBuildInfo.targetArchs.isNotEmpty &&
+          !_isDefaultTargetArchs(androidBuildInfo.targetArchs)) {
+        targetPlatforms = androidBuildInfo.targetArchs
+            .map((AndroidArch e) => e.platformName)
+            .join(',');
+      } else {
+        targetPlatforms = _getTargetPlatformByLocalEnginePath(localEngineInfo.targetOutPath);
+      }
+      command.add('-Ptarget-platform=$targetPlatforms');
     } else if (androidBuildInfo.targetArchs.isNotEmpty) {
       final String targetPlatforms = androidBuildInfo.targetArchs
           .map((AndroidArch e) => e.platformName)
@@ -1302,51 +1326,119 @@ Directory _getLocalEngineRepo({
   required AndroidBuildInfo androidBuildInfo,
   required FileSystem fileSystem,
 }) {
-  final String abi = _getAbiByLocalEnginePath(engineOutPath);
   final Directory localEngineRepo = fileSystem.systemTempDirectory.createTempSync(
     'flutter_tool_local_engine_repo.',
   );
   final String buildMode = androidBuildInfo.buildInfo.modeName;
-  final String artifactVersion = _getLocalArtifactVersion(
-    fileSystem.path.join(engineOutPath, 'flutter_embedding_$buildMode.pom'),
-    fileSystem,
-  );
-  for (final artifact in const <String>['pom', 'jar']) {
-    // The Android embedding artifacts.
-    _createSymlink(
-      fileSystem.path.join(engineOutPath, 'flutter_embedding_$buildMode.$artifact'),
-      fileSystem.path.join(
-        localEngineRepo.path,
-        'io',
-        'flutter',
-        'flutter_embedding_$buildMode',
-        artifactVersion,
-        'flutter_embedding_$buildMode-$artifactVersion.$artifact',
-      ),
-      fileSystem,
-    );
-    // The engine artifacts (libflutter.so).
-    _createSymlink(
-      fileSystem.path.join(engineOutPath, '${abi}_$buildMode.$artifact'),
-      fileSystem.path.join(
-        localEngineRepo.path,
-        'io',
-        'flutter',
-        '${abi}_$buildMode',
-        artifactVersion,
-        '${abi}_$buildMode-$artifactVersion.$artifact',
-      ),
-      fileSystem,
+  final List<String> engineOutPaths = engineOutPath
+      .split(',')
+      .map((String e) => e.trim())
+      .where((String e) => e.isNotEmpty)
+      .toList();
+
+  // 1. Find and symlink the Android embedding artifacts (flutter_embedding_$buildMode).
+  String? embeddingVersion;
+  for (final dir in engineOutPaths) {
+    final String pomPath = fileSystem.path.join(dir, 'flutter_embedding_$buildMode.pom');
+    if (fileSystem.file(pomPath).existsSync()) {
+      embeddingVersion = _getLocalArtifactVersion(pomPath, fileSystem);
+      _symlinkMavenArtifacts(
+        dir: dir,
+        artifactPrefix: 'flutter_embedding_$buildMode',
+        version: embeddingVersion,
+        localEngineRepo: localEngineRepo,
+        fileSystem: fileSystem,
+      );
+      break;
+    }
+  }
+
+  // Fallback if embedding pom was not checked above (e.g. in tests where pom might not exist or we need artifactVersion).
+  if (embeddingVersion == null && engineOutPaths.isNotEmpty) {
+    final String dir = engineOutPaths.first;
+    final String pomPath = fileSystem.path.join(dir, 'flutter_embedding_$buildMode.pom');
+    embeddingVersion = _getLocalArtifactVersion(pomPath, fileSystem);
+    _symlinkMavenArtifacts(
+      dir: dir,
+      artifactPrefix: 'flutter_embedding_$buildMode',
+      version: embeddingVersion,
+      localEngineRepo: localEngineRepo,
+      fileSystem: fileSystem,
     );
   }
-  for (final artifact in <String>['flutter_embedding_$buildMode', '${abi}_$buildMode']) {
-    _createSymlink(
-      fileSystem.path.join(engineOutPath, '$artifact.maven-metadata.xml'),
-      fileSystem.path.join(localEngineRepo.path, 'io', 'flutter', artifact, 'maven-metadata.xml'),
-      fileSystem,
-    );
+
+  // 2. Find and symlink the engine artifacts across all provided engine out paths and ABIs.
+  final symlinkedAbis = <String>{};
+  for (final dir in engineOutPaths) {
+    // First check all standard ABIs in this directory.
+    for (final abi in const <String>['armeabi_v7a', 'arm64_v8a', 'x86_64', 'x86']) {
+      if (symlinkedAbis.contains(abi)) {
+        continue;
+      }
+      final String pomPath = fileSystem.path.join(dir, '${abi}_$buildMode.pom');
+      if (fileSystem.file(pomPath).existsSync() ||
+          fileSystem.file(fileSystem.path.join(dir, '${abi}_$buildMode.jar')).existsSync()) {
+        final String version = embeddingVersion ?? _getLocalArtifactVersion(pomPath, fileSystem);
+        _symlinkMavenArtifacts(
+          dir: dir,
+          artifactPrefix: '${abi}_$buildMode',
+          version: version,
+          localEngineRepo: localEngineRepo,
+          fileSystem: fileSystem,
+        );
+        symlinkedAbis.add(abi);
+      }
+    }
+    // Also check the default ABI for this path if not already symlinked (for backwards compatibility with tests).
+    final String fallbackAbi = _getAbiByLocalEnginePath(dir);
+    if (!symlinkedAbis.contains(fallbackAbi)) {
+      final String pomPath = fileSystem.path.join(dir, '${fallbackAbi}_$buildMode.pom');
+      final String version = embeddingVersion ?? _getLocalArtifactVersion(pomPath, fileSystem);
+      _symlinkMavenArtifacts(
+        dir: dir,
+        artifactPrefix: '${fallbackAbi}_$buildMode',
+        version: version,
+        localEngineRepo: localEngineRepo,
+        fileSystem: fileSystem,
+      );
+      symlinkedAbis.add(fallbackAbi);
+    }
   }
   return localEngineRepo;
+}
+
+void _symlinkMavenArtifacts({
+  required String dir,
+  required String artifactPrefix,
+  required String version,
+  required Directory localEngineRepo,
+  required FileSystem fileSystem,
+}) {
+  for (final artifact in const <String>['pom', 'jar']) {
+    _createSymlink(
+      fileSystem.path.join(dir, '$artifactPrefix.$artifact'),
+      fileSystem.path.join(
+        localEngineRepo.path,
+        'io',
+        'flutter',
+        artifactPrefix,
+        version,
+        '$artifactPrefix-$version.$artifact',
+      ),
+      fileSystem,
+    );
+  }
+  _createSymlink(
+    fileSystem.path.join(dir, '$artifactPrefix.maven-metadata.xml'),
+    fileSystem.path.join(
+      localEngineRepo.path,
+      'io',
+      'flutter',
+      artifactPrefix,
+      'maven-metadata.xml',
+    ),
+    fileSystem,
+  );
 }
 
 String _getAbiByLocalEnginePath(String engineOutPath) {
@@ -1367,4 +1459,11 @@ String _getTargetPlatformByLocalEnginePath(String engineOutPath) {
     result = 'android-arm64';
   }
   return result;
+}
+
+bool _isDefaultTargetArchs(Iterable<AndroidArch> archs) {
+  return archs.length == 3 &&
+      archs.contains(AndroidArch.armeabi_v7a) &&
+      archs.contains(AndroidArch.arm64_v8a) &&
+      archs.contains(AndroidArch.x86_64);
 }
