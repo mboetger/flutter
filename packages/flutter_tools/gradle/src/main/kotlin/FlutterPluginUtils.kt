@@ -455,13 +455,53 @@ object FlutterPluginUtils {
      */
     @JvmStatic
     @JvmName("buildModeFor")
-    internal fun buildModeFor(buildType: BuildType): String {
+    internal fun buildModeFor(
+        buildType: BuildType,
+        project: Project? = null
+    ): String {
+        if (project != null) {
+            val buildMode =
+                getProperty(project, "flutter.buildMode.${buildType.name}")
+                    ?: getProperty(project, "buildMode.${buildType.name}")
+                    ?: getProperty(project, "flutter.buildMode")
+                    ?: getProperty(project, "buildMode")
+            if (buildMode != null && (buildMode == "debug" || buildMode == "profile" || buildMode == "release")) {
+                return buildMode
+            }
+        }
         if (buildType.name == "profile") {
             return "profile"
         } else if (buildType.isDebuggable) {
             return "debug"
         }
         return "release"
+    }
+
+    internal fun getProperty(
+        project: Project,
+        propertyName: String
+    ): String? {
+        try {
+            val valFromProject = project.findProperty(propertyName) as? String
+            if (valFromProject != null) {
+                return valFromProject
+            }
+            val rootDir = project.rootProject.projectDir
+            val rootLocalProperties = readPropertiesIfExist(File(rootDir, "local.properties"))
+            val valFromRootLocal = rootLocalProperties.getProperty(propertyName)
+            if (valFromRootLocal != null) {
+                return valFromRootLocal
+            }
+            val parentDir = project.projectDir.parentFile
+            if (parentDir != null) {
+                val parentLocalProperties = readPropertiesIfExist(File(parentDir, "local.properties"))
+                return parentLocalProperties.getProperty(propertyName)
+            }
+        } catch (ignored: Throwable) {
+            // In unit tests with strict mocks, calling methods on Project may throw exceptions.
+            return null
+        }
+        return null
     }
 
     /**
@@ -837,7 +877,7 @@ object FlutterPluginUtils {
         pluginHandler: PluginHandler,
         engineVersion: String
     ) {
-        val flutterBuildMode: String = buildModeFor(buildType)
+        val flutterBuildMode: String = buildModeFor(buildType, project)
         if (!supportsBuildMode(project, flutterBuildMode)) {
             project.logger.quiet(
                 "Project does not support Flutter build mode: $flutterBuildMode, " +

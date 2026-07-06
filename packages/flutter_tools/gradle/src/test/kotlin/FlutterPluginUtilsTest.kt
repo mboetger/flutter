@@ -523,6 +523,30 @@ class FlutterPluginUtilsTest {
         assertEquals("release", result)
     }
 
+    @Test
+    fun `buildModeFor returns configured build mode from project properties`() {
+        val buildType = mockk<BuildType>()
+        every { buildType.name } returns "debug"
+        every { buildType.isDebuggable } returns true
+        val project = mockk<Project>(relaxed = true)
+        every { project.findProperty("flutter.buildMode.debug") } returns "release"
+
+        val result = FlutterPluginUtils.buildModeFor(buildType, project)
+        assertEquals("release", result)
+    }
+
+    @Test
+    fun `buildModeFor returns fallback build mode if configured property is invalid`() {
+        val buildType = mockk<BuildType>()
+        every { buildType.name } returns "debug"
+        every { buildType.isDebuggable } returns true
+        val project = mockk<Project>(relaxed = true)
+        every { project.findProperty("flutter.buildMode.debug") } returns "invalidMode"
+
+        val result = FlutterPluginUtils.buildModeFor(buildType, project)
+        assertEquals("debug", result)
+    }
+
     // supportsBuildMode
     @Test
     fun `supportsBuildMode returns true if project should not use local engine`() {

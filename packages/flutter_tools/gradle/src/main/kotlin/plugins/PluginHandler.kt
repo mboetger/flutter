@@ -147,7 +147,7 @@ class PluginHandler(
             buildType: BuildType,
             engineVersion: String
         ) {
-            val flutterBuildMode: String = buildModeFor(buildType)
+            val flutterBuildMode: String = buildModeFor(buildType, project)
             // TODO(gmackall): this should be safe to remove, as the minimum required AGP is well above
             //                 3.5. We should try to remove it.
             // In AGP 3.5, the embedding must be added as an API implementation,
@@ -216,7 +216,7 @@ class PluginHandler(
             val pluginProject: Project = project.rootProject.findProject(":$pluginName") ?: return
 
             getLegacyAndroidExtension(project).buildTypes.forEach { buildType ->
-                val flutterBuildMode: String = buildModeFor(buildType)
+                val flutterBuildMode: String = buildModeFor(buildType, project)
                 if (flutterBuildMode == "release" && (pluginObject["dev_dependency"] as? Boolean == true)) {
                     // This plugin is a dev dependency will not be included in the
                     // release build, so no need to add its dependencies.
