@@ -142,8 +142,13 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
         @SuppressWarnings("unused")
         public void onPreEngineRestart() {
           Log.v(TAG, "onPreEngineRestart()");
-          for (EngineLifecycleListener lifecycleListener : engineLifecycleListeners) {
-            lifecycleListener.onPreEngineRestart();
+          for (EngineLifecycleListener lifecycleListener :
+              new HashSet<>(engineLifecycleListeners)) {
+            try {
+              lifecycleListener.onPreEngineRestart();
+            } catch (Throwable t) {
+              Log.e(TAG, "Uncaught exception in onPreEngineRestart listener", t);
+            }
           }
 
           platformViewsController.onPreEngineRestart();
@@ -504,8 +509,12 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
    */
   public void destroy() {
     Log.v(TAG, "Destroying.");
-    for (EngineLifecycleListener listener : engineLifecycleListeners) {
-      listener.onEngineWillDestroy();
+    for (EngineLifecycleListener listener : new HashSet<>(engineLifecycleListeners)) {
+      try {
+        listener.onEngineWillDestroy();
+      } catch (Throwable t) {
+        Log.e(TAG, "Uncaught exception in onEngineWillDestroy listener", t);
+      }
     }
     // The order that these things are destroyed is important.
     pluginRegistry.destroy();

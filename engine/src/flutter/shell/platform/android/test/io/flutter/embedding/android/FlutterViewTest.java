@@ -13,6 +13,7 @@ import static junit.framework.TestCase.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -59,6 +60,7 @@ import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterJNI;
 import io.flutter.embedding.engine.loader.FlutterLoader;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
+import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
 import io.flutter.embedding.engine.systemchannels.SettingsChannel;
 import io.flutter.plugin.platform.PlatformViewsController;
 import io.flutter.plugin.platform.PlatformViewsController2;
@@ -67,6 +69,7 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
@@ -231,6 +234,153 @@ public class FlutterViewTest {
 
     // Invoke all registered `FlutterUiDisplayListener` callback
     mockFlutterJni.onFirstFrame();
+  }
+
+  @Test
+  public void onFirstFrameRenderedListener_exceptionIsCaughtAndRemainingListenersNotified() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    ArgumentCaptor<FlutterUiDisplayListener> captor =
+        ArgumentCaptor.forClass(FlutterUiDisplayListener.class);
+    doNothing().when(mockFlutterJni).addIsDisplayingFlutterUiListener(captor.capture());
+    doAnswer(
+            invocation -> {
+              captor.getValue().onFlutterUiDisplayed();
+              return null;
+            })
+        .when(mockFlutterJni)
+        .onFirstFrame();
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+
+    FlutterUiDisplayListener throwingListener =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {
+            throw new RuntimeException("Exception from first frame listener");
+          }
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {}
+        };
+    flutterView.addOnFirstFrameRenderedListener(throwingListener);
+
+    AtomicInteger callbackInvocationCount = new AtomicInteger(0);
+    FlutterUiDisplayListener secondListener =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {
+            callbackInvocationCount.incrementAndGet();
+          }
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {}
+        };
+    flutterView.addOnFirstFrameRenderedListener(secondListener);
+
+    // When onFirstFrame is notified, an exception thrown by the listener should be caught
+    // so remaining listeners are notified and no uncaught exception propagates
+    // (flutter/flutter#73685).
+    mockFlutterJni.onFirstFrame();
+
+    assertEquals(1, callbackInvocationCount.get());
+  }
+
+  @Test
+  public void onRenderingStoppedListener_exceptionIsCaughtAndRemainingListenersNotified() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    ArgumentCaptor<FlutterUiDisplayListener> captor =
+        ArgumentCaptor.forClass(FlutterUiDisplayListener.class);
+    doNothing().when(mockFlutterJni).addIsDisplayingFlutterUiListener(captor.capture());
+    doAnswer(
+            invocation -> {
+              captor.getValue().onFlutterUiNoLongerDisplayed();
+              return null;
+            })
+        .when(mockFlutterJni)
+        .onRenderingStopped();
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+
+    FlutterUiDisplayListener throwingListener =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {}
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {
+            throw new RuntimeException("Exception from onRenderingStopped listener");
+          }
+        };
+    flutterView.addOnFirstFrameRenderedListener(throwingListener);
+
+    AtomicInteger callbackInvocationCount = new AtomicInteger(0);
+    FlutterUiDisplayListener secondListener =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {}
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {
+            callbackInvocationCount.incrementAndGet();
+          }
+        };
+    flutterView.addOnFirstFrameRenderedListener(secondListener);
+
+    mockFlutterJni.onRenderingStopped();
+
+    assertEquals(1, callbackInvocationCount.get());
+  }
+
+  @Test
+  public void
+      onFirstFrameRenderedListener_listenerCanRemoveItselfWithoutConcurrentModificationException() {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    ArgumentCaptor<FlutterUiDisplayListener> captor =
+        ArgumentCaptor.forClass(FlutterUiDisplayListener.class);
+    doNothing().when(mockFlutterJni).addIsDisplayingFlutterUiListener(captor.capture());
+    doAnswer(
+            invocation -> {
+              captor.getValue().onFlutterUiDisplayed();
+              return null;
+            })
+        .when(mockFlutterJni)
+        .onFirstFrame();
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+
+    AtomicInteger callbackInvocationCount = new AtomicInteger(0);
+    FlutterUiDisplayListener listener =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {
+            callbackInvocationCount.incrementAndGet();
+            flutterView.removeOnFirstFrameRenderedListener(this);
+          }
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {}
+        };
+    flutterView.addOnFirstFrameRenderedListener(listener);
+
+    mockFlutterJni.onFirstFrame();
+
+    assertEquals(1, callbackInvocationCount.get());
+
+    mockFlutterJni.onFirstFrame();
+
+    assertEquals(1, callbackInvocationCount.get());
   }
 
   @Test

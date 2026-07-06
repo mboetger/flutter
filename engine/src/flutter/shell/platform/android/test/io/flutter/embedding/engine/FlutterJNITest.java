@@ -21,6 +21,7 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.os.LocaleList;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import io.flutter.embedding.engine.FlutterEngine.EngineLifecycleListener;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.mutatorsstack.FlutterMutatorsStack;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
@@ -65,6 +66,119 @@ public class FlutterJNITest {
     // --- Execute Test ---
     // The callback removed itself from the listener list. A second call doesn't call the callback.
     flutterJNI.onFirstFrame();
+
+    // --- Verify Results ---
+    assertEquals(1, callbackInvocationCount.get());
+  }
+
+  @Test
+  public void onFirstFrame_exceptionInListenerIsCaughtAndRemainingListenersNotified() {
+    // --- Test Setup ---
+    FlutterJNI flutterJNI = new FlutterJNI();
+
+    FlutterUiDisplayListener throwingCallback =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {
+            throw new RuntimeException("Test exception in first frame listener");
+          }
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {}
+        };
+    flutterJNI.addIsDisplayingFlutterUiListener(throwingCallback);
+
+    AtomicInteger callbackInvocationCount = new AtomicInteger(0);
+    FlutterUiDisplayListener secondCallback =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {
+            callbackInvocationCount.incrementAndGet();
+          }
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {}
+        };
+    flutterJNI.addIsDisplayingFlutterUiListener(secondCallback);
+
+    // --- Execute Test ---
+    // Exceptions in listeners should be caught and logged so remaining listeners are notified
+    // and no uncaught exception propagates across the JNI boundary (flutter/flutter#73685).
+    flutterJNI.onFirstFrame();
+
+    // --- Verify Results ---
+    assertEquals(1, callbackInvocationCount.get());
+  }
+
+  @Test
+  public void onRenderingStopped_exceptionInListenerIsCaughtAndRemainingListenersNotified() {
+    // --- Test Setup ---
+    FlutterJNI flutterJNI = new FlutterJNI();
+
+    FlutterUiDisplayListener throwingCallback =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {}
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {
+            throw new RuntimeException("Test exception in onRenderingStopped listener");
+          }
+        };
+    flutterJNI.addIsDisplayingFlutterUiListener(throwingCallback);
+
+    AtomicInteger callbackInvocationCount = new AtomicInteger(0);
+    FlutterUiDisplayListener secondCallback =
+        new FlutterUiDisplayListener() {
+          @Override
+          public void onFlutterUiDisplayed() {}
+
+          @Override
+          public void onFlutterUiNoLongerDisplayed() {
+            callbackInvocationCount.incrementAndGet();
+          }
+        };
+    flutterJNI.addIsDisplayingFlutterUiListener(secondCallback);
+
+    // --- Execute Test ---
+    flutterJNI.onRenderingStopped();
+
+    // --- Verify Results ---
+    assertEquals(1, callbackInvocationCount.get());
+  }
+
+  @Test
+  public void onPreEngineRestart_exceptionInListenerIsCaughtAndRemainingListenersNotified() {
+    // --- Test Setup ---
+    FlutterJNI flutterJNI = new FlutterJNI();
+
+    EngineLifecycleListener throwingCallback =
+        new EngineLifecycleListener() {
+          @Override
+          public void onPreEngineRestart() {
+            throw new RuntimeException("Test exception in onPreEngineRestart listener");
+          }
+
+          @Override
+          public void onEngineWillDestroy() {}
+        };
+    flutterJNI.addEngineLifecycleListener(throwingCallback);
+
+    AtomicInteger callbackInvocationCount = new AtomicInteger(0);
+    EngineLifecycleListener secondCallback =
+        new EngineLifecycleListener() {
+          @Override
+          public void onPreEngineRestart() {
+            callbackInvocationCount.incrementAndGet();
+          }
+
+          @Override
+          public void onEngineWillDestroy() {}
+        };
+    flutterJNI.addEngineLifecycleListener(secondCallback);
+
+    // --- Execute Test ---
+    flutterJNI.onPreEngineRestart();
 
     // --- Verify Results ---
     assertEquals(1, callbackInvocationCount.get());

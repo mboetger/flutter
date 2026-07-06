@@ -218,8 +218,12 @@ public class FlutterView extends FrameLayout
         public void onFlutterUiDisplayed() {
           isFlutterUiDisplayed = true;
 
-          for (FlutterUiDisplayListener listener : flutterUiDisplayListeners) {
-            listener.onFlutterUiDisplayed();
+          for (FlutterUiDisplayListener listener : new HashSet<>(flutterUiDisplayListeners)) {
+            try {
+              listener.onFlutterUiDisplayed();
+            } catch (Throwable t) {
+              Log.e(TAG, "Uncaught exception in onFlutterUiDisplayed listener", t);
+            }
           }
         }
 
@@ -227,8 +231,12 @@ public class FlutterView extends FrameLayout
         public void onFlutterUiNoLongerDisplayed() {
           isFlutterUiDisplayed = false;
 
-          for (FlutterUiDisplayListener listener : flutterUiDisplayListeners) {
-            listener.onFlutterUiNoLongerDisplayed();
+          for (FlutterUiDisplayListener listener : new HashSet<>(flutterUiDisplayListeners)) {
+            try {
+              listener.onFlutterUiNoLongerDisplayed();
+            } catch (Throwable t) {
+              Log.e(TAG, "Uncaught exception in onFlutterUiNoLongerDisplayed listener", t);
+            }
           }
         }
       };

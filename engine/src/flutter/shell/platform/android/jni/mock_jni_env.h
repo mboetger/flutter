@@ -53,8 +53,11 @@ class MockableJNIEnv : public JNIEnv {
     functions = &jni_;
     jni_.CallObjectMethod = WrapCallObjectMethod;
     jni_.CallObjectMethodV = WrapCallObjectMethodV;
+    jni_.CallVoidMethod = WrapCallVoidMethod;
+    jni_.CallVoidMethodV = WrapCallVoidMethodV;
     jni_.DeleteGlobalRef = WrapDeleteGlobalRef;
     jni_.DeleteLocalRef = WrapDeleteLocalRef;
+    jni_.DeleteWeakGlobalRef = WrapDeleteWeakGlobalRef;
     jni_.ExceptionCheck = WrapExceptionCheck;
     jni_.ExceptionClear = WrapExceptionClear;
     jni_.ExceptionDescribe = WrapExceptionDescribe;
@@ -67,14 +70,17 @@ class MockableJNIEnv : public JNIEnv {
     jni_.GetStaticMethodID = WrapGetStaticMethodID;
     jni_.NewGlobalRef = WrapNewGlobalRef;
     jni_.NewLocalRef = WrapNewLocalRef;
+    jni_.NewWeakGlobalRef = WrapNewWeakGlobalRef;
     jni_.RegisterNatives = WrapRegisterNatives;
     jni_.GetArrayLength = WrapGetArrayLength;
     jni_.GetIntArrayRegion = WrapGetIntArrayRegion;
   }
 
   virtual jobject CallObjectMethodV(jobject, jmethodID, va_list) = 0;
+  virtual void CallVoidMethodV(jobject, jmethodID, va_list) = 0;
   virtual void DeleteGlobalRef(jobject) = 0;
   virtual void DeleteLocalRef(jobject) = 0;
+  virtual void DeleteWeakGlobalRef(jweak) = 0;
   virtual jboolean ExceptionCheck() = 0;
   virtual void ExceptionClear() = 0;
   virtual void ExceptionDescribe() = 0;
@@ -114,6 +120,9 @@ class MockableJNIEnv : public JNIEnv {
   }
   static void WrapDeleteLocalRef(JNIEnv* env, jobject localRef) {
     static_cast<MockableJNIEnv*>(env)->DeleteLocalRef(localRef);
+  }
+  static void WrapDeleteWeakGlobalRef(JNIEnv* env, jweak weakRef) {
+    static_cast<MockableJNIEnv*>(env)->DeleteWeakGlobalRef(weakRef);
   }
   static jboolean WrapExceptionCheck(JNIEnv* env) {
     return static_cast<MockableJNIEnv*>(env)->ExceptionCheck();
@@ -165,6 +174,9 @@ class MockableJNIEnv : public JNIEnv {
   static jobject WrapNewLocalRef(JNIEnv* env, jobject ref) {
     return static_cast<MockableJNIEnv*>(env)->NewLocalRef(ref);
   }
+  static jweak WrapNewWeakGlobalRef(JNIEnv* env, jobject ref) {
+    return static_cast<MockableJNIEnv*>(env)->NewWeakGlobalRef(ref);
+  }
   static jint WrapRegisterNatives(JNIEnv* env,
                                   jclass clazz,
                                   const JNINativeMethod* methods,
@@ -183,6 +195,21 @@ class MockableJNIEnv : public JNIEnv {
     static_cast<MockableJNIEnv*>(env)->GetIntArrayRegion(array, start, len,
                                                          buf);
   }
+  static void WrapCallVoidMethod(JNIEnv* env,
+                                 jobject obj,
+                                 jmethodID methodID,
+                                 ...) {
+    va_list args;
+    va_start(args, methodID);
+    WrapCallVoidMethodV(env, obj, methodID, args);
+    va_end(args);
+  }
+  static void WrapCallVoidMethodV(JNIEnv* env,
+                                  jobject obj,
+                                  jmethodID methodID,
+                                  va_list args) {
+    static_cast<MockableJNIEnv*>(env)->CallVoidMethodV(obj, methodID, args);
+  }
 
   JNINativeInterface jni_ = {};
 };
@@ -193,8 +220,10 @@ class MockJNIEnv : public MockableJNIEnv {
               CallObjectMethodV,
               (jobject, jmethodID, va_list),
               (override));
+  MOCK_METHOD(void, CallVoidMethodV, (jobject, jmethodID, va_list), (override));
   MOCK_METHOD(void, DeleteGlobalRef, (jobject), (override));
   MOCK_METHOD(void, DeleteLocalRef, (jobject), (override));
+  MOCK_METHOD(void, DeleteWeakGlobalRef, (jweak), (override));
   MOCK_METHOD(jboolean, ExceptionCheck, (), (override));
   MOCK_METHOD(void, ExceptionClear, (), (override));
   MOCK_METHOD(void, ExceptionDescribe, (), (override));
@@ -219,6 +248,7 @@ class MockJNIEnv : public MockableJNIEnv {
               (override));
   MOCK_METHOD(jobject, NewGlobalRef, (jobject), (override));
   MOCK_METHOD(jobject, NewLocalRef, (jobject), (override));
+  MOCK_METHOD(jweak, NewWeakGlobalRef, (jobject), (override));
   MOCK_METHOD(jint,
               RegisterNatives,
               (jclass, const JNINativeMethod*, jint),

@@ -591,17 +591,25 @@ public class FlutterJNI {
     ensureRunningOnMainThread();
 
     for (FlutterUiDisplayListener listener : flutterUiDisplayListeners) {
-      listener.onFlutterUiDisplayed();
+      try {
+        listener.onFlutterUiDisplayed();
+      } catch (Throwable t) {
+        Log.e(TAG, "Uncaught exception in onFlutterUiDisplayed listener", t);
+      }
     }
   }
 
   @VisibleForTesting
   @UiThread
-  void onRenderingStopped() {
+  public void onRenderingStopped() {
     ensureRunningOnMainThread();
 
     for (FlutterUiDisplayListener listener : flutterUiDisplayListeners) {
-      listener.onFlutterUiNoLongerDisplayed();
+      try {
+        listener.onFlutterUiNoLongerDisplayed();
+      } catch (Throwable t) {
+        Log.e(TAG, "Uncaught exception in onFlutterUiNoLongerDisplayed listener", t);
+      }
     }
   }
 
@@ -1267,9 +1275,14 @@ public class FlutterJNI {
 
   // Called by native.
   @SuppressWarnings("unused")
-  private void onPreEngineRestart() {
+  @VisibleForTesting
+  void onPreEngineRestart() {
     for (EngineLifecycleListener listener : engineLifecycleListeners) {
-      listener.onPreEngineRestart();
+      try {
+        listener.onPreEngineRestart();
+      } catch (Throwable t) {
+        Log.e(TAG, "Uncaught exception in onPreEngineRestart listener", t);
+      }
     }
   }
 
@@ -1332,7 +1345,11 @@ public class FlutterJNI {
   @UiThread
   public void maybeResizeSurfaceView(int width, int height) {
     for (FlutterUiResizeListener listener : flutterUiResizeListeners) {
-      listener.resizeEngineView(width, height);
+      try {
+        listener.resizeEngineView(width, height);
+      } catch (Throwable t) {
+        Log.e(TAG, "Uncaught exception in resizeEngineView listener", t);
+      }
     }
   }
   // ----- End Engine Lifecycle Support ----

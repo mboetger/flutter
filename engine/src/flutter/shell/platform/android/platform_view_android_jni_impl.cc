@@ -1525,7 +1525,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnFirstFrame() {
 
   env->CallVoidMethod(java_object.obj(), g_on_first_frame_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::ClearException(env);
 }
 
 void PlatformViewAndroidJNIImpl::FlutterViewOnPreEngineRestart() {
@@ -1538,7 +1538,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnPreEngineRestart() {
 
   env->CallVoidMethod(java_object.obj(), g_on_engine_restart_method);
 
-  FML_CHECK(fml::jni::CheckException(env));
+  fml::jni::ClearException(env);
 }
 
 void PlatformViewAndroidJNIImpl::SurfaceTextureAttachToGLContext(

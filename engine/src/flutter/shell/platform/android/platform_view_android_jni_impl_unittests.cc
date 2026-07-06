@@ -66,6 +66,8 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
   EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
   EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
   EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, NewWeakGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteWeakGlobalRef(_)).WillRepeatedly(Return());
   EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
   EXPECT_CALL(mock_env, GetFieldID(_, _, _))
       .WillRepeatedly(Return(kPlaceholderFieldID));
@@ -171,6 +173,49 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
                        reinterpret_cast<jlong>(holder.get()), 1.0f, 100, 100, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
                        0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, FlutterViewOnFirstFrameException) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  EXPECT_CALL(mock_env, GetObjectRefType(_))
+      .WillRepeatedly(Return(JNILocalRefType));
+  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, CallVoidMethodV(_, _, _)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, ExceptionCheck()).WillOnce(Return(JNI_TRUE));
+  EXPECT_CALL(mock_env, ExceptionDescribe()).WillOnce(Return());
+  EXPECT_CALL(mock_env, ExceptionClear()).Times(1).WillOnce(Return());
+
+  fml::jni::JavaObjectWeakGlobalRef flutter_jni_object(
+      &mock_env, reinterpret_cast<jobject>(123));
+  PlatformViewAndroidJNIImpl android_jni(flutter_jni_object);
+
+  // Calling FlutterViewOnFirstFrame when a Java exception occurs (e.g., from
+  // first frame listeners) should clear the exception and not abort the
+  // process (flutter/flutter#73685).
+  android_jni.FlutterViewOnFirstFrame();
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, FlutterViewOnPreEngineRestartException) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  EXPECT_CALL(mock_env, GetObjectRefType(_))
+      .WillRepeatedly(Return(JNILocalRefType));
+  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, CallVoidMethodV(_, _, _)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, ExceptionCheck()).WillOnce(Return(JNI_TRUE));
+  EXPECT_CALL(mock_env, ExceptionDescribe()).WillOnce(Return());
+  EXPECT_CALL(mock_env, ExceptionClear()).Times(1).WillOnce(Return());
+
+  fml::jni::JavaObjectWeakGlobalRef flutter_jni_object(
+      &mock_env, reinterpret_cast<jobject>(123));
+  PlatformViewAndroidJNIImpl android_jni(flutter_jni_object);
+
+  android_jni.FlutterViewOnPreEngineRestart();
 }
 
 }  // namespace testing
