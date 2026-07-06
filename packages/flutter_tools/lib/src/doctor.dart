@@ -11,6 +11,7 @@ import 'package:unified_analytics/unified_analytics.dart';
 import 'android/android_workflow.dart';
 import 'artifacts.dart';
 import 'base/async_guard.dart';
+import 'base/common.dart';
 import 'base/context.dart';
 import 'base/file_system.dart';
 import 'base/io.dart';
@@ -778,24 +779,36 @@ class DeviceValidator extends DoctorValidator {
 
   @override
   Future<ValidationResult> validateImpl() async {
-    final List<Device> devices = await _deviceManager.refreshAllDevices(
-      timeout: DeviceManager.minimumWirelessDeviceDiscoveryTimeout,
-    );
+    var devices = <Device>[];
+    var diagnostics = <String>[];
     var installedMessages = <ValidationMessage>[];
-    if (devices.isNotEmpty) {
-      installedMessages = (await Device.descriptions(
-        devices,
-      )).map<ValidationMessage>((String msg) => ValidationMessage(msg)).toList();
-    }
-
     var diagnosticMessages = <ValidationMessage>[];
-    final List<String> diagnostics = await _deviceManager.getDeviceDiagnostics();
-    if (diagnostics.isNotEmpty) {
-      diagnosticMessages = diagnostics
-          .map<ValidationMessage>((String message) => ValidationMessage.hint(message))
-          .toList();
-    } else if (devices.isEmpty) {
-      diagnosticMessages = <ValidationMessage>[ValidationMessage.hint(devicesMissing)];
+    try {
+      devices = await _deviceManager.refreshAllDevices(
+        timeout: DeviceManager.minimumWirelessDeviceDiscoveryTimeout,
+      );
+      if (devices.isNotEmpty) {
+        installedMessages = (await Device.descriptions(
+          devices,
+        )).map<ValidationMessage>((String msg) => ValidationMessage(msg)).toList();
+      }
+
+      diagnostics = await _deviceManager.getDeviceDiagnostics();
+      if (diagnostics.isNotEmpty) {
+        diagnosticMessages = diagnostics
+            .map<ValidationMessage>((String message) => ValidationMessage.hint(message))
+            .toList();
+      } else if (devices.isEmpty) {
+        diagnosticMessages = <ValidationMessage>[ValidationMessage.hint(devicesMissing)];
+      }
+    } on Exception catch (exception) {
+      return ValidationResult(ValidationType.notAvailable, <ValidationMessage>[
+        ValidationMessage.error(
+          exception is ToolExit && exception.message != null
+              ? exception.message!
+              : exception.toString(),
+        ),
+      ]);
     }
 
     if (devices.isEmpty) {
