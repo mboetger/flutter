@@ -228,9 +228,14 @@ fml::StatusOr<sk_sp<SkData>> EncodeImage(const sk_sp<SkImage>& raster_image,
       return CopyImageByteData(raster_image, kRGBA_8888_SkColorType,
                                kUnpremul_SkAlphaType);
 
-    case kRawUnmodified:
+    case kRawUnmodified: {
+      SkAlphaType alpha_type = raster_image->alphaType();
+      if (alpha_type == kPremul_SkAlphaType) {
+        alpha_type = kUnpremul_SkAlphaType;
+      }
       return CopyImageByteData(raster_image, raster_image->colorType(),
-                               raster_image->alphaType());
+                               alpha_type);
+    }
     case kRawExtendedRgba128:
       return CopyImageByteData(raster_image, kRGBA_F32_SkColorType,
                                kUnpremul_SkAlphaType);

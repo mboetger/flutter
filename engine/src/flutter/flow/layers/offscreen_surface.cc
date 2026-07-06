@@ -59,13 +59,17 @@ static sk_sp<SkData> GetRasterData(const sk_sp<SkSurface>& offscreen_surface,
     return SkPngEncoder::Encode(nullptr, cpu_snapshot.get(), {});
   }
 
-  // Copy it into a bitmap and return the same.
-  SkPixmap pixmap;
-  if (!cpu_snapshot->peekPixels(&pixmap)) {
+  SkImageInfo image_info =
+      cpu_snapshot->imageInfo().makeAlphaType(kUnpremul_SkAlphaType);
+  size_t row_bytes = image_info.minRowBytes();
+  size_t size = image_info.computeByteSize(row_bytes);
+  sk_sp<SkData> data = SkData::MakeUninitialized(size);
+  if (!data || !cpu_snapshot->readPixels(image_info, data->writable_data(),
+                                         row_bytes, 0, 0)) {
     FML_LOG(ERROR) << "Screenshot: unable to obtain bitmap pixels";
     return nullptr;
   }
-  return SkData::MakeWithCopy(pixmap.addr32(), pixmap.computeByteSize());
+  return data;
 }
 
 OffscreenSurface::OffscreenSurface(GrDirectContext* surface_context,

@@ -27,6 +27,7 @@
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkMatrix.h"
 #include "third_party/skia/include/core/SkPictureRecorder.h"
+#include "third_party/skia/include/core/SkPixmap.h"
 #include "third_party/skia/include/core/SkRect.h"
 #include "third_party/skia/include/core/SkSerialProcs.h"
 #include "third_party/skia/include/core/SkSize.h"
@@ -1002,13 +1003,45 @@ ScreenshotLayerTreeAsImageImpeller(
   fml::AutoResetWaitableEvent latch;
   sk_sp<SkData> sk_data;
   auto completion = [buffer, &buffer_desc, &sk_data,
+                     format = texture->GetTextureDescriptor().format,
+                     size = tree->frame_size(),
                      &latch](impeller::CommandBuffer::Status status) {
     fml::ScopedCleanupClosure cleanup([&latch]() { latch.Signal(); });
     if (status != impeller::CommandBuffer::Status::kCompleted) {
       FML_LOG(ERROR) << "Failed to complete blit pass.";
       return;
     }
-    sk_data = SkData::MakeWithCopy(buffer->OnGetContents(), buffer_desc.size);
+    SkColorType color_type = kUnknown_SkColorType;
+    switch (format) {
+      case impeller::PixelFormat::kR8G8B8A8UNormInt:
+        color_type = kRGBA_8888_SkColorType;
+        break;
+      case impeller::PixelFormat::kB8G8R8A8UNormInt:
+        color_type = kBGRA_8888_SkColorType;
+        break;
+      case impeller::PixelFormat::kR16G16B16A16Float:
+        color_type = kRGBA_F16_SkColorType;
+        break;
+      default:
+        break;
+    }
+    if (color_type != kUnknown_SkColorType) {
+      SkImageInfo src_info = SkImageInfo::Make(size.width, size.height,
+                                               color_type, kPremul_SkAlphaType);
+      SkImageInfo dst_info = src_info.makeAlphaType(kUnpremul_SkAlphaType);
+      size_t row_bytes = dst_info.minRowBytes();
+      size_t dst_size = dst_info.computeByteSize(row_bytes);
+      sk_data = SkData::MakeUninitialized(dst_size);
+      SkPixmap src_pixmap(src_info, buffer->OnGetContents(),
+                          src_info.minRowBytes());
+      if (!sk_data || !src_pixmap.readPixels(dst_info, sk_data->writable_data(),
+                                             row_bytes)) {
+        sk_data =
+            SkData::MakeWithCopy(buffer->OnGetContents(), buffer_desc.size);
+      }
+    } else {
+      sk_data = SkData::MakeWithCopy(buffer->OnGetContents(), buffer_desc.size);
+    }
   };
 
   if (!impeller_context->GetCommandQueue()
