@@ -7,6 +7,7 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
 import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/os.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/emulator.dart';
@@ -70,6 +71,7 @@ void main() {
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        os: FakeOperatingSystemUtils(),
       );
 
       await expectLater(() async => emulatorManager.getAllAvailableEmulators(), returnsNormally);
@@ -94,6 +96,7 @@ void main() {
           ]),
           androidSdk: sdk,
           androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+          os: FakeOperatingSystemUtils(),
         );
 
         final List<Emulator> emulators = await emulatorManager.getAllAvailableEmulators();
@@ -127,6 +130,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
           const FakeCommand(command: <String>['emulator', '-list-avds'], stdout: 'existing-avd-1'),
         ]),
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        os: FakeOperatingSystemUtils(),
       );
 
       await expectLater(() async => emulatorManager.getAllAvailableEmulators(), returnsNormally);
@@ -140,6 +144,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         processManager: fakeProcessManager,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
         fileSystem: fileSystem,
+        os: FakeOperatingSystemUtils(),
       );
 
       expect(await testEmulatorManager.getEmulatorsMatching('Nexus_5'), <Emulator>[emulator1]);
@@ -168,6 +173,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        os: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -204,6 +210,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        os: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -238,11 +245,65 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        os: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator(name: 'test');
 
       expect(result.success, true);
     });
+
+    testWithoutContext(
+      'create emulator on Apple Silicon / macOS arm64 selects arm64-v8a system image over x86/x86_64',
+      () async {
+        const arm64CreateFailureOutput =
+            'Error: Package path (-k) not specified. Valid system image paths are:\n'
+            'system-images;android-33;google_apis_playstore;x86_64\n'
+            'system-images;android-33;google_apis_playstore;x86\n'
+            'system-images;android-33;google_apis_playstore;arm64-v8a\n'
+            'null\n';
+
+        const arm64ListEmulatorsCommand = FakeCommand(
+          command: <String>['avdmanager', 'create', 'avd', '-n', 'temp'],
+          stderr: arm64CreateFailureOutput,
+          exitCode: 1,
+        );
+
+        final emulatorManager = EmulatorManager(
+          java: FakeJava(),
+          fileSystem: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            const FakeCommand(
+              command: <String>['avdmanager', 'list', 'device', '-c'],
+              stdout: 'test\ntest2\npixel\npixel-xl\n',
+            ),
+            arm64ListEmulatorsCommand,
+            const FakeCommand(
+              command: <String>[
+                'avdmanager',
+                'create',
+                'avd',
+                '-n',
+                'apple_silicon_emulator',
+                '-k',
+                'system-images;android-33;google_apis_playstore;arm64-v8a',
+                '-d',
+                'pixel',
+              ],
+            ),
+          ]),
+          androidSdk: sdk,
+          androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+          os: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+        );
+        final CreateEmulatorResult result = await emulatorManager.createEmulator(
+          name: 'apple_silicon_emulator',
+        );
+
+        expect(result.success, true);
+        expect(result.emulatorName, 'apple_silicon_emulator');
+      },
+    );
 
     testWithoutContext('create emulator with an existing name errors', () async {
       final emulatorManager = EmulatorManager(
@@ -275,6 +336,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
         ]),
         androidSdk: sdk,
         androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+        os: FakeOperatingSystemUtils(),
       );
       final CreateEmulatorResult result = await emulatorManager.createEmulator(
         name: 'existing-avd-1',
@@ -318,6 +380,7 @@ iOS Simulator       • iOS Simulator • Apple        • android
           ]),
           androidSdk: sdk,
           androidWorkflow: AndroidWorkflow(androidSdk: sdk, featureFlags: TestFeatureFlags()),
+          os: FakeOperatingSystemUtils(),
         );
         final CreateEmulatorResult result = await emulatorManager.createEmulator();
 
@@ -377,6 +440,7 @@ class TestEmulatorManager extends EmulatorManager {
     required super.processManager,
     required super.androidWorkflow,
     required super.fileSystem,
+    required super.os,
   });
 
   final List<Emulator> allEmulators;

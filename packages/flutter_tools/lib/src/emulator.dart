@@ -14,6 +14,7 @@ import 'android/java.dart';
 import 'base/context.dart';
 import 'base/file_system.dart';
 import 'base/logger.dart';
+import 'base/os.dart';
 import 'base/process.dart';
 import 'device.dart';
 import 'ios/ios_emulators.dart';
@@ -29,9 +30,11 @@ class EmulatorManager {
     required ProcessManager processManager,
     required AndroidWorkflow androidWorkflow,
     required FileSystem fileSystem,
+    required OperatingSystemUtils os,
   }) : _java = java,
        _androidSdk = androidSdk,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager),
+       _os = os,
        _androidEmulators = AndroidEmulators(
          androidSdk: androidSdk,
          logger: logger,
@@ -46,6 +49,7 @@ class EmulatorManager {
   final AndroidSdk? _androidSdk;
   final AndroidEmulators _androidEmulators;
   final ProcessUtils _processUtils;
+  final OperatingSystemUtils _os;
 
   // Constructing EmulatorManager is cheap; they only do expensive work if some
   // of their methods are called.
@@ -131,13 +135,18 @@ class EmulatorManager {
 
     final String? sdkId = await _getPreferredSdkId(avdManagerPath);
     if (sdkId == null) {
+      final bool isArm =
+          _os.hostPlatform == HostPlatform.darwin_arm64 ||
+          _os.hostPlatform == HostPlatform.linux_arm64 ||
+          _os.hostPlatform == HostPlatform.windows_arm64;
+      final suggestedArch = isArm ? 'arm64-v8a' : 'x86';
       return CreateEmulatorResult(
         emulatorName,
         success: false,
         error:
             'No suitable Android AVD system images are available. You may need to install these'
             ' using sdkmanager, for example:\n'
-            '  sdkmanager "system-images;android-27;google_apis_playstore;x86"',
+            '  sdkmanager "system-images;android-27;google_apis_playstore;$suggestedArch"',
       );
     }
 
@@ -224,14 +233,41 @@ class EmulatorManager {
         ? availableApiVersions.reduce(math.max)
         : -1; // Don't match below
 
-    // We're out of preferences, we just have to return the first one with the high
-    // API version.
-    for (final id in availableIDs) {
-      if (id.contains(';android-$apiVersion;')) {
-        return id;
+    final List<String> matchingIds = availableIDs
+        .where((String id) => id.contains(';android-$apiVersion;'))
+        .toList();
+    if (matchingIds.isEmpty) {
+      return null;
+    }
+
+    final bool isArm =
+        _os.hostPlatform == HostPlatform.darwin_arm64 ||
+        _os.hostPlatform == HostPlatform.linux_arm64 ||
+        _os.hostPlatform == HostPlatform.windows_arm64;
+    if (isArm) {
+      for (final id in matchingIds) {
+        if (id.contains('arm64')) {
+          return id;
+        }
+      }
+      for (final id in matchingIds) {
+        if (id.contains('armeabi')) {
+          return id;
+        }
+      }
+    } else {
+      for (final id in matchingIds) {
+        if (id.contains('x86_64')) {
+          return id;
+        }
+      }
+      for (final id in matchingIds) {
+        if (id.contains('x86')) {
+          return id;
+        }
       }
     }
-    return null;
+    return matchingIds.first;
   }
 
   /// Whether we're capable of listing any emulators given the current environment configuration.

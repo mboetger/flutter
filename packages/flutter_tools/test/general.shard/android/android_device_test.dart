@@ -178,6 +178,38 @@ void main() {
     expect(await device.isLocalEmulator, true);
   });
 
+  testWithoutContext(
+    'AndroidDevice recognizes ARM emulators on Apple Silicon / macOS arm64',
+    () async {
+      const armEmulatorHardware = <String>[
+        'qemu_arm64',
+        'ranchu_arm64',
+        'goldfish_arm64',
+        'vsoc_arm64',
+        'cutf_cvm',
+        'virtual',
+      ];
+      for (final hardware in armEmulatorHardware) {
+        final AndroidDevice device = setUpAndroidDevice(
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            FakeCommand(
+              command: const <String>['adb', '-s', '1234', 'shell', 'getprop'],
+              stdout:
+                  '[ro.hardware]: [$hardware]\n'
+                  '[ro.build.characteristics]: [phone,nosdcard]',
+            ),
+          ]),
+        );
+
+        expect(
+          await device.isLocalEmulator,
+          true,
+          reason: 'Expected $hardware to be recognized as an emulator',
+        );
+      }
+    },
+  );
+
   testWithoutContext('isSupported is false for x86 devices', () async {
     final processManager = FakeProcessManager.list(<FakeCommand>[
       const FakeCommand(

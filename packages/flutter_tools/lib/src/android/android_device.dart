@@ -37,9 +37,22 @@ enum HardwareType { emulator, physical }
 ///
 /// See [AndroidDevice] for more explanation of why this is needed.
 const kKnownHardware = <String, HardwareType>{
+  'cutf_arm64': HardwareType.emulator,
+  'cutf_cvm': HardwareType.emulator,
+  'cutf_x86': HardwareType.emulator,
+  'cutf_x86_64': HardwareType.emulator,
   'goldfish': HardwareType.emulator,
+  'goldfish_arm64': HardwareType.emulator,
+  'goldfish_x86': HardwareType.emulator,
+  'goldfish_x86_64': HardwareType.emulator,
   'qcom': HardwareType.physical,
+  'qemu_arm64': HardwareType.emulator,
+  'qemu_x86': HardwareType.emulator,
+  'qemu_x86_64': HardwareType.emulator,
   'ranchu': HardwareType.emulator,
+  'ranchu_arm64': HardwareType.emulator,
+  'ranchu_x86': HardwareType.emulator,
+  'ranchu_x86_64': HardwareType.emulator,
   'samsungexynos7420': HardwareType.physical,
   'samsungexynos7580': HardwareType.physical,
   'samsungexynos7870': HardwareType.physical,
@@ -48,6 +61,10 @@ const kKnownHardware = <String, HardwareType>{
   'samsungexynos8895': HardwareType.physical,
   'samsungexynos9810': HardwareType.physical,
   'samsungexynos7570': HardwareType.physical,
+  'virtual': HardwareType.emulator,
+  'vsoc_arm64': HardwareType.emulator,
+  'vsoc_x86': HardwareType.emulator,
+  'vsoc_x86_64': HardwareType.emulator,
 };
 
 /// A physical Android device or emulator.
