@@ -941,6 +941,38 @@ Android sdkmanager tool was found, but failed to run
       false,
     );
   });
+
+  testUsingContext(
+    'AndroidValidator succeeds without Android Studio installed (issue #71368)',
+    () async {
+      final sdkVersion = FakeAndroidSdkVersion()
+        ..sdkLevel = gradle_utils.compileSdkVersionInt
+        ..buildToolsVersion = gradle_utils.minBuildToolsVersion;
+      sdk
+        ..licensesAvailable = true
+        ..platformToolsAvailable = true
+        ..cmdlineToolsAvailable = true
+        ..directory = fileSystem.directory('/foo/bar')
+        ..latestVersion = sdkVersion;
+      final ValidationResult validationResult = await AndroidValidator(
+        java: FakeJava(javaSource: JavaSource.javaHome),
+        androidSdk: sdk,
+        logger: logger,
+        platform: FakePlatform()..environment = <String, String>{'HOME': '/home/me'},
+        userMessages: UserMessages(),
+        processManager: processManager,
+        osUtils: FakeOperatingSystemUtils(),
+      ).validate();
+
+      expect(validationResult.type, ValidationType.success);
+      expect(
+        validationResult.messages.any(
+          (ValidationMessage message) => message.message.toLowerCase().contains('android studio'),
+        ),
+        isFalse,
+      );
+    },
+  );
 }
 
 class ConflictFakeOperatingSystemUtils extends FakeOperatingSystemUtils {

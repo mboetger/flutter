@@ -905,6 +905,46 @@ void main() {
       expect(fakeAnalytics.sentEvents, isEmpty);
     }, overrides: <Type, Generator>{Analytics: () => fakeAnalytics});
   });
+
+  group('Decouple Flutter installation from Android Studio (issue #71368)', () {
+    testUsingContext(
+      'doctor validators do not include Android Studio validator or require Android Studio',
+      () async {
+        final List<DoctorValidator> validators =
+            DoctorValidatorsProvider.defaultInstance.validators;
+        final bool hasAndroidStudioValidator = validators.any((DoctorValidator validator) {
+          if (validator.title.toLowerCase().contains('android studio')) {
+            return true;
+          }
+          if (validator is GroupedValidator) {
+            return validator.subValidators.any(
+              (DoctorValidator sub) => sub.title.toLowerCase().contains('android studio'),
+            );
+          }
+          return false;
+        });
+        expect(hasAndroidStudioValidator, isFalse);
+      },
+      overrides: <Type, Generator>{
+        DoctorValidatorsProvider: () => DoctorValidatorsProvider.test(
+          platform: FakePlatform(),
+          featureFlags: TestFeatureFlags(),
+        ),
+        AnsiTerminal: () => FakeTerminal(),
+      },
+    );
+
+    testUsingContext(
+      'doctor diagnose does not complain about missing Android Studio when Android SDK is installed',
+      () async {
+        final logger = BufferLogger.test();
+        final doctor = FakePassingDoctor(logger);
+        await doctor.diagnose(verbose: false);
+        expect(logger.statusText.toLowerCase(), isNot(contains('android studio')));
+      },
+      overrides: <Type, Generator>{AnsiTerminal: () => FakeTerminal()},
+    );
+  });
 }
 
 class PassingValidator extends DoctorValidator {
