@@ -663,6 +663,10 @@ class AndroidGradleBuilder implements AndroidBuilder {
   // and moved them to the BUNDLE-METADATA directory. Block the build if this
   // isn't successful, as it means that debug symbols are getting included in
   // the final app that would be delivered to users.
+  //
+  // Also checks whether the release App Bundle contains native libraries for any architecture
+  // without libflutter.so, which causes the app to crash or get stuck at splash screen on
+  // production (Play Store). Emits a warning if any missing ABIs are detected.
   Future<bool> _isAabStrippedOfDebugSymbols(
     FlutterProject project,
     String aabPath,
@@ -701,6 +705,51 @@ class AndroidGradleBuilder implements AndroidBuilder {
         'and stdout was: ${result.stdout}',
       );
       return false;
+    }
+
+    final presentAbis = <String>{};
+    for (final String line in result.stdout.split('\n')) {
+      final String trimmed = line.trim();
+      String? path;
+      if (trimmed.startsWith('/base/lib/')) {
+        path = trimmed.substring('/base/lib/'.length);
+      } else if (trimmed.startsWith('base/lib/')) {
+        path = trimmed.substring('base/lib/'.length);
+      }
+      if (path != null && path.isNotEmpty) {
+        final int slashIndex = path.indexOf('/');
+        if (slashIndex != -1) {
+          final String abi = path.substring(0, slashIndex);
+          if (abi.isNotEmpty) {
+            presentAbis.add(abi);
+          }
+        }
+      }
+    }
+
+    final missingFlutterAbis = <String>[];
+    for (final String abi in presentAbis.toList()..sort()) {
+      if (!result.stdout.contains('/base/lib/$abi/libflutter.so') &&
+          !result.stdout.contains('base/lib/$abi/libflutter.so')) {
+        missingFlutterAbis.add(abi);
+      }
+    }
+
+    if (missingFlutterAbis.isNotEmpty) {
+      _logger.printWarning(
+        'Warning: The release App Bundle contains native libraries for the following '
+        'architectures without libflutter.so: ${missingFlutterAbis.join(', ')}.\n'
+        'When delivered to users via the Play Store (or split APKs), the application '
+        'may crash on launch or remain stuck on the Android splash screen with an '
+        'UnsatisfiedLinkError: dlopen failed: library "libflutter.so" not found.\n'
+        'To fix this, configure abiFilters in your android/app/build.gradle (or android/build.gradle) '
+        'to only include supported architectures:\n'
+        'android {\n'
+        '  defaultConfig {\n'
+        "    ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }\n"
+        '  }\n'
+        '}',
+      );
     }
 
     // As long as libflutter.so.sym/dbg and libapp.so.sym/dbg are present for at least
