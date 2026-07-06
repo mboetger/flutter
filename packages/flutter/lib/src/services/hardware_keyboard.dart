@@ -294,6 +294,10 @@ class KeyUpEvent extends KeyEvent {
 /// Repeat events are not guaranteed and are provided only if supported by the
 /// underlying platform.
 ///
+/// Note that on some virtual devices (such as the Android Emulator), holding
+/// down a key on the host keyboard may inject alternating [KeyDownEvent] and
+/// [KeyUpEvent] pairs instead of generating [KeyRepeatEvent]s.
+///
 /// See also:
 ///
 ///  * [KeyDownEvent], a key event representing the user
@@ -402,6 +406,12 @@ typedef KeyEventCallback = bool Function(KeyEvent event);
 /// process all events as if they come from a single keyboard, and try to
 /// resolve any conflicts and provide a regularized key event stream, which
 /// can deviate from the ground truth.
+///
+/// Note that on some virtual devices (such as the Android Emulator), holding
+/// down a key on the host keyboard causes the emulator's input bridge to inject
+/// alternating key down and key up events rather than a sequence of repeated
+/// key down events. This can cause [physicalKeysPressed] and [logicalKeysPressed]
+/// to toggle repeatedly while a key is held down on an emulator.
 ///
 /// See also:
 ///

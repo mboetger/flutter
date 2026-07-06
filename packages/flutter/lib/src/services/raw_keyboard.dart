@@ -647,6 +647,11 @@ abstract class RawKeyEvent with Diagnosticable {
   /// first event and true for the following events.
   ///
   /// The [repeat] attribute is always false for [RawKeyUpEvent]s.
+  ///
+  /// Note that on some virtual devices (such as the Android Emulator), holding
+  /// down a key on the host keyboard may generate alternating down and up events
+  /// (each with [repeat] set to false) instead of a sequence of repeated down
+  /// events. See [RawKeyboard] for more details.
   final bool repeat;
 
   /// Platform-specific information about the key event.
@@ -748,6 +753,22 @@ typedef RawKeyEventHandler = bool Function(RawKeyEvent event);
 ///   tracked manually).
 /// * Lock modes (such as CapsLock) only have their "enabled" state recorded.
 ///   There's no way to acquire their pressing state.
+///
+/// ## Android Emulator Key Repeat Behavior
+///
+/// On the Android Emulator, holding down a key on the host keyboard causes the
+/// emulator's input bridge to inject alternating down and up events into the guest
+/// OS (each with `repeatCount` set to 0), rather than a sequence of repeated
+/// down events followed by a single up event when physically released.
+/// Consequently, when running on an Android Emulator:
+///
+/// * Key listeners receive premature [RawKeyUpEvent]s while the key is still held down.
+/// * Subsequent down events while holding the key have [RawKeyEvent.repeat] set to false.
+/// * [keysPressed] and [physicalKeysPressed] will briefly toggle to empty between the alternating down and up events.
+///
+/// By contrast, real Android hardware and physical Bluetooth keyboards connected
+/// to Android devices generate consecutive down events with incrementing repeat
+/// counts and only produce an up event when the key is physically released.
 ///
 /// See also:
 ///

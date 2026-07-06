@@ -148,6 +148,11 @@ class RawKeyEventDataAndroid extends RawKeyEventData {
   ///
   /// See <https://developer.android.com/reference/android/view/KeyEvent#getRepeatCount()>
   /// for more information.
+  ///
+  /// Note that on the Android Emulator, holding down a key on the host keyboard
+  /// causes the emulator to inject alternating down and up events, each with
+  /// [repeatCount] set to 0, rather than incrementing the repeat count on down
+  /// events.
   final int repeatCount;
 
   // The source code that indicates that an event came from a joystick.
