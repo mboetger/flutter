@@ -621,6 +621,57 @@ TEST_F(ImageDecoderFixtureTest, ImpellerNonWideGamut) {
 #endif  // IMPELLER_SUPPORTS_RENDERING
 }
 
+TEST_F(ImageDecoderFixtureTest, ImpellerMaxTextureSizeProportionalScaling) {
+  auto data = flutter::testing::OpenFixtureAsSkData("Horizontal.jpg");
+  auto image = SkCodecs::DeferredImage(SkJpegDecoder::Decode(data, nullptr));
+  ASSERT_TRUE(image != nullptr);
+  ASSERT_EQ(SkISize::Make(600, 200), image->dimensions());
+
+  ImageGeneratorRegistry registry;
+  std::shared_ptr<ImageGenerator> generator =
+      registry.CreateCompatibleGenerator(data);
+  ASSERT_TRUE(generator);
+
+  auto descriptor = fml::MakeRefCounted<ImageDescriptor>(std::move(data),
+                                                         std::move(generator));
+
+#if IMPELLER_SUPPORTS_RENDERING
+  std::shared_ptr<impeller::Capabilities> capabilities =
+      impeller::CapabilitiesBuilder()
+          .SetSupportsTextureToTextureBlits(true)
+          .Build();
+  std::shared_ptr<impeller::Allocator> allocator =
+      std::make_shared<impeller::TestImpellerAllocator>();
+
+  // Case 1: Horizontally wide image exceeding max_texture_size width.
+  absl::StatusOr<ImageDecoderImpeller::DecompressResult> result_wide =
+      ImageDecoderImpeller::DecompressTexture(
+          descriptor.get(), {.target_width = 600, .target_height = 200},
+          {300, 300},
+          /*supports_wide_gamut=*/true, capabilities, allocator);
+  ASSERT_TRUE(result_wide.ok());
+  EXPECT_EQ(result_wide->image_info.size, impeller::ISize(300, 100));
+
+  // Case 2: Vertically long image exceeding max_texture_size height.
+  absl::StatusOr<ImageDecoderImpeller::DecompressResult> result_tall =
+      ImageDecoderImpeller::DecompressTexture(
+          descriptor.get(), {.target_width = 200, .target_height = 600},
+          {300, 300},
+          /*supports_wide_gamut=*/true, capabilities, allocator);
+  ASSERT_TRUE(result_tall.ok());
+  EXPECT_EQ(result_tall->image_info.size, impeller::ISize(100, 300));
+
+  // Case 3: Extreme aspect ratio asserting clamping to at least 1px.
+  absl::StatusOr<ImageDecoderImpeller::DecompressResult> result_extreme =
+      ImageDecoderImpeller::DecompressTexture(
+          descriptor.get(), {.target_width = 10, .target_height = 10000},
+          {100, 100},
+          /*supports_wide_gamut=*/true, capabilities, allocator);
+  ASSERT_TRUE(result_extreme.ok());
+  EXPECT_EQ(result_extreme->image_info.size, impeller::ISize(1, 100));
+#endif  // IMPELLER_SUPPORTS_RENDERING
+}
+
 TEST_F(ImageDecoderFixtureTest, ExifDataIsRespectedOnDecode) {
   auto loop = fml::ConcurrentMessageLoop::Create();
   TaskRunners runners(GetCurrentTestName(),         // label
@@ -912,13 +963,13 @@ TEST(ImageDecoderTest, VerifySimpleDecoding) {
   EXPECT_EQ(result_2->image_info.size.height, 2);
 
   // If the destination size is larger than the max texture size the image
-  // is scaled down.
+  // is scaled down proportionally.
   auto result_3 = ImageDecoderImpeller::DecompressTexture(
       descriptor.get(), {.target_width = 60, .target_height = 20}, {10, 10},
       /*supports_wide_gamut=*/false, capabilities, allocator);
   ASSERT_TRUE(result_3.ok());
   EXPECT_EQ(result_3->image_info.size.width, 10);
-  EXPECT_EQ(result_3->image_info.size.height, 10);
+  EXPECT_EQ(result_3->image_info.size.height, 3);
 
   // CPU resize is forced.
   auto result_4 = ImageDecoderImpeller::DecompressTexture(

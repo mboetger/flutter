@@ -4,6 +4,8 @@
 
 #include "flutter/lib/ui/painting/image_decoder_impeller.h"
 
+#include <algorithm>
+#include <cmath>
 #include <format>
 #include <memory>
 
@@ -265,6 +267,40 @@ absl::StatusOr<ImageDecoderImpeller::DecompressResult> ResizeOnCpu(
       .image_info = decoded_image_info.value()};
 }
 
+/**
+ * Computes the target dimensions for image decompression, scaling down
+ * proportionally if the requested dimensions exceed the GPU's maximum supported
+ * texture size.
+ */
+SkISize ComputeTargetSize(const SkISize& source_size,
+                          const ImageDecoder::Options& options,
+                          const impeller::ISize& max_texture_size) {
+  const int64_t req_width = options.target_width > 0
+                                ? static_cast<int64_t>(options.target_width)
+                                : source_size.width();
+  const int64_t req_height = options.target_height > 0
+                                 ? static_cast<int64_t>(options.target_height)
+                                 : source_size.height();
+  int64_t target_w = req_width;
+  int64_t target_h = req_height;
+  if ((target_w > max_texture_size.width ||
+       target_h > max_texture_size.height) &&
+      max_texture_size.width > 0 && max_texture_size.height > 0 &&
+      target_w > 0 && target_h > 0) {
+    const double scale_w =
+        static_cast<double>(max_texture_size.width) / target_w;
+    const double scale_h =
+        static_cast<double>(max_texture_size.height) / target_h;
+    const double scale = std::min(scale_w, scale_h);
+    target_w = std::clamp<int64_t>(std::round(target_w * scale), 1,
+                                   max_texture_size.width);
+    target_h = std::clamp<int64_t>(std::round(target_h * scale), 1,
+                                   max_texture_size.height);
+  }
+  return SkISize::Make(static_cast<int32_t>(target_w),
+                       static_cast<int32_t>(target_h));
+}
+
 bool IsZeroOpConversion(ImageDescriptor::PixelFormat input,
                         ImageDecoder::TargetPixelFormat output) {
   switch (input) {
@@ -347,10 +383,7 @@ ImageDecoderImpeller::DecompressTexture(
   const SkISize source_size = SkISize::Make(descriptor->image_info().width,
                                             descriptor->image_info().height);
   const SkISize target_size =
-      SkISize::Make(std::min(max_texture_size.width,
-                             static_cast<int64_t>(options.target_width)),
-                    std::min(max_texture_size.height,
-                             static_cast<int64_t>(options.target_height)));
+      ComputeTargetSize(source_size, options, max_texture_size);
 
   // Fast path for when the input requires no decompressing or conversion.
   if (!descriptor->is_compressed() && source_size == target_size &&
