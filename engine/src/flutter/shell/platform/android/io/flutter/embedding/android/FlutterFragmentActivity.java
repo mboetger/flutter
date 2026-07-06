@@ -38,7 +38,7 @@ import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
-import androidx.fragment.app.FragmentActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentManager;
 import io.flutter.Log;
 import io.flutter.embedding.android.FlutterActivityLaunchConfigs.BackgroundMode;
@@ -50,17 +50,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A Flutter {@code Activity} that is based upon {@link FragmentActivity}.
+ * A Flutter {@code Activity} that is based upon {@link AppCompatActivity}.
  *
  * <p>{@code FlutterFragmentActivity} exists because there are some Android APIs in the ecosystem
- * that only accept a {@link FragmentActivity}. If a {@link FragmentActivity} is not required, you
- * should consider using a regular {@link FlutterActivity} instead, because {@link FlutterActivity}
- * is considered to be the standard, canonical implementation of a Flutter {@code Activity}.
+ * that only accept a {@link androidx.fragment.app.FragmentActivity} or {@link AppCompatActivity}.
+ * If a {@link androidx.fragment.app.FragmentActivity} is not required, you should consider using a
+ * regular {@link FlutterActivity} instead, because {@link FlutterActivity} is considered to be the
+ * standard, canonical implementation of a Flutter {@code Activity}.
  */
 // A number of methods in this class have the same implementation as FlutterActivity. These methods
 // are duplicated for readability purposes. Be sure to replicate any change in this class in
 // FlutterActivity, too.
-public class FlutterFragmentActivity extends FragmentActivity
+public class FlutterFragmentActivity extends AppCompatActivity
     implements FlutterEngineProvider, FlutterEngineConfigurator {
   private static final String TAG = "FlutterFragmentActivity";
 

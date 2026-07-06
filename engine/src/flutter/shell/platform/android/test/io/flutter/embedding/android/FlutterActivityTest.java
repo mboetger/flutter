@@ -12,6 +12,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -435,12 +436,13 @@ public class FlutterActivityTest {
   public void itCanBeDetachedFromTheEngineAndStopSendingFurtherEvents() {
     FlutterActivityAndFragmentDelegate mockDelegate =
         mock(FlutterActivityAndFragmentDelegate.class);
-    FlutterEngine mockEngine = mock(FlutterEngine.class);
+    FlutterEngine mockEngine = mock(FlutterEngine.class, RETURNS_DEEP_STUBS);
     FlutterEngineCache.getInstance().put("my_cached_engine", mockEngine);
 
     Intent intent = FlutterActivity.withCachedEngine("my_cached_engine").build(ctx);
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
+    activityController.create();
     FlutterActivity flutterActivity = activityController.get();
 
     isDelegateAttached = true;
@@ -553,12 +555,13 @@ public class FlutterActivityTest {
     isDelegateAttached = true;
     when(mockDelegate.isAttached()).thenAnswer(invocation -> isDelegateAttached);
     doAnswer(invocation -> isDelegateAttached = false).when(mockDelegate).onDetach();
-    FlutterEngine mockEngine = mock(FlutterEngine.class);
+    FlutterEngine mockEngine = mock(FlutterEngine.class, RETURNS_DEEP_STUBS);
     FlutterEngineCache.getInstance().put("my_cached_engine", mockEngine);
 
     Intent intent = FlutterActivity.withCachedEngine("my_cached_engine").build(ctx);
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
+    activityController.create();
     FlutterActivity flutterActivity = activityController.get();
 
     flutterActivity.setDelegate(mockDelegate);
@@ -580,12 +583,13 @@ public class FlutterActivityTest {
     isDelegateAttached = true;
     when(mockDelegate.isAttached()).thenAnswer(invocation -> isDelegateAttached);
     doAnswer(invocation -> isDelegateAttached = false).when(mockDelegate).onDetach();
-    FlutterEngine mockEngine = mock(FlutterEngine.class);
+    FlutterEngine mockEngine = mock(FlutterEngine.class, RETURNS_DEEP_STUBS);
     FlutterEngineCache.getInstance().put("my_cached_engine", mockEngine);
 
     Intent intent = FlutterActivity.withCachedEngine("my_cached_engine").build(ctx);
     ActivityController<FlutterActivity> activityController =
         Robolectric.buildActivity(FlutterActivity.class, intent);
+    activityController.create();
     FlutterActivity flutterActivity = activityController.get();
 
     flutterActivity.setDelegate(mockDelegate);

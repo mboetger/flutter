@@ -43,9 +43,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
-import androidx.lifecycle.LifecycleRegistry;
 import io.flutter.Log;
 import io.flutter.embedding.android.FlutterActivityLaunchConfigs.BackgroundMode;
 import io.flutter.embedding.engine.FlutterEngine;
@@ -201,14 +201,14 @@ import java.util.List;
  * screen until the Android application is initialized.
  *
  * <p><strong>Alternative Activity</strong> {@link FlutterFragmentActivity} is also available, which
- * is similar to {@code FlutterActivity} but it extends {@code FragmentActivity}. You should use
+ * is similar to {@code FlutterActivity} but is based upon {@code FragmentActivity}. You should use
  * {@code FlutterActivity}, if possible, but if you need a {@code FragmentActivity} then you should
  * use {@link FlutterFragmentActivity}.
  */
 // A number of methods in this class have the same implementation as FlutterFragmentActivity. These
 // methods are duplicated for readability purposes. Be sure to replicate any change in this class in
 // FlutterFragmentActivity, too.
-public class FlutterActivity extends Activity
+public class FlutterActivity extends AppCompatActivity
     implements FlutterActivityAndFragmentDelegate.Host, LifecycleOwner {
   private static final String TAG = "FlutterActivity";
 
@@ -596,12 +596,6 @@ public class FlutterActivity extends Activity
   // implementation for details about why it exists.
   @VisibleForTesting protected FlutterActivityAndFragmentDelegate delegate;
 
-  @NonNull private LifecycleRegistry lifecycle;
-
-  public FlutterActivity() {
-    lifecycle = new LifecycleRegistry(this);
-  }
-
   /**
    * This method exists so that JVM tests can ensure that a delegate exists without putting this
    * Activity through any lifecycle events, because JVM tests cannot handle executing any lifecycle
@@ -644,8 +638,6 @@ public class FlutterActivity extends Activity
     delegate = new FlutterActivityAndFragmentDelegate(this);
     delegate.onAttach(this);
     delegate.onRestoreInstanceState(savedInstanceState);
-
-    lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);
 
     configureWindowForTransparency();
 
@@ -826,7 +818,6 @@ public class FlutterActivity extends Activity
   @Override
   protected void onStart() {
     super.onStart();
-    lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_START);
     if (stillAttachedForEvent("onStart")) {
       delegate.onStart();
     }
@@ -835,7 +826,6 @@ public class FlutterActivity extends Activity
   @Override
   protected void onResume() {
     super.onResume();
-    lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
     if (stillAttachedForEvent("onResume")) {
       delegate.onResume();
     }
@@ -855,7 +845,6 @@ public class FlutterActivity extends Activity
     if (stillAttachedForEvent("onPause")) {
       delegate.onPause();
     }
-    lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
   }
 
   @Override
@@ -864,7 +853,6 @@ public class FlutterActivity extends Activity
     if (stillAttachedForEvent("onStop")) {
       delegate.onStop();
     }
-    lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
   }
 
   @Override
@@ -917,7 +905,6 @@ public class FlutterActivity extends Activity
       delegate.onDetach();
     }
     release();
-    lifecycle.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY);
   }
 
   @Override
@@ -1022,17 +1009,6 @@ public class FlutterActivity extends Activity
   @NonNull
   public Activity getActivity() {
     return this;
-  }
-
-  /**
-   * {@link FlutterActivityAndFragmentDelegate.Host} method that is used by {@link
-   * FlutterActivityAndFragmentDelegate} to obtain a {@code Lifecycle} reference as needed. This
-   * reference is used by the delegate to provide Flutter plugins with access to lifecycle events.
-   */
-  @Override
-  @NonNull
-  public Lifecycle getLifecycle() {
-    return lifecycle;
   }
 
   /**
