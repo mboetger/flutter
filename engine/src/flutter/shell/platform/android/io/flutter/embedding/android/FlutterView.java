@@ -820,6 +820,20 @@ public class FlutterView extends FrameLayout
       viewportMetrics.viewInsetRight = 0;
       viewportMetrics.viewInsetBottom = guessBottomKeyboardInset(insets);
       viewportMetrics.viewInsetLeft = 0;
+
+      if (Build.VERSION.SDK_INT >= API_LEVELS.API_28) {
+        DisplayCutout cutout = insets.getDisplayCutout();
+        if (cutout != null) {
+          viewportMetrics.viewPaddingTop =
+              Math.max(viewportMetrics.viewPaddingTop, cutout.getSafeInsetTop());
+          viewportMetrics.viewPaddingRight =
+              Math.max(viewportMetrics.viewPaddingRight, cutout.getSafeInsetRight());
+          viewportMetrics.viewPaddingBottom =
+              Math.max(viewportMetrics.viewPaddingBottom, cutout.getSafeInsetBottom());
+          viewportMetrics.viewPaddingLeft =
+              Math.max(viewportMetrics.viewPaddingLeft, cutout.getSafeInsetLeft());
+        }
+      }
     }
 
     // Data from the DisplayCutout bounds. Cutouts for cameras and other sensors are

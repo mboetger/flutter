@@ -651,6 +651,55 @@ public class FlutterViewTest {
   }
 
   @SuppressWarnings("deprecation")
+  // getSystemUiVisibility, getWindowSystemUiVisibility required to test pre api 30 behavior.
+  // This test uses the pre-API 30 Algorithm for window insets.
+  // Verifies that on API 28 and 29 (when DisplayCutout was introduced), even when in fullscreen
+  // mode (where status bar is hidden and system window inset top is 0), safe insets from a
+  // DisplayCutout (e.g., camera notch) are preserved in viewPaddingTop so SafeArea works.
+  // Reproduces https://github.com/flutter/flutter/issues/71976.
+  @Test
+  @TargetApi(28)
+  @Config(minSdk = API_LEVELS.API_28, maxSdk = API_LEVELS.API_29, qualifiers = "port")
+  public void systemInsetDisplayCutoutWhenFullscreenLegacy() {
+    FlutterView flutterView = spy(new FlutterView(ctx));
+    setExpectedDisplayRotation(Surface.ROTATION_0);
+    assertEquals(0, flutterView.getSystemUiVisibility());
+    when(flutterView.getWindowSystemUiVisibility())
+        .thenReturn(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
+    when(flutterView.getContext()).thenReturn(ctx);
+
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+    ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+        ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+    verify(flutterRenderer).setViewportMetrics(viewportMetricsCaptor.capture());
+    assertEquals(0, viewportMetricsCaptor.getValue().viewPaddingTop);
+
+    // Simulate system applying a window inset with status bar hidden (top window inset 0),
+    // but with a physical display cutout (camera notch) present at the top.
+    WindowInsets windowInsets = mock(WindowInsets.class);
+    DisplayCutout displayCutout = mock(DisplayCutout.class);
+    mockSystemWindowInsets(windowInsets, 0, 0, 0, 0);
+    mockSystemGestureInsetsIfNeed(windowInsets);
+    when(windowInsets.getDisplayCutout()).thenReturn(displayCutout);
+    when(displayCutout.getSafeInsetTop()).thenReturn(120);
+    when(displayCutout.getSafeInsetBottom()).thenReturn(0);
+    when(displayCutout.getSafeInsetLeft()).thenReturn(0);
+    when(displayCutout.getSafeInsetRight()).thenReturn(0);
+
+    flutterView.onApplyWindowInsets(windowInsets);
+
+    verify(flutterRenderer, times(2)).setViewportMetrics(viewportMetricsCaptor.capture());
+    // Without the fix for #71976, viewPaddingTop is 0 because statusBarVisible is false
+    // and DisplayCutout is ignored in the pre-API 30 fallback path.
+    // With the fix, viewPaddingTop should preserve the cutout safe inset (120).
+    assertEquals(120, viewportMetricsCaptor.getValue().viewPaddingTop);
+  }
+
+  @SuppressWarnings("deprecation")
   // getSystemUiVisibility, getWindowSystemUiVisibility, getSystemGestureInsets required
   // to test pre api 30 interop behavior.
   // This test uses the API 30+ Algorithm for window insets. The legacy algorithm is
