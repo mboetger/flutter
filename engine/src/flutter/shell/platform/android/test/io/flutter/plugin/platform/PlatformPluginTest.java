@@ -15,6 +15,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -641,6 +642,113 @@ public class PlatformPluginTest {
       // Should re-apply WindowCompat, not setSystemUiVisibility.
       windowCompatMock.verify(() -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, false));
     }
+  }
+
+  @SuppressWarnings("deprecation")
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void showSystemOverlays_defersDecorViewModificationDuringStartup() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+
+    PlatformPlugin.PlatformPluginDelegate mockDelegate =
+        mock(PlatformPlugin.PlatformPluginDelegate.class);
+    when(mockDelegate.canUpdateSystemUiOverlays()).thenReturn(false);
+
+    PlatformPlugin platformPlugin =
+        new PlatformPlugin(mockActivity, mockPlatformChannel, mockDelegate);
+
+    // When Dart calls SystemChrome.setEnabledSystemUIOverlays([]) during startup while
+    // canUpdateSystemUiOverlays is false...
+    platformPlugin.mPlatformMessageHandler.showSystemOverlays(java.util.Collections.emptyList());
+
+    // Verify that the decor view's system UI visibility is NOT modified while deferred.
+    verify(fakeDecorView, never()).setSystemUiVisibility(anyInt());
+
+    // Now simulate first frame rendered allowing updates.
+    when(mockDelegate.canUpdateSystemUiOverlays()).thenReturn(true);
+    platformPlugin.updateSystemUiOverlays();
+
+    verify(fakeDecorView)
+        .setSystemUiVisibility(
+            PlatformPlugin.DEFAULT_SYSTEM_UI
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+  }
+
+  @SuppressWarnings("deprecation")
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void showSystemUiMode_edgeToEdge_defersModificationDuringStartup() {
+    try (MockedStatic<WindowCompat> windowCompatMock = mockStatic(WindowCompat.class)) {
+      View fakeDecorView = mock(View.class);
+      Window fakeWindow = mock(Window.class);
+      Activity mockActivity = mock(Activity.class);
+      when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+      when(mockActivity.getWindow()).thenReturn(fakeWindow);
+
+      PlatformPlugin.PlatformPluginDelegate mockDelegate =
+          mock(PlatformPlugin.PlatformPluginDelegate.class);
+      when(mockDelegate.canUpdateSystemUiOverlays()).thenReturn(false);
+
+      PlatformPlugin platformPlugin =
+          new PlatformPlugin(mockActivity, mockPlatformChannel, mockDelegate);
+
+      platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+          PlatformChannel.SystemUiMode.EDGE_TO_EDGE);
+
+      windowCompatMock.verify(
+          () -> WindowCompat.setDecorFitsSystemWindows(any(), anyBoolean()), never());
+
+      when(mockDelegate.canUpdateSystemUiOverlays()).thenReturn(true);
+      platformPlugin.updateSystemUiOverlays();
+
+      windowCompatMock.verify(() -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, false));
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void setSystemUiOverlayStyle_defersModificationDuringStartup() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+
+    PlatformPlugin.PlatformPluginDelegate mockDelegate =
+        mock(PlatformPlugin.PlatformPluginDelegate.class);
+    when(mockDelegate.canUpdateSystemUiOverlays()).thenReturn(false);
+
+    PlatformPlugin platformPlugin =
+        new PlatformPlugin(mockActivity, mockPlatformChannel, mockDelegate);
+
+    PlatformChannel.SystemChromeStyle style =
+        new PlatformChannel.SystemChromeStyle(
+            0xFF000000,
+            PlatformChannel.Brightness.LIGHT,
+            true,
+            0xFF000000,
+            PlatformChannel.Brightness.LIGHT,
+            0xFF000000,
+            true);
+
+    platformPlugin.mPlatformMessageHandler.setSystemUiOverlayStyle(style);
+
+    verify(fakeWindow, never()).setStatusBarColor(anyInt());
+    verify(fakeWindow, never()).setNavigationBarColor(anyInt());
+
+    when(mockDelegate.canUpdateSystemUiOverlays()).thenReturn(true);
+    platformPlugin.updateSystemUiOverlays();
+
+    verify(fakeWindow).setStatusBarColor(0xFF000000);
+    verify(fakeWindow).setNavigationBarColor(0xFF000000);
   }
 
   @SuppressWarnings("deprecation")

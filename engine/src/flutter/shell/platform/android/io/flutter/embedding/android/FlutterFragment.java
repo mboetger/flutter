@@ -1581,6 +1581,11 @@ public class FlutterFragment extends Fragment
     }
   }
 
+  @Override
+  public boolean canUpdateSystemUiOverlays() {
+    return delegate != null && delegate.canUpdateSystemUiOverlays();
+  }
+
   /**
    * Configures a {@link io.flutter.embedding.engine.FlutterEngine} after its creation.
    *

@@ -72,6 +72,16 @@ public class PlatformPlugin {
      * io.flutter.embedding.android.FlutterActivity}.
      */
     default void setFrameworkHandlesBack(boolean frameworkHandlesBack) {}
+
+    /**
+     * Returns true if system UI overlays can be updated immediately.
+     *
+     * <p>When false, {@link PlatformPlugin} will delay updating system UI overlays until {@link
+     * #updateSystemUiOverlays()} is called after the first Flutter frame is displayed.
+     */
+    default boolean canUpdateSystemUiOverlays() {
+      return true;
+    }
   }
 
   @VisibleForTesting
@@ -284,7 +294,7 @@ public class PlatformPlugin {
     // If we were previously in edge-to-edge mode and are switching to a different mode,
     // restore the default window inset behavior.
     if (systemUiMode != PlatformChannel.SystemUiMode.EDGE_TO_EDGE) {
-      disableEdgeToEdge();
+      isEdgeToEdge = false;
     }
 
     if (systemUiMode == PlatformChannel.SystemUiMode.LEAN_BACK) {
@@ -373,10 +383,7 @@ public class PlatformPlugin {
       // to ensure contrast with buttons on the nav and status bars, unless the contrast is not
       // enforced in the overlay styling.
       isEdgeToEdge = true;
-      enableEdgeToEdge();
-      if (currentTheme != null) {
-        setSystemChromeSystemUIOverlayStyle(currentTheme);
-      }
+      updateSystemUiOverlays();
       return;
     } else {
       // When none of the conditions are matched, return without updating the system UI overlays.
@@ -391,7 +398,7 @@ public class PlatformPlugin {
       List<PlatformChannel.SystemUiOverlay> overlaysToShow) {
     // If we were in edge-to-edge mode, restore normal inset behavior since this
     // older API sets specific overlay flags that are incompatible with edge-to-edge.
-    disableEdgeToEdge();
+    isEdgeToEdge = false;
 
     // Start by assuming we want to hide all system overlays (like an immersive
     // game).
@@ -432,11 +439,15 @@ public class PlatformPlugin {
    * PlatformPlugin}.
    */
   public void updateSystemUiOverlays() {
+    if (platformPluginDelegate != null && !platformPluginDelegate.canUpdateSystemUiOverlays()) {
+      return;
+    }
     if (isEdgeToEdge) {
       // In edge-to-edge mode, re-apply the modern API instead of using deprecated
       // setSystemUiVisibility(), which could interfere with WindowCompat on API < 30.
       enableEdgeToEdge();
     } else {
+      disableEdgeToEdge();
       activity.getWindow().getDecorView().setSystemUiVisibility(mEnabledOverlays);
     }
     if (currentTheme != null) {
@@ -468,10 +479,7 @@ public class PlatformPlugin {
    * Restores the default decor-fits-system-windows behavior.
    */
   private void disableEdgeToEdge() {
-    if (isEdgeToEdge) {
-      isEdgeToEdge = false;
-      WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), true);
-    }
+    WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), true);
   }
 
   /**
@@ -485,6 +493,10 @@ public class PlatformPlugin {
   @Deprecated
   private void setSystemChromeSystemUIOverlayStyle(
       PlatformChannel.SystemChromeStyle systemChromeStyle) {
+    currentTheme = systemChromeStyle;
+    if (platformPluginDelegate != null && !platformPluginDelegate.canUpdateSystemUiOverlays()) {
+      return;
+    }
     Window window = activity.getWindow();
     View view = window.getDecorView();
     WindowInsetsControllerCompat windowInsetsControllerCompat =
@@ -601,8 +613,6 @@ public class PlatformPlugin {
       window.setNavigationBarContrastEnforced(
           systemChromeStyle.systemNavigationBarContrastEnforced);
     }
-
-    currentTheme = systemChromeStyle;
   }
 
   private void setFrameworkHandlesBack(boolean frameworkHandlesBack) {

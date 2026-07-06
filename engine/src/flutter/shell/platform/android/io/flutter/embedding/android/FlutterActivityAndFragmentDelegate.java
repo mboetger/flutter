@@ -583,6 +583,7 @@ import java.util.Set;
             if (isFlutterUiDisplayed && activePreDrawListener != null) {
               flutterView.getViewTreeObserver().removeOnPreDrawListener(this);
               activePreDrawListener = null;
+              updateSystemUiOverlays();
             }
             return isFlutterUiDisplayed;
           }
@@ -627,12 +628,16 @@ import java.util.Set;
     }
   }
 
+  boolean canUpdateSystemUiOverlays() {
+    return activePreDrawListener == null;
+  }
+
   /**
    * Refreshes Android's window system UI (AKA system chrome) to match Flutter's desired system
    * chrome style.
    */
   void updateSystemUiOverlays() {
-    if (platformPlugin != null) {
+    if (platformPlugin != null && canUpdateSystemUiOverlays()) {
       // TODO(mattcarroll): find a better way to handle the update of UI overlays than calling
       // through to platformPlugin. We're implicitly entangling the Window, Activity,
       // Fragment, and engine all with this one call.

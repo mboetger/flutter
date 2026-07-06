@@ -57,6 +57,7 @@ import io.flutter.embedding.engine.systemchannels.SettingsChannel;
 import io.flutter.embedding.engine.systemchannels.SystemChannel;
 import io.flutter.embedding.engine.systemchannels.TextInputChannel;
 import io.flutter.plugin.localization.LocalizationPlugin;
+import io.flutter.plugin.platform.PlatformPlugin;
 import io.flutter.plugin.platform.PlatformViewsController;
 import io.flutter.plugin.platform.PlatformViewsController2;
 import io.flutter.plugin.platform.PlatformViewsControllerDelegator;
@@ -1626,6 +1627,79 @@ public class FlutterActivityAndFragmentDelegateTest {
     delegate.onResume();
 
     verify(mockFlutterEngine.getRenderer()).restoreSurfaceProducers();
+  }
+
+  @Test
+  public void onPostResume_defersSystemUiOverlaysBeforeFirstFrameRendered() {
+    PlatformPlugin mockPlatformPlugin = mock(PlatformPlugin.class);
+    when(mockHost.providePlatformPlugin(any(), any())).thenReturn(mockPlatformPlugin);
+    FlutterActivityAndFragmentDelegate delegate = new FlutterActivityAndFragmentDelegate(mockHost);
+
+    delegate.onAttach(ctx);
+    delegate.onCreateView(
+        /* inflater=*/ null,
+        /* container=*/ null,
+        /* savedInstanceState=*/ null,
+        /*flutterViewId=*/ 0,
+        /*shouldDelayFirstAndroidViewDraw=*/ true);
+
+    // Verify that activePreDrawListener is active (meaning the first draw is delayed and splash
+    // screen is showing).
+    assertNotNull(delegate.activePreDrawListener);
+
+    // --- Execute behavior under test ---
+    // When onPostResume is called before the first frame is rendered...
+    delegate.onPostResume();
+
+    // Verify that updateSystemUiOverlays is NOT invoked on PlatformPlugin while first draw is still
+    // delayed.
+    verify(mockPlatformPlugin, never()).updateSystemUiOverlays();
+
+    // Simulate first frame rendered and displayed.
+    ArgumentCaptor<FlutterUiDisplayListener> listenerCaptor =
+        ArgumentCaptor.forClass(FlutterUiDisplayListener.class);
+    verify(mockFlutterEngine.getRenderer())
+        .addIsDisplayingFlutterUiListener(listenerCaptor.capture());
+    listenerCaptor.getValue().onFlutterUiDisplayed();
+
+    // Trigger onPreDraw on the activePreDrawListener.
+    delegate.activePreDrawListener.onPreDraw();
+    assertNull(delegate.activePreDrawListener);
+
+    // Verify that updateSystemUiOverlays is now invoked on PlatformPlugin.
+    verify(mockPlatformPlugin, times(1)).updateSystemUiOverlays();
+  }
+
+  @Test
+  public void updateSystemUiOverlays_defersPlatformPluginBeforeFirstFrameRendered() {
+    PlatformPlugin mockPlatformPlugin = mock(PlatformPlugin.class);
+    when(mockHost.providePlatformPlugin(any(), any())).thenReturn(mockPlatformPlugin);
+    FlutterActivityAndFragmentDelegate delegate = new FlutterActivityAndFragmentDelegate(mockHost);
+
+    delegate.onAttach(ctx);
+    delegate.onCreateView(
+        /* inflater=*/ null,
+        /* container=*/ null,
+        /* savedInstanceState=*/ null,
+        /*flutterViewId=*/ 0,
+        /*shouldDelayFirstAndroidViewDraw=*/ true);
+
+    assertNotNull(delegate.activePreDrawListener);
+
+    // --- Execute behavior under test ---
+    delegate.updateSystemUiOverlays();
+
+    verify(mockPlatformPlugin, never()).updateSystemUiOverlays();
+
+    ArgumentCaptor<FlutterUiDisplayListener> listenerCaptor =
+        ArgumentCaptor.forClass(FlutterUiDisplayListener.class);
+    verify(mockFlutterEngine.getRenderer())
+        .addIsDisplayingFlutterUiListener(listenerCaptor.capture());
+    listenerCaptor.getValue().onFlutterUiDisplayed();
+    delegate.activePreDrawListener.onPreDraw();
+    assertNull(delegate.activePreDrawListener);
+
+    verify(mockPlatformPlugin, times(1)).updateSystemUiOverlays();
   }
 
   /**

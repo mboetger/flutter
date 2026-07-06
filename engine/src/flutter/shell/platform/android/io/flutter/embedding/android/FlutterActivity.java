@@ -1331,6 +1331,11 @@ public class FlutterActivity extends Activity
         FLUTTER_VIEW_ID, activity, flutterEngine.getSensitiveContentChannel());
   }
 
+  @Override
+  public boolean canUpdateSystemUiOverlays() {
+    return delegate != null && delegate.canUpdateSystemUiOverlays();
+  }
+
   /**
    * Hook for subclasses to easily configure a {@code FlutterEngine}.
    *
