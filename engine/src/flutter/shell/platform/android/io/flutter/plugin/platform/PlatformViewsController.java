@@ -523,7 +523,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     }
 
     Object createParams = null;
-    if (request.params != null) {
+    if (request.params != null && viewFactory.getCreateArgsCodec() != null) {
       createParams = viewFactory.getCreateArgsCodec().decodeMessage(request.params);
     }
 

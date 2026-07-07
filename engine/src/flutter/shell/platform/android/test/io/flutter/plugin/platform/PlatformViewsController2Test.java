@@ -598,6 +598,52 @@ public class PlatformViewsController2Test {
         /*messageData=*/ 0);
   }
 
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void itCreatesPlatformViewWithLambdaAndNonNullParamsWithoutCrashing() {
+    PlatformViewRegistryImpl registryImpl = new PlatformViewRegistryImpl();
+    PlatformViewsController2 platformViewsController2 = new PlatformViewsController2();
+    platformViewsController2.setRegistry(registryImpl);
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController2.setFlutterJNI(jni);
+    attach(jni, platformViewsController2);
+
+    final boolean[] callbackCalled = {false};
+    final Object[] receivedArgs = {new Object()}; // non-null initial value
+
+    // Register factory via the new lambda overload
+    platformViewsController2.getRegistry().registerViewFactory(
+        "dummy-lambda-view",
+        (context, viewId, args) -> {
+          callbackCalled[0] = true;
+          receivedArgs[0] = args;
+          return new PlatformView() {
+            @Override
+            public View getView() {
+              return new View(context);
+            }
+
+            @Override
+            public void dispose() {}
+          };
+        });
+
+    // Create the platform view with a non-null params payload
+    int viewId = 42;
+    ByteBuffer params = ByteBuffer.wrap(new byte[]{1, 2, 3});
+    final PlatformViewCreationRequest request =
+        PlatformViewCreationRequest.createHCPPRequest(
+            viewId,
+            "dummy-lambda-view",
+            View.LAYOUT_DIRECTION_LTR,
+            params);
+
+    PlatformView pView = platformViewsController2.createFlutterPlatformView(request);
+    assertNotNull(pView);
+    assertTrue(callbackCalled[0]);
+    assertNull(receivedArgs[0]); // Verification that args decoded is null (since codec is null)
+  }
+
   private static void disposePlatformView(
       FlutterJNI jni, PlatformViewsController2 PlatformViewsController2, int platformViewId) {
 

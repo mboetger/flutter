@@ -1967,6 +1967,54 @@ public class PlatformViewsControllerTest {
         /*messageData=*/ 0);
   }
 
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void itCreatesPlatformViewWithLambdaAndNonNullParamsWithoutCrashing() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    final boolean[] callbackCalled = {false};
+    final Object[] receivedArgs = {new Object()}; // non-null initial value
+
+    // Register factory via the new lambda overload
+    platformViewsController.getRegistry().registerViewFactory(
+        "dummy-lambda-view",
+        (context, viewId, args) -> {
+          callbackCalled[0] = true;
+          receivedArgs[0] = args;
+          return new PlatformView() {
+            @Override
+            public View getView() {
+              return new View(context);
+            }
+
+            @Override
+            public void dispose() {}
+          };
+        });
+
+    // Create the platform view with a non-null params payload
+    int viewId = 42;
+    ByteBuffer params = ByteBuffer.wrap(new byte[]{1, 2, 3});
+    final PlatformViewCreationRequest request =
+        new PlatformViewCreationRequest(
+            viewId,
+            "dummy-lambda-view",
+            0,
+            0,
+            128,
+            128,
+            View.LAYOUT_DIRECTION_LTR,
+            params);
+
+    PlatformView pView = platformViewsController.createPlatformView(request, true);
+    assertNotNull(pView);
+    assertTrue(callbackCalled[0]);
+    assertNull(receivedArgs[0]); // Verification that args decoded is null (since codec is null)
+  }
+
   private static void disposePlatformView(
       FlutterJNI jni, PlatformViewsController platformViewsController, int platformViewId) {
 

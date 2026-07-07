@@ -4,7 +4,9 @@
 
 package io.flutter.plugin.platform;
 
+import android.content.Context;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 /**
  * Registry for platform view factories.
@@ -21,4 +23,25 @@ public interface PlatformViewRegistry {
    * @return true if succeeded, false if a factory is already registered for viewTypeId.
    */
   boolean registerViewFactory(@NonNull String viewTypeId, @NonNull PlatformViewFactory factory);
+
+  /**
+   * Registers a factory for a platform view using a callback.
+   *
+   * @param viewTypeId unique identifier for the platform view's type.
+   * @param factoryCallback callback for creating platform views of the specified type.
+   * @return true if succeeded, false if a factory is already registered for viewTypeId.
+   */
+  default boolean registerViewFactory(
+      @NonNull String viewTypeId, @NonNull PlatformViewFactoryCallback factoryCallback) {
+    return registerViewFactory(
+        viewTypeId,
+        new PlatformViewFactory(null) {
+          @NonNull
+          @Override
+          public PlatformView create(
+              @NonNull Context context, int viewId, @Nullable Object args) {
+            return factoryCallback.create(context, viewId, args);
+          }
+        });
+  }
 }
