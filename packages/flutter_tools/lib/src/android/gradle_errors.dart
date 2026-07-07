@@ -393,7 +393,10 @@ final lockFileDepMissingHandler = GradleHandledError(
 // This handler is made visible in other files so that we can uniquely set it
 // to be the lowest priority error.
 final incompatibleKotlinVersionHandler = GradleHandledError(
-  test: _lineMatcher(const <String>['was compiled with an incompatible version of Kotlin']),
+  test: _lineMatcher(const <String>[
+    'was compiled with an incompatible version of Kotlin',
+    'supports only Kotlin Gradle plugin version',
+  ]),
   handler: ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
     final File gradleFile = project.android.hostAppGradleFile;
     final File settingsFile = project.directory

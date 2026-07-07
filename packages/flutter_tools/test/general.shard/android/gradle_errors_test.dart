@@ -968,6 +968,12 @@ Execution failed for task ':app:generateDebugFeatureTransitiveDeps'.
         ),
         isTrue,
       );
+      expect(
+        incompatibleKotlinVersionHandler.test(
+          "The Android Gradle plugin supports only Kotlin Gradle plugin version 1.2.51 and higher. Project 'plugin_with_old_kotlin' is using version 1.2.30.",
+        ),
+        isTrue,
+      );
     });
 
     testUsingContext(
