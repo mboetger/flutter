@@ -76,6 +76,31 @@ import java.util.regex.Pattern;
  * consumed by a Flutter widget, as if it were an Android {@link View}. {@code AccessibilityBridge}
  * refers to Flutter's accessible widgets as "virtual views" and identifies them with "virtual view
  * IDs".
+ *
+ * <p><b>Design Decision: AccessibilityNodeProvider vs. ExploreByTouchHelper</b>
+ *
+ * <p>Migrating this class from {@link AccessibilityNodeProvider} to Android's {@code
+ * ExploreByTouchHelper} (considered in GitHub issue #11025) is decided against for the following
+ * reasons:
+ *
+ * <ul>
+ *   <li><b>Complex Nested Hierarchy:</b> {@code ExploreByTouchHelper} is primarily designed for a
+ *       single-level flat hierarchy of virtual children within a single custom View. Flutter,
+ *       however, manages a deep, nested hierarchy of {@code SemanticsNode}s that requires direct,
+ *       low-level control over accessibility node queries and traversal.
+ *   <li><b>Custom Focus Management:</b> Flutter relies on its own custom focus tree implemented in
+ *       Dart and synchronized with the platform side. The internal focus management logic of {@code
+ *       ExploreByTouchHelper} would conflict with and potentially break Flutter's custom-engineered focus
+ *       behavior.
+ *   <li><b>Integration with Platform Views:</b> Flutter's accessibility bridging integrates with
+ *       embedded Android views via {@code AccessibilityViewEmbedder}. Attempting to route these through
+ *       the compatibility layers of {@code ExploreByTouchHelper} introduces a high risk of regressions
+ *       and compatibility issues.
+ *   <li><b>Refactoring Overhead:</b> {@code AccessibilityBridge} is a highly complex, 3,000+ line
+ *       class. Rewriting it to use {@code ExploreByTouchHelper} would require a massive restructuring
+ *       with minimal benefit, since {@code AccessibilityNodeProvider} already provides the necessary API for
+ *       our custom virtual view tree.
+ * </ul>
  */
 public class AccessibilityBridge extends AccessibilityNodeProvider {
   private static final String TAG = "AccessibilityBridge";
