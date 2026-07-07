@@ -12,6 +12,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 
 import 'binding.dart';
+import 'message_codec.dart';
 import 'system_channels.dart';
 
 export 'dart:ui' show Brightness, Color;
@@ -563,6 +564,21 @@ abstract final class SystemChrome {
       'SystemChrome.setApplicationSwitcherDescription',
       <String, dynamic>{'label': description.label, 'primaryColor': description.primaryColor},
     );
+  }
+
+  /// Control whether the screen should remain on (wake lock).
+  ///
+  /// Setting this to true will prevent the screen from turning off (dimming or
+  /// locking) due to inactivity.
+  static Future<void> setWakeLock(bool enabled) async {
+    try {
+      await SystemChannels.platform.invokeMethod<void>(
+        'SystemChrome.setWakeLock',
+        <String, dynamic>{'enabled': enabled},
+      );
+    } on PlatformException {
+      // Ignore if the platform doesn't support or implement wake lock.
+    }
   }
 
   /// Specifies the [SystemUiMode] to have visible when the application

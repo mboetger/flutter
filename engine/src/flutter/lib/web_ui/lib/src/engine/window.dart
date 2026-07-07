@@ -441,6 +441,9 @@ final class EngineFlutterWindow extends EngineFlutterView implements ui.Singleto
   bool get alwaysUse24HourFormat => platformDispatcher.alwaysUse24HourFormat;
 
   @override
+  bool get isScreenRound => platformDispatcher.isScreenRound;
+
+  @override
   ui.VoidCallback? get onTextScaleFactorChanged => platformDispatcher.onTextScaleFactorChanged;
   @override
   set onTextScaleFactorChanged(ui.VoidCallback? callback) {

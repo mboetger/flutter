@@ -1980,6 +1980,14 @@ void main() {
           MediaQuery.maybeDisplayCornerRadiiOf,
           MediaQueryData(displayCornerRadii: BorderRadius.all(Radius.circular(33))),
         ),
+        const _MediaQueryAspectCase(
+          MediaQuery.isScreenRoundOf,
+          MediaQueryData(isScreenRound: true),
+        ),
+        const _MediaQueryAspectCase(
+          MediaQuery.maybeIsScreenRoundOf,
+          MediaQueryData(isScreenRound: true),
+        ),
       ],
     ),
   );

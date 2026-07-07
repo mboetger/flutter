@@ -53,6 +53,8 @@ abstract class SingletonFlutterWindow extends FlutterView {
 
   bool get alwaysUse24HourFormat;
 
+  bool get isScreenRound;
+
   VoidCallback? get onTextScaleFactorChanged;
   set onTextScaleFactorChanged(VoidCallback? callback);
 

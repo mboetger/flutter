@@ -115,6 +115,15 @@ public class PlatformChannel {
                   result.error("error", exception.getMessage(), null);
                 }
                 break;
+              case "SystemChrome.setWakeLock":
+                try {
+                  boolean enabled = ((JSONObject) arguments).getBoolean("enabled");
+                  platformMessageHandler.setWakeLock(enabled);
+                  result.success(null);
+                } catch (JSONException exception) {
+                  result.error("error", exception.getMessage(), null);
+                }
+                break;
               case "SystemChrome.setSystemUIChangeListener":
                 platformMessageHandler.setSystemUiChangeListener();
                 result.success(null);
@@ -561,6 +570,9 @@ public class PlatformChannel {
      * https://developer.android.com/reference/android/content/Intent.html#ACTION_SEND
      */
     void share(@NonNull String text);
+
+    /** The Flutter application would like to set the wake lock status. */
+    void setWakeLock(boolean enabled);
   }
 
   /** Types of sounds the Android OS can play on behalf of an application. */

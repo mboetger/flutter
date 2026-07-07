@@ -110,6 +110,20 @@ void main() {
     );
   });
 
+  testWidgets('TestWindow can fake isScreenRound', (WidgetTester tester) async {
+    verifyPropertyFaked<bool>(
+      tester: tester,
+      realValue: false,
+      fakeValue: true,
+      propertyRetriever: () {
+        return WidgetsBinding.instance.window.isScreenRound;
+      },
+      propertyFaker: (TestWidgetsFlutterBinding binding, bool fakeValue) {
+        binding.platformDispatcher.isScreenRoundTestValue = fakeValue;
+      },
+    );
+  });
+
   testWidgets('TestWindow can clear out fake properties all at once', (WidgetTester tester) async {
     final double originalDevicePixelRatio = ui.window.devicePixelRatio;
     final double originalTextScaleFactor = ui.window.textScaleFactor;

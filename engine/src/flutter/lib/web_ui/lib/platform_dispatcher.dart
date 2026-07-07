@@ -126,6 +126,8 @@ abstract class PlatformDispatcher {
 
   bool get alwaysUse24HourFormat;
 
+  bool get isScreenRound;
+
   double get textScaleFactor;
 
   bool get nativeSpellCheckServiceDefined => false;

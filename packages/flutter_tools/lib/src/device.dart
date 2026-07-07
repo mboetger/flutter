@@ -27,7 +27,8 @@ DeviceManager? get deviceManager => context.get<DeviceManager>();
 enum Category {
   web._('web'),
   desktop._('desktop'),
-  mobile._('mobile');
+  mobile._('mobile'),
+  watch._('watch');
 
   const Category._(this.value);
 
@@ -37,7 +38,12 @@ enum Category {
   String toString() => value;
 
   static Category? fromString(String category) {
-    return const <String, Category>{'web': web, 'desktop': desktop, 'mobile': mobile}[category];
+    return const <String, Category>{
+      'web': web,
+      'desktop': desktop,
+      'mobile': mobile,
+      'watch': watch,
+    }[category];
   }
 }
 

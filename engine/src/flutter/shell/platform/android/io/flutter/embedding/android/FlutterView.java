@@ -1539,6 +1539,11 @@ public class FlutterView extends FrameLayout
       }
     }
 
+    boolean isScreenRound = false;
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_23) {
+      isScreenRound = getResources().getConfiguration().isScreenRound();
+    }
+
     flutterEngine
         .getSettingsChannel()
         .startMessage()
@@ -1551,6 +1556,7 @@ public class FlutterView extends FrameLayout
                 == 1)
         .setUse24HourFormat(DateFormat.is24HourFormat(getContext()))
         .setPlatformBrightness(brightness)
+        .setIsScreenRound(isScreenRound)
         .send();
   }
 

@@ -137,6 +137,10 @@ static void SetStatusBarStyleForSharedApplication(UIStatusBarStyle style) {
   } else if ([method isEqualToString:@"SystemChrome.setSystemUIOverlayStyle"]) {
     [self setSystemChromeSystemUIOverlayStyle:args];
     result(nil);
+  } else if ([method isEqualToString:@"SystemChrome.setWakeLock"]) {
+    BOOL enabled = [args[@"enabled"] boolValue];
+    [UIApplication sharedApplication].idleTimerDisabled = enabled;
+    result(nil);
   } else if ([method isEqualToString:@"SystemNavigator.pop"]) {
     NSNumber* isAnimated = args;
     [self popSystemNavigator:isAnimated.boolValue];

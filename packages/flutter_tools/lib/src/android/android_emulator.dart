@@ -164,7 +164,20 @@ class AndroidEmulator extends Emulator {
   String? get manufacturer => _prop('hw.device.manufacturer');
 
   @override
-  Category get category => Category.mobile;
+  Category get category {
+    final String? tagId = _prop('tag.id');
+    if (tagId != null &&
+        (tagId.toLowerCase().contains('wear') || tagId.toLowerCase().contains('wearable'))) {
+      return Category.watch;
+    }
+    final String? deviceName = _prop('hw.device.name');
+    if (deviceName != null &&
+        (deviceName.toLowerCase().contains('wear') ||
+            deviceName.toLowerCase().contains('wearable'))) {
+      return Category.watch;
+    }
+    return Category.mobile;
+  }
 
   @override
   PlatformType get platformType => PlatformType.android;

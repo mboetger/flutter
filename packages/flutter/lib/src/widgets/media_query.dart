@@ -133,6 +133,9 @@ enum _MediaQueryAspect {
 
   /// Specifies the aspect corresponding to [MediaQueryData.displayCornerRadii].
   displayCornerRadii,
+
+  /// Specifies the aspect corresponding to [MediaQueryData.isScreenRound].
+  isScreenRound,
 }
 
 /// Information about a piece of media (e.g., a window).
@@ -239,6 +242,7 @@ class MediaQueryData {
     this.wordSpacingOverride,
     this.paragraphSpacingOverride,
     this.displayCornerRadii,
+    this.isScreenRound = false,
   }) : _textScaleFactor = textScaleFactor,
        _textScaler = textScaler,
        assert(
@@ -346,7 +350,8 @@ class MediaQueryData {
       paragraphSpacingOverride =
           platformData?.paragraphSpacingOverride ??
           view.platformDispatcher.paragraphSpacingOverride,
-      displayCornerRadii = _displayCornerRadiiFromView(view);
+      displayCornerRadii = _displayCornerRadiiFromView(view),
+      isScreenRound = platformData?.isScreenRound ?? view.isScreenRound;
 
   static TextScaler _textScalerFromView(ui.FlutterView view, MediaQueryData? platformData) {
     return platformData?.textScaler ?? SystemTextScaler._(view.platformDispatcher);
@@ -630,6 +635,9 @@ class MediaQueryData {
   ///    originates.
   final bool invertColors;
 
+  /// Whether the device has a round screen.
+  final bool isScreenRound;
+
   /// Whether the platform is requesting a high contrast between foreground and
   /// background content.
   ///
@@ -860,6 +868,7 @@ class MediaQueryData {
     DeviceGestureSettings? gestureSettings,
     List<ui.DisplayFeature>? displayFeatures,
     bool? supportsShowingSystemContextMenu,
+    bool? isScreenRound,
   }) {
     assert(textScaleFactor == null || textScaler == null);
     if (textScaleFactor != null) {
@@ -892,6 +901,7 @@ class MediaQueryData {
       wordSpacingOverride: wordSpacingOverride,
       paragraphSpacingOverride: paragraphSpacingOverride,
       displayCornerRadii: displayCornerRadii,
+      isScreenRound: isScreenRound ?? this.isScreenRound,
     );
   }
 
@@ -939,6 +949,7 @@ class MediaQueryData {
       wordSpacingOverride: wordSpacingOverride,
       paragraphSpacingOverride: paragraphSpacingOverride,
       displayCornerRadii: displayCornerRadii,
+      isScreenRound: isScreenRound,
     );
   }
 
@@ -974,6 +985,7 @@ class MediaQueryData {
       wordSpacingOverride: wordSpacingOverride,
       paragraphSpacingOverride: paragraphSpacingOverride,
       displayCornerRadii: displayCornerRadii,
+      isScreenRound: isScreenRound,
     );
   }
 
@@ -1177,7 +1189,8 @@ class MediaQueryData {
         other.letterSpacingOverride == letterSpacingOverride &&
         other.wordSpacingOverride == wordSpacingOverride &&
         other.paragraphSpacingOverride == paragraphSpacingOverride &&
-        other.displayCornerRadii == displayCornerRadii;
+        other.displayCornerRadii == displayCornerRadii &&
+        other.isScreenRound == isScreenRound;
   }
 
   @override
@@ -1200,6 +1213,7 @@ class MediaQueryData {
     gestureSettings,
     Object.hashAll(displayFeatures),
     supportsShowingSystemContextMenu,
+    isScreenRound,
     Object.hash(
       lineHeightScaleFactorOverride,
       letterSpacingOverride,
@@ -1236,6 +1250,7 @@ class MediaQueryData {
       'wordSpacingOverride: $wordSpacingOverride',
       'paragraphSpacingOverride: $paragraphSpacingOverride',
       'displayCornerRadii: $displayCornerRadii',
+      'isScreenRound: $isScreenRound',
     ];
     return '${objectRuntimeType(this, 'MediaQueryData')}(${properties.join(', ')})';
   }
@@ -1961,6 +1976,28 @@ class MediaQuery extends InheritedModel<_MediaQueryAspect> {
   static bool? maybeInvertColorsOf(BuildContext context) =>
       _maybeOf(context, _MediaQueryAspect.invertColors)?.invertColors;
 
+  /// Returns [MediaQueryData.isScreenRound] for the nearest [MediaQuery]
+  /// ancestor or false, if no such ancestor exists.
+  ///
+  /// Use of this method will cause the given [context] to rebuild any time that
+  /// the [MediaQueryData.isScreenRound] property of the ancestor [MediaQuery]
+  /// changes.
+  ///
+  /// {@macro flutter.widgets.media_query.MediaQuery.dontUseOf}
+  static bool isScreenRoundOf(BuildContext context) =>
+      maybeIsScreenRoundOf(context) ?? false;
+
+  /// Returns [MediaQueryData.isScreenRound] for the nearest [MediaQuery]
+  /// ancestor or null, if no such ancestor exists.
+  ///
+  /// Use of this method will cause the given [context] to rebuild any time that
+  /// the [MediaQueryData.isScreenRound] property of the ancestor [MediaQuery]
+  /// changes.
+  ///
+  /// {@macro flutter.widgets.media_query.MediaQuery.dontUseMaybeOf}
+  static bool? maybeIsScreenRoundOf(BuildContext context) =>
+      _maybeOf(context, _MediaQueryAspect.isScreenRound)?.isScreenRound;
+
   /// Returns [MediaQueryData.highContrast] for the nearest [MediaQuery]
   /// ancestor or false, if no such ancestor exists.
   ///
@@ -2268,6 +2305,7 @@ class MediaQuery extends InheritedModel<_MediaQueryAspect> {
             _MediaQueryAspect.viewInsets => data.viewInsets != oldWidget.data.viewInsets,
             _MediaQueryAspect.viewPadding => data.viewPadding != oldWidget.data.viewPadding,
             _MediaQueryAspect.invertColors => data.invertColors != oldWidget.data.invertColors,
+            _MediaQueryAspect.isScreenRound => data.isScreenRound != oldWidget.data.isScreenRound,
             _MediaQueryAspect.highContrast => data.highContrast != oldWidget.data.highContrast,
             _MediaQueryAspect.onOffSwitchLabels =>
               data.onOffSwitchLabels != oldWidget.data.onOffSwitchLabels,

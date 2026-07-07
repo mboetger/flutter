@@ -1127,6 +1127,9 @@ class PlatformDispatcher {
   /// This option is used by [showTimePicker].
   bool get alwaysUse24HourFormat => _configuration.alwaysUse24HourFormat;
 
+  /// Whether the screen is round.
+  bool get isScreenRound => _configuration.isScreenRound;
+
   /// The system-suggested height of the text, as a multiple of the font size.
   ///
   /// This value takes precedence over any text height specified at the
@@ -1288,6 +1291,7 @@ class PlatformDispatcher {
 
     final double textScaleFactor = (data['textScaleFactor']! as num).toDouble();
     final alwaysUse24HourFormat = data['alwaysUse24HourFormat']! as bool;
+    final isScreenRound = data['isScreenRound'] as bool? ?? false;
     final nativeSpellCheckServiceDefined = data['nativeSpellCheckServiceDefined'] as bool?;
     if (nativeSpellCheckServiceDefined != null) {
       _nativeSpellCheckServiceDefined = nativeSpellCheckServiceDefined;
@@ -1321,10 +1325,12 @@ class PlatformDispatcher {
     final alwaysUse24HourFormatChanged =
         previousConfiguration.alwaysUse24HourFormat != alwaysUse24HourFormat;
     final systemFontFamilyChanged = previousConfiguration.systemFontFamily != systemFontFamily;
+    final isScreenRoundChanged = previousConfiguration.isScreenRound != isScreenRound;
     if (!platformBrightnessChanged &&
         !textScaleFactorChanged &&
         !alwaysUse24HourFormatChanged &&
         !systemFontFamilyChanged &&
+        !isScreenRoundChanged &&
         configurationId == null) {
       return;
     }
@@ -1334,6 +1340,7 @@ class PlatformDispatcher {
       platformBrightness: platformBrightness,
       systemFontFamily: systemFontFamily,
       configurationId: configurationId,
+      isScreenRound: isScreenRound,
     );
     _invoke(onPlatformConfigurationChanged, _onPlatformConfigurationChangedZone);
     if (textScaleFactorChanged) {
@@ -1894,6 +1901,7 @@ class _PlatformConfiguration {
     this.letterSpacingOverride,
     this.wordSpacingOverride,
     this.paragraphSpacingOverride,
+    this.isScreenRound = false,
   });
 
   _PlatformConfiguration copyWith({
@@ -1906,6 +1914,7 @@ class _PlatformConfiguration {
     String? defaultRouteName,
     String? systemFontFamily,
     int? configurationId,
+    bool? isScreenRound,
   }) {
     return _PlatformConfiguration(
       accessibilityFeatures: accessibilityFeatures ?? this.accessibilityFeatures,
@@ -1921,8 +1930,12 @@ class _PlatformConfiguration {
       letterSpacingOverride: letterSpacingOverride,
       wordSpacingOverride: wordSpacingOverride,
       paragraphSpacingOverride: paragraphSpacingOverride,
+      isScreenRound: isScreenRound ?? this.isScreenRound,
     );
   }
+
+  /// Whether the screen is round.
+  final bool isScreenRound;
 
   /// Additional accessibility features that may be enabled by the platform.
   final AccessibilityFeatures accessibilityFeatures;

@@ -141,6 +141,9 @@ class FlutterView {
   ///    The value here is equal to the value exposed on [display].
   double get devicePixelRatio => _viewConfiguration.devicePixelRatio;
 
+  /// Whether the screen is round.
+  bool get isScreenRound => platformDispatcher.isScreenRound;
+
   /// The sizing constraints in physical pixels for this view.
   ///
   /// The view can take on any [Size] that fulfills these constraints. These

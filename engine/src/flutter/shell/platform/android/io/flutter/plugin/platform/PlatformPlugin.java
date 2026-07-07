@@ -155,6 +155,11 @@ public class PlatformPlugin {
         public void share(@NonNull String text) {
           PlatformPlugin.this.share(text);
         }
+
+        @Override
+        public void setWakeLock(boolean enabled) {
+          PlatformPlugin.this.setWakeLock(enabled);
+        }
       };
 
   public PlatformPlugin(@NonNull Activity activity, @NonNull PlatformChannel platformChannel) {
@@ -720,5 +725,14 @@ public class PlatformPlugin {
     intent.putExtra(Intent.EXTRA_TEXT, text);
 
     activity.startActivity(Intent.createChooser(intent, null));
+  }
+
+  @VisibleForTesting
+  /* package */ void setWakeLock(boolean enabled) {
+    if (enabled) {
+      activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    } else {
+      activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
   }
 }

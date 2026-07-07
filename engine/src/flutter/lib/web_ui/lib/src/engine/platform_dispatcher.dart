@@ -537,6 +537,9 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
             setThemeColor(statusBarColor == null ? null : ui.Color(statusBarColor));
             replyToPlatformMessage(callback, jsonCodec.encodeSuccessEnvelope(true));
             return;
+          case 'SystemChrome.setWakeLock':
+            replyToPlatformMessage(callback, jsonCodec.encodeSuccessEnvelope(true));
+            return;
           case 'SystemChrome.setPreferredOrientations':
             final arguments = decoded.arguments as List<dynamic>;
             ScreenOrientation.instance.setPreferredOrientation(arguments).then((bool success) {
@@ -995,6 +998,9 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
   /// This option is used by [showTimePicker].
   @override
   bool get alwaysUse24HourFormat => configuration.alwaysUse24HourFormat;
+
+  @override
+  bool get isScreenRound => configuration.isScreenRound;
 
   /// Watches for resize changes on an off-screen invisible element to
   /// recalculate [lineHeightScaleFactorOverride], [letterSpacingOverride],
@@ -1878,6 +1884,7 @@ class PlatformConfiguration {
     this.letterSpacingOverride,
     this.wordSpacingOverride,
     this.paragraphSpacingOverride,
+    this.isScreenRound = false,
   });
 
   static const Object _noOverridePlaceholder = Object();
@@ -1895,6 +1902,7 @@ class PlatformConfiguration {
     Object? letterSpacingOverride = _noOverridePlaceholder,
     Object? wordSpacingOverride = _noOverridePlaceholder,
     Object? paragraphSpacingOverride = _noOverridePlaceholder,
+    bool? isScreenRound,
   }) {
     return PlatformConfiguration(
       accessibilityFeatures: accessibilityFeatures ?? this.accessibilityFeatures,
@@ -1919,6 +1927,7 @@ class PlatformConfiguration {
       paragraphSpacingOverride: paragraphSpacingOverride == _noOverridePlaceholder
           ? this.paragraphSpacingOverride
           : paragraphSpacingOverride as double?,
+      isScreenRound: isScreenRound ?? this.isScreenRound,
     );
   }
 
@@ -1935,6 +1944,7 @@ class PlatformConfiguration {
     double? letterSpacingOverride,
     double? wordSpacingOverride,
     double? paragraphSpacingOverride,
+    bool? isScreenRound,
   }) {
     return PlatformConfiguration(
       accessibilityFeatures: accessibilityFeatures ?? this.accessibilityFeatures,
@@ -1950,6 +1960,7 @@ class PlatformConfiguration {
       letterSpacingOverride: letterSpacingOverride ?? this.letterSpacingOverride,
       wordSpacingOverride: wordSpacingOverride ?? this.wordSpacingOverride,
       paragraphSpacingOverride: paragraphSpacingOverride ?? this.paragraphSpacingOverride,
+      isScreenRound: isScreenRound ?? this.isScreenRound,
     );
   }
 
@@ -1965,6 +1976,7 @@ class PlatformConfiguration {
   final double? letterSpacingOverride;
   final double? wordSpacingOverride;
   final double? paragraphSpacingOverride;
+  final bool isScreenRound;
 }
 
 /// Helper class to hold navigation target information for AT focus restoration

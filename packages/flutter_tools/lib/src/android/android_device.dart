@@ -75,7 +75,18 @@ class AndroidDevice extends Device {
        _fileSystem = fileSystem,
        _androidConsoleSocketFactory = androidConsoleSocketFactory,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager),
-       super(category: Category.mobile, platformType: PlatformType.android, ephemeral: true);
+       super(
+         category: ((productID?.toLowerCase().contains('wear') ?? false) ||
+                    (productID?.toLowerCase().contains('watch') ?? false) ||
+                    modelID.toLowerCase().contains('wear') ||
+                    modelID.toLowerCase().contains('watch') ||
+                    (deviceCodeName?.toLowerCase().contains('wear') ?? false) ||
+                    (deviceCodeName?.toLowerCase().contains('watch') ?? false))
+             ? Category.watch
+             : Category.mobile,
+         platformType: PlatformType.android,
+         ephemeral: true,
+       );
 
   final Logger _logger;
   final ProcessManager _processManager;
@@ -88,6 +99,11 @@ class AndroidDevice extends Device {
   final String? productID;
   final String modelID;
   final String? deviceCodeName;
+
+  Category? _categoryOverride;
+
+  @override
+  Category? get category => _categoryOverride ?? super.category;
 
   @override
   // Wirelessly paired Android devices should have `adb-tls-connect` in the id.
@@ -112,6 +128,10 @@ class AndroidDevice extends Device {
       );
       if (result.exitCode == 0 || _allowHeapCorruptionOnWindows(result.exitCode, _platform)) {
         properties = parseAdbDeviceProperties(result.stdout as String);
+        final String? characteristics = properties['ro.build.characteristics'];
+        if (characteristics != null && characteristics.split(',').contains('watch')) {
+          _categoryOverride = Category.watch;
+        }
       } else {
         _logger.printError('Error ${result.exitCode} retrieving device properties for $name:');
         _logger.printError(result.stderr as String);
@@ -578,10 +598,12 @@ class AndroidDevice extends Device {
       );
       // Package has been built, so we can get the updated application ID and
       // activity name from the .apk.
-      builtPackage = await ApplicationPackageFactory.instance!.getPackageForPlatform(
-        devicePlatform,
-        buildInfo: debuggingOptions.buildInfo,
-      ) as AndroidApk?;
+      builtPackage =
+          await ApplicationPackageFactory.instance!.getPackageForPlatform(
+                devicePlatform,
+                buildInfo: debuggingOptions.buildInfo,
+              )
+              as AndroidApk?;
     }
     // There was a failure parsing the android project information.
     if (builtPackage == null) {

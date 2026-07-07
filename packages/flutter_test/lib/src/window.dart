@@ -399,6 +399,23 @@ class TestPlatformDispatcher implements PlatformDispatcher {
   }
 
   @override
+  bool get isScreenRound => _isScreenRoundTestValue ?? _platformDispatcher.isScreenRound;
+  bool? _isScreenRoundTestValue;
+
+  /// Hides the real screen roundness value and reports the given
+  /// [isScreenRoundTestValue] instead.
+  // ignore: avoid_setters_without_getters
+  set isScreenRoundTestValue(bool isScreenRoundTestValue) {
+    _isScreenRoundTestValue = isScreenRoundTestValue;
+  }
+
+  /// Deletes any existing test screen roundness value and returns to using the
+  /// real screen roundness value.
+  void clearIsScreenRoundTestValue() {
+    _isScreenRoundTestValue = null;
+  }
+
+  @override
   VoidCallback? get onTextScaleFactorChanged => _platformDispatcher.onTextScaleFactorChanged;
   @override
   set onTextScaleFactorChanged(VoidCallback? callback) {
@@ -806,6 +823,7 @@ class TestPlatformDispatcher implements PlatformDispatcher {
     clearLetterSpacingOverrideTestValue();
     clearWordSpacingOverrideTestValue();
     clearParagraphSpacingOverrideTestValue();
+    clearIsScreenRoundTestValue();
     resetBrieflyShowPassword();
     resetSupportsShowingSystemContextMenu();
     resetInitialLifecycleState();
@@ -1029,6 +1047,9 @@ class TestFlutterView implements FlutterView {
 
   @override
   int get viewId => _view.viewId;
+
+  @override
+  bool get isScreenRound => platformDispatcher.isScreenRound;
 
   /// The device pixel ratio to use for this test.
   ///
@@ -1911,6 +1932,15 @@ class TestWindow implements SingletonFlutterWindow {
   )
   @override
   bool get alwaysUse24HourFormat => platformDispatcher.alwaysUse24HourFormat;
+
+  /// Deprecated. Use [WidgetTester.platformDispatcher.isScreenRound] instead.
+  @Deprecated(
+    'Use WidgetTester.platformDispatcher.isScreenRound instead. '
+    'Deprecated to prepare for the upcoming multi-window support. '
+    'This feature was deprecated after v3.9.0-0.1.pre.',
+  )
+  @override
+  bool get isScreenRound => platformDispatcher.isScreenRound;
 
   @Deprecated(
     'Use WidgetTester.platformDispatcher.onTextScaleFactorChanged instead. '

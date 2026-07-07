@@ -184,6 +184,9 @@ class _TestFlutterView implements FlutterView {
   double get devicePixelRatio => display.devicePixelRatio;
 
   @override
+  bool get isScreenRound => _platformDispatcher.isScreenRound;
+
+  @override
   ui.Display get display => platformDispatcher.displays.first;
 
   @override

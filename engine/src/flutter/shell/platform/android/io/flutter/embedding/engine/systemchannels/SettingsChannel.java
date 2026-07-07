@@ -31,6 +31,7 @@ public class SettingsChannel {
   private static final String ALWAYS_USE_24_HOUR_FORMAT = "alwaysUse24HourFormat";
   private static final String PLATFORM_BRIGHTNESS = "platformBrightness";
   private static final String CONFIGURATION_ID = "configurationId";
+  private static final String IS_SCREEN_ROUND = "isScreenRound";
 
   // When hasNonlinearTextScalingSupport() returns false, this will not be initialized.
   @VisibleForTesting final ConfigurationQueue configurationQueue = new ConfigurationQueue();
@@ -99,6 +100,12 @@ public class SettingsChannel {
     @NonNull
     public MessageBuilder setPlatformBrightness(@NonNull PlatformBrightness brightness) {
       message.put(PLATFORM_BRIGHTNESS, brightness.name);
+      return this;
+    }
+
+    @NonNull
+    public MessageBuilder setIsScreenRound(boolean isScreenRound) {
+      message.put(IS_SCREEN_ROUND, isScreenRound);
       return this;
     }
 

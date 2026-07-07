@@ -33,6 +33,50 @@ void main() {
     expect(device.id, '1234');
   });
 
+  testWithoutContext(
+    'AndroidDevice category is Category.watch if productID/modelID/deviceCodeName contains watch or wear',
+    () {
+      final AndroidDevice device1 = setUpAndroidDevice(modelID: 'Wear OS watch');
+      expect(device1.category, Category.watch);
+
+      final AndroidDevice device2 = setUpAndroidDevice(productID: 'wearable_device');
+      expect(device2.category, Category.watch);
+
+      final AndroidDevice device3 = setUpAndroidDevice(deviceCodeName: 'watch_codename');
+      expect(device3.category, Category.watch);
+
+      final AndroidDevice device4 = setUpAndroidDevice(modelID: 'Regular Phone');
+      expect(device4.category, Category.mobile);
+    },
+  );
+
+  testWithoutContext(
+    'AndroidDevice category is overridden to Category.watch asynchronously if ro.build.characteristics contains watch',
+    () async {
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        const FakeCommand(
+          command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+          stdout: '[ro.build.characteristics]: [watch]\n[ro.hardware]: [goldfish]\n',
+        ),
+      ]);
+      final AndroidDevice device = setUpAndroidDevice(
+        modelID: 'Regular Phone',
+        processManager: processManager,
+      );
+
+      // Synchronous initial value should be mobile
+      expect(device.category, Category.mobile);
+
+      // Accessing properties (which will trigger async population of properties)
+      final bool isEmulator = await device.isLocalEmulator;
+      expect(isEmulator, isTrue);
+
+      // After resolution, category is overridden to watch
+      expect(device.category, Category.watch);
+      expect(processManager, hasNoRemainingExpectations);
+    },
+  );
+
   testWithoutContext('parseAdbDeviceProperties parses adb shell output', () {
     final Map<String, String> properties = parseAdbDeviceProperties(kAdbShellGetprop);
 
@@ -571,6 +615,9 @@ class _MyFakeVmServiceConnectionDisposedCode extends Fake implements VmService {
 
 AndroidDevice setUpAndroidDevice({
   String? id,
+  String? modelID,
+  String? productID,
+  String? deviceCodeName,
   AndroidSdk? androidSdk,
   FileSystem? fileSystem,
   ProcessManager? processManager,
@@ -580,7 +627,9 @@ AndroidDevice setUpAndroidDevice({
   androidSdk ??= FakeAndroidSdk();
   return AndroidDevice(
     id ?? '1234',
-    modelID: 'TestModel',
+    modelID: modelID ?? 'TestModel',
+    productID: productID,
+    deviceCodeName: deviceCodeName,
     logger: BufferLogger.test(),
     platform: platform ?? FakePlatform(),
     androidSdk: androidSdk,
