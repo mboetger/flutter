@@ -664,8 +664,8 @@ AsyncMatcher matchesReferenceImage(ui.Image image) {
 ///   * [isSemantics], a similar matcher without default values for flags or actions.
 Matcher matchesSemantics({
   String? identifier,
-  String? traversalParentIdentifier,
-  String? traversalChildIdentifier,
+  Object? traversalParentIdentifier,
+  Object? traversalChildIdentifier,
   String? label,
   AttributedString? attributedLabel,
   String? hint,
@@ -863,8 +863,8 @@ Matcher matchesSemantics({
 )
 Matcher containsSemantics({
   String? identifier,
-  String? traversalParentIdentifier,
-  String? traversalChildIdentifier,
+  Object? traversalParentIdentifier,
+  Object? traversalChildIdentifier,
   String? label,
   AttributedString? attributedLabel,
   String? hint,
@@ -1067,8 +1067,8 @@ Matcher containsSemantics({
 ///   * [matchesSemantics], a similar matcher with default values for flags and actions.
 Matcher isSemantics({
   String? identifier,
-  String? traversalParentIdentifier,
-  String? traversalChildIdentifier,
+  Object? traversalParentIdentifier,
+  Object? traversalChildIdentifier,
   String? label,
   AttributedString? attributedLabel,
   String? hint,
@@ -2770,8 +2770,8 @@ class _MatchesSemanticsData extends Matcher {
            : SemanticsHintOverrides(onTapHint: onTapHint, onLongPressHint: onLongPressHint);
 
   final String? identifier;
-  final String? traversalParentIdentifier;
-  final String? traversalChildIdentifier;
+  final Object? traversalParentIdentifier;
+  final Object? traversalChildIdentifier;
   final String? label;
   final AttributedString? attributedLabel;
   final String? hint;
@@ -2809,6 +2809,15 @@ class _MatchesSemanticsData extends Matcher {
   @override
   Description describe(Description description, [String? index]) {
     description.add('${index == null ? '' : 'Child $index '}has semantics');
+    if (identifier != null) {
+      description.add(' with identifier: ${_escape(identifier!)}');
+    }
+    if (traversalParentIdentifier != null) {
+      description.add(' with traversalParentIdentifier: $traversalParentIdentifier');
+    }
+    if (traversalChildIdentifier != null) {
+      description.add(' with traversalChildIdentifier: $traversalChildIdentifier');
+    }
     if (label != null) {
       description.add(' with label: ${_escape(label!)}');
     }
@@ -2991,6 +3000,23 @@ class _MatchesSemanticsData extends Matcher {
       _ => node as SemanticsData,
     };
 
+    if (identifier != null && identifier != data.identifier) {
+      return _checkStringMismatch(matchState, 'identifier', data.identifier);
+    }
+    if (traversalParentIdentifier != null &&
+        traversalParentIdentifier != data.traversalParentIdentifier) {
+      return failWithDescription(
+        matchState,
+        'traversalParentIdentifier was: ${data.traversalParentIdentifier}',
+      );
+    }
+    if (traversalChildIdentifier != null &&
+        traversalChildIdentifier != data.traversalChildIdentifier) {
+      return failWithDescription(
+        matchState,
+        'traversalChildIdentifier was: ${data.traversalChildIdentifier}',
+      );
+    }
     if (label != null && label != data.label) {
       return _checkStringMismatch(matchState, 'label', data.label);
     }

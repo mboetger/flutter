@@ -1978,6 +1978,132 @@ void main() {
       );
     });
 
+    testWidgets(
+      'can match identifier, traversalParentIdentifier, traversalChildIdentifier with matchesSemantics',
+      (WidgetTester tester) async {
+        final SemanticsHandle handle = tester.ensureSemantics();
+        const parentObject = 'parent_id';
+        const childObject = 'child_id';
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Semantics(
+              identifier: 'test_id',
+              child: Semantics(
+                traversalParentIdentifier: parentObject,
+                traversalChildIdentifier: childObject,
+                child: const Text('Hello'),
+              ),
+            ),
+          ),
+        );
+
+        final SemanticsNode node = tester.getSemantics(find.text('Hello'));
+        // Semantics with a non-null identifier forces a new SemanticsNode boundary (Node 1),
+        // traversal identifiers create a traversal boundary node (Node 2),
+        // and the text forms the leaf node (Node 3).
+        expect(
+          node.parent?.parent,
+          matchesSemantics(
+            identifier: 'test_id',
+          ),
+        );
+
+        expect(
+          node.parent,
+          matchesSemantics(
+            traversalParentIdentifier: parentObject,
+            traversalChildIdentifier: childObject,
+          ),
+        );
+
+        expect(
+          node,
+          matchesSemantics(
+            label: 'Hello',
+          ),
+        );
+
+        // Verify that mismatch fails.
+        expect(
+          () => expect(node.parent?.parent, matchesSemantics(identifier: 'wrong_id')),
+          throwsA(isA<TestFailure>()),
+        );
+
+        expect(
+          () => expect(node.parent, matchesSemantics(traversalParentIdentifier: 'wrong_parent')),
+          throwsA(isA<TestFailure>()),
+        );
+
+        expect(
+          () => expect(node.parent, matchesSemantics(traversalChildIdentifier: 'wrong_child')),
+          throwsA(isA<TestFailure>()),
+        );
+
+        handle.dispose();
+      },
+    );
+
+    testWidgets('can match non-string traversal identifiers with matchesSemantics', (
+      WidgetTester tester,
+    ) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      final parentObject = Object();
+      final childObject = Object();
+      final data = SemanticsData(
+        flagsCollection: SemanticsFlags.none,
+        actions: 0,
+        identifier: 'i',
+        traversalChildIdentifier: childObject,
+        traversalParentIdentifier: parentObject,
+        attributedLabel: AttributedString('a'),
+        attributedIncreasedValue: AttributedString(''),
+        attributedValue: AttributedString(''),
+        attributedDecreasedValue: AttributedString(''),
+        attributedHint: AttributedString(''),
+        tooltip: '',
+        textDirection: TextDirection.ltr,
+        rect: const Rect.fromLTRB(0.0, 0.0, 10.0, 10.0),
+        textSelection: null,
+        scrollIndex: null,
+        scrollChildCount: null,
+        scrollPosition: null,
+        scrollExtentMax: null,
+        scrollExtentMin: null,
+        platformViewId: null,
+        currentValueLength: null,
+        maxValueLength: null,
+        headingLevel: 0,
+        linkUrl: null,
+        role: ui.SemanticsRole.none,
+        controlsNodes: null,
+        validationResult: SemanticsValidationResult.none,
+        hitTestBehavior: ui.SemanticsHitTestBehavior.defer,
+        inputType: ui.SemanticsInputType.none,
+        locale: null,
+        minValue: null,
+        maxValue: null,
+      );
+      final node = _FakeSemanticsNode(data);
+
+      expect(
+        node,
+        matchesSemantics(
+          identifier: 'i',
+          traversalParentIdentifier: parentObject,
+          traversalChildIdentifier: childObject,
+        ),
+      );
+
+      // Verify mismatch throws.
+      expect(
+        () => expect(node, matchesSemantics(traversalParentIdentifier: Object())),
+        throwsA(isA<TestFailure>()),
+      );
+
+      handle.dispose();
+    });
+
     testWidgets('can match only custom actions', (WidgetTester tester) async {
       const action = CustomSemanticsAction(label: 'test');
       final data = SemanticsData(
