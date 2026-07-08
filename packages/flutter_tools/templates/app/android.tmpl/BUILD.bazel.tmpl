@@ -1,0 +1,19 @@
+load("@rules_android//android:rules.bzl", "android_library", "aar_import")
+
+# Bazel-orchestrated payload. This references the core Flutter Engine 
+# and the Dart snapshot compiled internally across platform targets.
+aar_import(
+    name = "flutter_framework_aar",
+    aar = "//flutter:engine_and_dart_snapshot.aar",
+)
+
+# App plugin manifest layer
+android_library(
+    name = "app_plugins",
+    srcs = glob(["app/src/main/java/**/*.java", "app/src/main/kotlin/**/*.kt"]),
+    custom_package = "{{androidIdentifier}}",
+    manifest = "app/src/main/AndroidManifest.xml",
+    deps = [
+        ":flutter_framework_aar",
+    ],
+)
