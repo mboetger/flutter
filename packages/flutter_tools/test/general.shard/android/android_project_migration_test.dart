@@ -7,6 +7,7 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_studio.dart';
 import 'package:flutter_tools/src/android/gradle_utils.dart';
 import 'package:flutter_tools/src/android/migrations/android_studio_java_gradle_conflict_migration.dart';
+import 'package:flutter_tools/src/android/migrations/androidx_migration.dart';
 import 'package:flutter_tools/src/android/migrations/disable_built_in_kotlin_migration.dart';
 import 'package:flutter_tools/src/android/migrations/disable_new_dsl_migration.dart';
 import 'package:flutter_tools/src/android/migrations/min_sdk_version_migration.dart';
@@ -494,6 +495,73 @@ android.builtInKotlin    false
           overrides: <Type, Generator>{
             FileSystem: () => errorThrowingFileSystemForProcessFile,
             ProcessManager: () => FakeProcessManager.any(),
+          },
+        );
+      });
+
+      group('Migrate to enable AndroidX', () {
+        testUsingContext('skip if AndroidX flag already exists as true', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+android.useAndroidX=true
+''');
+          final androidProjectMigration = AndroidXMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync(),
+            equals('android.useAndroidX=true\n'),
+          );
+        });
+
+        testUsingContext('skip if AndroidX flag already exists as false', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+android.useAndroidX=false
+''');
+          final androidProjectMigration = AndroidXMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync(),
+            equals('android.useAndroidX=false\n'),
+          );
+        });
+
+        testUsingContext(
+          'create gradle.properties file and add the AndroidX flag if gradle.properties file is missing',
+          () async {
+            final androidProjectMigration = AndroidXMigration(project, bufferLogger);
+            expect(topLevelGradlePropertiesFile.existsSync(), isFalse);
+            await androidProjectMigration.migrate();
+            expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+            expect(
+              bufferLogger.traceText,
+              contains(
+                'The gradle.properties file was not found. Creating it with android.useAndroidX=true.',
+              ),
+            );
+            expect(
+              topLevelGradlePropertiesFile.readAsStringSync(),
+              equals('android.useAndroidX=true\n'),
+            );
+          },
+        );
+
+        testUsingContext(
+          'append AndroidX flag if gradle.properties exists but is missing the flag',
+          () async {
+            topLevelGradlePropertiesFile.writeAsStringSync('''
+some.other.property=value
+''');
+            final androidProjectMigration = AndroidXMigration(project, bufferLogger);
+
+            await androidProjectMigration.migrate();
+            expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+            expect(
+              topLevelGradlePropertiesFile.readAsStringSync(),
+              equals('some.other.property=value\nandroid.useAndroidX=true\n'),
+            );
           },
         );
       });

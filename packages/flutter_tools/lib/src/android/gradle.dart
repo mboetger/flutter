@@ -39,6 +39,7 @@ import 'gradle_utils.dart';
 import 'gradle_utils.dart' as gradle;
 import 'java.dart';
 import 'migrations/android_studio_java_gradle_conflict_migration.dart';
+import 'migrations/androidx_migration.dart';
 import 'migrations/cmake_android_16k_pages_migration.dart';
 import 'migrations/disable_built_in_kotlin_migration.dart';
 import 'migrations/disable_new_dsl_migration.dart';
@@ -463,6 +464,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
         androidStudio: _androidStudio,
         java: globals.java,
       ),
+      AndroidXMigration(project.android, _logger),
       MinSdkVersionMigration(project.android, _logger),
       MultidexRemovalMigration(project.android, _logger),
       CmakeAndroid16kPagesMigration(project.android, _logger),
@@ -472,6 +474,14 @@ class AndroidGradleBuilder implements AndroidBuilder {
 
     final migration = ProjectMigration(migrators);
     await migration.run();
+
+    if (!isAppUsingAndroidX(project.android.hostAppGradleRoot)) {
+      throwToolExit(
+        'The project is not configured to use AndroidX.\n'
+        'Please add "android.useAndroidX=true" to your android/gradle.properties file.\n'
+        'For more information, see https://flutter.dev/to/migrate-to-androidx',
+      );
+    }
 
     // The default Gradle script reads the version name and number
     // from the local.properties file.

@@ -62,6 +62,7 @@ void main() {
       );
     });
 
+<<<<<<< HEAD
     String sdkPath() => fileSystem.directory('android-sdk').absolute.path;
     String missingSdkPath() => fileSystem.directory('nonexistent-android-sdk').absolute.path;
     String sdkManagerPath() => fileSystem.path.join(
@@ -191,6 +192,108 @@ void main() {
         AndroidStudio: () => FakeAndroidStudio(),
       },
     );
+=======
+    testUsingContext('Can immediately tool exit on recognized exit code/stderr', () async {
+      final builder = AndroidGradleBuilder(
+        java: FakeJava(),
+        logger: logger,
+        processManager: processManager,
+        fileSystem: fileSystem,
+        artifacts: Artifacts.test(),
+        analytics: fakeAnalytics,
+        gradleUtils: FakeGradleUtils(),
+        platform: FakePlatform(),
+        androidStudio: FakeAndroidStudio(),
+      );
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>[
+            'gradlew',
+            '-q',
+            '-Ptarget-platform=android-arm,android-arm64,android-x64',
+            '-Ptarget=lib/main.dart',
+            '-Pbase-application-name=android.app.Application',
+            '-Pdart-obfuscation=false',
+            '-Ptrack-widget-creation=false',
+            '-Ptree-shake-icons=false',
+            'assembleRelease',
+          ],
+          exitCode: 1,
+          stderr: '\nSome gradle message\n',
+        ),
+      );
+
+      fileSystem.directory('android').childFile('build.gradle').createSync(recursive: true);
+
+      fileSystem.directory('android').childFile('gradle.properties').createSync(recursive: true);
+
+      fileSystem.directory('android').childDirectory('app').childFile('build.gradle')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('apply from: irrelevant/flutter.gradle');
+
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+      project.android.appManifestFile
+        ..createSync(recursive: true)
+        ..writeAsStringSync(minimalV2EmbeddingManifest);
+
+      var handlerCalled = false;
+      await expectLater(() async {
+        await builder.buildGradleApp(
+          project: project,
+          androidBuildInfo: const AndroidBuildInfo(
+            BuildInfo(
+              BuildMode.release,
+              null,
+              treeShakeIcons: false,
+              packageConfigPath: '.dart_tool/package_config.json',
+            ),
+          ),
+          target: 'lib/main.dart',
+          isBuildingBundle: false,
+          configOnly: false,
+          localGradleErrors: <GradleHandledError>[
+            GradleHandledError(
+              test: (String line) {
+                return line.contains('Some gradle message');
+              },
+              handler: ({String? line, FlutterProject? project, bool? usesAndroidX}) async {
+                handlerCalled = true;
+                return GradleBuildStatus.exit;
+              },
+              eventLabel: 'random-event-label',
+            ),
+          ],
+        );
+      }, throwsToolExit(message: 'Gradle task assembleRelease failed with exit code 1'));
+
+      expect(handlerCalled, isTrue);
+
+      expect(
+        fakeAnalytics.sentEvents,
+        containsAll(<Event>[
+          Event.flutterBuildInfo(
+            label: 'app-using-android-x',
+            buildType: 'gradle',
+            settings: 'androidGradlePluginVersion: null',
+          ),
+          Event.flutterBuildInfo(
+            label: 'gradle-random-event-label-failure',
+            buildType: 'gradle',
+            settings: 'androidGradlePluginVersion: null',
+          ),
+        ]),
+      );
+
+      expect(
+        analyticsTimingEventExists(
+          sentEvents: fakeAnalytics.sentEvents,
+          workflow: 'build',
+          variableName: 'gradle',
+        ),
+        true,
+      );
+    }, overrides: <Type, Generator>{AndroidStudio: () => FakeAndroidStudio()});
+>>>>>>> f2ce5592921 (fix: enforce AndroidX and auto-migrate missing settings in gradle.properties)
 
     testUsingContext(
       'build apk keeps skip dependency checks on the main gradle invocation when ndk provisioning is unavailable',
@@ -1452,30 +1555,24 @@ void main() {
             FakeCommand(command: List<String>.of(commonCommandPortion())..add('bundleDebug')),
           );
 
-          createSharedGradleFiles();
-          createAabFile(BuildMode.debug);
+        createSharedGradleFiles();
+        createAabFile(BuildMode.debug);
 
-          final FlutterProject project = FlutterProject.fromDirectoryTest(
-            fileSystem.currentDirectory,
-          );
-          project.android.appManifestFile
-            ..createSync(recursive: true)
-            ..writeAsStringSync(minimalV2EmbeddingManifest);
+        final FlutterProject project = FlutterProject.fromDirectoryTest(
+          fileSystem.currentDirectory,
+        );
+        project.android.appManifestFile
+          ..createSync(recursive: true)
+          ..writeAsStringSync(minimalV2EmbeddingManifest);
 
-          await builder.buildGradleApp(
-            project: project,
-            androidBuildInfo: const AndroidBuildInfo(
-              BuildInfo(
-                BuildMode.debug,
-                null,
-                treeShakeIcons: false,
-                packageConfigPath: '.dart_tool/package_config.json',
-              ),
-              targetArchs: <AndroidArch>[
-                AndroidArch.arm64_v8a,
-                AndroidArch.armeabi_v7a,
-                AndroidArch.x86_64,
-              ],
+        await builder.buildGradleApp(
+          project: project,
+          androidBuildInfo: const AndroidBuildInfo(
+            BuildInfo(
+              BuildMode.debug,
+              null,
+              treeShakeIcons: false,
+              packageConfigPath: '.dart_tool/package_config.json',
             ),
             target: 'lib/main.dart',
             isBuildingBundle: true,
