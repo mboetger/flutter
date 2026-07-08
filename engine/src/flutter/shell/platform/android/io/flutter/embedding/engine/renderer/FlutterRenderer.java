@@ -786,7 +786,7 @@ public class FlutterRenderer implements TextureRegistry {
 
     @RequiresApi(API_LEVELS.API_33)
     @VisibleForTesting
-    void waitOnFence(Image image) {
+    public void waitOnFence(Image image) {
       try (SyncFence fence = image.getFence()) {
         fence.awaitForever();
       } catch (IOException e) {
@@ -852,6 +852,21 @@ public class FlutterRenderer implements TextureRegistry {
       this.createNewReader = true;
       this.requestedHeight = height;
       this.requestedWidth = width;
+
+      Callback cb = null;
+      synchronized (lock) {
+        // Only notify the callback if a surface has already been vended (queue is not empty).
+        // If no surface has been vended yet, the client will naturally get a surface of the
+        // correct size upon calling getSurface() for the first time. This prevents premature
+        // cleanup/available notifications which can invalidate camera feeds.
+        if (callback != null && !imageReaderQueue.isEmpty()) {
+          cb = callback;
+        }
+      }
+      if (cb != null) {
+        cb.onSurfaceCleanup();
+        cb.onSurfaceAvailable();
+      }
     }
 
     @Override

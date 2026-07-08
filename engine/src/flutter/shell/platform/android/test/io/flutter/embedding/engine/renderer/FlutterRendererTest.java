@@ -1087,4 +1087,138 @@ public class FlutterRendererTest {
     producer.waitOnFence(image);
     verify(fence, times(1)).close();
   }
+
+  @Test
+  public void ImageReaderSurfaceProducerStuckAtOldSizeIfGetSurfaceNotCalled() {
+    FlutterRenderer flutterRenderer = engineRule.getFlutterEngine().getRenderer();
+    TextureRegistry.SurfaceProducer producer = flutterRenderer.createSurfaceProducer();
+    FlutterRenderer.ImageReaderSurfaceProducer texture =
+        (FlutterRenderer.ImageReaderSurfaceProducer) producer;
+    texture.disableFenceForTest();
+
+    // Give the texture an initial size.
+    texture.setSize(100, 100);
+
+    // Get the surface for the first time.
+    Surface surface = texture.getSurface();
+    assertNotNull(surface);
+
+    // Draw a frame.
+    Canvas canvas = surface.lockHardwareCanvas();
+    canvas.drawARGB(255, 255, 0, 0);
+    surface.unlockCanvasAndPost(canvas);
+    shadowOf(Looper.getMainLooper()).idle();
+
+    // Verify it produced a 100x100 image.
+    Image image = texture.acquireLatestImage();
+    assertNotNull(image);
+    assertEquals(100, image.getWidth());
+    assertEquals(100, image.getHeight());
+    image.close();
+
+    // Resize the texture.
+    texture.setSize(200, 200);
+
+    // Draw another frame to the SAME surface.
+    canvas = surface.lockHardwareCanvas();
+    canvas.drawARGB(255, 255, 0, 0);
+    surface.unlockCanvasAndPost(canvas);
+    shadowOf(Looper.getMainLooper()).idle();
+
+    // Extract the image. We expect it to be 100x100 if getSurface() was not called again,
+    // since the old 100x100 ImageReader remains active.
+    image = texture.acquireLatestImage();
+    assertNotNull(image);
+    assertEquals(100, image.getWidth());
+    assertEquals(100, image.getHeight());
+    image.close();
+
+    texture.release();
+  }
+
+  @Test
+  public void ImageReaderSurfaceProducerAdaptsToSizeChangeWithCallback() {
+    FlutterRenderer flutterRenderer = engineRule.getFlutterEngine().getRenderer();
+    TextureRegistry.SurfaceProducer producer = flutterRenderer.createSurfaceProducer();
+    final FlutterRenderer.ImageReaderSurfaceProducer texture =
+        (FlutterRenderer.ImageReaderSurfaceProducer) producer;
+    texture.disableFenceForTest();
+
+    final Surface[] surfaceHolder = new Surface[1];
+    texture.setCallback(
+        new TextureRegistry.SurfaceProducer.Callback() {
+          @Override
+          public void onSurfaceAvailable() {
+            surfaceHolder[0] = texture.getSurface();
+          }
+
+          @Override
+          public void onSurfaceCleanup() {
+            surfaceHolder[0] = null;
+          }
+        });
+
+    // Give the texture an initial size.
+    texture.setSize(100, 100);
+
+    // Get the surface for the first time.
+    Surface surface = texture.getSurface();
+    assertNotNull(surface);
+    surfaceHolder[0] = surface;
+
+    // Draw a frame.
+    Canvas canvas = surface.lockHardwareCanvas();
+    canvas.drawARGB(255, 255, 0, 0);
+    surface.unlockCanvasAndPost(canvas);
+    shadowOf(Looper.getMainLooper()).idle();
+
+    // Verify it produced a 100x100 image.
+    Image image = texture.acquireLatestImage();
+    assertNotNull(image);
+    assertEquals(100, image.getWidth());
+    assertEquals(100, image.getHeight());
+    image.close();
+
+    // Resize the texture.
+    texture.setSize(200, 200);
+
+    // Draw another frame to the NEW surface retrieved from callback.
+    surface = surfaceHolder[0];
+    assertNotNull(surface);
+    canvas = surface.lockHardwareCanvas();
+    canvas.drawARGB(255, 255, 0, 0);
+    surface.unlockCanvasAndPost(canvas);
+    shadowOf(Looper.getMainLooper()).idle();
+
+    // Extract the image. We expect it to be 200x200 since callback was triggered.
+    image = texture.acquireLatestImage();
+    assertNotNull(image);
+    assertEquals(200, image.getWidth());
+    assertEquals(200, image.getHeight());
+    image.close();
+
+    texture.release();
+  }
+
+  @Test
+  public void ImageReaderSurfaceProducerDoesNotNotifyCallbackIfQueueEmpty() {
+    FlutterRenderer flutterRenderer = engineRule.getFlutterEngine().getRenderer();
+    TextureRegistry.SurfaceProducer producer = flutterRenderer.createSurfaceProducer();
+    FlutterRenderer.ImageReaderSurfaceProducer texture =
+        (FlutterRenderer.ImageReaderSurfaceProducer) producer;
+    texture.disableFenceForTest();
+
+    TextureRegistry.SurfaceProducer.Callback callback =
+        mock(TextureRegistry.SurfaceProducer.Callback.class);
+    texture.setCallback(callback);
+
+    // Call setSize without retrieving the surface.
+    texture.setSize(100, 100);
+
+    // Verify callback is not notified because no surface was vended yet (queue is empty).
+    verify(callback, never()).onSurfaceCleanup();
+    verify(callback, never()).onSurfaceAvailable();
+
+    texture.release();
+  }
 }
