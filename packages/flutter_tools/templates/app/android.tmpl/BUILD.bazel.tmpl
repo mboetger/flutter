@@ -1,4 +1,5 @@
 load("@rules_android//android:rules.bzl", "android_library", "aar_import")
+load("//:plugins.bzl", "flutter_plugin_deps")
 
 # Bazel-orchestrated payload. This references the core Flutter Engine 
 # and the Dart snapshot compiled internally across platform targets.
@@ -15,5 +16,5 @@ android_library(
     manifest = "app/src/main/AndroidManifest.xml",
     deps = [
         ":flutter_framework_aar",
-    ],
+    ] + flutter_plugin_deps,
 )

@@ -1,4 +1,8 @@
 workspace(name = "{{androidIdentifier}}")
 
+# Load dynamically generated plugin workspace maps
+load("//:plugins.bzl", "flutter_plugin_workspaces")
+flutter_plugin_workspaces()
+
 # Bazelisk will supply the necessary internal Android bindings.
 # This workspace purely delegates to the AAR artifact builders.
