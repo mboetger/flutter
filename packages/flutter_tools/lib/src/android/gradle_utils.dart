@@ -259,6 +259,9 @@ class GradleUtils {
       _cache.getArtifactDirectory('gradle_wrapper'),
       directory,
       shouldCopyFile: (File sourceFile, File destinationFile) {
+        if (sourceFile.basename == gradleWrapperPropertiesFilename) {
+          return false;
+        }
         // Don't override the existing files in the project.
         return !destinationFile.existsSync();
       },
