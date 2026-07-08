@@ -8,13 +8,16 @@ import static io.flutter.Build.API_LEVELS;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.graphics.Insets;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
@@ -47,6 +50,9 @@ import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Consumer;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.LifecycleRegistry;
 import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter;
 import androidx.window.layout.DisplayFeature;
 import androidx.window.layout.FoldingFeature;
@@ -154,6 +160,8 @@ public class FlutterView extends FrameLayout
 
   // Provides access to foldable/hinge information
   @Nullable private WindowInfoRepositoryCallbackAdapterWrapper windowInfoRepo;
+  @Nullable private ActivityLifecycleOwner activityLifecycleOwner;
+  private boolean isActivityAttachmentManagedByView = false;
   // Directly implemented View behavior that communicates with Flutter.
   private final FlutterRenderer.ViewportMetrics viewportMetrics =
       new FlutterRenderer.ViewportMetrics();
@@ -1259,6 +1267,38 @@ public class FlutterView extends FrameLayout
     flutterEngine.getPlatformViewsController().attachToView(this);
     flutterEngine.getPlatformViewsController2().attachToView(this);
 
+    final Activity activity = getActivity();
+    if (activity != null) {
+      Activity currentActivity = flutterEngine.getActivityControlSurface().getAttachedActivity();
+      if (currentActivity != activity) {
+        isActivityAttachmentManagedByView = true;
+        Lifecycle lifecycle;
+        if (activity instanceof LifecycleOwner) {
+          lifecycle = ((LifecycleOwner) activity).getLifecycle();
+        } else {
+          activityLifecycleOwner = new ActivityLifecycleOwner(activity);
+          lifecycle = activityLifecycleOwner.getLifecycle();
+        }
+
+        flutterEngine
+            .getActivityControlSurface()
+            .attachToActivity(
+                new ExclusiveAppComponent<Activity>() {
+                  @NonNull
+                  @Override
+                  public Activity getAppComponent() {
+                    return activity;
+                  }
+
+                  @Override
+                  public void detachFromFlutterEngine() {
+                    FlutterView.this.detachFromFlutterEngine();
+                  }
+                },
+                lifecycle);
+      }
+    }
+
     // Notify engine attachment listeners of the attachment.
     for (FlutterEngineAttachmentListener listener : flutterEngineAttachmentListeners) {
       listener.onFlutterEngineAttachedToFlutterView(flutterEngine);
@@ -1288,6 +1328,17 @@ public class FlutterView extends FrameLayout
     if (!isAttachedToFlutterEngine()) {
       Log.v(TAG, "FlutterView not attached to an engine. Not detaching.");
       return;
+    }
+
+    if (isActivityAttachmentManagedByView) {
+      if (activityLifecycleOwner != null) {
+        activityLifecycleOwner.destroy();
+        activityLifecycleOwner = null;
+      }
+      if (getActivity() != null) {
+        flutterEngine.getActivityControlSurface().detachFromActivity();
+      }
+      isActivityAttachmentManagedByView = false;
     }
 
     // Notify engine attachment listeners of the detachment.
@@ -1635,5 +1686,106 @@ public class FlutterView extends FrameLayout
      * from the associated {@code FlutterView}.
      */
     void onFlutterEngineDetachedFromFlutterView();
+  }
+
+  @Nullable
+  private Activity getActivity() {
+    Context context = getContext();
+    while (context instanceof ContextWrapper) {
+      if (context instanceof Activity) {
+        return (Activity) context;
+      }
+      context = ((ContextWrapper) context).getBaseContext();
+    }
+    return null;
+  }
+
+  private static class ActivityLifecycleOwner implements LifecycleOwner {
+    @NonNull private final LifecycleRegistry lifecycleRegistry = new LifecycleRegistry(this);
+    @NonNull private final Activity activity;
+    @NonNull private final Application.ActivityLifecycleCallbacks callbacks;
+    private boolean isRegistered = false;
+
+    public ActivityLifecycleOwner(@NonNull Activity activity) {
+      this.activity = activity;
+
+      this.callbacks =
+          new Application.ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityCreated(
+                @NonNull Activity a, @Nullable Bundle savedInstanceState) {
+              if (a == activity) {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);
+              }
+            }
+
+            @Override
+            public void onActivityStarted(@NonNull Activity a) {
+              if (a == activity) {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START);
+              }
+            }
+
+            @Override
+            public void onActivityResumed(@NonNull Activity a) {
+              if (a == activity) {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME);
+              }
+            }
+
+            @Override
+            public void onActivityPaused(@NonNull Activity a) {
+              if (a == activity) {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE);
+              }
+            }
+
+            @Override
+            public void onActivityStopped(@NonNull Activity a) {
+              if (a == activity) {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
+              }
+            }
+
+            @Override
+            public void onActivitySaveInstanceState(
+                @NonNull Activity a, @NonNull Bundle outState) {}
+
+            @Override
+            public void onActivityDestroyed(@NonNull Activity a) {
+              if (a == activity) {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY);
+                destroy();
+              }
+            }
+          };
+
+      if (activity.isDestroyed()) {
+        lifecycleRegistry.setCurrentState(Lifecycle.State.DESTROYED);
+      } else {
+        lifecycleRegistry.setCurrentState(Lifecycle.State.RESUMED);
+        Application app = activity.getApplication();
+        if (app != null) {
+          app.registerActivityLifecycleCallbacks(callbacks);
+          isRegistered = true;
+        }
+      }
+    }
+
+    @Override
+    @NonNull
+    public Lifecycle getLifecycle() {
+      return lifecycleRegistry;
+    }
+
+    public void destroy() {
+      if (isRegistered) {
+        Application app = activity.getApplication();
+        if (app != null) {
+          app.unregisterActivityLifecycleCallbacks(callbacks);
+        }
+        isRegistered = false;
+      }
+    }
   }
 }

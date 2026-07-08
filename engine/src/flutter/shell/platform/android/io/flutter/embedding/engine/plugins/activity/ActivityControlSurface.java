@@ -132,4 +132,12 @@ public interface ActivityControlSurface {
    * in the {@link android.app.Activity} or {@code Fragment}.
    */
   void onRestoreInstanceState(@Nullable Bundle bundle);
+
+  /**
+   * Returns the {@link android.app.Activity} currently attached to this {@code
+   * ActivityControlSurface}, or null if none is attached.
+   */
+  default @Nullable Activity getAttachedActivity() {
+    return null;
+  }
 }

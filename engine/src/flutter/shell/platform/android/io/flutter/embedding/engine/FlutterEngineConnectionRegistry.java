@@ -313,6 +313,12 @@ import java.util.Set;
   }
 
   @Override
+  @Nullable
+  public Activity getAttachedActivity() {
+    return attachedActivity();
+  }
+
+  @Override
   public void attachToActivity(
       @NonNull ExclusiveAppComponent<Activity> exclusiveActivity, @NonNull Lifecycle lifecycle) {
     try (TraceSection e = TraceSection.scoped("FlutterEngineConnectionRegistry#attachToActivity")) {
