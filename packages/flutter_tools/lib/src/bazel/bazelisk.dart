@@ -7,6 +7,7 @@ import 'package:process/process.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
+import 'bep.dart';
 
 /// A wrapper class for interacting with the Bazelisk CLI.
 ///
@@ -36,11 +37,32 @@ class Bazelisk {
     List<String> extraArgs = const <String>[],
   }) async {
     final String executable = await _getBazeliskPath();
-    final cmd = <String>[executable, 'build', target, ...extraArgs];
+    final File bepFile = fileSystem.systemTempDirectory
+        .createTempSync('bazel_bep_')
+        .childFile('bep.json');
+    final cmd = <String>[
+      executable,
+      'build',
+      target,
+      '--build_event_json_file=${bepFile.path}',
+      ...extraArgs,
+    ];
 
     logger.printStatus('Executing: ${cmd.join(' ')}');
 
     final ProcessResult result = await processManager.run(cmd, workingDirectory: workingDirectory);
+
+    // Consume BEP logs
+    final parser = BepParser(logger: logger);
+    await parser.parseFile(bepFile);
+
+    try {
+      if (bepFile.existsSync()) {
+        bepFile.deleteSync();
+      }
+    } on FileSystemException catch (_) {
+      // Ignored
+    }
 
     if (result.exitCode != 0) {
       logger.printError('Bazel build failed with exit code ${result.exitCode}.');

@@ -2,7 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:process/process.dart';
+
+import '../base/file_system.dart';
 import '../base/logger.dart';
+import '../bazel/bazelisk.dart';
 import '../build_info.dart';
 import '../project.dart';
 import 'android_builder.dart';
@@ -12,9 +16,15 @@ import 'android_builder.dart';
 ///
 /// This is a skeleton implementation as part of the Bazel migration plan.
 class BazelBuilder implements AndroidBuilder {
-  BazelBuilder({required Logger logger}) : _logger = logger;
+  BazelBuilder({
+    required Logger logger,
+    required FileSystem fileSystem,
+    required ProcessManager processManager,
+  }) : _logger = logger,
+       _bazelisk = Bazelisk(fileSystem: fileSystem, logger: logger, processManager: processManager);
 
   final Logger _logger;
+  final Bazelisk _bazelisk;
 
   @override
   Future<void> buildAar({
@@ -25,8 +35,10 @@ class BazelBuilder implements AndroidBuilder {
     String? outputDirectoryPath,
     required String buildNumber,
   }) async {
-    _logger.printStatus('Building AAR via Bazel is not yet fully implemented.');
-    // TODO(boetger): Implement Bazel AAR build orchestration.
+    _logger.printStatus('Orchestrating AAR via Bazel...');
+
+    await _bazelisk.build(target: '//...', workingDirectory: project.directory.path);
+    _logger.printStatus('Bazel AAR build completed.');
   }
 
   @override
