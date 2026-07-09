@@ -284,6 +284,9 @@ public interface TextureRegistry {
 
     /** Set a listener that will be notified when a memory pressure warning was forward. */
     default void setOnTrimMemoryListener(@Nullable OnTrimMemoryListener listener) {}
+
+    /** Specify the size of this texture's buffer in physical pixels. */
+    default void setBufferSize(int width, int height) {}
   }
 
   @Keep

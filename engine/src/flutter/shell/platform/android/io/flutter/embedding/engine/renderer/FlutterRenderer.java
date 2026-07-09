@@ -420,6 +420,11 @@ public class FlutterRenderer implements TextureRegistry {
     public void setOnTrimMemoryListener(@Nullable OnTrimMemoryListener listener) {
       trimMemoryListener = listener;
     }
+
+    @Override
+    public void setBufferSize(int width, int height) {
+      surfaceTexture().setDefaultBufferSize(width, height);
+    }
   }
 
   static final class TextureFinalizerRunnable implements Runnable {

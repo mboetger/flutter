@@ -425,6 +425,24 @@ public class FlutterRendererTest {
   }
 
   @Test
+  public void itSetsBufferSizeOnSurfaceTextureEntry() {
+    // Setup the test.
+    FlutterRenderer flutterRenderer = engineRule.getFlutterEngine().getRenderer();
+    SurfaceTexture mockSurfaceTexture = mock(SurfaceTexture.class);
+
+    FlutterRenderer.SurfaceTextureRegistryEntry entry =
+        (FlutterRenderer.SurfaceTextureRegistryEntry)
+            flutterRenderer.registerSurfaceTexture(mockSurfaceTexture);
+
+    // Execute behavior.
+    entry.setBufferSize(1920, 1080);
+
+    // Verify.
+    verify(mockSurfaceTexture, times(1)).setDefaultBufferSize(1920, 1080);
+  }
+
+
+  @Test
   public void itDoesDispatchSurfaceDestructionNotificationOnlyOnce() {
     // Setup the test.
     Surface fakeSurface = mock(Surface.class);
