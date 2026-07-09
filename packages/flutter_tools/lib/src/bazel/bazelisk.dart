@@ -4,6 +4,7 @@
 
 import 'package:process/process.dart';
 
+import '../base/common.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
@@ -24,7 +25,7 @@ class Bazelisk {
   Future<String> _getBazeliskPath() async {
     // TODO(bazel-migration): Define the artifact caching and fetching logic.
     // For now, we assume bazelisk exists in our bundled bin directory.
-    return 'bazel';
+    return 'bazelisk';
   }
 
   /// Executes a 'bazel build' command for a given [target].
@@ -67,7 +68,7 @@ class Bazelisk {
     if (result.exitCode != 0) {
       logger.printError('Bazel build failed with exit code ${result.exitCode}.');
       logger.printError(result.stderr.toString());
-      throw Exception('Bazelisk execution failed.');
+      throwToolExit('Bazelisk build failed with exit code ${result.exitCode}.');
     } else {
       logger.printStatus(result.stdout.toString());
     }
@@ -81,7 +82,7 @@ class Bazelisk {
     final ProcessResult result = await processManager.run(cmd, workingDirectory: workingDirectory);
 
     if (result.exitCode != 0) {
-      throw Exception('Bazelisk query failed: ${result.stderr}');
+      throwToolExit('Bazelisk query failed: ${result.stderr}');
     }
     return result.stdout.toString();
   }
