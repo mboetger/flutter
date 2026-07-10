@@ -141,5 +141,36 @@ TEST_F(ShellTest, DeterministicRenderingDisablesPathVolatility) {
   DestroyShell(std::move(shell), task_runners);
 }
 
+
+TEST(PathTest, AddPathStructureDifference) {
+  SkPathBuilder path_a;
+  SkPathBuilder path_b;
+
+  SkPathBuilder child_builder;
+  child_builder.addRect(SkRect::MakeLTRB(0, 0, 40, 40));
+  SkPath child = child_builder.snapshot();
+
+  SkMatrix matrix;
+  matrix.setScale(2.5, 0.5);
+  matrix.postTranslate(10.0, 20.0);
+
+  for (int i = 0; i < 150; i++) {
+    path_a.addPath(child, matrix, SkPath::kAppend_AddPathMode);
+  }
+
+  for (int i = 0; i < 150; i++) {
+    path_b.moveTo(0, 0);
+    path_b.addPath(child, matrix, SkPath::kAppend_AddPathMode);
+  }
+
+  SkPath path_a_snapshot = path_a.snapshot();
+  SkPath path_b_snapshot = path_b.snapshot();
+
+  EXPECT_EQ(path_a_snapshot.countVerbs(), path_b_snapshot.countVerbs());
+  EXPECT_EQ(path_a_snapshot.countPoints(), path_b_snapshot.countPoints());
+  EXPECT_EQ(path_a_snapshot, path_b_snapshot);
+  EXPECT_EQ(path_a_snapshot.getBounds(), path_b_snapshot.getBounds());
+}
+
 }  // namespace testing
 }  // namespace flutter

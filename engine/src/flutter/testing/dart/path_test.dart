@@ -297,6 +297,26 @@ void main() {
     checkDiagonalPoints(const Offset(21.05, -20.92));
     checkDiagonalPoints(const Offset(40.0, 5.68));
   });
+
+  test('addPath contour count differences', () {
+    final child = Path()..addRect(const Rect.fromLTRB(0, 0, 40, 40));
+
+    final pathA = Path();
+    for (int i = 0; i < 10; i++) {
+      pathA.addPath(child, Offset.zero);
+    }
+
+    final pathB = Path();
+    for (int i = 0; i < 10; i++) {
+      pathB.moveTo(0, 0);
+      pathB.addPath(child, Offset.zero);
+    }
+
+    final metricsA = pathA.computeMetrics().toList();
+    final metricsB = pathB.computeMetrics().toList();
+
+    expect(metricsA.length, equals(metricsB.length));
+  });
 }
 
 void checkPointWithOffset(Path path, Offset inPoint, Offset outwardOffset) {
