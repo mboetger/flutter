@@ -2266,4 +2266,97 @@ public class PlatformViewsControllerTest {
       return holder;
     }
   }
+
+  @Test
+  @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
+  public void platformViewSizingRoundingGaps() {
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+    FlutterJNI jni = new FlutterJNI();
+    platformViewsController.setFlutterJNI(jni);
+
+    final Context context = ApplicationProvider.getApplicationContext();
+    // Save density to restore it later
+    float originalDensity = context.getResources().getDisplayMetrics().density;
+    context.getResources().getDisplayMetrics().density = 2.75f;
+
+    try {
+      PlatformViewRegistry registry = platformViewsController.getRegistry();
+      registry.registerViewFactory(
+          "testType",
+          new PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+            @Override
+            public PlatformView create(Context context, int viewId, Object args) {
+              return new PlatformView() {
+                private final View view = new View(context);
+                @Override
+                public View getView() { return view; }
+                @Override
+                public void dispose() {}
+              };
+            }
+          });
+
+      attachToFlutterView(jni, platformViewsController, new FlutterView(context, new FlutterSurfaceView(context)));
+
+      int viewId = 0;
+      // We choose logicalLeft and logicalWidth such that:
+      // Math.round(logicalLeft * density) + Math.round(logicalWidth * density) < Math.round((logicalLeft + logicalWidth) * density)
+      // For density = 2.75:
+      // logicalLeft = 9.909090909090908 (9.909090909090908 * 2.75 = 27.25 -> round = 27)
+      // logicalWidth = 20.09090909090909 (20.09090909090909 * 2.75 = 55.25 -> round = 55)
+      // physicalRight of layout: 27 + 55 = 82.
+      // Expected physicalRight of logical bounds (9.909090909090908 + 20.09090909090909 = 30.0):
+      // 30.0 * 2.75 = 82.5 -> round = 83.
+      // This causes a 1-pixel gap.
+      double logicalLeft = 9.909090909090908;
+      double logicalWidth = 20.09090909090909;
+      double logicalTop = 9.909090909090908;
+      double logicalHeight = 20.09090909090909;
+
+      final PlatformViewCreationRequest request =
+          new PlatformViewCreationRequest(
+              viewId,
+              "testType",
+              logicalTop,
+              logicalLeft,
+              logicalWidth,
+              logicalHeight,
+              View.LAYOUT_DIRECTION_LTR,
+              null);
+
+      PlatformView pView = platformViewsController.createPlatformView(request, true);
+      platformViewsController.configureForTextureLayerComposition(pView, request);
+
+      PlatformViewWrapper viewWrapper = platformViewsController.getViewWrappers().get(viewId);
+      assertNotNull(viewWrapper);
+
+      int physicalLeft = ((FrameLayout.LayoutParams) viewWrapper.getLayoutParams()).leftMargin;
+      int physicalWidth = viewWrapper.getLayoutParams().width;
+      int physicalRight = physicalLeft + physicalWidth;
+
+      int expectedPhysicalRight = (int) Math.round((logicalLeft + logicalWidth) * 2.75f);
+
+      // Verify that there is no 1-pixel gap at the right edge
+      assertEquals(27, physicalLeft);
+      assertEquals(56, physicalWidth);
+      assertEquals(83, physicalRight);
+      assertEquals(83, expectedPhysicalRight);
+
+      int physicalTop = ((FrameLayout.LayoutParams) viewWrapper.getLayoutParams()).topMargin;
+      int physicalHeight = viewWrapper.getLayoutParams().height;
+      int physicalBottom = physicalTop + physicalHeight;
+
+      int expectedPhysicalBottom = (int) Math.round((logicalTop + logicalHeight) * 2.75f);
+
+      // Verify that there is no 1-pixel gap at the bottom edge
+      assertEquals(27, physicalTop);
+      assertEquals(56, physicalHeight);
+      assertEquals(83, physicalBottom);
+      assertEquals(83, expectedPhysicalBottom);
+
+    } finally {
+      context.getResources().getDisplayMetrics().density = originalDensity;
+    }
+  }
 }
+

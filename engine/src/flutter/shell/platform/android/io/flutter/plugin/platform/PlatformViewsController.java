@@ -154,6 +154,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   // Whether software rendering is used.
   private boolean usesSoftwareRendering = false;
 
+  private final HashMap<Integer, LogicalBounds> logicalBounds;
+
   private static boolean enableImageRenderTarget = true;
 
   private static boolean enableSurfaceProducerRenderTarget = true;
@@ -253,6 +255,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             Log.e(TAG, "Disposing unknown platform view with id: " + viewId);
             return;
           }
+          logicalBounds.remove(viewId);
           if (platformView.getView() != null) {
             final View embeddedView = platformView.getView();
             final ViewGroup pvParent = (ViewGroup) embeddedView.getParent();
@@ -326,25 +329,49 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             Log.e(TAG, "Setting offset for unknown platform view with id: " + viewId);
             return;
           }
-          final int physicalTop = toPhysicalPixels(top);
-          final int physicalLeft = toPhysicalPixels(left);
+          LogicalBounds bounds = logicalBounds.get(viewId);
+          if (bounds == null) {
+            bounds = new LogicalBounds(left, top, 0, 0);
+            logicalBounds.put(viewId, bounds);
+          } else {
+            bounds.left = left;
+            bounds.top = top;
+          }
+          final double density = getDisplayDensity();
+          final int physicalLeft = (int) Math.round(bounds.left * density);
+          final int physicalTop = (int) Math.round(bounds.top * density);
+          final int physicalRight = (int) Math.round((bounds.left + bounds.width) * density);
+          final int physicalBottom = (int) Math.round((bounds.top + bounds.height) * density);
+          final int physicalWidth = physicalRight - physicalLeft;
+          final int physicalHeight = physicalBottom - physicalTop;
+
           final FrameLayout.LayoutParams layoutParams =
               (FrameLayout.LayoutParams) viewWrapper.getLayoutParams();
           layoutParams.topMargin = physicalTop;
           layoutParams.leftMargin = physicalLeft;
+          layoutParams.width = physicalWidth;
+          layoutParams.height = physicalHeight;
           layoutParams.gravity = Gravity.LEFT | Gravity.TOP;
           viewWrapper.setLayoutParams(layoutParams);
+
+          final PlatformView platformView = platformViews.get(viewId);
+          if (platformView != null && platformView.getView() != null) {
+            final View embeddedView = platformView.getView();
+            final ViewGroup.LayoutParams embeddedViewLayoutParams = embeddedView.getLayoutParams();
+            embeddedViewLayoutParams.width = physicalWidth;
+            embeddedViewLayoutParams.height = physicalHeight;
+            embeddedView.setLayoutParams(embeddedViewLayoutParams);
+          }
         }
 
         @Override
         public void resize(
             @NonNull PlatformViewsChannel.PlatformViewResizeRequest request,
             @NonNull PlatformViewsChannel.PlatformViewBufferResized onComplete) {
-          final int physicalWidth = toPhysicalPixels(request.newLogicalWidth);
-          final int physicalHeight = toPhysicalPixels(request.newLogicalHeight);
           final int viewId = request.viewId;
-
           if (usesVirtualDisplay(viewId)) {
+            final int physicalWidth = toPhysicalPixels(request.newLogicalWidth);
+            final int physicalHeight = toPhysicalPixels(request.newLogicalHeight);
             final float originalDisplayDensity = getDisplayDensity();
             final VirtualDisplayController vdController = vdControllers.get(viewId);
             // Resizing involved moving the platform view to a new virtual display. Doing so
@@ -376,6 +403,24 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             Log.e(TAG, "Resizing unknown platform view with id: " + viewId);
             return;
           }
+
+          LogicalBounds bounds = logicalBounds.get(viewId);
+          if (bounds == null) {
+            bounds = new LogicalBounds(0, 0, request.newLogicalWidth, request.newLogicalHeight);
+            logicalBounds.put(viewId, bounds);
+          } else {
+            bounds.width = request.newLogicalWidth;
+            bounds.height = request.newLogicalHeight;
+          }
+
+          final double density = getDisplayDensity();
+          final int physicalLeft = (int) Math.round(bounds.left * density);
+          final int physicalTop = (int) Math.round(bounds.top * density);
+          final int physicalRight = (int) Math.round((bounds.left + bounds.width) * density);
+          final int physicalBottom = (int) Math.round((bounds.top + bounds.height) * density);
+          final int physicalWidth = physicalRight - physicalLeft;
+          final int physicalHeight = physicalBottom - physicalTop;
+
           // Resize the buffer only when the current buffer size is smaller than the new size.
           // This is required to prevent a situation when smooth keyboard animation
           // resizes the texture too often, such that the GPU and the platform thread don't agree on
@@ -394,6 +439,8 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
           if (viewWrapperLayoutParams instanceof FrameLayout.LayoutParams) {
             ((FrameLayout.LayoutParams) viewWrapperLayoutParams).gravity =
                 Gravity.LEFT | Gravity.TOP;
+            ((FrameLayout.LayoutParams) viewWrapperLayoutParams).leftMargin = physicalLeft;
+            ((FrameLayout.LayoutParams) viewWrapperLayoutParams).topMargin = physicalTop;
           }
           viewWrapper.setLayoutParams(viewWrapperLayoutParams);
 
@@ -616,8 +663,15 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     // Flutter engine.
     Log.i(TAG, "Hosting view in view hierarchy for platform view: " + request.viewId);
 
-    final int physicalWidth = toPhysicalPixels(request.logicalWidth);
-    final int physicalHeight = toPhysicalPixels(request.logicalHeight);
+    final double density = getDisplayDensity();
+    final int physicalLeft = (int) Math.round(request.logicalLeft * density);
+    final int physicalTop = (int) Math.round(request.logicalTop * density);
+    final int physicalRight = (int) Math.round((request.logicalLeft + request.logicalWidth) * density);
+    final int physicalBottom = (int) Math.round((request.logicalTop + request.logicalHeight) * density);
+    final int physicalWidth = physicalRight - physicalLeft;
+    final int physicalHeight = physicalBottom - physicalTop;
+    logicalBounds.put(request.viewId, new LogicalBounds(request.logicalLeft, request.logicalTop, request.logicalWidth, request.logicalHeight));
+
     PlatformViewWrapper viewWrapper;
     long textureId;
     if (usesSoftwareRendering) {
@@ -635,8 +689,6 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         new FrameLayout.LayoutParams(physicalWidth, physicalHeight, Gravity.LEFT | Gravity.TOP);
 
     // Size and position the view wrapper.
-    final int physicalTop = toPhysicalPixels(request.logicalTop);
-    final int physicalLeft = toPhysicalPixels(request.logicalLeft);
     viewWrapperLayoutParams.topMargin = physicalTop;
     viewWrapperLayoutParams.leftMargin = physicalLeft;
     viewWrapper.setLayoutParams(viewWrapperLayoutParams);
@@ -782,6 +834,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     viewWrappers = new SparseArray<>();
     platformViews = new SparseArray<>();
     platformViewParent = new SparseArray<>();
+    logicalBounds = new HashMap<>();
 
     motionEventTracker = MotionEventTracker.getInstance();
   }
@@ -1427,5 +1480,23 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   @VisibleForTesting
   public SparseArray<PlatformOverlayView> getOverlayLayerViews() {
     return overlayLayerViews;
+  }
+
+  @VisibleForTesting
+  public SparseArray<PlatformViewWrapper> getViewWrappers() {
+    return viewWrappers;
+  }
+
+  private static class LogicalBounds {
+    double left;
+    double top;
+    double width;
+    double height;
+    LogicalBounds(double left, double top, double width, double height) {
+      this.left = left;
+      this.top = top;
+      this.width = width;
+      this.height = height;
+    }
   }
 }
