@@ -3621,4 +3621,66 @@ public class AccessibilityBridgeTest {
       }
     }
   }
+
+  private static long packNodeId(int virtualId, int viewId) {
+    return ((long) virtualId << 32) | (viewId & 0xFFFFFFFFL);
+  }
+
+  private static AccessibilityNodeInfo mockAccessibilityNodeInfo(
+      final int virtualId, final int childCount, final int[] childVirtualIds, final int parentVirtualId) {
+    org.mockito.stubbing.Answer<Object> hiddenMethodsAnswer = new org.mockito.stubbing.Answer<Object>() {
+      @Override
+      public Object answer(org.mockito.invocation.InvocationOnMock invocation) throws Throwable {
+        String methodName = invocation.getMethod().getName();
+        if (methodName.equals("getSourceNodeId")) {
+          return packNodeId(virtualId, 0);
+        } else if (methodName.equals("getParentNodeId")) {
+          return packNodeId(parentVirtualId, 0);
+        } else if (methodName.equals("getChildId")) {
+          int index = (Integer) invocation.getArguments()[0];
+          return packNodeId(childVirtualIds[index], 0);
+        }
+        return org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation);
+      }
+    };
+    
+    AccessibilityNodeInfo mockNode = mock(AccessibilityNodeInfo.class, hiddenMethodsAnswer);
+    when(mockNode.getChildCount()).thenReturn(childCount);
+    when(mockNode.getClassName()).thenReturn("android.view.View");
+    return mockNode;
+  }
+
+  @Config(sdk = API_LEVELS.API_26)
+  @Test
+  public void testAccessibilityViewEmbedderCycleReproduction() throws Exception {
+    View rootAccessibilityView = mock(View.class);
+    Context context = mock(Context.class);
+    when(rootAccessibilityView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+
+    AccessibilityViewEmbedder embedder = new AccessibilityViewEmbedder(rootAccessibilityView, 1000);
+
+    View embeddedView = mock(View.class);
+    
+    AccessibilityNodeInfo rootOriginNode = mockAccessibilityNodeInfo(-1, 1, new int[]{1}, -2);
+    when(embeddedView.createAccessibilityNodeInfo()).thenReturn(rootOriginNode);
+
+    android.view.accessibility.AccessibilityNodeProvider mockProvider = mock(android.view.accessibility.AccessibilityNodeProvider.class);
+    when(embeddedView.getAccessibilityNodeProvider()).thenReturn(mockProvider);
+
+    AccessibilityNodeInfo childOriginNode = mockAccessibilityNodeInfo(1, 1, new int[]{-1}, -1);
+    when(mockProvider.createAccessibilityNodeInfo(1)).thenReturn(childOriginNode);
+
+    int rootFlutterId = 99;
+    Rect displayBounds = new Rect(0, 0, 100, 100);
+    AccessibilityNodeInfo rootFlutterNode = embedder.getRootNode(embeddedView, rootFlutterId, displayBounds);
+    assertNotNull(rootFlutterNode);
+
+    AccessibilityNodeInfo childFlutterNode = embedder.createAccessibilityNodeInfo(1000);
+    assertNotNull(childFlutterNode);
+
+    assertEquals(0, childFlutterNode.getChildCount());
+  }
 }
+
+

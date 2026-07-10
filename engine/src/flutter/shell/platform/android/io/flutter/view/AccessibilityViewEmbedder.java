@@ -175,6 +175,9 @@ class AccessibilityViewEmbedder {
         continue;
       }
       int originId = ReflectionAccessors.getVirtualNodeId(originPackedId);
+      if (originId == AccessibilityNodeProvider.HOST_VIEW_ID) {
+        continue;
+      }
       ViewAndId origin = new ViewAndId(embeddedView, originId);
       int childFlutterId;
       if (originToFlutterId.containsKey(origin)) {
