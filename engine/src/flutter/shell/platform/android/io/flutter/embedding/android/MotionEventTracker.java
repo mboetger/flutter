@@ -80,7 +80,12 @@ public final class MotionEventTracker {
   public MotionEvent pop(@NonNull MotionEventId eventId) {
     // remove all the older events.
     while (!unusedEvents.isEmpty() && unusedEvents.peek() < eventId.id) {
-      eventById.remove(unusedEvents.poll());
+      Long id = unusedEvents.poll();
+      MotionEvent event = eventById.get(id);
+      if (event != null) {
+        event.recycle();
+      }
+      eventById.remove(id);
     }
 
     // remove the current event from the heap if it exists.

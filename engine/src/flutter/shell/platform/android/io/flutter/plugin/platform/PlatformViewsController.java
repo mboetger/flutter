@@ -419,6 +419,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             final VirtualDisplayController vdController = vdControllers.get(viewId);
             final MotionEvent event = toMotionEvent(density, touch, true);
             vdController.dispatchTouchEvent(event);
+            event.recycle();
             return;
           }
 
@@ -434,6 +435,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
           }
           final MotionEvent event = toMotionEvent(density, touch, false);
           view.dispatchTouchEvent(event);
+          event.recycle();
         }
 
         @Override
@@ -718,38 +720,44 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         parsePointerPropertiesList(touch.rawPointerPropertiesList)
             .toArray(new PointerProperties[touch.pointerCount]);
 
-    if (!usingVirtualDisplay && trackedEvent != null) {
-      // We have the original event. Check if pointer counts and actions match.
-      if (trackedEvent.getPointerCount() == touch.pointerCount
-          && trackedEvent.getAction() == touch.action) {
-        // This preserves the verifiable input flag.
-        translateMotionEvent(trackedEvent, pointerCoords);
-        return trackedEvent;
-      }
+    if (trackedEvent != null) {
+      if (!usingVirtualDisplay) {
+        // We have the original event. Check if pointer counts and actions match.
+        if (trackedEvent.getPointerCount() == touch.pointerCount
+            && trackedEvent.getAction() == touch.action) {
+          // This preserves the verifiable input flag.
+          translateMotionEvent(trackedEvent, pointerCoords);
+          return trackedEvent;
+        }
 
-      // Pointer count or action mismatch detected
-      // (e.g., gesture recognizer filtered some pointers).
-      // This commonly occurs when:
-      // - Multi-touch gestures (zoom/pinch) are filtered by gesture recognizers
-      //
-      // We must reconstruct the event with the correct pointer count and action from Flutter.
-      // Unfortunately, this loses Android's verifiable input flag because there is no
-      // public API to modify pointer count while preserving verifiability.
-      return MotionEvent.obtain(
-          trackedEvent.getDownTime(),
-          trackedEvent.getEventTime(),
-          touch.action, // Use framework's action
-          touch.pointerCount, // Use framework's pointer count
-          pointerProperties,
-          pointerCoords,
-          trackedEvent.getMetaState(),
-          trackedEvent.getButtonState(),
-          trackedEvent.getXPrecision(),
-          trackedEvent.getYPrecision(),
-          trackedEvent.getDeviceId(),
-          trackedEvent.getEdgeFlags(),
-          trackedEvent.getSource(),
-          trackedEvent.getFlags());
+        // Pointer count or action mismatch detected
+        // (e.g., gesture recognizer filtered some pointers).
+        // This commonly occurs when:
+        // - Multi-touch gestures (zoom/pinch) are filtered by gesture recognizers
+        //
+        // We must reconstruct the event with the correct pointer count and action from Flutter.
+        // Unfortunately, this loses Android's verifiable input flag because there is no
+        // public API to modify pointer count while preserving verifiability.
+        MotionEvent reconstructedEvent = MotionEvent.obtain(
+            trackedEvent.getDownTime(),
+            trackedEvent.getEventTime(),
+            touch.action, // Use framework's action
+            touch.pointerCount, // Use framework's pointer count
+            pointerProperties,
+            pointerCoords,
+            trackedEvent.getMetaState(),
+            trackedEvent.getButtonState(),
+            trackedEvent.getXPrecision(),
+            trackedEvent.getYPrecision(),
+            trackedEvent.getDeviceId(),
+            trackedEvent.getEdgeFlags(),
+            trackedEvent.getSource(),
+            trackedEvent.getFlags());
+        trackedEvent.recycle();
+        return reconstructedEvent;
+      } else {
+        trackedEvent.recycle();
+      }
     }
 
     // TODO (kaushikiska) : warn that we are potentially using an untracked

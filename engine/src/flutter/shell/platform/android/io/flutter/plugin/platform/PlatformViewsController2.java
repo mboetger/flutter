@@ -822,6 +822,7 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
           }
           final MotionEvent event = toMotionEvent(density, touch);
           view.dispatchTouchEvent(event);
+          event.recycle();
         }
 
         @Override
