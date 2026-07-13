@@ -41,6 +41,9 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
 
   // |AndroidSurface|
   bool ResourceContextClearCurrent() override;
+ 
+  // |AndroidSurface|
+  bool IsOffscreenSurfaceInitialized() const override;
 
   // |AndroidSurface|
   bool SetNativeWindow(
@@ -75,6 +78,8 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
   sk_sp<const GrGLInterface> GetGLInterface() const override;
 
  private:
+  bool EnsureOffscreenSurfaceInitialized();
+
   std::shared_ptr<AndroidContextGLImpeller> android_context_;
   std::unique_ptr<impeller::egl::Surface> onscreen_surface_;
   std::unique_ptr<impeller::egl::Surface> offscreen_surface_;

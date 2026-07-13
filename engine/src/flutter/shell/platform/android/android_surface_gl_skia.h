@@ -44,6 +44,9 @@ class AndroidSurfaceGLSkia final : public GPUSurfaceGLDelegate,
 
   // |AndroidSurface|
   bool ResourceContextClearCurrent() override;
+ 
+  // |AndroidSurface|
+  bool IsOffscreenSurfaceInitialized() const override;
 
   // |AndroidSurface|
   bool SetNativeWindow(
@@ -83,6 +86,8 @@ class AndroidSurfaceGLSkia final : public GPUSurfaceGLDelegate,
   }
 
  private:
+  bool EnsureOffscreenSurfaceInitialized();
+
   std::shared_ptr<AndroidContextGLSkia> android_context_;
   fml::RefPtr<AndroidNativeWindow> native_window_;
   std::unique_ptr<AndroidEGLSurface> onscreen_surface_;

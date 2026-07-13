@@ -231,6 +231,27 @@ TEST(AndroidContextGl, EnsureMakeCurrentChecksCurrentContextStatus) {
   status = pbuffer_surface->MakeCurrent();
   EXPECT_EQ(AndroidEGLSurfaceMakeCurrentStatus::kSuccessAlreadyCurrent, status);
 }
+
+TEST(AndroidSurfaceGL, OffscreenSurfaceIsLazilyInitialized) {
+  auto environment = fml::MakeRefCounted<AndroidEnvironmentGL>();
+  std::string thread_label =
+      ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  ThreadHost thread_host(ThreadHost::ThreadHostConfig(
+      thread_label, ThreadHost::Type::kUi | ThreadHost::Type::kRaster |
+                        ThreadHost::Type::kIo));
+  TaskRunners task_runners = MakeTaskRunners(thread_label, thread_host);
+  auto android_context =
+      std::make_shared<AndroidContextGLSkia>(environment, task_runners);
+  auto android_surface =
+      std::make_unique<AndroidSurfaceGLSkia>(android_context);
+
+  EXPECT_FALSE(android_surface->IsOffscreenSurfaceInitialized());
+
+  android_surface->ResourceContextMakeCurrent();
+
+  EXPECT_TRUE(android_surface->IsOffscreenSurfaceInitialized());
+}
+
 }  // namespace android
 }  // namespace testing
 }  // namespace flutter

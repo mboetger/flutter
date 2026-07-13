@@ -48,6 +48,8 @@ class AndroidSurface {
 
   virtual void SetupImpellerSurface();
 
+  virtual bool IsOffscreenSurfaceInitialized() const { return false; }
+
  protected:
   AndroidSurface();
 };

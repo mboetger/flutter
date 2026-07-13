@@ -116,6 +116,11 @@ class PlatformViewAndroid final : public PlatformView {
     return android_context_;
   }
 
+  // Visible for testing.
+  AndroidSurface* GetAndroidSurfaceForTesting() const {
+    return android_surface_.get();
+  }
+
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override {
     return platform_message_handler_;

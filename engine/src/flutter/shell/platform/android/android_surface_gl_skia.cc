@@ -25,13 +25,7 @@ AndroidSurfaceGLSkia::AndroidSurfaceGLSkia(
     : android_context_(android_context),
       native_window_(nullptr),
       onscreen_surface_(nullptr),
-      offscreen_surface_(nullptr) {
-  // Acquire the offscreen surface.
-  offscreen_surface_ = android_context_->CreateOffscreenSurface();
-  if (!offscreen_surface_->IsValid()) {
-    offscreen_surface_ = nullptr;
-  }
-}
+      offscreen_surface_(nullptr) {}
 
 AndroidSurfaceGLSkia::~AndroidSurfaceGLSkia() = default;
 
@@ -44,7 +38,7 @@ void AndroidSurfaceGLSkia::TeardownOnScreenContext() {
 }
 
 bool AndroidSurfaceGLSkia::IsValid() const {
-  return offscreen_surface_ && android_context_->IsValid();
+  return android_context_ && android_context_->IsValid();
 }
 
 std::unique_ptr<Surface> AndroidSurfaceGLSkia::CreateGPUSurface(
@@ -86,8 +80,26 @@ bool AndroidSurfaceGLSkia::OnScreenSurfaceResize(const DlISize& size) {
   return true;
 }
 
+bool AndroidSurfaceGLSkia::EnsureOffscreenSurfaceInitialized() {
+  if (offscreen_surface_) {
+    return true;
+  }
+  offscreen_surface_ = android_context_->CreateOffscreenSurface();
+  if (!offscreen_surface_->IsValid()) {
+    offscreen_surface_ = nullptr;
+  }
+  return offscreen_surface_ != nullptr;
+}
+
+bool AndroidSurfaceGLSkia::IsOffscreenSurfaceInitialized() const {
+  return offscreen_surface_ != nullptr;
+}
+
 bool AndroidSurfaceGLSkia::ResourceContextMakeCurrent() {
   FML_DCHECK(IsValid());
+  if (!EnsureOffscreenSurfaceInitialized()) {
+    return false;
+  }
   auto status = offscreen_surface_->MakeCurrent();
   return status != AndroidEGLSurfaceMakeCurrentStatus::kFailure;
 }

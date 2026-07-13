@@ -385,8 +385,10 @@ std::unique_ptr<Shell> Shell::CreateShellOnPlatformThread(
         // Wait until Impeller context setup is complete before creating the
         // resource context.
         io_manager->GetImpellerContext();
-        sk_sp<GrDirectContext> resource_context =
-            platform_view_ptr->CreateResourceContext();
+        sk_sp<GrDirectContext> resource_context = nullptr;
+        if (!io_manager->GetResourceContext()) {
+          resource_context = platform_view_ptr->CreateResourceContext();
+        }
         io_manager->NotifyResourceContextAvailable(resource_context);
       });
 

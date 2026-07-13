@@ -78,16 +78,8 @@ class AndroidSwitchableGLContextImpeller : public SwitchableGLContext {
 AndroidSurfaceGLImpeller::AndroidSurfaceGLImpeller(
     const std::shared_ptr<AndroidContextGLImpeller>& android_context)
     : android_context_(android_context) {
-  offscreen_surface_ = android_context_->CreateOffscreenSurface();
-
-  if (!offscreen_surface_) {
-    FML_DLOG(ERROR) << "Could not create offscreen surface.";
-    return;
-  }
-
-  // The onscreen surface will be acquired once the native window is set.
-
-  is_valid_ = true;
+  // The offscreen surface will be acquired lazily.
+  is_valid_ = android_context_ && android_context_->IsValid();
 }
 
 AndroidSurfaceGLImpeller::~AndroidSurfaceGLImpeller() = default;
@@ -124,9 +116,24 @@ bool AndroidSurfaceGLImpeller::OnScreenSurfaceResize(const DlISize& size) {
   return RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
 }
 
+bool AndroidSurfaceGLImpeller::EnsureOffscreenSurfaceInitialized() {
+  if (offscreen_surface_) {
+    return true;
+  }
+  offscreen_surface_ = android_context_->CreateOffscreenSurface();
+  if (!offscreen_surface_) {
+    FML_DLOG(ERROR) << "Could not create offscreen surface.";
+  }
+  return offscreen_surface_ != nullptr;
+}
+
+bool AndroidSurfaceGLImpeller::IsOffscreenSurfaceInitialized() const {
+  return offscreen_surface_ != nullptr;
+}
+
 // |AndroidSurface|
 bool AndroidSurfaceGLImpeller::ResourceContextMakeCurrent() {
-  if (!offscreen_surface_) {
+  if (!EnsureOffscreenSurfaceInitialized()) {
     return false;
   }
   return android_context_->ResourceContextMakeCurrent(offscreen_surface_.get());

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "flutter/shell/platform/android/android_context_gl_impeller.h"
+#include "flutter/shell/platform/android/android_surface_gl_impeller.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -134,6 +135,41 @@ TEST_F(AndroidContextGLImpellerTest, FallbackForEmulator) {
   auto context =
       std::make_unique<AndroidContextGLImpeller>(std::move(display), true);
   ASSERT_TRUE(context);
+}
+
+TEST_F(AndroidContextGLImpellerTest, OffscreenSurfaceIsLazilyInitialized) {
+  EGLConfig window_egl_config, pbuffer_egl_config;
+  ASSERT_TRUE(GetEGLConfigForSurface(EGL_WINDOW_BIT, &window_egl_config));
+  ASSERT_TRUE(GetEGLConfigForSurface(EGL_PBUFFER_BIT, &pbuffer_egl_config));
+
+  auto display = std::make_unique<MockDisplay>();
+  EXPECT_CALL(*display, IsValid).WillRepeatedly(Return(true));
+  auto first_result =
+      std::make_unique<Config>(ConfigDescriptor(), window_egl_config);
+  auto second_result =
+      std::make_unique<Config>(ConfigDescriptor(), pbuffer_egl_config);
+  EXPECT_CALL(
+      *display,
+      ChooseConfig(Matcher<ConfigDescriptor>(AllOf(
+          Field(&ConfigDescriptor::samples, impeller::egl::Samples::kFour),
+          Field(&ConfigDescriptor::surface_type,
+                impeller::egl::SurfaceType::kWindow)))))
+      .WillOnce(Return(ByMove(std::move(first_result))));
+  EXPECT_CALL(*display, ChooseConfig(Matcher<ConfigDescriptor>(
+                            Field(&ConfigDescriptor::surface_type,
+                                  impeller::egl::SurfaceType::kPBuffer))))
+      .WillOnce(Return(ByMove(std::move(second_result))));
+  ON_CALL(*display, ChooseConfig(_))
+      .WillByDefault(Return(ByMove(std::unique_ptr<Config>())));
+  auto context =
+      std::make_shared<AndroidContextGLImpeller>(std::move(display), true);
+  ASSERT_TRUE(context);
+
+  auto android_surface = std::make_unique<AndroidSurfaceGLImpeller>(context);
+  EXPECT_FALSE(android_surface->IsOffscreenSurfaceInitialized());
+
+  android_surface->ResourceContextMakeCurrent();
+  EXPECT_TRUE(android_surface->IsOffscreenSurfaceInitialized());
 }
 
 }  // namespace testing
