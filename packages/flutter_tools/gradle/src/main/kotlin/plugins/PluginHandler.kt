@@ -232,8 +232,8 @@ class PluginHandler(
                     val dependencyProject =
                         project.rootProject.findProject(":$pluginDependencyName") ?: return@innerForEach
                     pluginProject.afterEvaluate {
-                        // this.dependencies.add("implementation", dependencyProject)
-                        pluginProject.dependencies.add("implementation", dependencyProject)
+                        val configuration = if (isBuiltAsApp(pluginProject)) "implementation" else "api"
+                        pluginProject.dependencies.add(configuration, dependencyProject)
                     }
                 }
             }

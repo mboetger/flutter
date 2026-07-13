@@ -4,7 +4,6 @@
 
 package com.flutter.gradle
 
-import org.gradle.internal.impldep.org.junit.Assert.assertThrows
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFalse
@@ -41,7 +40,7 @@ class DeeplinkTest {
         val deeplink1 = Deeplink("scheme1", "host1", "path1", IntentFilterCheck())
         val deeplink2 = null
 
-        assertThrows(NullPointerException::class.java) { deeplink1.equals(deeplink2) }
+        kotlin.test.assertFailsWith<NullPointerException> { deeplink1.equals(deeplink2) }
     }
 
     @Test
