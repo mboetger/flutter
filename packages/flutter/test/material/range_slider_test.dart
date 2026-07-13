@@ -4073,6 +4073,86 @@ void main() {
     expect(endFocusNode.hasFocus, isTrue, reason: 'End thumb should have focus after tab');
     expect(FocusManager.instance.primaryFocus, equals(endFocusNode));
   });
+
+  testWidgets('RangeSlider calls onChangeStart and onChangeEnd on semantics actions', (
+    WidgetTester tester,
+  ) async {
+    final semantics = SemanticsTester(tester);
+    var values = const RangeValues(0.3, 0.7);
+    var startCallCount = 0;
+    var endCallCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+                return RangeSlider(
+                  values: values,
+                  divisions: 10,
+                  onChanged: (RangeValues newValues) {
+                    setState(() {
+                      values = newValues;
+                    });
+                  },
+                  onChangeStart: (RangeValues startValues) {
+                    startCallCount++;
+                  },
+                  onChangeEnd: (RangeValues endValues) {
+                    endCallCount++;
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    List<SemanticsNode> findSliderSemanticsNodes(SemanticsNode node) {
+      final result = <SemanticsNode>[];
+      if (node.getSemanticsData().hasAction(SemanticsAction.increase)) {
+        result.add(node);
+      }
+      node.visitChildren((SemanticsNode child) {
+        result.addAll(findSliderSemanticsNodes(child));
+        return true;
+      });
+      return result;
+    }
+
+    final List<SemanticsNode> nodes = findSliderSemanticsNodes(
+      tester.getSemantics(find.byType(RangeSlider)),
+    );
+    expect(nodes.length, 2);
+    nodes.sort((SemanticsNode a, SemanticsNode b) => a.rect.center.dx.compareTo(b.rect.center.dx));
+    final SemanticsNode startThumbNode = nodes[0];
+    final SemanticsNode endThumbNode = nodes[1];
+
+    final SemanticsOwner semanticsOwner = tester.binding.pipelineOwner.semanticsOwner!;
+
+    expect(startCallCount, 0);
+    expect(endCallCount, 0);
+
+    // Increase start thumb
+    semanticsOwner.performAction(startThumbNode.id, SemanticsAction.increase);
+    await tester.pumpAndSettle();
+
+    expect(startCallCount, 1);
+    expect(endCallCount, 1);
+    expect(values.start, 0.4);
+
+    // Decrease end thumb
+    semanticsOwner.performAction(endThumbNode.id, SemanticsAction.decrease);
+    await tester.pumpAndSettle();
+
+    expect(startCallCount, 2);
+    expect(endCallCount, 2);
+    expect(values.end, 0.6);
+
+    semantics.dispose();
+  });
 }
 
 // A value indicator shape to log labelPainter text.

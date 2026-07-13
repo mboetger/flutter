@@ -4071,72 +4071,70 @@ void main() {
     );
   });
 
-  testWidgets(
-    'Overlay appear only when hovered on the thumb on desktop',
-    (WidgetTester tester) async {
-      var value = 0.5;
-      const overlayColor = Color(0xffff0000);
+  testWidgets('Overlay appear only when hovered on the thumb on desktop', (
+    WidgetTester tester,
+  ) async {
+    var value = 0.5;
+    const overlayColor = Color(0xffff0000);
 
-      Widget buildApp({bool enabled = true}) {
-        return MaterialApp(
-          home: Material(
-            child: Center(
-              child: StatefulBuilder(
-                builder: (BuildContext context, StateSetter setState) {
-                  return Slider(
-                    value: value,
-                    overlayColor: const MaterialStatePropertyAll<Color?>(overlayColor),
-                    onChanged: enabled
-                        ? (double newValue) {
-                            setState(() {
-                              value = newValue;
-                            });
-                          }
-                        : null,
-                  );
-                },
-              ),
+    Widget buildApp({bool enabled = true}) {
+      return MaterialApp(
+        home: Material(
+          child: Center(
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+                return Slider(
+                  value: value,
+                  overlayColor: const MaterialStatePropertyAll<Color?>(overlayColor),
+                  onChanged: enabled
+                      ? (double newValue) {
+                          setState(() {
+                            value = newValue;
+                          });
+                        }
+                      : null,
+                );
+              },
             ),
           ),
-        );
-      }
-
-      await tester.pumpWidget(buildApp());
-
-      // Slider does not have overlay when enabled and not hovered.
-      await tester.pumpAndSettle();
-      expect(
-        Material.of(tester.element(find.byType(Slider))),
-        isNot(paints..circle(color: overlayColor)),
+        ),
       );
+    }
 
-      // Hover on the slider but outside the thumb.
-      final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await gesture.addPointer();
-      await gesture.moveTo(tester.getTopLeft(find.byType(Slider)));
+    await tester.pumpWidget(buildApp());
 
-      await tester.pumpWidget(buildApp());
-      await tester.pumpAndSettle();
-      expect(
-        Material.of(tester.element(find.byType(Slider))),
-        isNot(paints..circle(color: overlayColor)),
-      );
+    // Slider does not have overlay when enabled and not hovered.
+    await tester.pumpAndSettle();
+    expect(
+      Material.of(tester.element(find.byType(Slider))),
+      isNot(paints..circle(color: overlayColor)),
+    );
 
-      // Hover on the thumb.
-      await gesture.moveTo(tester.getCenter(find.byType(Slider)));
-      await tester.pumpAndSettle();
-      expect(Material.of(tester.element(find.byType(Slider))), paints..circle(color: overlayColor));
+    // Hover on the slider but outside the thumb.
+    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer();
+    await gesture.moveTo(tester.getTopLeft(find.byType(Slider)));
 
-      // Hover on the slider but outside the thumb.
-      await gesture.moveTo(tester.getBottomRight(find.byType(Slider)));
-      await tester.pumpAndSettle();
-      expect(
-        Material.of(tester.element(find.byType(Slider))),
-        isNot(paints..circle(color: overlayColor)),
-      );
-    },
-    variant: TargetPlatformVariant.desktop(),
-  );
+    await tester.pumpWidget(buildApp());
+    await tester.pumpAndSettle();
+    expect(
+      Material.of(tester.element(find.byType(Slider))),
+      isNot(paints..circle(color: overlayColor)),
+    );
+
+    // Hover on the thumb.
+    await gesture.moveTo(tester.getCenter(find.byType(Slider)));
+    await tester.pumpAndSettle();
+    expect(Material.of(tester.element(find.byType(Slider))), paints..circle(color: overlayColor));
+
+    // Hover on the slider but outside the thumb.
+    await gesture.moveTo(tester.getBottomRight(find.byType(Slider)));
+    await tester.pumpAndSettle();
+    expect(
+      Material.of(tester.element(find.byType(Slider))),
+      isNot(paints..circle(color: overlayColor)),
+    );
+  }, variant: TargetPlatformVariant.desktop());
 
   testWidgets('Overlay remains when Slider is in focus on desktop', (WidgetTester tester) async {
     var value = 0.5;
@@ -4205,155 +4203,151 @@ void main() {
   }, variant: TargetPlatformVariant.desktop());
 
   // Regression test for https://github.com/flutter/flutter/issues/123313, which only occurs on desktop platforms.
-  testWidgets(
-    'Value indicator disappears after adjusting the slider on desktop',
-    (WidgetTester tester) async {
-      final theme = ThemeData();
-      const currentValue = 0.5;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: theme,
-          home: Material(
-            child: Center(
-              child: Slider(
-                value: currentValue,
-                divisions: 5,
-                label: currentValue.toStringAsFixed(1),
-                onChanged: (_) {},
-              ),
+  testWidgets('Value indicator disappears after adjusting the slider on desktop', (
+    WidgetTester tester,
+  ) async {
+    final theme = ThemeData();
+    const currentValue = 0.5;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: Material(
+          child: Center(
+            child: Slider(
+              value: currentValue,
+              divisions: 5,
+              label: currentValue.toStringAsFixed(1),
+              onChanged: (_) {},
             ),
           ),
         ),
-      );
+      ),
+    );
 
-      // Slider does not show value indicator initially.
-      await tester.pumpAndSettle();
-      RenderBox valueIndicatorBox = tester.renderObject(find.byType(Overlay));
-      expect(
-        valueIndicatorBox,
-        isNot(
-          paints
-            ..scale()
-            ..path(color: theme.colorScheme.primary),
-        ),
-      );
-
-      final Offset sliderCenter = tester.getCenter(find.byType(Slider));
-      final tapLocation = Offset(sliderCenter.dx + 50, sliderCenter.dy);
-
-      // Tap the slider by mouse to bring up the value indicator.
-      await tester.tapAt(tapLocation, kind: PointerDeviceKind.mouse);
-      await tester.pumpAndSettle();
-
-      // Value indicator is visible.
-      valueIndicatorBox = tester.renderObject(find.byType(Overlay));
-      expect(
-        valueIndicatorBox,
+    // Slider does not show value indicator initially.
+    await tester.pumpAndSettle();
+    RenderBox valueIndicatorBox = tester.renderObject(find.byType(Overlay));
+    expect(
+      valueIndicatorBox,
+      isNot(
         paints
           ..scale()
           ..path(color: theme.colorScheme.primary),
-      );
+      ),
+    );
 
-      // Wait for the value indicator to disappear.
-      await tester.pumpAndSettle(const Duration(seconds: 2));
+    final Offset sliderCenter = tester.getCenter(find.byType(Slider));
+    final tapLocation = Offset(sliderCenter.dx + 50, sliderCenter.dy);
 
-      // Value indicator is no longer visible.
-      expect(
-        valueIndicatorBox,
-        isNot(
-          paints
-            ..scale()
-            ..path(color: theme.colorScheme.primary),
+    // Tap the slider by mouse to bring up the value indicator.
+    await tester.tapAt(tapLocation, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+
+    // Value indicator is visible.
+    valueIndicatorBox = tester.renderObject(find.byType(Overlay));
+    expect(
+      valueIndicatorBox,
+      paints
+        ..scale()
+        ..path(color: theme.colorScheme.primary),
+    );
+
+    // Wait for the value indicator to disappear.
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+
+    // Value indicator is no longer visible.
+    expect(
+      valueIndicatorBox,
+      isNot(
+        paints
+          ..scale()
+          ..path(color: theme.colorScheme.primary),
+      ),
+    );
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets('Value indicator remains when Slider is in focus on desktop', (
+    WidgetTester tester,
+  ) async {
+    var value = 0.5;
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+
+    Widget buildApp({bool enabled = true}) {
+      return MaterialApp(
+        theme: ThemeData(
+          sliderTheme: const SliderThemeData(showValueIndicator: ShowValueIndicator.always),
         ),
-      );
-    },
-    variant: TargetPlatformVariant.desktop(),
-  );
-
-  testWidgets(
-    'Value indicator remains when Slider is in focus on desktop',
-    (WidgetTester tester) async {
-      var value = 0.5;
-      final focusNode = FocusNode();
-      addTearDown(focusNode.dispose);
-
-      Widget buildApp({bool enabled = true}) {
-        return MaterialApp(
-          theme: ThemeData(
-            sliderTheme: const SliderThemeData(showValueIndicator: ShowValueIndicator.always),
-          ),
-          home: Material(
-            child: Center(
-              child: StatefulBuilder(
-                builder: (BuildContext context, StateSetter setState) {
-                  return Slider(
-                    value: value,
-                    focusNode: focusNode,
-                    divisions: 5,
-                    label: value.toStringAsFixed(1),
-                    onChanged: enabled
-                        ? (double newValue) {
-                            setState(() {
-                              value = newValue;
-                            });
-                          }
-                        : null,
-                  );
-                },
-              ),
+        home: Material(
+          child: Center(
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+                return Slider(
+                  value: value,
+                  focusNode: focusNode,
+                  divisions: 5,
+                  label: value.toStringAsFixed(1),
+                  onChanged: enabled
+                      ? (double newValue) {
+                          setState(() {
+                            value = newValue;
+                          });
+                        }
+                      : null,
+                );
+              },
             ),
           ),
-        );
-      }
-
-      await tester.pumpWidget(buildApp());
-
-      // Slider does not show value indicator without focus.
-      await tester.pumpAndSettle();
-      expect(focusNode.hasFocus, false);
-      RenderBox valueIndicatorBox = tester.renderObject(find.byType(Overlay));
-      expect(
-        valueIndicatorBox,
-        isNot(
-          paints
-            ..path(color: const Color(0xff000000))
-            ..paragraph(),
         ),
       );
+    }
 
-      final Offset sliderCenter = tester.getCenter(find.byType(Slider));
-      final tapLocation = Offset(sliderCenter.dx + 50, sliderCenter.dy);
+    await tester.pumpWidget(buildApp());
 
-      // Tap somewhere to bring value indicator.
-      final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await gesture.addPointer();
-      await gesture.down(tapLocation);
-      await gesture.up();
-      focusNode.requestFocus();
-      await tester.pumpAndSettle();
-      expect(focusNode.hasFocus, true);
-      valueIndicatorBox = tester.renderObject(find.byType(Overlay));
-      expect(
-        valueIndicatorBox,
+    // Slider does not show value indicator without focus.
+    await tester.pumpAndSettle();
+    expect(focusNode.hasFocus, false);
+    RenderBox valueIndicatorBox = tester.renderObject(find.byType(Overlay));
+    expect(
+      valueIndicatorBox,
+      isNot(
         paints
           ..path(color: const Color(0xff000000))
           ..paragraph(),
-      );
+      ),
+    );
 
-      focusNode.unfocus();
-      await tester.pumpAndSettle();
-      expect(focusNode.hasFocus, false);
-      expect(
-        valueIndicatorBox,
-        isNot(
-          paints
-            ..path(color: const Color(0xff000000))
-            ..paragraph(),
-        ),
-      );
-    },
-    variant: TargetPlatformVariant.desktop(),
-  );
+    final Offset sliderCenter = tester.getCenter(find.byType(Slider));
+    final tapLocation = Offset(sliderCenter.dx + 50, sliderCenter.dy);
+
+    // Tap somewhere to bring value indicator.
+    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer();
+    await gesture.down(tapLocation);
+    await gesture.up();
+    focusNode.requestFocus();
+    await tester.pumpAndSettle();
+    expect(focusNode.hasFocus, true);
+    valueIndicatorBox = tester.renderObject(find.byType(Overlay));
+    expect(
+      valueIndicatorBox,
+      paints
+        ..path(color: const Color(0xff000000))
+        ..paragraph(),
+    );
+
+    focusNode.unfocus();
+    await tester.pumpAndSettle();
+    expect(focusNode.hasFocus, false);
+    expect(
+      valueIndicatorBox,
+      isNot(
+        paints
+          ..path(color: const Color(0xff000000))
+          ..paragraph(),
+      ),
+    );
+  }, variant: TargetPlatformVariant.desktop());
 
   testWidgets('showValueIndicator takes priority over theme', (WidgetTester tester) async {
     Widget buildApp({
@@ -5679,6 +5673,83 @@ void main() {
     );
     expect(tester.getSize(find.byType(Slider)), Size.zero);
   });
+
+  testWidgets(
+    'Slider calls onChangeStart and onChangeEnd on semantics increase and decrease actions',
+    (WidgetTester tester) async {
+      final semantics = SemanticsTester(tester);
+      var value = 0.5;
+      var startCallCount = 0;
+      var endCallCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Center(
+              child: StatefulBuilder(
+                builder: (BuildContext context, StateSetter setState) {
+                  return Slider(
+                    value: value,
+                    divisions: 10,
+                    onChanged: (double newValue) {
+                      setState(() {
+                        value = newValue;
+                      });
+                    },
+                    onChangeStart: (double startValue) {
+                      startCallCount++;
+                    },
+                    onChangeEnd: (double endValue) {
+                      endCallCount++;
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      SemanticsNode? findSliderSemanticsNode(SemanticsNode node) {
+        if (node.getSemanticsData().hasAction(SemanticsAction.increase)) {
+          return node;
+        }
+        SemanticsNode? found;
+        node.visitChildren((SemanticsNode child) {
+          found = findSliderSemanticsNode(child);
+          return found == null;
+        });
+        return found;
+      }
+
+      final SemanticsNode? sliderSemantics = findSliderSemanticsNode(
+        tester.getSemantics(find.byType(Slider)),
+      );
+      if (sliderSemantics == null) {
+        throw StateError('No slider semantics node found');
+      }
+      final SemanticsOwner semanticsOwner = tester.binding.pipelineOwner.semanticsOwner!;
+
+      expect(startCallCount, 0);
+      expect(endCallCount, 0);
+
+      semanticsOwner.performAction(sliderSemantics.id, SemanticsAction.increase);
+      await tester.pumpAndSettle();
+
+      expect(startCallCount, 1);
+      expect(endCallCount, 1);
+      expect(value, 0.6);
+
+      semanticsOwner.performAction(sliderSemantics.id, SemanticsAction.decrease);
+      await tester.pumpAndSettle();
+
+      expect(startCallCount, 2);
+      expect(endCallCount, 2);
+      expect(value, 0.5);
+
+      semantics.dispose();
+    },
+  );
 }
 
 // A slider value indicator that's a circle with a fixed size and

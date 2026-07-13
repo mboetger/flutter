@@ -631,13 +631,19 @@ class _RenderCupertinoSlider extends RenderConstrainedBox implements MouseTracke
 
   void _increaseAction() {
     if (isInteractive) {
-      onChanged!(clampDouble(value + _semanticActionUnit, 0.0, 1.0), false);
+      onChangeStart?.call(value);
+      final double newValue = clampDouble(value + _semanticActionUnit, 0.0, 1.0);
+      onChanged!(newValue, false);
+      onChangeEnd?.call(newValue);
     }
   }
 
   void _decreaseAction() {
     if (isInteractive) {
-      onChanged!(clampDouble(value - _semanticActionUnit, 0.0, 1.0), false);
+      onChangeStart?.call(value);
+      final double newValue = clampDouble(value - _semanticActionUnit, 0.0, 1.0);
+      onChanged!(newValue, false);
+      onChangeEnd?.call(newValue);
     }
   }
 

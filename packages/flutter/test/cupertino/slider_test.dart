@@ -10,6 +10,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../widgets/semantics_tester.dart';
+
 const CupertinoDynamicColor _kSystemFill = CupertinoDynamicColor(
   color: Color.fromARGB(51, 120, 120, 128),
   darkColor: Color.fromARGB(91, 120, 120, 128),
@@ -241,137 +243,131 @@ void main() {
     expect(SchedulerBinding.instance.transientCallbackCount, equals(0));
   });
 
-  testWidgets(
-    'Slider emits haptic feedback when hitting edge',
-    (WidgetTester tester) async {
-      final hapticLog = <MethodCall>[];
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
-        MethodCall methodCall,
-      ) async {
-        hapticLog.add(methodCall);
-        return null;
-      });
+  testWidgets('Slider emits haptic feedback when hitting edge', (WidgetTester tester) async {
+    final hapticLog = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
+      MethodCall methodCall,
+    ) async {
+      hapticLog.add(methodCall);
+      return null;
+    });
 
-      final Key sliderKey = UniqueKey();
-      var value = 0.0;
+    final Key sliderKey = UniqueKey();
+    var value = 0.0;
 
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setState) {
-              return Center(
-                child: CupertinoSlider(
-                  key: sliderKey,
-                  value: value,
-                  onChanged: (double newValue) {
-                    setState(() {
-                      value = newValue;
-                    });
-                  },
-                ),
-              );
-            },
-          ),
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Center(
+              child: CupertinoSlider(
+                key: sliderKey,
+                value: value,
+                onChanged: (double newValue) {
+                  setState(() {
+                    value = newValue;
+                  });
+                },
+              ),
+            );
+          },
         ),
-      );
+      ),
+    );
 
-      // No haptic feedback should be emitted when the slider is created.
-      expect(hapticLog, hasLength(0));
+    // No haptic feedback should be emitted when the slider is created.
+    expect(hapticLog, hasLength(0));
 
-      const double unit = CupertinoThumbPainter.radius;
-      final Offset topLeft = tester.getTopLeft(find.byKey(sliderKey));
-      Offset thumbCenter = topLeft + const Offset(unit, unit);
-      const delta = Offset(50.0, 0.0);
-      await tester.dragFrom(thumbCenter, delta);
-      await tester.pump();
+    const double unit = CupertinoThumbPainter.radius;
+    final Offset topLeft = tester.getTopLeft(find.byKey(sliderKey));
+    Offset thumbCenter = topLeft + const Offset(unit, unit);
+    const delta = Offset(50.0, 0.0);
+    await tester.dragFrom(thumbCenter, delta);
+    await tester.pump();
 
-      thumbCenter += delta;
+    thumbCenter += delta;
 
-      // No haptic feedback should be emitted when the slider is moved.
-      expect(hapticLog, hasLength(0));
+    // No haptic feedback should be emitted when the slider is moved.
+    expect(hapticLog, hasLength(0));
 
-      // Move the slider to the end quickly.
-      await tester.timedDragFrom(
-        thumbCenter,
-        const Offset(1000.0, 0.0),
-        const Duration(milliseconds: 100),
-      );
+    // Move the slider to the end quickly.
+    await tester.timedDragFrom(
+      thumbCenter,
+      const Offset(1000.0, 0.0),
+      const Duration(milliseconds: 100),
+    );
 
-      // Medium haptic feedback should be emitted when the slider is quickly moved to the end.
-      expect(hapticLog, hasLength(1));
-      expect(
-        hapticLog.last,
-        isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.mediumImpact'),
-      );
+    // Medium haptic feedback should be emitted when the slider is quickly moved to the end.
+    expect(hapticLog, hasLength(1));
+    expect(
+      hapticLog.last,
+      isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.mediumImpact'),
+    );
 
-      // Move the slider to the start slowly.
-      thumbCenter = tester.getTopRight(find.byKey(sliderKey)) - const Offset(unit, -unit);
-      await tester.timedDragFrom(
-        thumbCenter,
-        -Offset(thumbCenter.dx - topLeft.dx - unit * 2, 0),
-        const Duration(milliseconds: 1100),
-      );
+    // Move the slider to the start slowly.
+    thumbCenter = tester.getTopRight(find.byKey(sliderKey)) - const Offset(unit, -unit);
+    await tester.timedDragFrom(
+      thumbCenter,
+      -Offset(thumbCenter.dx - topLeft.dx - unit * 2, 0),
+      const Duration(milliseconds: 1100),
+    );
 
-      expect(value, equals(0.0));
+    expect(value, equals(0.0));
 
-      // Selection click should be emitted when the slider is slowly moved to the start.
-      expect(hapticLog, hasLength(2));
-      expect(
-        hapticLog.last,
-        isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.selectionClick'),
-      );
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
-  );
+    // Selection click should be emitted when the slider is slowly moved to the start.
+    expect(hapticLog, hasLength(2));
+    expect(
+      hapticLog.last,
+      isMethodCall('HapticFeedback.vibrate', arguments: 'HapticFeedbackType.selectionClick'),
+    );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
-  testWidgets(
-    'Slider does not emit haptic feedback on non-iOS platforms',
-    (WidgetTester tester) async {
-      final hapticLog = <MethodCall>[];
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
-        MethodCall methodCall,
-      ) async {
-        hapticLog.add(methodCall);
-        return null;
-      });
+  testWidgets('Slider does not emit haptic feedback on non-iOS platforms', (
+    WidgetTester tester,
+  ) async {
+    final hapticLog = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
+      MethodCall methodCall,
+    ) async {
+      hapticLog.add(methodCall);
+      return null;
+    });
 
-      final Key sliderKey = UniqueKey();
-      var value = 0.0;
+    final Key sliderKey = UniqueKey();
+    var value = 0.0;
 
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setState) {
-              return Center(
-                child: CupertinoSlider(
-                  key: sliderKey,
-                  value: value,
-                  onChanged: (double newValue) {
-                    setState(() {
-                      value = newValue;
-                    });
-                  },
-                ),
-              );
-            },
-          ),
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Center(
+              child: CupertinoSlider(
+                key: sliderKey,
+                value: value,
+                onChanged: (double newValue) {
+                  setState(() {
+                    value = newValue;
+                  });
+                },
+              ),
+            );
+          },
         ),
-      );
+      ),
+    );
 
-      const double unit = CupertinoThumbPainter.radius;
-      final Offset topLeft = tester.getTopLeft(find.byKey(sliderKey));
-      final Offset thumbCenter = topLeft + const Offset(unit, unit);
+    const double unit = CupertinoThumbPainter.radius;
+    final Offset topLeft = tester.getTopLeft(find.byKey(sliderKey));
+    final Offset thumbCenter = topLeft + const Offset(unit, unit);
 
-      // Move the slider to the end.
-      await tester.dragFrom(thumbCenter, const Offset(1000.0, 0.0));
+    // Move the slider to the end.
+    await tester.dragFrom(thumbCenter, const Offset(1000.0, 0.0));
 
-      expect(value, equals(1.0));
-      expect(hapticLog, hasLength(0));
-    },
-    variant: TargetPlatformVariant.all(excluding: <TargetPlatform>{TargetPlatform.iOS}),
-  );
+    expect(value, equals(1.0));
+    expect(hapticLog, hasLength(0));
+  }, variant: TargetPlatformVariant.all(excluding: <TargetPlatform>{TargetPlatform.iOS}));
 
   testWidgets('Slider moves when dragged (RTL)', (WidgetTester tester) async {
     final Key sliderKey = UniqueKey();
@@ -801,5 +797,84 @@ void main() {
       ),
     );
     expect(tester.getSize(find.byType(CupertinoSlider)), Size.zero);
+  });
+
+  testWidgets('CupertinoSlider calls onChangeStart and onChangeEnd on semantics actions', (
+    WidgetTester tester,
+  ) async {
+    final semantics = SemanticsTester(tester);
+    var value = 0.5;
+    var startCallCount = 0;
+    var endCallCount = 0;
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+                return CupertinoSlider(
+                  value: value,
+                  divisions: 10,
+                  onChanged: (double newValue) {
+                    setState(() {
+                      value = newValue;
+                    });
+                  },
+                  onChangeStart: (double startValue) {
+                    startCallCount++;
+                  },
+                  onChangeEnd: (double endValue) {
+                    endCallCount++;
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    SemanticsNode? findSliderSemanticsNode(SemanticsNode node) {
+      if (node.getSemanticsData().hasAction(SemanticsAction.increase)) {
+        return node;
+      }
+      SemanticsNode? found;
+      node.visitChildren((SemanticsNode child) {
+        found = findSliderSemanticsNode(child);
+        return found == null;
+      });
+      return found;
+    }
+
+    final SemanticsNode? sliderSemantics = findSliderSemanticsNode(
+      tester.getSemantics(find.byType(CupertinoSlider)),
+    );
+    if (sliderSemantics == null) {
+      throw StateError('No slider semantics node found');
+    }
+    final SemanticsOwner semanticsOwner = tester.binding.pipelineOwner.semanticsOwner!;
+
+    expect(startCallCount, 0);
+    expect(endCallCount, 0);
+
+    // Increase
+    semanticsOwner.performAction(sliderSemantics.id, SemanticsAction.increase);
+    await tester.pumpAndSettle();
+
+    expect(startCallCount, 1);
+    expect(endCallCount, 1);
+    expect(value, 0.6);
+
+    // Decrease
+    semanticsOwner.performAction(sliderSemantics.id, SemanticsAction.decrease);
+    await tester.pumpAndSettle();
+
+    expect(startCallCount, 2);
+    expect(endCallCount, 2);
+    expect(value, 0.5);
+
+    semantics.dispose();
   });
 }

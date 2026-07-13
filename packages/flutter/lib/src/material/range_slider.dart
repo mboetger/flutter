@@ -1977,25 +1977,37 @@ class _RenderRangeSlider extends RenderBox with RelayoutWhenSystemFontsChangeMix
 
   void _increaseStartAction() {
     if (isEnabled) {
-      onChanged!(RangeValues(_increasedStartValue, values.end));
+      onChangeStart?.call(values);
+      final newValues = RangeValues(_increasedStartValue, values.end);
+      onChanged!(newValues);
+      onChangeEnd?.call(newValues);
     }
   }
 
   void _decreaseStartAction() {
     if (isEnabled) {
-      onChanged!(RangeValues(_decreasedStartValue, values.end));
+      onChangeStart?.call(values);
+      final newValues = RangeValues(_decreasedStartValue, values.end);
+      onChanged!(newValues);
+      onChangeEnd?.call(newValues);
     }
   }
 
   void _increaseEndAction() {
     if (isEnabled) {
-      onChanged!(RangeValues(values.start, _increasedEndValue));
+      onChangeStart?.call(values);
+      final newValues = RangeValues(values.start, _increasedEndValue);
+      onChanged!(newValues);
+      onChangeEnd?.call(newValues);
     }
   }
 
   void _decreaseEndAction() {
     if (isEnabled) {
-      onChanged!(RangeValues(values.start, _decreasedEndValue));
+      onChangeStart?.call(values);
+      final newValues = RangeValues(values.start, _decreasedEndValue);
+      onChanged!(newValues);
+      onChangeEnd?.call(newValues);
     }
   }
 
