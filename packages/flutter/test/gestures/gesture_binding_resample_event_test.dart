@@ -38,6 +38,10 @@ class TestResampleEventFlutterBinding extends BindingBase with GestureBinding, S
 
   @override
   SamplingClock? get debugSamplingClock => TestSamplingClock();
+
+  void reset() {
+    resetGestureBinding();
+  }
 }
 
 class TestSamplingClock implements SamplingClock {
@@ -177,6 +181,86 @@ void main() {
     expect(events.length, 5);
 
     GestureBinding.instance.resamplingEnabled = false;
+  });
+
+  testResampleEvent('Pointer event resampling with customizable device kinds', (FakeAsync async) {
+    Duration currentTime() => Duration(milliseconds: clock.now().millisecondsSinceEpoch);
+    final Duration epoch = currentTime();
+
+    // Create a mouse pointer event
+    final packet = ui.PointerDataPacket(
+      data: <ui.PointerData>[
+        ui.PointerData(
+          change: ui.PointerChange.add,
+          kind: ui.PointerDeviceKind.mouse,
+          timeStamp: epoch,
+        ),
+        ui.PointerData(
+          change: ui.PointerChange.down,
+          kind: ui.PointerDeviceKind.mouse,
+          timeStamp: epoch + const Duration(milliseconds: 10),
+        ),
+        ui.PointerData(
+          change: ui.PointerChange.move,
+          kind: ui.PointerDeviceKind.mouse,
+          physicalX: 10.0,
+          timeStamp: epoch + const Duration(milliseconds: 20),
+        ),
+      ],
+    );
+
+    // 1. By default, mouse is not in resampledDeviceKinds.
+    // When resampling is enabled, mouse events should still be dispatched immediately.
+    GestureBinding.instance.resamplingEnabled = true;
+    GestureBinding.instance.resampledDeviceKinds = <PointerDeviceKind>{
+      PointerDeviceKind.touch,
+    };
+
+    final events = <PointerEvent>[];
+    binding.callback = events.add;
+
+    GestureBinding.instance.platformDispatcher.onPointerDataPacket?.call(packet);
+
+    // They should be dispatched immediately because mouse is not resampled.
+    expect(events.length, 2);
+    expect(events[0], isA<PointerDownEvent>());
+    expect(events[1], isA<PointerMoveEvent>());
+    events.clear();
+
+    // 2. Add PointerDeviceKind.mouse to resampledDeviceKinds.
+    // Reset resampler and hit tests first.
+    GestureBinding.instance.resamplingEnabled = false;
+    GestureBinding.instance.handlePointerEvent(const PointerAddedEvent());
+    binding.reset();
+    events.clear();
+
+    GestureBinding.instance.resamplingEnabled = true;
+    GestureBinding.instance.resampledDeviceKinds = <PointerDeviceKind>{
+      PointerDeviceKind.touch,
+      PointerDeviceKind.mouse,
+    };
+
+    GestureBinding.instance.platformDispatcher.onPointerDataPacket?.call(packet);
+
+    // They should NOT be dispatched immediately now because mouse is resampled.
+    expect(events.length, 0);
+
+    // Pump a frame callback to dispatch resampled events.
+    final FrameCallback? callback = binding.postFrameCallback;
+    binding.postFrameCallback = null;
+    expect(callback, isNotNull);
+
+    binding.frameTime = epoch + const Duration(milliseconds: 15);
+    callback!(Duration.zero);
+
+    // Resampled mouse events should now be dispatched.
+    expect(events.length, 1);
+    expect(events[0], isA<PointerDownEvent>());
+
+    GestureBinding.instance.resamplingEnabled = false;
+    GestureBinding.instance.resampledDeviceKinds = <PointerDeviceKind>{
+      PointerDeviceKind.touch,
+    };
   });
 }
 

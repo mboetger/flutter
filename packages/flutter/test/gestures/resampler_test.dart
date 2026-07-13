@@ -852,4 +852,81 @@ void main() {
     // No pointer events should have been returned.
     expect(result.length, 6);
   });
+
+  test('pointer prediction (extrapolation)', () {
+    final resampler = PointerEventResampler();
+    final PointerEvent event0 = createSimulatedPointerAddedEvent(1000, 0.0, 0.0);
+    final PointerEvent event1 = createSimulatedPointerDownEvent(1000, 0.0, 0.0);
+    final PointerEvent event2 = createSimulatedPointerMoveEvent(2000, 10.0, 20.0, 10.0, 20.0);
+
+    resampler
+      ..addEvent(event0)
+      ..addEvent(event1)
+      ..addEvent(event2);
+
+    final result = <PointerEvent>[];
+
+    // Case 1: sampleTime is 2500, maxPredictionDuration is zero (default).
+    // The position should be the latest event position (10.0, 20.0) without extrapolation.
+    resampler.sample(
+      const Duration(microseconds: 2500),
+      Duration.zero,
+      result.add,
+    );
+
+    expect(result.length, 2);
+    expect(result[0] is PointerAddedEvent, true);
+    expect(result[0].position, const Offset(10.0, 20.0));
+    expect(result[1] is PointerDownEvent, true);
+    expect(result[1].position, const Offset(10.0, 20.0));
+    result.clear();
+
+    // Reset and try with maxPredictionDuration = 500us
+    final resampler2 = PointerEventResampler();
+    resampler2
+      ..addEvent(event0)
+      ..addEvent(event1)
+      ..addEvent(event2);
+
+    // Case 2: sampleTime is 2500, maxPredictionDuration is 500us.
+    // Since last is 1000 (0,0) and next is 2000 (10, 20), velocity is 10/1000 = 0.01 per us dx, 0.02 per us dy.
+    // Capped prediction time is 2000 + 500 = 2500.
+    // Extrapolated position should be: 10 + 0.01 * 500 = 15.0 dx, 20 + 0.02 * 500 = 30.0 dy.
+    resampler2.sample(
+      const Duration(microseconds: 2500),
+      Duration.zero,
+      result.add,
+      maxPredictionDuration: const Duration(microseconds: 500),
+    );
+
+    expect(result.length, 2);
+    expect(result[0] is PointerAddedEvent, true);
+    expect(result[0].position, const Offset(15.0, 30.0));
+    expect(result[1] is PointerDownEvent, true);
+    expect(result[1].position, const Offset(15.0, 30.0));
+    result.clear();
+
+    // Reset and try with capped maxPredictionDuration = 250us
+    final resampler3 = PointerEventResampler();
+    resampler3
+      ..addEvent(event0)
+      ..addEvent(event1)
+      ..addEvent(event2);
+
+    // Case 3: sampleTime is 2500, maxPredictionDuration is 250us.
+    // Capped prediction time is 2000 + 250 = 2250.
+    // Extrapolated position should be: 10 + 0.01 * 250 = 12.5 dx, 20 + 0.02 * 250 = 25.0 dy.
+    resampler3.sample(
+      const Duration(microseconds: 2500),
+      Duration.zero,
+      result.add,
+      maxPredictionDuration: const Duration(microseconds: 250),
+    );
+
+    expect(result.length, 2);
+    expect(result[0] is PointerAddedEvent, true);
+    expect(result[0].position, const Offset(12.5, 25.0));
+    expect(result[1] is PointerDownEvent, true);
+    expect(result[1].position, const Offset(12.5, 25.0));
+  });
 }

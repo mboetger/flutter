@@ -127,7 +127,7 @@ class PointerEventResampler {
         : _toHoverEvent(event, position, delta, timeStamp, buttons);
   }
 
-  Offset _positionAt(Duration sampleTime) {
+  Offset _positionAt(Duration sampleTime, {Duration maxPredictionDuration = Duration.zero}) {
     // Use `next` position by default.
     double x = _next?.position.dx ?? 0.0;
     double y = _next?.position.dy ?? 0.0;
@@ -135,10 +135,21 @@ class PointerEventResampler {
     final Duration nextTimeStamp = _next?.timeStamp ?? Duration.zero;
     final Duration lastTimeStamp = _last?.timeStamp ?? Duration.zero;
 
-    // Resample if `next` time stamp is past `sampleTime`.
-    if (nextTimeStamp > sampleTime && nextTimeStamp > lastTimeStamp) {
+    var effectiveSampleTime = sampleTime;
+    if (sampleTime > nextTimeStamp && maxPredictionDuration > Duration.zero) {
+      final Duration maxPredictionTime = nextTimeStamp + maxPredictionDuration;
+      if (effectiveSampleTime > maxPredictionTime) {
+        effectiveSampleTime = maxPredictionTime;
+      }
+    }
+
+    // Resample if `next` time stamp is past `effectiveSampleTime` (interpolation),
+    // or if `effectiveSampleTime` is past `next` time stamp (extrapolation).
+    if (nextTimeStamp > lastTimeStamp &&
+        (nextTimeStamp > effectiveSampleTime ||
+         (effectiveSampleTime > nextTimeStamp && maxPredictionDuration > Duration.zero))) {
       final double interval = (nextTimeStamp - lastTimeStamp).inMicroseconds.toDouble();
-      final double scalar = (sampleTime - lastTimeStamp).inMicroseconds.toDouble() / interval;
+      final double scalar = (effectiveSampleTime - lastTimeStamp).inMicroseconds.toDouble() / interval;
       final double lastX = _last?.position.dx ?? 0.0;
       final double lastY = _last?.position.dy ?? 0.0;
       x = lastX + (x - lastX) * scalar;
@@ -150,12 +161,14 @@ class PointerEventResampler {
 
   void _processPointerEvents(Duration sampleTime) {
     final Iterator<PointerEvent> it = _queuedEvents.iterator;
+    PointerEvent? prev;
     while (it.moveNext()) {
       final PointerEvent event = it.current;
 
       // Update both `last` and `next` pointer event if time stamp is older
       // or equal to `sampleTime`.
       if (event.timeStamp <= sampleTime || _last == null) {
+        prev = _next;
         _last = event;
         _next = event;
         continue;
@@ -169,13 +182,18 @@ class PointerEventResampler {
         break;
       }
     }
+
+    if (_last != null && _next != null && _last == _next && prev != null && _next!.timeStamp > prev.timeStamp) {
+      _last = prev;
+    }
   }
 
   void _dequeueAndSampleNonHoverOrMovePointerEventsUntil(
     Duration sampleTime,
     Duration nextSampleTime,
-    HandleEventCallback callback,
-  ) {
+    HandleEventCallback callback, {
+    Duration maxPredictionDuration = Duration.zero,
+  }) {
     var endTime = sampleTime;
     // Scan queued events to determine end time.
     final Iterator<PointerEvent> it = _queuedEvents.iterator;
@@ -222,7 +240,7 @@ class PointerEventResampler {
       _hasButtons = event.buttons;
 
       // Position at `sampleTime`.
-      final Offset position = _positionAt(sampleTime);
+      final Offset position = _positionAt(sampleTime, maxPredictionDuration: maxPredictionDuration);
 
       // Initialize position if we are starting to track this pointer.
       if (_isTracked && !wasTracked) {
@@ -274,9 +292,13 @@ class PointerEventResampler {
     }
   }
 
-  void _samplePointerPosition(Duration sampleTime, HandleEventCallback callback) {
+  void _samplePointerPosition(
+    Duration sampleTime,
+    HandleEventCallback callback, {
+    Duration maxPredictionDuration = Duration.zero,
+  }) {
     // Position at `sampleTime`.
-    final Offset position = _positionAt(sampleTime);
+    final Offset position = _positionAt(sampleTime, maxPredictionDuration: maxPredictionDuration);
 
     // Add `move` or `hover` events if position has changed.
     final PointerEvent? next = _next;
@@ -313,15 +335,34 @@ class PointerEventResampler {
   /// Positive value for `nextSampleTime` allow early processing of
   /// up and removed events. This improves resampling of these events,
   /// which is important for fling animations.
-  void sample(Duration sampleTime, Duration nextSampleTime, HandleEventCallback callback) {
+  ///
+  /// The [maxPredictionDuration] specifies the maximum duration that
+  /// the resampler is allowed to extrapolate (predict) pointer positions
+  /// into the future when `sampleTime` is ahead of the latest pointer event
+  /// timestamp.
+  void sample(
+    Duration sampleTime,
+    Duration nextSampleTime,
+    HandleEventCallback callback, {
+    Duration maxPredictionDuration = Duration.zero,
+  }) {
     _processPointerEvents(sampleTime);
 
     // Dequeue and sample pointer events until `sampleTime`.
-    _dequeueAndSampleNonHoverOrMovePointerEventsUntil(sampleTime, nextSampleTime, callback);
+    _dequeueAndSampleNonHoverOrMovePointerEventsUntil(
+      sampleTime,
+      nextSampleTime,
+      callback,
+      maxPredictionDuration: maxPredictionDuration,
+    );
 
     // Dispatch resampled pointer location event if tracked.
     if (_isTracked) {
-      _samplePointerPosition(sampleTime, callback);
+      _samplePointerPosition(
+        sampleTime,
+        callback,
+        maxPredictionDuration: maxPredictionDuration,
+      );
     }
   }
 

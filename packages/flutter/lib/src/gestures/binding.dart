@@ -60,7 +60,13 @@ class SamplingClock {
 // SchedulerBinding's `currentSystemFrameTimeStamp` is used to determine
 // sample time.
 class _Resampler {
-  _Resampler(this._handlePointerEvent, this._handleSampleTimeChanged, this._samplingInterval);
+  _Resampler(
+    this._handlePointerEvent,
+    this._handleSampleTimeChanged,
+    this._samplingInterval,
+    this._resampledDeviceKinds,
+    this._maxPredictionDuration,
+  );
 
   // Resamplers used to filter incoming pointer events.
   final Map<int, PointerEventResampler> _resamplers = <int, PointerEventResampler>{};
@@ -90,14 +96,20 @@ class _Resampler {
   // Interval used for sampling.
   final Duration _samplingInterval;
 
+  // Device kinds that should be resampled.
+  final ValueGetter<Set<PointerDeviceKind>> _resampledDeviceKinds;
+
+  // Maximum duration to extrapolate/predict resampled events into the future.
+  final ValueGetter<Duration> _maxPredictionDuration;
+
   // Timer used to schedule resampling.
   Timer? _timer;
 
   // Add `event` for resampling or dispatch it directly if
   // not a touch event.
   void addOrDispatch(PointerEvent event) {
-    // Add touch event to resampler or dispatch pointer event directly.
-    if (event.kind == PointerDeviceKind.touch) {
+    // Add resampled event to resampler or dispatch pointer event directly.
+    if (_resampledDeviceKinds().contains(event.kind)) {
       // Save last event time for debugPrint of resampling margin.
       _lastEventTime = event.timeStamp;
 
@@ -151,10 +163,16 @@ class _Resampler {
     // to the current sample time.
     final Duration nextSampleTime = sampleTime + _samplingInterval;
 
+    final Duration maxPredictionDuration = _maxPredictionDuration();
     // Iterate over active resamplers and sample pointer events for
     // current sample time.
     for (final PointerEventResampler resampler in _resamplers.values) {
-      resampler.sample(sampleTime, nextSampleTime, _handlePointerEvent);
+      resampler.sample(
+        sampleTime,
+        nextSampleTime,
+        _handlePointerEvent,
+        maxPredictionDuration: maxPredictionDuration,
+      );
     }
 
     // Remove inactive resamplers.
@@ -594,7 +612,30 @@ mixin GestureBinding on BindingBase implements HitTestable, HitTestDispatcher, H
     _handlePointerEventImmediately,
     _handleSampleTimeChanged,
     _samplingInterval,
+    () => resampledDeviceKinds,
+    () => maxPredictionDuration,
   );
+
+  /// The pointer device kinds for which events are resampled.
+  ///
+  /// By default, only [PointerDeviceKind.touch] events are resampled.
+  Set<PointerDeviceKind> resampledDeviceKinds = <PointerDeviceKind>{
+    PointerDeviceKind.touch,
+  };
+
+  /// The maximum duration that the resampler is allowed to extrapolate (predict)
+  /// pointer positions into the future.
+  ///
+  /// If the target sample time is ahead of the latest received pointer event
+  /// timestamp, the resampler can extrapolate the position based on the
+  /// velocity of the pointer. This property limits how far into the future
+  /// (relative to the latest event timestamp) the position can be predicted,
+  /// to avoid excessive overshoot if the pointer changes direction or stops.
+  ///
+  /// Setting this to [Duration.zero] disables prediction.
+  ///
+  /// Defaults to [Duration.zero].
+  Duration maxPredictionDuration = Duration.zero;
 
   /// Enable pointer event resampling for touch devices by setting
   /// this to true.
