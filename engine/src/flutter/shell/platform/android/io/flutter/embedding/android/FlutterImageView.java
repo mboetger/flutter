@@ -230,8 +230,12 @@ public class FlutterImageView extends View implements RenderSurface {
     closeCurrentImage();
     // Close the current image reader, then create a new one with the new size.
     // Image readers cannot be resized once created.
-    closeImageReader();
+    final ImageReader oldImageReader = imageReader;
     imageReader = createImageReader(width, height);
+    if (isAttachedToFlutterRenderer) {
+      flutterRenderer.swapSurface(imageReader.getSurface());
+    }
+    oldImageReader.close();
   }
 
   /**
@@ -301,9 +305,6 @@ public class FlutterImageView extends View implements RenderSurface {
     // pool in the native side.
     if (kind == SurfaceKind.background && isAttachedToFlutterRenderer) {
       resizeIfNeeded(width, height);
-      // Bind native window to the new surface, and create a new onscreen surface
-      // with the new size in the native side.
-      flutterRenderer.swapSurface(imageReader.getSurface());
     }
   }
 }
