@@ -529,6 +529,32 @@ class AndroidDevice extends Device {
     return await _checkForSupportedAdbVersion() && await _checkForSupportedAndroidVersion();
   }();
 
+  Future<bool> _isAppRunning(String packageName) async {
+    try {
+      final RunResult result = await _processUtils.run(
+        adbCommandForDevice(<String>['shell', 'pidof', packageName]),
+      );
+      if (result.exitCode == 0) {
+        return result.stdout.trim().isNotEmpty;
+      }
+      if (result.stderr.contains('not found')) {
+        final RunResult psResult = await _processUtils.run(
+          adbCommandForDevice(<String>['shell', 'ps']),
+        );
+        if (psResult.exitCode == 0 && psResult.stdout.contains(packageName)) {
+          return true;
+        }
+        final RunResult psAResult = await _processUtils.run(
+          adbCommandForDevice(<String>['shell', 'ps', '-A']),
+        );
+        return psAResult.exitCode == 0 && psAResult.stdout.contains(packageName);
+      }
+    } on Exception {
+      // Ignore and assume not running.
+    }
+    return false;
+  }
+
   AndroidApk? _package;
 
   @override
@@ -588,10 +614,12 @@ class AndroidDevice extends Device {
       );
       // Package has been built, so we can get the updated application ID and
       // activity name from the .apk.
-      builtPackage = await ApplicationPackageFactory.instance!.getPackageForPlatform(
-        devicePlatform,
-        buildInfo: debuggingOptions.buildInfo,
-      ) as AndroidApk?;
+      builtPackage =
+          await ApplicationPackageFactory.instance!.getPackageForPlatform(
+                devicePlatform,
+                buildInfo: debuggingOptions.buildInfo,
+              )
+              as AndroidApk?;
     }
     // There was a failure parsing the android project information.
     if (builtPackage == null) {
@@ -733,14 +761,48 @@ class AndroidDevice extends Device {
     try {
       Uri? vmServiceUri;
       if (debuggingOptions.buildInfo.isDebug || debuggingOptions.buildInfo.isProfile) {
-        vmServiceUri = await vmServiceDiscovery?.uri;
-        if (vmServiceUri == null) {
+        if (vmServiceDiscovery == null) {
           _logger.printError(
             'Error waiting for a debug connection: '
-            'The log reader stopped unexpectedly',
+            'The log reader was not initialized',
           );
           return LaunchResult.failed();
         }
+        var isDiscovered = false;
+        Future<void> waitForAppToExit(String packageName) async {
+          // Wait for the app to start (max 5 seconds)
+          var checks = 10;
+          while (!isDiscovered && checks > 0 && !await _isAppRunning(packageName)) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+            checks--;
+          }
+          // Now wait for it to exit
+          while (!isDiscovered && await _isAppRunning(packageName)) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+          }
+        }
+
+        final Future<Uri?> discoveryFuture = vmServiceDiscovery.uri.then((Uri? uri) {
+          isDiscovered = true;
+          return uri;
+        });
+        final Future<void> exitFuture = waitForAppToExit(builtPackage.id);
+
+        final dynamic result = await Future.any<dynamic>(<Future<dynamic>>[
+          discoveryFuture,
+          exitFuture,
+        ]);
+
+        isDiscovered = true; // Ensure the loop stops if exitFuture completed or we threw.
+
+        if (result == null || result is! Uri) {
+          _logger.printError(
+            'Error waiting for a debug connection: '
+            'The application crashed on startup or VM Service was not found.',
+          );
+          return LaunchResult.failed();
+        }
+        vmServiceUri = result;
       }
       return LaunchResult.succeeded(vmServiceUri: vmServiceUri);
     } on Exception catch (error) {

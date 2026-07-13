@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_device.dart';
 import 'package:flutter_tools/src/android/android_sdk.dart';
@@ -391,6 +393,12 @@ void main() {
         ],
       ),
     );
+    processManager.addCommand(
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'shell', 'pidof', 'FlutterApp'],
+        stdout: '12345',
+      ),
+    );
 
     final LaunchResult launchResult = await device.startApp(
       apk,
@@ -566,6 +574,112 @@ void main() {
       expect(processManager, hasNoRemainingExpectations);
     },
   );
+
+  testWithoutContext('AndroidDevice.startApp aborts when app crashes on startup', () async {
+    final device = AndroidDevice(
+      '1234',
+      modelID: 'TestModel',
+      fileSystem: fileSystem,
+      processManager: processManager,
+      logger: BufferLogger.test(),
+      platform: FakePlatform(),
+      androidSdk: androidSdk,
+    );
+    final File apkFile = fileSystem.file('app-debug.apk')..createSync();
+    final apk = AndroidApk(
+      id: 'FlutterApp',
+      applicationPackage: apkFile,
+      launchActivity: 'FlutterActivity',
+      versionCode: 1,
+    );
+
+    processManager.addCommand(kAdbVersionCommand);
+    processManager.addCommand(kStartServer);
+    processManager.addCommand(
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'shell', 'getprop'],
+        stdout: '[ro.product.cpu.abi]: [x86_64]',
+      ),
+    );
+    processManager.addCommand(
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'shell', 'am', 'force-stop', 'FlutterApp'],
+      ),
+    );
+    processManager.addCommand(
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'install', '-t', '-r', 'app-debug.apk'],
+      ),
+    );
+    processManager.addCommand(kShaCommand);
+
+    // Logcat runs forever (completer not completed)
+    final logcatCompleter = Completer<int>();
+    processManager.addCommand(
+      FakeCommand(
+        command: const <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+        completer: logcatCompleter,
+      ),
+    );
+
+    processManager.addCommand(
+      const FakeCommand(
+        command: <String>[
+          'adb',
+          '-s',
+          '1234',
+          'shell',
+          'am',
+          'start',
+          '-a',
+          'android.intent.action.MAIN',
+          '-c',
+          'android.intent.category.LAUNCHER',
+          '-f',
+          '0x20000000',
+          '--ez',
+          'enable-dart-profiling',
+          'true',
+          '--ez',
+          'enable-checked-mode',
+          'true',
+          '--ez',
+          'verify-entry-points',
+          'true',
+          'FlutterActivity',
+        ],
+      ),
+    );
+
+    // First pidof check: app is running
+    processManager.addCommand(
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'shell', 'pidof', 'FlutterApp'],
+        stdout: '12345',
+      ),
+    );
+
+    // Second pidof check: app has crashed
+    processManager.addCommand(
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'shell', 'pidof', 'FlutterApp'],
+        exitCode: 1,
+      ),
+    );
+
+    final LaunchResult launchResult = await device.startApp(
+      apk,
+      prebuiltApplication: true,
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      platformArgs: <String, dynamic>{},
+    );
+
+    expect(launchResult.started, false);
+    expect(processManager, hasNoRemainingExpectations);
+
+    // Clean up logcat
+    logcatCompleter.complete(0);
+  });
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {
