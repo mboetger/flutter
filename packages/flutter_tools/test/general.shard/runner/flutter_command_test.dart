@@ -1865,6 +1865,56 @@ Use the "flutter config" command to enable feature flags.''',
         },
       );
     });
+
+    group('androidGradleDaemon', () {
+      testUsingContext('defaults to true on non-ChromeOS', () async {
+        final command = AndroidGradleDaemonTestCommand();
+        final runner = createTestCommandRunner(command);
+        await runner.run(<String>['android_gradle_daemon_test']);
+        final buildInfo = await command.getBuildInfo();
+        expect(buildInfo.androidGradleDaemon, isTrue);
+      }, overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+        OperatingSystemUtils: () => FakeOperatingSystemUtils(isCrostini: false),
+      });
+
+      testUsingContext('defaults to false on ChromeOS', () async {
+        final command = AndroidGradleDaemonTestCommand();
+        final runner = createTestCommandRunner(command);
+        await runner.run(<String>['android_gradle_daemon_test']);
+        final buildInfo = await command.getBuildInfo();
+        expect(buildInfo.androidGradleDaemon, isFalse);
+      }, overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+        OperatingSystemUtils: () => FakeOperatingSystemUtils(isCrostini: true),
+      });
+
+      testUsingContext('can be overridden to true on ChromeOS', () async {
+        final command = AndroidGradleDaemonTestCommand();
+        final runner = createTestCommandRunner(command);
+        await runner.run(<String>['android_gradle_daemon_test', '--android-gradle-daemon']);
+        final buildInfo = await command.getBuildInfo();
+        expect(buildInfo.androidGradleDaemon, isTrue);
+      }, overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+        OperatingSystemUtils: () => FakeOperatingSystemUtils(isCrostini: true),
+      });
+
+      testUsingContext('can be overridden to false on non-ChromeOS', () async {
+        final command = AndroidGradleDaemonTestCommand();
+        final runner = createTestCommandRunner(command);
+        await runner.run(<String>['android_gradle_daemon_test', '--no-android-gradle-daemon']);
+        final buildInfo = await command.getBuildInfo();
+        expect(buildInfo.androidGradleDaemon, isFalse);
+      }, overrides: <Type, Generator>{
+        FileSystem: () => fileSystem,
+        ProcessManager: () => processManager,
+        OperatingSystemUtils: () => FakeOperatingSystemUtils(isCrostini: false),
+      });
+    });
   });
 }
 
@@ -2108,3 +2158,24 @@ class DummyMachineFlutterCommand extends DummyFlutterCommand {
     addMachineOutputFlag(verboseHelp: false);
   }
 }
+
+class AndroidGradleDaemonTestCommand extends FlutterCommand {
+  AndroidGradleDaemonTestCommand() {
+    addAndroidSpecificBuildOptions();
+  }
+
+  BuildInfo? buildInfo;
+
+  @override
+  String get description => 'for testing androidGradleDaemon';
+
+  @override
+  String get name => 'android_gradle_daemon_test';
+
+  @override
+  Future<FlutterCommandResult> runCommand() async {
+    buildInfo = await getBuildInfo();
+    return FlutterCommandResult.success();
+  }
+}
+

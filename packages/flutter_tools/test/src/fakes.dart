@@ -678,7 +678,13 @@ class TestFeatureFlags implements FeatureFlags {
 }
 
 class FakeOperatingSystemUtils extends Fake implements OperatingSystemUtils {
-  FakeOperatingSystemUtils({this.hostPlatform = HostPlatform.linux_x64});
+  FakeOperatingSystemUtils({
+    this.hostPlatform = HostPlatform.linux_x64,
+    this.isCrostini = false,
+  });
+
+  @override
+  final bool isCrostini;
 
   final chmods = <List<String>>[];
 

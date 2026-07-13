@@ -1066,7 +1066,7 @@ abstract class FlutterCommand extends Command<void> {
           'in a Flutter project. Setting this flag to false corresponds to passing '
           '"--no-daemon" to the gradle wrapper script. This flag will cause the daemon '
           'process to terminate after the build is completed.',
-      defaultsTo: true,
+      defaultsTo: !globals.os.isCrostini,
       hide: hide,
     );
     argParser.addFlag(

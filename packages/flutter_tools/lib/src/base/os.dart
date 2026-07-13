@@ -193,6 +193,9 @@ abstract class OperatingSystemUtils {
     }
     return port;
   }
+
+  /// Returns whether the tool is running in a Crostini (Linux on ChromeOS) environment.
+  bool get isCrostini => _platform.isLinux && _fileSystem.directory('/mnt/chromeos').existsSync();
 }
 
 class _PosixUtils extends OperatingSystemUtils {
