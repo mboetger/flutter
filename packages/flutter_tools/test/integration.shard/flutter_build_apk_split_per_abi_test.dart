@@ -178,7 +178,7 @@ Future<void> _assertSplitPerAbiVersionCodes(
 
     final int actual = actualVersionCodes[abi]!;
     final int expected =
-        (abiIndex * 1000) + ((buildNumber ?? 1) * (usingCustomAppGradleFile ? 10000 : 1));
+        (abiIndex * 1000000) + ((buildNumber ?? 1) * (usingCustomAppGradleFile ? 10000 : 1));
     expect(
       actual,
       expected,
@@ -212,7 +212,7 @@ void main() {
 
   // Check with no build-number
   testWithoutContext(
-    'APK versionCodes after --split-per-abi (no explicit build-number) follow "(abiIndex * 1000) + 1"',
+    'APK versionCodes after --split-per-abi (no explicit build-number) follow "(abiIndex * 1000000) + 1"',
     () async {
       await _assertSplitPerAbiVersionCodes(null, appDir, false);
     },
@@ -220,7 +220,7 @@ void main() {
 
   // Check with custom buildNumber=42
   testWithoutContext(
-    'APK versionCodes after --split-per-abi with custom build-number=42 follow "(abiIndex * 1000) + 42"',
+    'APK versionCodes after --split-per-abi with custom build-number=42 follow "(abiIndex * 1000000) + 42"',
     () async {
       await _assertSplitPerAbiVersionCodes(42, appDir, false);
     },
@@ -228,7 +228,7 @@ void main() {
 
   // Check with custom buildNumber=42 and custom gradle file which multiplies build number by 10000
   testWithoutContext(
-    'APK versionCodes after --split-per-abi with custom build-number=42 and gradle file follow "(abiIndex * 1000) + (42 * 10000)"',
+    'APK versionCodes after --split-per-abi with custom build-number=42 and gradle file follow "(abiIndex * 1000000) + (42 * 10000)"',
     () async {
       await _assertSplitPerAbiVersionCodes(42, appDir, true);
     },
