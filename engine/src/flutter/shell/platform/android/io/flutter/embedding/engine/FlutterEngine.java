@@ -425,7 +425,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     // Only automatically register plugins if both constructor parameter and
     // loaded AndroidManifest config turn this feature on.
     if (automaticallyRegisterPlugins && flutterLoader.automaticallyRegisterPlugins()) {
-      GeneratedPluginRegister.registerGeneratedPlugins(this);
+      GeneratedPluginRegister.registerGeneratedPlugins(this, context);
     }
 
     ViewUtils.calculateMaximumDisplayMetrics(context, this);

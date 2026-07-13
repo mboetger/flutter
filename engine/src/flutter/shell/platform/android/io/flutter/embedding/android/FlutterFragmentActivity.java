@@ -761,7 +761,7 @@ public class FlutterFragmentActivity extends FragmentActivity
       return;
     }
 
-    GeneratedPluginRegister.registerGeneratedPlugins(flutterEngine);
+    GeneratedPluginRegister.registerGeneratedPlugins(flutterEngine, this);
   }
 
   /**

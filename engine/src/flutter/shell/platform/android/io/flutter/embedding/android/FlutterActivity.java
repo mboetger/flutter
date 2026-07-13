@@ -1352,7 +1352,7 @@ public class FlutterActivity extends Activity
       return;
     }
 
-    GeneratedPluginRegister.registerGeneratedPlugins(flutterEngine);
+    GeneratedPluginRegister.registerGeneratedPlugins(flutterEngine, this);
   }
 
   /**

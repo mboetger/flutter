@@ -4,7 +4,9 @@
 
 package io.flutter.embedding.engine.plugins.util;
 
+import android.content.Context;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import io.flutter.Log;
 import io.flutter.embedding.engine.FlutterEngine;
 import java.lang.reflect.Method;
@@ -72,9 +74,28 @@ public class GeneratedPluginRegister {
    * the list of plugins being registered.
    */
   public static void registerGeneratedPlugins(@NonNull FlutterEngine flutterEngine) {
+    // Fallback if no context is provided.
+    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    if (classLoader == null) {
+      classLoader = GeneratedPluginRegister.class.getClassLoader();
+    }
+    registerGeneratedPlugins(flutterEngine, classLoader);
+  }
+
+  /**
+   * Same as {@link #registerGeneratedPlugins(FlutterEngine)} but uses the class loader of the
+   * passed {@code Context} to find the {@code GeneratedPluginRegistrant}.
+   */
+  public static void registerGeneratedPlugins(
+      @NonNull FlutterEngine flutterEngine, @NonNull Context context) {
+    registerGeneratedPlugins(flutterEngine, context.getClassLoader());
+  }
+
+  private static void registerGeneratedPlugins(
+      @NonNull FlutterEngine flutterEngine, @Nullable ClassLoader classLoader) {
     try {
       Class<?> generatedPluginRegistrant =
-          Class.forName("io.flutter.plugins.GeneratedPluginRegistrant");
+          Class.forName("io.flutter.plugins.GeneratedPluginRegistrant", true, classLoader);
       Method registrationMethod =
           generatedPluginRegistrant.getDeclaredMethod("registerWith", FlutterEngine.class);
       registrationMethod.invoke(null, flutterEngine);
