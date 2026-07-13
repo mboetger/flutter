@@ -238,6 +238,7 @@ abstract class ProcessUtils {
     RegExp? stdoutErrorMatcher,
     StringConverter? mapFunction,
     Map<String, String>? environment,
+    void Function(String line, Process process)? onLine,
   });
 
   bool exitsHappySync(List<String> cli, {Map<String, String>? environment});
@@ -554,6 +555,7 @@ class _DefaultProcessUtils implements ProcessUtils {
     RegExp? stdoutErrorMatcher,
     StringConverter? mapFunction,
     Map<String, String>? environment,
+    void Function(String line, Process process)? onLine,
   }) async {
     final Process process = await start(
       cmd,
@@ -565,6 +567,9 @@ class _DefaultProcessUtils implements ProcessUtils {
         .transform(utf8AllowMalformedLineDecoder)
         .where((String line) => filter == null || filter.hasMatch(line))
         .listen((String line) {
+          if (onLine != null) {
+            onLine(line, process);
+          }
           String? mappedLine = line;
           if (mapFunction != null) {
             mappedLine = mapFunction(line);
@@ -584,6 +589,9 @@ class _DefaultProcessUtils implements ProcessUtils {
         .transform(utf8AllowMalformedLineDecoder)
         .where((String line) => filter == null || filter.hasMatch(line))
         .listen((String line) {
+          if (onLine != null) {
+            onLine(line, process);
+          }
           String? mappedLine = line;
           if (mapFunction != null) {
             mappedLine = mapFunction(line);

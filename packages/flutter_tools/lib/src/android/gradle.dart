@@ -347,6 +347,7 @@ class AndroidGradleBuilder implements AndroidBuilder {
     preRunTask?.call();
 
     var exitCode = 1;
+    var daemonStartCount = 0;
     try {
       exitCode = await _processUtils.stream(
         command,
@@ -354,6 +355,19 @@ class AndroidGradleBuilder implements AndroidBuilder {
         allowReentrantFlutter: true,
         environment: _java?.environment,
         mapFunction: consumeLog,
+        onLine: (String line, Process process) {
+          if (line.contains('Starting a Gradle Daemon')) {
+            daemonStartCount++;
+            if (daemonStartCount > 5) {
+              _logger.printError(
+                'Gradle daemon startup loop detected. The build has been aborted.\n'
+                'This often happens due to firewall or network configuration issues (e.g. hotspot).\n'
+                'Please try running with --no-android-gradle-daemon or check your configuration.',
+              );
+              process.kill();
+            }
+          }
+        },
       );
     } on ProcessException catch (exception) {
       consumeLog(exception.toString());

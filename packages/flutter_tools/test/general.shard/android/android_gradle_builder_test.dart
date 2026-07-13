@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:convert';
+
 import 'package:archive/archive.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:file/memory.dart';
@@ -29,8 +31,9 @@ import 'package:unified_analytics/unified_analytics.dart';
 import '../../src/common.dart';
 import '../../src/context.dart';
 import '../../src/context.dart' as test_context;
+
 import '../../src/fake_process_manager.dart';
-import '../../src/fakes.dart';
+import '../../src/fakes.dart' hide FakeProcess;
 
 const minimalV2EmbeddingManifest = r'''
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -3066,6 +3069,78 @@ Gradle Crashed
           'flutter_embedding_release-1.0.0-73fd6b049a80bcea2db1f26c7cee434907cd188b.pom',
         ),
         exists,
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    }, overrides: <Type, Generator>{AndroidStudio: () => FakeAndroidStudio()});
+
+    testUsingContext('Aborts build when Gradle daemon startup loop is detected', () async {
+      final builder = AndroidGradleBuilder(
+        java: FakeJava(),
+        logger: logger,
+        processManager: processManager,
+        fileSystem: fileSystem,
+        artifacts: Artifacts.test(),
+        analytics: fakeAnalytics,
+        gradleUtils: FakeGradleUtils(),
+        platform: FakePlatform(),
+        androidStudio: FakeAndroidStudio(),
+      );
+
+      final gradleProcess = FakeProcess(
+        exitCode: 143, // SIGTERM exit code
+        stdout: utf8.encode('Starting a Gradle Daemon\n' * 6),
+      );
+
+      processManager.addCommand(
+        FakeCommand(
+          command: const <String>[
+            'gradlew',
+            '-q',
+            '-Ptarget-platform=android-arm,android-arm64,android-x64',
+            '-Ptarget=lib/main.dart',
+            '-Pbase-application-name=android.app.Application',
+            '-Pdart-obfuscation=false',
+            '-Ptrack-widget-creation=false',
+            '-Ptree-shake-icons=false',
+            'assembleRelease',
+          ],
+          process: gradleProcess,
+        ),
+      );
+
+      fileSystem.directory('android').childFile('build.gradle').createSync(recursive: true);
+      fileSystem.directory('android').childFile('gradle.properties').createSync(recursive: true);
+      fileSystem.directory('android').childDirectory('app').childFile('build.gradle')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('apply from: irrelevant/flutter.gradle');
+
+      final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+      project.android.appManifestFile
+        ..createSync(recursive: true)
+        ..writeAsStringSync(minimalV2EmbeddingManifest);
+
+      await expectLater(() async {
+        await builder.buildGradleApp(
+          project: project,
+          androidBuildInfo: const AndroidBuildInfo(
+            BuildInfo(
+              BuildMode.release,
+              null,
+              treeShakeIcons: false,
+              packageConfigPath: '.dart_tool/package_config.json',
+            ),
+          ),
+          target: 'lib/main.dart',
+          isBuildingBundle: false,
+          configOnly: false,
+          localGradleErrors: const <GradleHandledError>[],
+        );
+      }, throwsToolExit(message: 'Gradle task assembleRelease failed with exit code 143'));
+
+      expect(gradleProcess.signals.map((s) => s.toString()), contains('SIGTERM'));
+      expect(
+        logger.errorText,
+        contains('Gradle daemon startup loop detected. The build has been aborted.'),
       );
       expect(processManager, hasNoRemainingExpectations);
     }, overrides: <Type, Generator>{AndroidStudio: () => FakeAndroidStudio()});
