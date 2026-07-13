@@ -345,6 +345,13 @@ FLUTTER_DARWIN_EXPORT
 /**
  * An event sink callback.
  *
+ * Must be called on the platform's main thread. If events are generated on a
+ * background thread, they must be marshalled to the main thread.
+ *
+ * If the application goes to the background, the main Flutter isolate might be
+ * suspended by the OS, which pauses Dart event processing. Events sent during
+ * suspension may be queued or lost.
+ *
  * @param event The event.
  */
 typedef void (^FlutterEventSink)(id _Nullable event);

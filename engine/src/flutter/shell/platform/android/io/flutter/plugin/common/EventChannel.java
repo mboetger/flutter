@@ -157,28 +157,43 @@ public final class EventChannel {
    * Event callback. Supports dual use: Producers of events to be sent to Flutter act as clients of
    * this interface for sending events. Consumers of events sent from Flutter implement this
    * interface for handling received events (the latter facility has not been implemented yet).
+   *
+   * <p>All methods of this interface must be called on the platform's UI thread.
+   *
+   * <p>If the application goes to the background, the main Flutter isolate might be suspended by
+   * the OS, which pauses Dart event processing. Events sent during suspension may be queued or
+   * lost.
    */
   public interface EventSink {
     /**
      * Consumes a successful event.
      *
+     * <p>Must be called on the platform's UI thread.
+     *
      * @param event the event, possibly null.
      */
+    @UiThread
     void success(Object event);
 
     /**
      * Consumes an error event.
      *
+     * <p>Must be called on the platform's UI thread.
+     *
      * @param errorCode an error code String.
      * @param errorMessage a human-readable error message String, possibly null.
      * @param errorDetails error details, possibly null
      */
+    @UiThread
     void error(String errorCode, String errorMessage, Object errorDetails);
 
     /**
      * Consumes end of stream. Ensuing calls to {@link #success(Object)} or {@link #error(String,
      * String, Object)}, if any, are ignored.
+     *
+     * <p>Must be called on the platform's UI thread.
      */
+    @UiThread
     void endOfStream();
   }
 

@@ -11,6 +11,14 @@ class EncodableValue;
 
 // Event callback. Events to be sent to Flutter application
 // act as clients of this interface for sending events.
+//
+// All methods of this class must be called on the platform's UI thread (the
+// main thread). If events are generated on a background thread, they must
+// be marshalled to the UI thread before calling Success or Error.
+//
+// If the application goes to the background, the main Flutter isolate might be
+// suspended by the OS, which pauses Dart event processing. Events sent during
+// suspension may be queued or lost.
 template <typename T = EncodableValue>
 class EventSink {
  public:

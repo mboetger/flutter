@@ -647,6 +647,15 @@ class OptionalMethodChannel extends MethodChannel {
 /// The logical identity of the channel is given by its name. Identically named
 /// channels will interfere with each other's communication.
 ///
+/// ### Threading and Background execution
+///
+/// On the platform side, events must be sent to the event sink from the
+/// platform's UI thread (the main thread).
+///
+/// If the application goes to the background, the main Flutter isolate might be
+/// suspended by the OS, which pauses Dart event processing. Events sent during
+/// suspension may be queued or lost.
+///
 /// See: <https://flutter.dev/to/platform-channels/>
 class EventChannel {
   /// Creates an [EventChannel] with the specified [name].
