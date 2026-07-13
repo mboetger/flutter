@@ -32,7 +32,7 @@ public final class BasicMessageChannel<T> {
   private static final String TAG = "BasicMessageChannel#";
   public static final String CHANNEL_BUFFERS_CHANNEL = "dev.flutter/channel-buffers";
 
-  @NonNull private final BinaryMessenger messenger;
+  @NonNull private final java.lang.ref.WeakReference<BinaryMessenger> messengerRef;
   @NonNull private final String name;
   @NonNull private final MessageCodec<T> codec;
   @Nullable private final BinaryMessenger.TaskQueue taskQueue;
@@ -77,7 +77,7 @@ public final class BasicMessageChannel<T> {
         Log.e(TAG, "Parameter codec must not be null.");
       }
     }
-    this.messenger = messenger;
+    this.messengerRef = new java.lang.ref.WeakReference<>(messenger);
     this.name = name;
     this.codec = codec;
     this.taskQueue = taskQueue;
@@ -102,6 +102,13 @@ public final class BasicMessageChannel<T> {
    */
   @UiThread
   public void send(@Nullable T message, @Nullable final Reply<T> callback) {
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger == null) {
+      Log.w(
+          TAG + name,
+          "Tried to send message on a destroyed BasicMessageChannel (messenger was garbage collected).");
+      return;
+    }
     messenger.send(
         name,
         codec.encodeMessage(message),
@@ -121,6 +128,13 @@ public final class BasicMessageChannel<T> {
    */
   @UiThread
   public void setMessageHandler(@Nullable final MessageHandler<T> handler) {
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger == null) {
+      Log.w(
+          TAG + name,
+          "Tried to set message handler on a destroyed BasicMessageChannel (messenger was garbage collected).");
+      return;
+    }
     // We call the 2 parameter variant specifically to avoid breaking changes in
     // mock verify calls.
     // See https://github.com/flutter/flutter/issues/92582.
@@ -139,7 +153,10 @@ public final class BasicMessageChannel<T> {
    * handler isn't set up on the Dart side yet.
    */
   public void resizeChannelBuffer(int newSize) {
-    resizeChannelBuffer(messenger, name, newSize);
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger != null) {
+      resizeChannelBuffer(messenger, name, newSize);
+    }
   }
 
   /**
@@ -148,7 +165,10 @@ public final class BasicMessageChannel<T> {
    * not be shown.
    */
   public void setWarnsOnChannelOverflow(boolean warns) {
-    setWarnsOnChannelOverflow(messenger, name, warns);
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger != null) {
+      setWarnsOnChannelOverflow(messenger, name, warns);
+    }
   }
 
   private static ByteBuffer packetFromEncodedMessage(ByteBuffer message) {

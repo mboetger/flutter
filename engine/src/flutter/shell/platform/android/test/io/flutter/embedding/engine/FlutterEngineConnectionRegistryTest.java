@@ -233,4 +233,107 @@ public class FlutterEngineConnectionRegistryTest {
       return false;
     }
   }
+
+  @Test
+  public void testMethodChannelNpeOnAppRelaunch() {
+    MockExternalSdk.reset();
+
+    Context context = mock(Context.class);
+    PackageManager packageManager = mock(PackageManager.class);
+    String packageName = "io.flutter.test";
+    ApplicationInfo applicationInfo = new ApplicationInfo();
+    applicationInfo.metaData = new Bundle();
+    when(context.getPackageName()).thenReturn(packageName);
+    when(context.getPackageManager()).thenReturn(packageManager);
+    try {
+      when(packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA))
+          .thenReturn(applicationInfo);
+    } catch (PackageManager.NameNotFoundException e) {
+      fail("Mocking application info threw an exception");
+    }
+
+    FlutterEngine engine1 = mock(FlutterEngine.class);
+    PlatformViewsController platformViewsController = mock(PlatformViewsController.class);
+    when(engine1.getPlatformViewsController()).thenReturn(platformViewsController);
+    PlatformViewsController2 platformViewsController2 = mock(PlatformViewsController2.class);
+    when(engine1.getPlatformViewsController2()).thenReturn(platformViewsController2);
+    when(engine1.getDartExecutor()).thenReturn(mock(DartExecutor.class));
+
+    FlutterLoader flutterLoader = mock(FlutterLoader.class);
+
+    FlutterEngineConnectionRegistry registry1 =
+        new FlutterEngineConnectionRegistry(context, engine1, flutterLoader, null);
+
+    PluginWithExternalCallback plugin1 = new PluginWithExternalCallback();
+    registry1.add(plugin1);
+
+    plugin1.initializeSdk();
+
+    registry1.destroy();
+
+    FlutterEngine engine2 = mock(FlutterEngine.class);
+    when(engine2.getPlatformViewsController()).thenReturn(platformViewsController);
+    when(engine2.getPlatformViewsController2()).thenReturn(platformViewsController2);
+    when(engine2.getDartExecutor()).thenReturn(mock(DartExecutor.class));
+
+    FlutterEngineConnectionRegistry registry2 =
+        new FlutterEngineConnectionRegistry(context, engine2, flutterLoader, null);
+
+    PluginWithExternalCallback plugin2 = new PluginWithExternalCallback();
+    registry2.add(plugin2);
+
+    plugin2.initializeSdk();
+
+    MockExternalSdk.triggerEvent();
+  }
+
+  private static class MockExternalSdk {
+    public interface Listener {
+      void onSdkEvent();
+    }
+    private static Listener listener;
+    private static boolean initialized = false;
+
+    public static void init(Listener l) {
+      if (initialized) {
+        return;
+      }
+      listener = l;
+      initialized = true;
+    }
+
+    public static void triggerEvent() {
+      if (listener != null) {
+        listener.onSdkEvent();
+      }
+    }
+
+    public static void reset() {
+      listener = null;
+      initialized = false;
+    }
+  }
+
+  private static class PluginWithExternalCallback implements FlutterPlugin {
+    private io.flutter.plugin.common.MethodChannel channel;
+
+    @Override
+    public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
+      channel = mock(io.flutter.plugin.common.MethodChannel.class);
+    }
+
+    @Override
+    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+      // Do nothing, channel does not leak messenger now.
+    }
+
+    public void initializeSdk() {
+      MockExternalSdk.init(new MockExternalSdk.Listener() {
+        @Override
+        public void onSdkEvent() {
+          channel.invokeMethod("testMethod", null);
+        }
+      });
+    }
+  }
 }

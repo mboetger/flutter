@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class EventChannel {
   private static final String TAG = "EventChannel#";
 
-  private final BinaryMessenger messenger;
+  private final java.lang.ref.WeakReference<BinaryMessenger> messengerRef;
   private final String name;
   private final MethodCodec codec;
   @Nullable private final BinaryMessenger.TaskQueue taskQueue;
@@ -87,7 +87,7 @@ public final class EventChannel {
         Log.e(TAG, "Parameter codec must not be null.");
       }
     }
-    this.messenger = messenger;
+    this.messengerRef = new java.lang.ref.WeakReference<>(messenger);
     this.name = name;
     this.codec = codec;
     this.taskQueue = taskQueue;
@@ -105,6 +105,13 @@ public final class EventChannel {
    */
   @UiThread
   public void setStreamHandler(final StreamHandler handler) {
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger == null) {
+      Log.w(
+          TAG + name,
+          "Tried to set stream handler on a destroyed EventChannel (messenger was garbage collected).");
+      return;
+    }
     // We call the 2 parameter variant specifically to avoid breaking changes in
     // mock verify calls.
     // See https://github.com/flutter/flutter/issues/92582.

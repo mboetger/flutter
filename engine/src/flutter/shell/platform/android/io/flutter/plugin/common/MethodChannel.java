@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
 public class MethodChannel {
   private static final String TAG = "MethodChannel#";
 
-  private final BinaryMessenger messenger;
+  private final java.lang.ref.WeakReference<BinaryMessenger> messengerRef;
   private final String name;
   private final MethodCodec codec;
   private final BinaryMessenger.TaskQueue taskQueue;
@@ -60,7 +60,7 @@ public class MethodChannel {
 
   /**
    * Creates a new channel associated with the specified {@link BinaryMessenger} and with the
-   * specified name and {@link MethodCodec}.
+   * specified name and {@link MessageCodec}.
    *
    * @param messenger a {@link BinaryMessenger}.
    * @param name a channel name String.
@@ -85,7 +85,7 @@ public class MethodChannel {
         Log.e(TAG, "Parameter codec must not be null.");
       }
     }
-    this.messenger = messenger;
+    this.messengerRef = new java.lang.ref.WeakReference<>(messenger);
     this.name = name;
     this.codec = codec;
     this.taskQueue = taskQueue;
@@ -114,6 +114,13 @@ public class MethodChannel {
   @UiThread
   public void invokeMethod(
       @NonNull String method, @Nullable Object arguments, @Nullable Result callback) {
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger == null) {
+      Log.w(
+          TAG + name,
+          "Tried to call invokeMethod on a destroyed MethodChannel (messenger was garbage collected).");
+      return;
+    }
     messenger.send(
         name,
         codec.encodeMethodCall(new MethodCall(method, arguments)),
@@ -136,6 +143,13 @@ public class MethodChannel {
    */
   @UiThread
   public void setMethodCallHandler(final @Nullable MethodCallHandler handler) {
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger == null) {
+      Log.w(
+          TAG + name,
+          "Tried to set method call handler on a destroyed MethodChannel (messenger was garbage collected).");
+      return;
+    }
     // We call the 2 parameter variant specifically to avoid breaking changes in
     // mock verify calls.
     // See https://github.com/flutter/flutter/issues/92582.
@@ -154,7 +168,10 @@ public class MethodChannel {
    * handler isn't set up on the Dart side yet.
    */
   public void resizeChannelBuffer(int newSize) {
-    BasicMessageChannel.resizeChannelBuffer(messenger, name, newSize);
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger != null) {
+      BasicMessageChannel.resizeChannelBuffer(messenger, name, newSize);
+    }
   }
 
   /**
@@ -163,7 +180,10 @@ public class MethodChannel {
    * not be shown.
    */
   public void setWarnsOnChannelOverflow(boolean warns) {
-    BasicMessageChannel.setWarnsOnChannelOverflow(messenger, name, warns);
+    BinaryMessenger messenger = messengerRef.get();
+    if (messenger != null) {
+      BasicMessageChannel.setWarnsOnChannelOverflow(messenger, name, warns);
+    }
   }
 
   /** A handler of incoming method calls. */
