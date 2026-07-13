@@ -245,6 +245,9 @@ class FlutterPlugin : Plugin<Project> {
                 throw GradleException("local-engine-host-out must point to a local engine host build")
             }
             localEngineHost = engineHostOut.name
+
+            val androidExtension = FlutterPluginUtils.getAndroidExtension(project)
+            androidExtension.addKeepDebugSymbols("**/libflutter.so")
         }
         FlutterPluginUtils.getLegacyAndroidExtension(project).buildTypes.all {
             addFlutterDependencies(this)

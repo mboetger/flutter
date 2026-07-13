@@ -335,6 +335,87 @@ class FlutterPluginTest {
         }
     }
 
+    @Test
+    fun `apply() configures keepDebugSymbols when local engine is used`(
+        @TempDir tempDir: Path
+    ) {
+        val projectDir = tempDir.resolve("project-dir").resolve("android").resolve("app")
+        projectDir.toFile().mkdirs()
+        val settingsFile = projectDir.parent.resolve("settings.gradle")
+        settingsFile.writeText("empty for now")
+        val fakeFlutterSdkDir = tempDir.resolve("fake-flutter-sdk")
+        fakeFlutterSdkDir.toFile().mkdirs()
+        val fakeCacheDir = fakeFlutterSdkDir.resolve("bin").resolve("cache")
+        fakeCacheDir.toFile().mkdirs()
+        val fakeEngineStampFile = fakeCacheDir.resolve("engine.stamp")
+        fakeEngineStampFile.writeText(FAKE_ENGINE_STAMP)
+        val fakeEngineRealmFile = fakeCacheDir.resolve("engine.realm")
+        fakeEngineRealmFile.writeText(FAKE_ENGINE_REALM)
+        val project = mockk<Project>(relaxed = true)
+        val mockAbstractAppExtension =
+            mockk<AbstractAppExtension>(
+                moreInterfaces = arrayOf(ApplicationExtension::class),
+                relaxed = true
+            )
+        val mockLibraryExtension = mockk<LibraryExtension>(relaxed = true)
+        every { project.extensions.findByType(AbstractAppExtension::class.java) } returns mockAbstractAppExtension
+        val mockAndroidComponentsExtension = mockk<AndroidComponentsExtension<*, *, *>>(relaxed = true)
+        every { project.extensions.getByType(AndroidComponentsExtension::class.java) } returns mockAndroidComponentsExtension
+        every { project.extensions.findByType(AndroidComponentsExtension::class.java) } returns mockAndroidComponentsExtension
+        val mockSelector = mockk<com.android.build.api.variant.VariantSelector>(relaxed = true)
+        every { mockAndroidComponentsExtension.selector() } returns mockSelector
+        every { mockSelector.all() } returns mockSelector
+        every { mockSelector.withName(any<String>()) } returns mockSelector
+        every { project.extensions.getByType(AbstractAppExtension::class.java) } returns mockAbstractAppExtension
+        every { project.extensions.getByType(LibraryExtension::class.java) } returns mockLibraryExtension
+        every { project.extensions.findByName("android") } returns mockAbstractAppExtension
+        every { project.projectDir } returns projectDir.toFile()
+        every { project.findProperty("flutter.sdk") } returns fakeFlutterSdkDir.toString()
+        every { project.file(fakeFlutterSdkDir.toString()) } returns fakeFlutterSdkDir.toFile()
+        val flutterExtension = FlutterExtension()
+        every { project.extensions.create("flutter", any<Class<*>>()) } returns flutterExtension
+        every { project.extensions.findByType(FlutterExtension::class.java) } returns flutterExtension
+        val mockBaseExtension = mockk<BaseExtension>(relaxed = true)
+        val mockCommonExtension = mockk<CommonExtension<*, *, *, *, *, *>>(relaxed = true)
+        val mockDebugBuildType = mockk<com.android.build.api.dsl.ApplicationBuildType>(relaxed = true)
+        val mockReleaseBuildType = mockk<com.android.build.api.dsl.ApplicationBuildType>(relaxed = true)
+
+        val mockApplicationExtension = mockAbstractAppExtension as ApplicationExtension
+        val mockKeepDebugSymbols = mockk<MutableSet<String>>(relaxed = true)
+
+        every { mockApplicationExtension.buildTypes.getByName("debug") } returns mockDebugBuildType
+        every { mockApplicationExtension.buildTypes.getByName("release") } returns mockReleaseBuildType
+        every { mockCommonExtension.buildTypes.getByName("debug") } returns mockDebugBuildType
+        every { mockCommonExtension.buildTypes.getByName("release") } returns mockReleaseBuildType
+        every { project.extensions.findByType(BaseExtension::class.java) } returns mockBaseExtension
+        every { project.extensions.findByType(CommonExtension::class.java) } returns mockCommonExtension
+        every { project.extensions.findByType(ApplicationExtension::class.java) } returns mockApplicationExtension
+        every { project.extensions.getByType(ApplicationExtension::class.java) } returns mockApplicationExtension
+        every { mockApplicationExtension.packaging.jniLibs.keepDebugSymbols } returns mockKeepDebugSymbols
+
+        // Setup local engine properties
+        val fakeEngineOutDir = tempDir.resolve("engine-out")
+        fakeEngineOutDir.toFile().mkdirs()
+        val fakeEngineHostOutDir = tempDir.resolve("engine-host-out")
+        fakeEngineHostOutDir.toFile().mkdirs()
+
+        val fakeLocalEngineRepo = tempDir.resolve("local-engine-repo")
+        fakeLocalEngineRepo.toFile().mkdirs()
+        every { project.hasProperty("local-engine-repo") } returns true
+        every { project.property("local-engine-repo") } returns fakeLocalEngineRepo.toUri().toString()
+        every { project.properties } returns mapOf(
+            "local-engine-out" to fakeEngineOutDir.toString(),
+            "local-engine-host-out" to fakeEngineHostOutDir.toString()
+        )
+        every { project.file(fakeEngineOutDir.toString()) } returns fakeEngineOutDir.toFile()
+        every { project.file(fakeEngineHostOutDir.toString()) } returns fakeEngineHostOutDir.toFile()
+
+        val plugin = FlutterPlugin()
+        plugin.apply(project)
+
+        verify { mockKeepDebugSymbols.add("**/libflutter.so") }
+    }
+
     companion object {
         const val FAKE_ENGINE_STAMP = "901b0f1afe77c3555abee7b86a26aaa37f131379"
         const val FAKE_ENGINE_REALM = "made_up_realm"

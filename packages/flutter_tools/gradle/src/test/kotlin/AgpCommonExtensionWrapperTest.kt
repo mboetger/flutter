@@ -46,4 +46,26 @@ class AgpCommonExtensionWrapperTest {
 
         assertFailsWith<IllegalArgumentException> { wrapper.splits }
     }
+
+    @Test
+    fun `addKeepDebugSymbols adds pattern to application extension`() {
+        val mockKeepDebugSymbols = mockk<MutableSet<String>>(relaxed = true)
+        val mockApplicationExtension = mockk<ApplicationExtension>(relaxed = true) {
+            every { packaging.jniLibs.keepDebugSymbols } returns mockKeepDebugSymbols
+        }
+        val wrapper = AgpCommonExtensionWrapper(mockApplicationExtension)
+        wrapper.addKeepDebugSymbols("**/libflutter.so")
+        io.mockk.verify { mockKeepDebugSymbols.add("**/libflutter.so") }
+    }
+
+    @Test
+    fun `addKeepDebugSymbols adds pattern to library extension`() {
+        val mockKeepDebugSymbols = mockk<MutableSet<String>>(relaxed = true)
+        val mockLibraryExtension = mockk<LibraryExtension>(relaxed = true) {
+            every { packaging.jniLibs.keepDebugSymbols } returns mockKeepDebugSymbols
+        }
+        val wrapper = AgpCommonExtensionWrapper(mockLibraryExtension)
+        wrapper.addKeepDebugSymbols("**/libflutter.so")
+        io.mockk.verify { mockKeepDebugSymbols.add("**/libflutter.so") }
+    }
 }

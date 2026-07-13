@@ -118,5 +118,15 @@ class AgpCommonExtensionWrapper(
         }
     }
 
+    fun addKeepDebugSymbols(pattern: String) {
+        when (backingExtension) {
+            is ApplicationExtension -> backingExtension.packaging.jniLibs.keepDebugSymbols.add(pattern)
+            is LibraryExtension -> backingExtension.packaging.jniLibs.keepDebugSymbols.add(pattern)
+            is DynamicFeatureExtension -> backingExtension.packaging.jniLibs.keepDebugSymbols.add(pattern)
+            is TestExtension -> backingExtension.packaging.jniLibs.keepDebugSymbols.add(pattern)
+            else -> throw IllegalArgumentException(unsupportedMessage())
+        }
+    }
+
     private fun unsupportedMessage() = "Unsupported Android extension type: ${backingExtension.javaClass.name}"
 }
