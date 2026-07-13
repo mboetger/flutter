@@ -1242,6 +1242,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     if (view != null) {
       view.setLayoutParams(layoutParams);
       view.bringToFront();
+      view.setVisibility(View.VISIBLE);
     }
     currentFrameUsedPlatformViewIds.add(viewId);
   }
@@ -1349,11 +1350,19 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
       //
       // Otherwise, hide the platform view, but don't remove it from the view hierarchy yet as
       // they are removed when the framework disposes the platform view widget.
+      final PlatformView platformView = platformViews.get(viewId);
+      final View embeddedView = platformView != null ? platformView.getView() : null;
       if (currentFrameUsedPlatformViewIds.contains(viewId)
           && (isFrameRenderedUsingImageReaders || !synchronizeToNativeViewHierarchy)) {
         parentView.setVisibility(View.VISIBLE);
+        if (embeddedView != null) {
+          embeddedView.setVisibility(View.VISIBLE);
+        }
       } else {
         parentView.setVisibility(View.GONE);
+        if (embeddedView != null) {
+          embeddedView.setVisibility(View.GONE);
+        }
       }
     }
   }

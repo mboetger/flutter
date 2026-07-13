@@ -1487,6 +1487,42 @@ public class PlatformViewsControllerTest {
         ShadowFlutterJNI.class,
         ShadowPlatformTaskQueue.class
       })
+  public void onEndFrame_hidesEmbeddedViewWhenNotUsed() {
+    final PlatformViewsController platformViewsController = new PlatformViewsController();
+
+    final int platformViewId = 0;
+    final PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    final PlatformView platformView = mock(PlatformView.class);
+    final View androidView = mock(View.class);
+    when(platformView.getView()).thenReturn(androidView);
+    when(viewFactory.create(any(), eq(platformViewId), any())).thenReturn(platformView);
+
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+
+    final FlutterJNI jni = new FlutterJNI();
+    jni.attachToNative();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    jni.onFirstFrame();
+
+    createPlatformView(jni, platformViewsController, platformViewId, "testType", /* hybrid=*/ true);
+    assertTrue(platformViewsController.initializePlatformViewIfNeeded(platformViewId));
+
+    jni.onFirstFrame();
+    platformViewsController.onBeginFrame();
+
+    platformViewsController.onEndFrame();
+    verify(androidView, times(1)).setVisibility(View.GONE);
+  }
+
+  @Test
+  @Config(
+      shadows = {
+        ShadowFlutterSurfaceView.class,
+        ShadowFlutterJNI.class,
+        ShadowPlatformTaskQueue.class
+      })
   public void onEndFrame_removesPlatformViewParent() {
     final PlatformViewsController platformViewsController = new PlatformViewsController();
 
