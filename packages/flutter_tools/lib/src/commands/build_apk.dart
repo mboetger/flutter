@@ -126,7 +126,14 @@ class BuildApkCommand extends BuildSubCommand {
       splitPerAbi: boolArg('split-per-abi'),
       targetArchs: _targetArchs.map<AndroidArch>(getAndroidArchForName),
     );
-    validateBuild(androidBuildInfo);
+    validateBuild(
+      androidBuildInfo,
+      fileSystem: globals.fs,
+      platform: globals.platform,
+      processManager: globals.processManager,
+      projectDirectory: FlutterProject.current().directory,
+      logger: globals.logger,
+    );
     globals.terminal.usesTerminalUi = true;
     final FlutterProject project = FlutterProject.current();
     await androidBuilder?.buildApk(

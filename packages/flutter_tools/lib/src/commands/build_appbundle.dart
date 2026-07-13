@@ -164,7 +164,14 @@ class BuildAppBundleCommand extends BuildSubCommand {
       }
     }
 
-    validateBuild(androidBuildInfo);
+    validateBuild(
+      androidBuildInfo,
+      fileSystem: globals.fs,
+      platform: globals.platform,
+      processManager: globals.processManager,
+      projectDirectory: project.directory,
+      logger: globals.logger,
+    );
     globals.terminal.usesTerminalUi = true;
     await androidBuilder?.buildAab(
       project: project,

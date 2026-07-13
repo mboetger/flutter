@@ -2,12 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/build_validation.dart';
+import 'package:flutter_tools/src/base/file_system.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/build_info.dart';
+import 'package:process/process.dart';
 
 import '../../src/common.dart';
+import '../../src/fake_process_manager.dart';
 
 void main() {
+  final FileSystem fileSystem = MemoryFileSystem.test();
+  final Platform platform = FakePlatform();
+  final ProcessManager processManager = FakeProcessManager.any();
+  final Directory projectDirectory = fileSystem.directory('/project');
+
   testWithoutContext('validateBuild does not throw on AOT supported architectures', () {
     expect(
       () => validateBuild(
@@ -19,6 +29,10 @@ void main() {
             AndroidArch.arm64_v8a,
           ],
         ),
+        fileSystem: fileSystem,
+        platform: platform,
+        processManager: processManager,
+        projectDirectory: projectDirectory,
       ),
       returnsNormally,
     );
@@ -38,6 +52,10 @@ void main() {
           ),
           targetArchs: <AndroidArch>[AndroidArch.x86_64],
         ),
+        fileSystem: fileSystem,
+        platform: platform,
+        processManager: processManager,
+        projectDirectory: projectDirectory,
       ),
       throwsToolExit(message: 'buildNumber: a was not a valid integer value.'),
     );
@@ -55,6 +73,10 @@ void main() {
           ),
           targetArchs: <AndroidArch>[AndroidArch.x86_64],
         ),
+        fileSystem: fileSystem,
+        platform: platform,
+        processManager: processManager,
+        projectDirectory: projectDirectory,
       ),
       throwsToolExit(message: 'buildNumber: -1 must be a positive integer value.'),
     );
@@ -72,6 +94,10 @@ void main() {
           ),
           targetArchs: <AndroidArch>[AndroidArch.x86_64],
         ),
+        fileSystem: fileSystem,
+        platform: platform,
+        processManager: processManager,
+        projectDirectory: projectDirectory,
       ),
       throwsToolExit(
         message:
@@ -94,6 +120,10 @@ void main() {
           ),
           targetArchs: <AndroidArch>[AndroidArch.x86_64],
         ),
+        fileSystem: fileSystem,
+        platform: platform,
+        processManager: processManager,
+        projectDirectory: projectDirectory,
       ),
       returnsNormally,
     );
