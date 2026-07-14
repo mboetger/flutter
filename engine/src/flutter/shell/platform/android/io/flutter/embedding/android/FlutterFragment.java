@@ -1009,6 +1009,8 @@ public class FlutterFragment extends Fragment
 
   @NonNull private FlutterActivityAndFragmentDelegate.DelegateFactory delegateFactory = this;
 
+  @Nullable private FragmentActivity cachedActivity;
+
   /** Default delegate factory that creates a simple FlutterActivityAndFragmentDelegate instance. */
   public FlutterActivityAndFragmentDelegate createDelegate(
       FlutterActivityAndFragmentDelegate.Host host) {
@@ -1086,6 +1088,7 @@ public class FlutterFragment extends Fragment
   @Override
   public void onAttach(@NonNull Context context) {
     super.onAttach(context);
+    cachedActivity = getActivity();
     delegate = delegateFactory.createDelegate(this);
     delegate.onAttach(context);
     if (getArguments().getBoolean(ARG_SHOULD_AUTOMATICALLY_HANDLE_ON_BACK_PRESSED, false)) {
@@ -1219,6 +1222,14 @@ public class FlutterFragment extends Fragment
     } else {
       Log.v(TAG, "FlutterFragment " + this + " onDetach called after release.");
     }
+    cachedActivity = null;
+  }
+
+  @Override
+  @Nullable
+  public Activity getAttachedActivity() {
+    FragmentActivity activity = getActivity();
+    return activity != null ? activity : cachedActivity;
   }
 
   /**
@@ -1603,7 +1614,7 @@ public class FlutterFragment extends Fragment
    */
   @Override
   public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
-    FragmentActivity attachedActivity = getActivity();
+    Activity attachedActivity = getAttachedActivity();
     if (attachedActivity instanceof FlutterEngineConfigurator) {
       ((FlutterEngineConfigurator) attachedActivity).configureFlutterEngine(flutterEngine);
     }
@@ -1617,7 +1628,7 @@ public class FlutterFragment extends Fragment
    */
   @Override
   public void cleanUpFlutterEngine(@NonNull FlutterEngine flutterEngine) {
-    FragmentActivity attachedActivity = getActivity();
+    Activity attachedActivity = getAttachedActivity();
     if (attachedActivity instanceof FlutterEngineConfigurator) {
       ((FlutterEngineConfigurator) attachedActivity).cleanUpFlutterEngine(flutterEngine);
     }

@@ -290,7 +290,7 @@ public class FlutterAndroidComponentTest {
 
     @NonNull
     @Override
-    public Activity getActivity() {
+    public Activity getAttachedActivity() {
       return cachedActivity;
     }
 

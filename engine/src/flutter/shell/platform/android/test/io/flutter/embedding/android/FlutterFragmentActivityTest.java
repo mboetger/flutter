@@ -375,8 +375,31 @@ public class FlutterFragmentActivityTest {
     flutterActivityScenario.close();
   }
 
+  @Test
+  public void itCallsCleanUpFlutterEngineOnActivityWhenDestroyed() {
+    final FlutterFragmentActivityWithProvidedEngine[] activityRef =
+        new FlutterFragmentActivityWithProvidedEngine[1];
+    try (ActivityScenario<FlutterFragmentActivityWithProvidedEngine> scenario =
+        ActivityScenario.launch(FlutterFragmentActivityWithProvidedEngine.class)) {
+      scenario.onActivity(
+          activity -> {
+            activityRef[0] = activity;
+            assertFalse(activity.cleanUpFlutterEngineCalled);
+          });
+    }
+    assertNotNull(activityRef[0]);
+    assertTrue(activityRef[0].cleanUpFlutterEngineCalled);
+  }
+
   static class FlutterFragmentActivityWithProvidedEngine extends FlutterFragmentActivity {
     int numberOfEnginesCreated = 0;
+    boolean cleanUpFlutterEngineCalled = false;
+
+    @Override
+    public void cleanUpFlutterEngine(@NonNull FlutterEngine flutterEngine) {
+      super.cleanUpFlutterEngine(flutterEngine);
+      cleanUpFlutterEngineCalled = true;
+    }
 
     @Override
     protected FlutterFragment createFlutterFragment() {

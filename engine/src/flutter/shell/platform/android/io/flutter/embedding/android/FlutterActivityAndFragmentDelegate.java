@@ -221,7 +221,7 @@ import java.util.Set;
     //                    use-cases.
     // TODO(camsim99): Consider creating an interface for embedding plugins that require an
     // `Activity` reference. See https://github.com/flutter/flutter/issues/164945.
-    final Activity hostActivity = host.getActivity();
+    final Activity hostActivity = host.getAttachedActivity();
     platformPlugin = host.providePlatformPlugin(hostActivity, flutterEngine);
     sensitiveContentPlugin = host.provideSensitiveContentPlugin(hostActivity, flutterEngine);
 
@@ -231,7 +231,7 @@ import java.util.Set;
 
   @Override
   public @NonNull Activity getAppComponent() {
-    final Activity activity = host.getActivity();
+    final Activity activity = host.getAttachedActivity();
     if (activity == null) {
       throw new AssertionError(
           "FlutterActivityAndFragmentDelegate's getAppComponent should only "
@@ -251,7 +251,7 @@ import java.util.Set;
             appBundlePathOverride, host.getDartEntrypointFunctionName());
     String initialRoute = host.getInitialRoute();
     if (initialRoute == null) {
-      initialRoute = maybeGetInitialRouteFromIntent(host.getActivity().getIntent());
+      initialRoute = maybeGetInitialRouteFromIntent(host.getAttachedActivity().getIntent());
       if (initialRoute == null) {
         initialRoute = DEFAULT_INITIAL_ROUTE;
       }
@@ -333,7 +333,7 @@ import java.util.Set;
         "No preferred FlutterEngine was provided. Creating a new FlutterEngine for"
             + " this FlutterFragment.");
 
-    warnIfEngineFlagsSetViaIntent(host.getActivity().getIntent());
+    warnIfEngineFlagsSetViaIntent(host.getAttachedActivity().getIntent());
     FlutterEngineGroup group =
         engineGroup == null
             ? new FlutterEngineGroup(host.getContext(), host.getFlutterShellArgs().toArray())
@@ -513,7 +513,7 @@ import java.util.Set;
     }
     String initialRoute = host.getInitialRoute();
     if (initialRoute == null) {
-      initialRoute = maybeGetInitialRouteFromIntent(host.getActivity().getIntent());
+      initialRoute = maybeGetInitialRouteFromIntent(host.getAttachedActivity().getIntent());
       if (initialRoute == null) {
         initialRoute = DEFAULT_INITIAL_ROUTE;
       }
@@ -784,7 +784,8 @@ import java.util.Set;
     if (host.shouldAttachEngineToActivity()) {
       // Notify plugins that they are no longer attached to an Activity.
       Log.v(TAG, "Detaching FlutterEngine from the Activity that owns this Fragment.");
-      if (host.getActivity().isChangingConfigurations()) {
+      Activity activity = host.getAttachedActivity();
+      if (activity != null && activity.isChangingConfigurations()) {
         flutterEngine.getActivityControlSurface().detachFromActivityForConfigChanges();
       } else {
         flutterEngine.getActivityControlSurface().detachFromActivity();
@@ -1110,7 +1111,7 @@ import java.util.Set;
      * attached to the host {@code Fragment}.
      */
     @Nullable
-    Activity getActivity();
+    Activity getAttachedActivity();
 
     /**
      * Returns the {@link Lifecycle} that backs the host {@link android.app.Activity} or {@code

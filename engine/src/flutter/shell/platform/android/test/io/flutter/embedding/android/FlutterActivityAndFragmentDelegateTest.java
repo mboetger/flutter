@@ -131,7 +131,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // We're testing lifecycle behaviors, which require/expect that certain methods have
             // already
@@ -222,7 +222,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             when(mockHost.shouldDispatchAppLifecycleState()).thenReturn(false);
 
@@ -314,7 +314,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // The FlutterEngine existence is verified in onAttach()
@@ -349,7 +349,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     when(mockHost.shouldAttachEngineToActivity()).thenReturn(false);
     when(mockHost.getDartEntrypointArgs()).thenReturn(entryPointArgs);
     when(mockHost.shouldHandleDeeplinking()).thenReturn(true);
-    when(mockHost.getActivity()).thenReturn(mockActivity);
+    when(mockHost.getAttachedActivity()).thenReturn(mockActivity);
     when(mockActivity.getIntent()).thenReturn(mockIntent);
     when(mockIntent.getData()).thenReturn(Uri.parse("foo://example.com/initial_route"));
 
@@ -437,7 +437,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // The FlutterEngine is created in onAttach().
@@ -473,7 +473,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(customMockHost.getActivity()).thenReturn(activity);
+            when(customMockHost.getAttachedActivity()).thenReturn(activity);
             when(customMockHost.getLifecycle()).thenReturn(mock(Lifecycle.class));
             when(customMockHost.getFlutterShellArgs())
                 .thenReturn(new FlutterShellArgs(new String[] {}));
@@ -509,7 +509,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // The FlutterEngine is created in onAttach().
@@ -656,7 +656,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // Flutter is attached to the surrounding Activity in onAttach.
@@ -684,8 +684,8 @@ public class FlutterActivityAndFragmentDelegateTest {
     // Declare that the host does NOT want Flutter to attach to the surrounding Activity.
     when(mockHost.shouldAttachEngineToActivity()).thenReturn(false);
 
-    // getActivity() returns null if the activity is not attached
-    when(mockHost.getActivity()).thenReturn(null);
+    // getAttachedActivity() returns null if the activity is not attached
+    when(mockHost.getAttachedActivity()).thenReturn(null);
 
     // Create the real object that we're testing.
     FlutterActivityAndFragmentDelegate delegate = new FlutterActivityAndFragmentDelegate(mockHost);
@@ -822,7 +822,7 @@ public class FlutterActivityAndFragmentDelegateTest {
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
 
-    when(mockHost.getActivity()).thenReturn(flutterActivity);
+    when(mockHost.getAttachedActivity()).thenReturn(flutterActivity);
     when(mockHost.getInitialRoute()).thenReturn(null);
     when(mockHost.shouldHandleDeeplinking()).thenReturn(true);
     // Create the real object that we're testing.
@@ -850,7 +850,7 @@ public class FlutterActivityAndFragmentDelegateTest {
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
 
-    when(mockHost.getActivity()).thenReturn(flutterActivity);
+    when(mockHost.getAttachedActivity()).thenReturn(flutterActivity);
     when(mockHost.getInitialRoute()).thenReturn(null);
     when(mockHost.shouldHandleDeeplinking()).thenReturn(true);
     // Create the real object that we're testing.
@@ -878,7 +878,7 @@ public class FlutterActivityAndFragmentDelegateTest {
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
 
-    when(mockHost.getActivity()).thenReturn(flutterActivity);
+    when(mockHost.getAttachedActivity()).thenReturn(flutterActivity);
     when(mockHost.getInitialRoute()).thenReturn(null);
     when(mockHost.shouldHandleDeeplinking()).thenReturn(true);
     // Create the real object that we're testing.
@@ -906,7 +906,7 @@ public class FlutterActivityAndFragmentDelegateTest {
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
 
-    when(mockHost.getActivity()).thenReturn(flutterActivity);
+    when(mockHost.getAttachedActivity()).thenReturn(flutterActivity);
     when(mockHost.getInitialRoute()).thenReturn(null);
     when(mockHost.shouldHandleDeeplinking()).thenReturn(true);
     // Create the real object that we're testing.
@@ -933,7 +933,7 @@ public class FlutterActivityAndFragmentDelegateTest {
         Robolectric.buildActivity(FlutterActivity.class, intent);
     FlutterActivity flutterActivity = activityController.get();
 
-    when(mockHost.getActivity()).thenReturn(flutterActivity);
+    when(mockHost.getAttachedActivity()).thenReturn(flutterActivity);
     when(mockHost.getInitialRoute()).thenReturn(null);
     when(mockHost.shouldHandleDeeplinking()).thenReturn(true);
     // Create the real object that we're testing.
@@ -1255,7 +1255,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // Push the delegate through all lifecycle methods all the way to destruction.
@@ -1285,7 +1285,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // Push the delegate through all lifecycle methods all the way to destruction.
@@ -1322,7 +1322,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // Push the delegate through all lifecycle methods all the way to destruction.
@@ -1360,7 +1360,7 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             // --- Execute the behavior under test ---
             // Push the delegate through all lifecycle methods all the way to destruction.
@@ -1550,14 +1550,14 @@ public class FlutterActivityAndFragmentDelegateTest {
     try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
       scenario.onActivity(
           activity -> {
-            when(mockHost.getActivity()).thenReturn(activity);
+            when(mockHost.getAttachedActivity()).thenReturn(activity);
 
             FlutterActivityAndFragmentDelegate delegate2 =
                 new FlutterActivityAndFragmentDelegate(mockHost2);
             try (ActivityScenario<Activity> scenario2 = ActivityScenario.launch(Activity.class)) {
               scenario2.onActivity(
                   activity2 -> {
-                    when(mockHost2.getActivity()).thenReturn(activity2);
+                    when(mockHost2.getAttachedActivity()).thenReturn(activity2);
 
                     // This test is written to recreate the following scenario:
                     // 1. We have a FlutterFragment_A attached to a singleton cached engine.

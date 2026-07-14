@@ -1018,9 +1018,15 @@ public class FlutterActivity extends Activity
    * reference is used by the delegate to instantiate a {@link FlutterView}, a {@link
    * PlatformPlugin}, and to determine if the {@code Activity} is changing configurations.
    */
-  @Override
+  // @Override
   @NonNull
   public Activity getActivity() {
+    return this;
+  }
+
+  @Override
+  @NonNull
+  public Activity getAttachedActivity() {
     return this;
   }
 
