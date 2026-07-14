@@ -260,7 +260,10 @@ public class FlutterRenderer implements TextureRegistry {
   @Override
   public SurfaceTextureEntry createSurfaceTexture() {
     Log.v(TAG, "Creating a SurfaceTexture.");
-    final SurfaceTexture surfaceTexture = new SurfaceTexture(0);
+    final SurfaceTexture surfaceTexture =
+        Build.VERSION.SDK_INT >= API_LEVELS.API_26
+            ? new SurfaceTexture(false)
+            : new SurfaceTexture(0);
     return registerSurfaceTexture(surfaceTexture);
   }
 

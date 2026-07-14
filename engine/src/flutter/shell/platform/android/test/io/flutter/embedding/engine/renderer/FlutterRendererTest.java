@@ -1087,4 +1087,50 @@ public class FlutterRendererTest {
     producer.waitOnFence(image);
     verify(fence, times(1)).close();
   }
+
+  @Test
+  @Config(sdk = 28)
+  public void createSurfaceTexture_doesNotThrowWhenCustomEglContextIsCurrent() {
+    android.opengl.EGLDisplay dpy = android.opengl.EGL14.eglGetDisplay(android.opengl.EGL14.EGL_DEFAULT_DISPLAY);
+    int[] vers = new int[2];
+    android.opengl.EGL14.eglInitialize(dpy, vers, 0, vers, 1);
+    int[] configAttr = {
+        android.opengl.EGL14.EGL_RENDERABLE_TYPE, android.opengl.EGL14.EGL_OPENGL_ES2_BIT,
+        android.opengl.EGL14.EGL_NONE
+    };
+    android.opengl.EGLConfig[] configs = new android.opengl.EGLConfig[1];
+    int[] numConfig = new int[1];
+    android.opengl.EGL14.eglChooseConfig(dpy, configAttr, 0, configs, 0, 1, numConfig, 0);
+    android.opengl.EGLConfig config = configs[0];
+    int[] ctxAttr = {
+        android.opengl.EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
+        android.opengl.EGL14.EGL_NONE
+    };
+    android.opengl.EGLContext ctx = android.opengl.EGL14.eglCreateContext(dpy, config, android.opengl.EGL14.EGL_NO_CONTEXT, ctxAttr, 0);
+    int[] surfAttr = {
+        android.opengl.EGL14.EGL_WIDTH, 1,
+        android.opengl.EGL14.EGL_HEIGHT, 1,
+        android.opengl.EGL14.EGL_NONE
+    };
+    android.opengl.EGLSurface surf = android.opengl.EGL14.eglCreatePbufferSurface(dpy, config, surfAttr, 0);
+    android.opengl.EGL14.eglMakeCurrent(dpy, surf, surf, ctx);
+
+    // Mock SurfaceTexture construction to simulate the EGL error.
+    // If a current context exists, and SurfaceTexture is constructed with a texture ID (like 0),
+    // it should fail with EGL_BAD_ATTRIBUTE.
+    try (org.mockito.MockedConstruction<SurfaceTexture> mocked = org.mockito.Mockito.mockConstruction(
+        SurfaceTexture.class,
+        (mock, context) -> {
+          if (context.arguments().size() == 1 && context.arguments().get(0) instanceof Integer) {
+            int texName = (Integer) context.arguments().get(0);
+            if (texName == 0 && android.opengl.EGL14.eglGetCurrentContext() != android.opengl.EGL14.EGL_NO_CONTEXT) {
+              throw new RuntimeException("EGL_BAD_ATTRIBUTE");
+            }
+          }
+        })) {
+
+      FlutterRenderer flutterRenderer = engineRule.getFlutterEngine().getRenderer();
+      flutterRenderer.createSurfaceTexture();
+    }
+  }
 }
