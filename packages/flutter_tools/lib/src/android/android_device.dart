@@ -458,6 +458,11 @@ class AndroidDevice extends Device {
       ]),
     );
     status.stop();
+    if (installResult.stdout.contains('INSTALL_FAILED_INSUFFICIENT_STORAGE') ||
+        installResult.stderr.contains('INSTALL_FAILED_INSUFFICIENT_STORAGE')) {
+      _logger.printError('Error: ADB install failed due to insufficient storage on the device.');
+      return false;
+    }
     // Some versions of adb exit with exit code 0 even on failure :(
     // Parsing the output to check for failures.
     final failureExp = RegExp(r'^Failure.*$', multiLine: true);
@@ -588,10 +593,12 @@ class AndroidDevice extends Device {
       );
       // Package has been built, so we can get the updated application ID and
       // activity name from the .apk.
-      builtPackage = await ApplicationPackageFactory.instance!.getPackageForPlatform(
-        devicePlatform,
-        buildInfo: debuggingOptions.buildInfo,
-      ) as AndroidApk?;
+      builtPackage =
+          await ApplicationPackageFactory.instance!.getPackageForPlatform(
+                devicePlatform,
+                buildInfo: debuggingOptions.buildInfo,
+              )
+              as AndroidApk?;
     }
     // There was a failure parsing the android project information.
     if (builtPackage == null) {

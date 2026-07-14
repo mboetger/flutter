@@ -187,6 +187,62 @@ void main() {
     expect(processManager, hasNoRemainingExpectations);
   });
 
+  testWithoutContext('displays error if insufficient storage (stdout)', () async {
+    final processManager = FakeProcessManager.list(<FakeCommand>[
+      kAdbVersionCommand,
+      kAdbStartServerCommand,
+      const FakeCommand(command: <String>['adb', '-s', '1234', 'shell', 'getprop']),
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'install', '-t', '-r', 'app-debug.apk'],
+        stdout: 'Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]',
+      ),
+    ]);
+    final File apk = fileSystem.file('app-debug.apk')..createSync();
+    final androidApk = AndroidApk(
+      applicationPackage: apk,
+      id: 'app',
+      versionCode: 22,
+      launchActivity: 'Main',
+    );
+    final AndroidDevice androidDevice = setUpAndroidDevice(processManager: processManager);
+
+    expect(await androidDevice.installApp(androidApk), false);
+    expect(
+      logger.errorText,
+      contains('Error: ADB install failed due to insufficient storage on the device.'),
+    );
+    expect(processManager, hasNoRemainingExpectations);
+  });
+
+  testWithoutContext('displays error if insufficient storage (stderr)', () async {
+    final processManager = FakeProcessManager.list(<FakeCommand>[
+      kAdbVersionCommand,
+      kAdbStartServerCommand,
+      const FakeCommand(command: <String>['adb', '-s', '1234', 'shell', 'getprop']),
+      const FakeCommand(
+        command: <String>['adb', '-s', '1234', 'install', '-t', '-r', 'app-debug.apk'],
+        exitCode: 1,
+        stderr:
+            'adb: failed to install app-debug.apk: Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]',
+      ),
+    ]);
+    final File apk = fileSystem.file('app-debug.apk')..createSync();
+    final androidApk = AndroidApk(
+      applicationPackage: apk,
+      id: 'app',
+      versionCode: 22,
+      launchActivity: 'Main',
+    );
+    final AndroidDevice androidDevice = setUpAndroidDevice(processManager: processManager);
+
+    expect(await androidDevice.installApp(androidApk), false);
+    expect(
+      logger.errorText,
+      contains('Error: ADB install failed due to insufficient storage on the device.'),
+    );
+    expect(processManager, hasNoRemainingExpectations);
+  });
+
   testWithoutContext('Will continue install if the correct version is up to date', () async {
     final processManager = FakeProcessManager.list(<FakeCommand>[
       kAdbVersionCommand,
