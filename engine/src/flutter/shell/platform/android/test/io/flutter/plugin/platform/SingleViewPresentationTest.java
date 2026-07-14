@@ -20,7 +20,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import io.flutter.Build.API_LEVELS;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowDisplayManager;
 
 @RunWith(AndroidJUnit4.class)
 @TargetApi(API_LEVELS.API_28)
@@ -81,4 +83,91 @@ public class SingleViewPresentationTest {
     // Android OS (or Robolectric's shadow, in this case).
     assertEquals(expected, actual);
   }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_31)
+  public void immContext_returnsDisplayContextInputMethodManagerOnApi31() throws Exception {
+    // Create outer context (display 0)
+    Context outerContext = spy(ApplicationProvider.getApplicationContext());
+    InputMethodManager immDisplay0 = mock(InputMethodManager.class);
+    when(outerContext.getSystemService(Context.INPUT_METHOD_SERVICE)).thenReturn(immDisplay0);
+
+    // Get a real Display
+    DisplayManager displayManager =
+        (DisplayManager) outerContext.getSystemService(Context.DISPLAY_SERVICE);
+    ShadowDisplayManager shadowDisplayManager = Shadows.shadowOf(displayManager);
+    int displayId = shadowDisplayManager.addDisplay("w1024dp-h768dp");
+    Display display = displayManager.getDisplay(displayId);
+
+    // Create display context (display 1)
+    Context realDisplayContext = outerContext.createDisplayContext(display);
+    Context displayContextSpy = spy(realDisplayContext);
+    InputMethodManager immDisplay1 = mock(InputMethodManager.class);
+    when(displayContextSpy.getSystemService(Context.INPUT_METHOD_SERVICE)).thenReturn(immDisplay1);
+
+    // Mock createDisplayContext to return the spy displayContext
+    when(outerContext.createDisplayContext(display)).thenReturn(displayContextSpy);
+
+    // Instantiate ImmContext using reflection
+    Class<?> immContextClass =
+        Class.forName("io.flutter.plugin.platform.SingleViewPresentation$ImmContext");
+    java.lang.reflect.Constructor<?> constructor =
+        immContextClass.getDeclaredConstructor(Context.class);
+    constructor.setAccessible(true);
+    Context immContext = (Context) constructor.newInstance(outerContext);
+
+    // Call createDisplayContext on ImmContext
+    Context displayImmContext = immContext.createDisplayContext(display);
+
+    // Call getSystemService on the returned display context
+    InputMethodManager actual =
+        (InputMethodManager) displayImmContext.getSystemService(Context.INPUT_METHOD_SERVICE);
+
+    // On API 31+, we expect the display context's IMM.
+    assertEquals(immDisplay1, actual);
+  }
+
+  @Test
+  @Config(sdk = API_LEVELS.API_30)
+  public void immContext_returnsOuterContextInputMethodManagerOnApi30() throws Exception {
+    // Create outer context (display 0)
+    Context outerContext = spy(ApplicationProvider.getApplicationContext());
+    InputMethodManager immDisplay0 = mock(InputMethodManager.class);
+    when(outerContext.getSystemService(Context.INPUT_METHOD_SERVICE)).thenReturn(immDisplay0);
+
+    // Get a real Display
+    DisplayManager displayManager =
+        (DisplayManager) outerContext.getSystemService(Context.DISPLAY_SERVICE);
+    ShadowDisplayManager shadowDisplayManager = Shadows.shadowOf(displayManager);
+    int displayId = shadowDisplayManager.addDisplay("w1024dp-h768dp");
+    Display display = displayManager.getDisplay(displayId);
+
+    // Create display context (display 1)
+    Context realDisplayContext = outerContext.createDisplayContext(display);
+    Context displayContextSpy = spy(realDisplayContext);
+    InputMethodManager immDisplay1 = mock(InputMethodManager.class);
+    when(displayContextSpy.getSystemService(Context.INPUT_METHOD_SERVICE)).thenReturn(immDisplay1);
+
+    // Mock createDisplayContext to return the spy displayContext
+    when(outerContext.createDisplayContext(display)).thenReturn(displayContextSpy);
+
+    // Instantiate ImmContext using reflection
+    Class<?> immContextClass =
+        Class.forName("io.flutter.plugin.platform.SingleViewPresentation$ImmContext");
+    java.lang.reflect.Constructor<?> constructor =
+        immContextClass.getDeclaredConstructor(Context.class);
+    constructor.setAccessible(true);
+    Context immContext = (Context) constructor.newInstance(outerContext);
+
+    // Call createDisplayContext on ImmContext
+    Context displayImmContext = immContext.createDisplayContext(display);
+
+    // Call getSystemService on the returned display context
+    InputMethodManager actual =
+        (InputMethodManager) displayImmContext.getSystemService(Context.INPUT_METHOD_SERVICE);
+
+    // On API 30, we expect the outer context's IMM.
+    assertEquals(immDisplay0, actual);
+  }
 }
+

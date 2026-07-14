@@ -239,6 +239,9 @@ class SingleViewPresentation extends Presentation {
     @Override
     public Object getSystemService(String name) {
       if (INPUT_METHOD_SERVICE.equals(name)) {
+        if (android.os.Build.VERSION.SDK_INT >= io.flutter.Build.API_LEVELS.API_31) {
+          return super.getSystemService(name);
+        }
         return inputMethodManager;
       }
       return super.getSystemService(name);
