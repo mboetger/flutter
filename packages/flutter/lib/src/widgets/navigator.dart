@@ -5580,6 +5580,9 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin, Res
   @optionalTypeArgs
   @awaitNotRequired
   Future<bool> maybePop<T extends Object?>([T? result]) async {
+    if (userGestureInProgress) {
+      return true;
+    }
     final _RouteEntry? lastEntry = _lastRouteEntryWhereOrNull(_RouteEntry.isPresentPredicate);
     if (lastEntry == null) {
       return false;
