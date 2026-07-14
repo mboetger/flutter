@@ -315,6 +315,9 @@ class AndroidGradleBuilder implements AndroidBuilder {
     GradleHandledError? detectedGradleError;
     String? detectedGradleErrorLine;
     String? consumeLog(String line) {
+      if (line.startsWith('Warning: Mapping new ns')) {
+        return null;
+      }
       if (outputParser != null) {
         outputParser(line);
       }
