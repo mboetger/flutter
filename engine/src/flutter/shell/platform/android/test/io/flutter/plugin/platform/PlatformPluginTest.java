@@ -538,6 +538,39 @@ public class PlatformPluginTest {
   }
 
   @SuppressWarnings("deprecation")
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void systemUiVisibilityCallback_whenOverlaysVisible_clearsFullScreenFlags() {
+    ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class);
+    controller.setup();
+    Activity fakeActivity = controller.get();
+    PlatformPlugin platformPlugin = new PlatformPlugin(fakeActivity, mockPlatformChannel);
+
+    // Go fullscreen (hide overlays)
+    platformPlugin.mPlatformMessageHandler.showSystemUiMode(PlatformChannel.SystemUiMode.IMMERSIVE_STICKY);
+    
+    // Verify that the flags are set to hide navigation/fullscreen
+    int flagsBefore = fakeActivity.getWindow().getDecorView().getSystemUiVisibility();
+    assertTrue((flagsBefore & View.SYSTEM_UI_FLAG_FULLSCREEN) != 0);
+    assertTrue((flagsBefore & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) != 0);
+
+    // Subscribe to listener
+    platformPlugin.mPlatformMessageHandler.setSystemUiChangeListener();
+
+    // Simulate system UI changing to visible (e.g. keyboard showing, which clears full screen flag)
+    fakeActivity.getWindow().getDecorView().dispatchSystemUiVisibilityChanged(0);
+
+    // Run the posted message on UI thread
+    ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
+
+    // Now check if the flags on the decor view have been cleared.
+    int flagsAfter = fakeActivity.getWindow().getDecorView().getSystemUiVisibility();
+    assertTrue((flagsAfter & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0);
+    assertTrue((flagsAfter & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0);
+  }
+
+
+  @SuppressWarnings("deprecation")
   // SYSTEM_UI_FLAG_*, setSystemUiVisibility
   @Config(sdk = API_LEVELS.API_28)
   @Test

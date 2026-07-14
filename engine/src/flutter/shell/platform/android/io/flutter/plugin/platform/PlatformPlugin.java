@@ -266,6 +266,9 @@ public class PlatformPlugin {
                     // controls. Another common action is to set a timer to dismiss
                     // the system bars and restore the fullscreen mode that was
                     // previously enabled.
+                    mEnabledOverlays &= ~View.SYSTEM_UI_FLAG_FULLSCREEN;
+                    mEnabledOverlays &= ~View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+                    updateSystemUiOverlays();
                     platformChannel.systemChromeChanged(true);
                   } else {
                     // The system bars are NOT visible. Make any desired adjustments
