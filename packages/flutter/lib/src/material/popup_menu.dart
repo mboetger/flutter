@@ -1750,6 +1750,7 @@ class PopupMenuButtonState<T> extends State<PopupMenuButton<T>> {
     if (widget.child != null) {
       final Widget child = Tooltip(
         message: widget.tooltip ?? MaterialLocalizations.of(context).showMenuTooltip,
+        enableFeedback: enableFeedback,
         child: InkWell(
           borderRadius: widget.borderRadius,
           onTap: widget.enabled ? showButtonMenu : null,

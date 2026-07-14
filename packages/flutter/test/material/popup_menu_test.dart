@@ -3134,6 +3134,24 @@ void main() {
       expect(feedback.clickSoundCount, 2);
       expect(feedback.hapticCount, 0);
     });
+
+    testWidgets('PopupMenuButton long press feedback works properly', (WidgetTester tester) async {
+      expect(feedback.hapticCount, 0);
+
+      // PopupMenuButton with enabled feedback (default).
+      await tester.pumpWidget(buildFrame());
+      await tester.longPress(find.text('Show Menu'));
+      await tester.pumpAndSettle();
+      expect(feedback.hapticCount, 1);
+
+      await tester.pumpWidget(Container());
+
+      // PopupMenuButton with disabled feedback.
+      await tester.pumpWidget(buildFrame(widgetEnableFeedback: false));
+      await tester.longPress(find.text('Show Menu'));
+      await tester.pumpAndSettle();
+      expect(feedback.hapticCount, 1); // Should still be 1
+    });
   });
 
   testWidgets('Can customize PopupMenuButton icon', (WidgetTester tester) async {

@@ -895,6 +895,86 @@ void main() {
       expect(feedback.clickSoundCount, 1);
       expect(feedback.hapticCount, 0);
     });
+
+    testWidgets('IconButton long press feedback works properly', (WidgetTester tester) async {
+      expect(feedback.hapticCount, 0);
+
+      // IconButton with enabled feedback (default).
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Center(
+              child: IconButton(onPressed: () {}, tooltip: 'Link', icon: const Icon(Icons.link)),
+            ),
+          ),
+        ),
+      );
+      await tester.longPress(find.byType(IconButton));
+      await tester.pumpAndSettle();
+      expect(feedback.hapticCount, 1);
+
+      await tester.pumpWidget(Container());
+
+      // IconButton with disabled feedback.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Center(
+              child: IconButton(
+                onPressed: () {},
+                enableFeedback: false,
+                tooltip: 'Link',
+                icon: const Icon(Icons.link),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.longPress(find.byType(IconButton));
+      await tester.pumpAndSettle();
+      expect(feedback.hapticCount, 1); // Should still be 1
+    });
+
+    testWidgets('IconButton long press feedback works properly (M2)', (WidgetTester tester) async {
+      expect(feedback.hapticCount, 0);
+
+      // IconButton with enabled feedback (default).
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false),
+          home: Material(
+            child: Center(
+              child: IconButton(onPressed: () {}, tooltip: 'Link', icon: const Icon(Icons.link)),
+            ),
+          ),
+        ),
+      );
+      await tester.longPress(find.byType(IconButton));
+      await tester.pumpAndSettle();
+      expect(feedback.hapticCount, 1);
+
+      await tester.pumpWidget(Container());
+
+      // IconButton with disabled feedback.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false),
+          home: Material(
+            child: Center(
+              child: IconButton(
+                onPressed: () {},
+                enableFeedback: false,
+                tooltip: 'Link',
+                icon: const Icon(Icons.link),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.longPress(find.byType(IconButton));
+      await tester.pumpAndSettle();
+      expect(feedback.hapticCount, 1); // Should still be 1
+    });
   });
 
   testWidgets('IconButton responds to density changes.', (WidgetTester tester) async {

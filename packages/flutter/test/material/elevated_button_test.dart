@@ -7,7 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import '../widgets/feedback_tester.dart';
 import 'semantics_tester.dart';
 
 void main() {
@@ -2692,4 +2692,93 @@ void main() {
     // The button should still be focused.
     expect(getButtonFocusNode().hasFocus, true);
   });
+
+  testWidgets('ButtonStyleButton long press feedback works properly', (WidgetTester tester) async {
+    final feedback = FeedbackTester();
+    expect(feedback.hapticCount, 0);
+
+    final focusNode1 = FocusNode();
+    final focusNode2 = FocusNode();
+
+    // ButtonStyleButton with enabled feedback (default).
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: _TestButtonStyleButton(
+              onPressed: () {},
+              onLongPress: null,
+              onHover: (bool value) {},
+              onFocusChange: (bool value) {},
+              style: const ButtonStyle(),
+              focusNode: focusNode1,
+              autofocus: false,
+              clipBehavior: Clip.none,
+              tooltip: 'Button',
+              child: const Text('Button'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.longPress(find.byType(_TestButtonStyleButton));
+    await tester.pumpAndSettle();
+    expect(feedback.hapticCount, 1);
+
+    await tester.pumpWidget(Container());
+
+    // ButtonStyleButton with disabled feedback.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: _TestButtonStyleButton(
+              onPressed: () {},
+              onLongPress: null,
+              onHover: (bool value) {},
+              onFocusChange: (bool value) {},
+              style: const ButtonStyle(enableFeedback: false),
+              focusNode: focusNode2,
+              autofocus: false,
+              clipBehavior: Clip.none,
+              tooltip: 'Button',
+              child: const Text('Button'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.longPress(find.byType(_TestButtonStyleButton));
+    await tester.pumpAndSettle();
+    expect(feedback.hapticCount, 1); // Should still be 1
+
+    feedback.dispose();
+    focusNode1.dispose();
+    focusNode2.dispose();
+  });
+}
+
+class _TestButtonStyleButton extends ButtonStyleButton {
+  const _TestButtonStyleButton({
+    required super.onPressed,
+    required super.onLongPress,
+    required super.onHover,
+    required super.onFocusChange,
+    required super.style,
+    required super.focusNode,
+    required super.autofocus,
+    required super.clipBehavior,
+    super.tooltip,
+    required super.child,
+  });
+
+  @override
+  ButtonStyle defaultStyleOf(BuildContext context) {
+    return const ElevatedButton(onPressed: null, child: SizedBox()).defaultStyleOf(context);
+  }
+
+  @override
+  ButtonStyle? themeStyleOf(BuildContext context) {
+    return ElevatedButtonTheme.of(context).style;
+  }
 }

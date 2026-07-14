@@ -572,7 +572,11 @@ class _ButtonStyleState extends State<ButtonStyleButton> with TickerProviderStat
     );
 
     if (widget.tooltip != null) {
-      result = Tooltip(message: widget.tooltip, child: result);
+      result = Tooltip(
+        message: widget.tooltip,
+        enableFeedback: resolvedEnableFeedback,
+        child: result,
+      );
     }
 
     final Size minSize;

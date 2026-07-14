@@ -832,7 +832,7 @@ class IconButton extends StatelessWidget {
     );
 
     if (tooltip != null) {
-      result = Tooltip(message: tooltip, child: result);
+      result = Tooltip(message: tooltip, enableFeedback: effectiveEnableFeedback, child: result);
     }
 
     return Semantics(button: true, enabled: onPressed != null, child: result);
