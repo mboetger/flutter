@@ -375,6 +375,36 @@ public class FlutterFragmentActivityTest {
     flutterActivityScenario.close();
   }
 
+  @Test
+  public void itConfiguresWindowForTransparencyOnResume() {
+    Intent intent =
+        FlutterFragmentActivity.withNewEngine()
+            .backgroundMode(BackgroundMode.transparent)
+            .build(ctx);
+    org.robolectric.android.controller.ActivityController<FlutterFragmentActivity>
+        activityController = Robolectric.buildActivity(FlutterFragmentActivity.class, intent);
+    FlutterFragmentActivity activity = activityController.get();
+
+    activityController.create().start().resume();
+
+    // Set background to something else first to simulate reset
+    activity
+        .getWindow()
+        .setBackgroundDrawable(
+            new android.graphics.drawable.ColorDrawable(android.graphics.Color.RED));
+
+    // Call onPostResume manually to trigger the re-application
+    activity.onPostResume();
+
+    // Verify it is transparent again
+    android.graphics.drawable.Drawable background =
+        activity.getWindow().getDecorView().getBackground();
+    assertTrue(background instanceof android.graphics.drawable.ColorDrawable);
+    assertEquals(
+        android.graphics.Color.TRANSPARENT,
+        ((android.graphics.drawable.ColorDrawable) background).getColor());
+  }
+
   static class FlutterFragmentActivityWithProvidedEngine extends FlutterFragmentActivity {
     int numberOfEnginesCreated = 0;
 

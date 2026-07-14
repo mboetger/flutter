@@ -627,6 +627,34 @@ public class FlutterActivityTest {
     flutterActivity.resetFullyDrawn();
   }
 
+  @Test
+  public void itConfiguresWindowForTransparencyOnResume() {
+    Intent intent =
+        FlutterActivity.withNewEngine().backgroundMode(BackgroundMode.transparent).build(ctx);
+    ActivityController<FlutterActivity> activityController =
+        Robolectric.buildActivity(FlutterActivity.class, intent);
+    FlutterActivity activity = activityController.get();
+
+    activityController.create().start().resume();
+
+    // Set background to something else first to simulate reset
+    activity
+        .getWindow()
+        .setBackgroundDrawable(
+            new android.graphics.drawable.ColorDrawable(android.graphics.Color.RED));
+
+    // Call onPostResume manually to trigger the re-application
+    activity.onPostResume();
+
+    // Verify it is transparent again
+    android.graphics.drawable.Drawable background =
+        activity.getWindow().getDecorView().getBackground();
+    assertTrue(background instanceof android.graphics.drawable.ColorDrawable);
+    assertEquals(
+        android.graphics.Color.TRANSPARENT,
+        ((android.graphics.drawable.ColorDrawable) background).getColor());
+  }
+
   static class FlutterActivityWithProvidedEngine extends FlutterActivity {
     @Override
     @SuppressLint("MissingSuperCall")

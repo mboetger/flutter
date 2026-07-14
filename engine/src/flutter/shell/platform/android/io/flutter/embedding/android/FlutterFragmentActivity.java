@@ -623,6 +623,7 @@ public class FlutterFragmentActivity extends FragmentActivity
   public void onPostResume() {
     super.onPostResume();
     flutterFragment.onPostResume();
+    configureWindowForTransparency();
   }
 
   @Override

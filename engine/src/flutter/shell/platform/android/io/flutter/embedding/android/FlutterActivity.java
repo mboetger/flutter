@@ -847,6 +847,7 @@ public class FlutterActivity extends Activity
     if (stillAttachedForEvent("onPostResume")) {
       delegate.onPostResume();
     }
+    configureWindowForTransparency();
   }
 
   @Override
