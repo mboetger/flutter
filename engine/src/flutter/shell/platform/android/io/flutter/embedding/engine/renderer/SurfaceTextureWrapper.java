@@ -8,6 +8,7 @@ import android.graphics.SurfaceTexture;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import io.flutter.Log;
 
 /**
  * A wrapper for a SurfaceTexture that tracks whether the texture has been released.
@@ -18,6 +19,7 @@ import androidx.annotation.Nullable;
  */
 @Keep
 public class SurfaceTextureWrapper {
+  private static final String TAG = "SurfaceTextureWrapper";
   private SurfaceTexture surfaceTexture;
   private boolean released;
   private boolean attached;
@@ -99,7 +101,7 @@ public class SurfaceTextureWrapper {
       // surface_texture_external_texture_gl.cc, and
       // https://github.com/flutter/flutter/issues/98155
       if (attached) {
-        surfaceTexture.detachFromGLContext();
+        detachFromGLContext();
       }
       surfaceTexture.attachToGLContext(texName);
       attached = true;
@@ -111,7 +113,11 @@ public class SurfaceTextureWrapper {
   public void detachFromGLContext() {
     synchronized (this) {
       if (attached && !released) {
-        surfaceTexture.detachFromGLContext();
+        try {
+          surfaceTexture.detachFromGLContext();
+        } catch (IllegalStateException e) {
+          Log.e(TAG, "Error detaching from GL context: " + e.getMessage());
+        }
         attached = false;
       }
     }
