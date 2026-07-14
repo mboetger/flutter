@@ -1345,7 +1345,7 @@ public class FlutterActivity extends Activity
    */
   @Override
   public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
-    if (delegate.isFlutterEngineFromHost()) {
+    if (delegate.isFlutterEngineFromHost() && !flutterEngine.shouldAutomaticallyRegisterPlugins()) {
       // If the FlutterEngine was explicitly built and injected into this FlutterActivity, the
       // builder should explicitly decide whether to automatically register plugins via the
       // FlutterEngine's construction parameter or via the AndroidManifest metadata.

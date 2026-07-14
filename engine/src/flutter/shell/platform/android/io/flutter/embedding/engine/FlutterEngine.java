@@ -125,6 +125,8 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   // Unique handle for this engine.
   @NonNull private final long engineId;
 
+  private final boolean automaticallyRegisterPlugins;
+
   @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
   public static void resetNextEngineId() {
     nextEngineId = 1;
@@ -335,6 +337,7 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
       @Nullable FlutterEngineGroup group) {
 
     this.engineId = nextEngineId++;
+    this.automaticallyRegisterPlugins = automaticallyRegisterPlugins;
     idToEngine.put(engineId, this);
 
     AssetManager assetManager;
@@ -727,6 +730,15 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
   /** Returns unique identifier for this engine. */
   public long getEngineId() {
     return engineId;
+  }
+
+  /**
+   * Returns whether this engine should automatically register plugins.
+   *
+   * @return {@code true} if this engine should automatically register plugins, {@code false} otherwise.
+   */
+  public boolean shouldAutomaticallyRegisterPlugins() {
+    return automaticallyRegisterPlugins;
   }
 
   /**

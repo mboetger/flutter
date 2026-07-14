@@ -780,4 +780,144 @@ public class FlutterActivityTest {
       onCreateCalled = true;
     }
   }
+
+  @Test
+  public void itSkipsPluginRegistrationWhenPreWarmedEngineIsProvidedAndSuperConfigureIsNotCalled() {
+    FlutterLoader mockFlutterLoader = mock(FlutterLoader.class);
+    FlutterJNI mockFlutterJni = mock(FlutterJNI.class);
+    when(mockFlutterJni.isAttached()).thenReturn(true);
+    when(mockFlutterLoader.automaticallyRegisterPlugins()).thenReturn(true);
+
+    // Create a pre-warmed engine with automaticallyRegisterPlugins = false to simulate manual/custom setup
+    FlutterEngine preWarmedEngine =
+        new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni, new String[] {}, false);
+
+    GeneratedPluginRegistrant.clearRegisteredEngines();
+
+    FlutterEngineCache.getInstance().put("pre_warmed_engine", preWarmedEngine);
+    FlutterActivityWithPreWarmedEngineNoSuperConfigure.cachedEngineId = "pre_warmed_engine";
+
+    Intent intent = new Intent(ctx, FlutterActivityWithPreWarmedEngineNoSuperConfigure.class);
+    ActivityController<FlutterActivityWithPreWarmedEngineNoSuperConfigure> activityController =
+        Robolectric.buildActivity(FlutterActivityWithPreWarmedEngineNoSuperConfigure.class, intent);
+
+    activityController.create();
+
+    // Verify that the activity's configure lifecycle did NOT register plugins on the engine
+    List<FlutterEngine> registeredEngines = GeneratedPluginRegistrant.getRegisteredEngines();
+    assertTrue(registeredEngines.isEmpty());
+
+    // Clean up
+    FlutterEngineCache.getInstance().remove("pre_warmed_engine");
+    FlutterActivityWithPreWarmedEngineNoSuperConfigure.cachedEngineId = null;
+  }
+
+  @Test
+  public void itSkipsPluginRegistrationWhenPreWarmedEngineIsProvidedEvenIfSuperConfigureIsCalled() {
+    FlutterLoader mockFlutterLoader = mock(FlutterLoader.class);
+    FlutterJNI mockFlutterJni = mock(FlutterJNI.class);
+    when(mockFlutterJni.isAttached()).thenReturn(true);
+    when(mockFlutterLoader.automaticallyRegisterPlugins()).thenReturn(true);
+
+    // Create a pre-warmed engine with automaticallyRegisterPlugins = false
+    FlutterEngine preWarmedEngine =
+        new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni, new String[] {}, false);
+
+    GeneratedPluginRegistrant.clearRegisteredEngines();
+
+    FlutterEngineCache.getInstance().put("pre_warmed_engine", preWarmedEngine);
+    FlutterActivityWithPreWarmedEngineWithSuperConfigure.cachedEngineId = "pre_warmed_engine";
+
+    Intent intent = new Intent(ctx, FlutterActivityWithPreWarmedEngineWithSuperConfigure.class);
+    ActivityController<FlutterActivityWithPreWarmedEngineWithSuperConfigure> activityController =
+        Robolectric.buildActivity(FlutterActivityWithPreWarmedEngineWithSuperConfigure.class, intent);
+
+    activityController.create();
+
+    // Verify that even with super.configureFlutterEngine called, plugins are NOT registered
+    // because isFlutterEngineFromHost is true and super.configureFlutterEngine returns early.
+    List<FlutterEngine> registeredEngines = GeneratedPluginRegistrant.getRegisteredEngines();
+    assertTrue(registeredEngines.isEmpty());
+
+    // Clean up
+    FlutterEngineCache.getInstance().remove("pre_warmed_engine");
+    FlutterActivityWithPreWarmedEngineWithSuperConfigure.cachedEngineId = null;
+  }
+
+  @Test
+  public void itRegistersPluginsWhenPreWarmedEngineIsProvidedAndAutomaticallyRegisterPluginsIsTrue() {
+    FlutterLoader mockFlutterLoader = mock(FlutterLoader.class);
+    FlutterJNI mockFlutterJni = mock(FlutterJNI.class);
+    when(mockFlutterJni.isAttached()).thenReturn(true);
+    when(mockFlutterLoader.automaticallyRegisterPlugins()).thenReturn(true);
+
+    // Create a pre-warmed engine with automaticallyRegisterPlugins = true
+    FlutterEngine preWarmedEngine =
+        new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni, new String[] {}, true);
+
+    GeneratedPluginRegistrant.clearRegisteredEngines();
+
+    FlutterEngineCache.getInstance().put("pre_warmed_engine", preWarmedEngine);
+    FlutterActivityWithPreWarmedEngineWithSuperConfigure.cachedEngineId = "pre_warmed_engine";
+
+    Intent intent = new Intent(ctx, FlutterActivityWithPreWarmedEngineWithSuperConfigure.class);
+    ActivityController<FlutterActivityWithPreWarmedEngineWithSuperConfigure> activityController =
+        Robolectric.buildActivity(FlutterActivityWithPreWarmedEngineWithSuperConfigure.class, intent);
+
+    activityController.create();
+
+    // Verify that the activity's configure lifecycle DID register plugins on the engine
+    List<FlutterEngine> registeredEngines = GeneratedPluginRegistrant.getRegisteredEngines();
+    assertEquals(1, registeredEngines.size());
+    assertEquals(preWarmedEngine, registeredEngines.get(0));
+
+    // Clean up
+    FlutterEngineCache.getInstance().remove("pre_warmed_engine");
+    FlutterActivityWithPreWarmedEngineWithSuperConfigure.cachedEngineId = null;
+  }
+
+  static class FlutterActivityWithPreWarmedEngineNoSuperConfigure extends FlutterActivity {
+    static String cachedEngineId;
+
+    @Override
+    @SuppressLint("MissingSuperCall")
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+      super.delegate = new FlutterActivityAndFragmentDelegate(this);
+      super.delegate.onAttach(this);
+    }
+
+    @Override
+    public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
+      // Custom configuration but DO NOT call super.configureFlutterEngine(flutterEngine)
+    }
+
+    @Nullable
+    @Override
+    public FlutterEngine provideFlutterEngine(@NonNull Context context) {
+      return FlutterEngineCache.getInstance().get(cachedEngineId);
+    }
+  }
+
+  static class FlutterActivityWithPreWarmedEngineWithSuperConfigure extends FlutterActivity {
+    static String cachedEngineId;
+
+    @Override
+    @SuppressLint("MissingSuperCall")
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+      super.delegate = new FlutterActivityAndFragmentDelegate(this);
+      super.delegate.onAttach(this);
+    }
+
+    @Override
+    public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
+      super.configureFlutterEngine(flutterEngine);
+    }
+
+    @Nullable
+    @Override
+    public FlutterEngine provideFlutterEngine(@NonNull Context context) {
+      return FlutterEngineCache.getInstance().get(cachedEngineId);
+    }
+  }
 }
+

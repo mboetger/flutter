@@ -27,7 +27,9 @@ public class GeneratedPluginRegistrant {
     if (pluginRegistrationException != null) {
       throw pluginRegistrationException;
     }
-    registeredEngines.add(engine);
+    if (!registeredEngines.contains(engine)) {
+      registeredEngines.add(engine);
+    }
   }
 
   /**

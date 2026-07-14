@@ -754,7 +754,9 @@ public class FlutterFragmentActivity extends FragmentActivity
       // only informs the guard.
       attachedFlutterFragment = retrieveExistingFlutterFragmentIfPossible();
     }
-    if (attachedFlutterFragment != null && attachedFlutterFragment.isFlutterEngineInjected()) {
+    if (attachedFlutterFragment != null
+        && attachedFlutterFragment.isFlutterEngineInjected()
+        && !flutterEngine.shouldAutomaticallyRegisterPlugins()) {
       // If the FlutterEngine was explicitly built and injected into this FlutterActivity, the
       // builder should explicitly decide whether to automatically register plugins via the
       // FlutterEngine's construction parameter or via the AndroidManifest metadata.
