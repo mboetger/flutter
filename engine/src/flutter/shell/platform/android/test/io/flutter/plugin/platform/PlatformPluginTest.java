@@ -672,6 +672,31 @@ public class PlatformPluginTest {
   }
 
   @SuppressWarnings("deprecation")
+  @Config(sdk = API_LEVELS.API_29)
+  @Test
+  public void switchFromEdgeToEdgeToManualOverlays_doesNotDisableEdgeToEdge() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    try (MockedStatic<WindowCompat> windowCompatMock = mockStatic(WindowCompat.class)) {
+      platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+          PlatformChannel.SystemUiMode.EDGE_TO_EDGE);
+      windowCompatMock.verify(() -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, false));
+
+      windowCompatMock.clearInvocations();
+
+      platformPlugin.mPlatformMessageHandler.showSystemOverlays(
+          java.util.List.of(PlatformChannel.SystemUiOverlay.BOTTOM_OVERLAYS));
+
+      windowCompatMock.verify(() -> WindowCompat.setDecorFitsSystemWindows(fakeWindow, true), never());
+    }
+  }
+
+  @SuppressWarnings("deprecation")
   // FLAG_TRANSLUCENT_STATUS, FLAG_TRANSLUCENT_NAVIGATION
   @Config(sdk = API_LEVELS.API_29)
   @Test

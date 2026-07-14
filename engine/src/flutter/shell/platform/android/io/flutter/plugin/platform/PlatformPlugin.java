@@ -26,6 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import io.flutter.Log;
 import io.flutter.embedding.engine.systemchannels.PlatformChannel;
@@ -44,6 +45,8 @@ public class PlatformPlugin {
   private PlatformChannel.SystemChromeStyle currentTheme;
   private int mEnabledOverlays;
   private boolean isEdgeToEdge = false;
+  private boolean mShowStatusBars = true;
+  private boolean mShowNavigationBars = true;
   private static final String TAG = "PlatformPlugin";
 
   /**
@@ -373,10 +376,9 @@ public class PlatformPlugin {
       // to ensure contrast with buttons on the nav and status bars, unless the contrast is not
       // enforced in the overlay styling.
       isEdgeToEdge = true;
-      enableEdgeToEdge();
-      if (currentTheme != null) {
-        setSystemChromeSystemUIOverlayStyle(currentTheme);
-      }
+      mShowStatusBars = true;
+      mShowNavigationBars = true;
+      updateSystemUiOverlays();
       return;
     } else {
       // When none of the conditions are matched, return without updating the system UI overlays.
@@ -389,6 +391,24 @@ public class PlatformPlugin {
 
   private void setSystemChromeEnabledSystemUIOverlays(
       List<PlatformChannel.SystemUiOverlay> overlaysToShow) {
+    if (isEdgeToEdge) {
+      mShowStatusBars = false;
+      mShowNavigationBars = false;
+      for (int i = 0; i < overlaysToShow.size(); ++i) {
+        PlatformChannel.SystemUiOverlay overlayToShow = overlaysToShow.get(i);
+        switch (overlayToShow) {
+          case TOP_OVERLAYS:
+            mShowStatusBars = true;
+            break;
+          case BOTTOM_OVERLAYS:
+            mShowNavigationBars = true;
+            break;
+        }
+      }
+      updateSystemUiOverlays();
+      return;
+    }
+
     // If we were in edge-to-edge mode, restore normal inset behavior since this
     // older API sets specific overlay flags that are incompatible with edge-to-edge.
     disableEdgeToEdge();
@@ -436,11 +456,27 @@ public class PlatformPlugin {
       // In edge-to-edge mode, re-apply the modern API instead of using deprecated
       // setSystemUiVisibility(), which could interfere with WindowCompat on API < 30.
       enableEdgeToEdge();
+      applyEdgeToEdgeOverlays();
     } else {
       activity.getWindow().getDecorView().setSystemUiVisibility(mEnabledOverlays);
     }
     if (currentTheme != null) {
       setSystemChromeSystemUIOverlayStyle(currentTheme);
+    }
+  }
+
+  private void applyEdgeToEdgeOverlays() {
+    Window window = activity.getWindow();
+    View view = window.getDecorView();
+    WindowInsetsControllerCompat windowInsetsControllerCompat =
+        new WindowInsetsControllerCompat(window, view);
+
+    if (!mShowStatusBars) {
+      windowInsetsControllerCompat.hide(WindowInsetsCompat.Type.statusBars());
+    }
+
+    if (!mShowNavigationBars) {
+      windowInsetsControllerCompat.hide(WindowInsetsCompat.Type.navigationBars());
     }
   }
 
