@@ -128,6 +128,7 @@ abstract class ScrollView extends StatelessWidget {
     this.restorationId,
     this.clipBehavior = Clip.hardEdge,
     this.hitTestBehavior = HitTestBehavior.opaque,
+    this.obscuredInsets,
   }) : assert(
          !(controller != null && (primary ?? false)),
          'Primary ScrollViews obtain their ScrollController via inheritance '
@@ -414,6 +415,16 @@ abstract class ScrollView extends StatelessWidget {
   /// Defaults to [HitTestBehavior.opaque].
   final HitTestBehavior hitTestBehavior;
 
+  /// The parts of the viewport that are obscured by other UI elements.
+  ///
+  /// For example, if the body of a scaffold extends behind a bottom navigation
+  /// bar, this should be set to the height of the bottom navigation bar.
+  /// This is used to ensure that [showOnScreen] scrolls the target into the
+  /// unobstructed area of the viewport.
+  ///
+  /// If null, it defaults to the ambient [MediaQueryData.padding] from [MediaQuery].
+  final EdgeInsets? obscuredInsets;
+
   /// Returns the [AxisDirection] in which the scroll view scrolls.
   ///
   /// Combines the [scrollDirection] with the [reverse] boolean to obtain the
@@ -477,6 +488,7 @@ abstract class ScrollView extends StatelessWidget {
     }());
     final ScrollCacheExtent? effectiveScrollCacheExtent =
         scrollCacheExtent ?? (cacheExtent != null ? ScrollCacheExtent.pixels(cacheExtent!) : null);
+    final EdgeInsets effectiveObscuredInsets = obscuredInsets ?? MediaQuery.paddingOf(context);
     if (shrinkWrap) {
       return ShrinkWrappingViewport(
         axisDirection: axisDirection,
@@ -485,6 +497,7 @@ abstract class ScrollView extends StatelessWidget {
         paintOrder: paintOrder,
         clipBehavior: clipBehavior,
         scrollCacheExtent: effectiveScrollCacheExtent,
+        obscuredInsets: effectiveObscuredInsets,
       );
     }
     return Viewport(
@@ -496,6 +509,7 @@ abstract class ScrollView extends StatelessWidget {
       anchor: anchor,
       paintOrder: paintOrder,
       clipBehavior: clipBehavior,
+      obscuredInsets: effectiveObscuredInsets,
     );
   }
 
@@ -744,6 +758,7 @@ class CustomScrollView extends ScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   });
 
   /// The slivers to place inside the viewport.
@@ -889,6 +904,7 @@ abstract class BoxScrollView extends ScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   });
 
   /// The amount of space by which to inset the children.
@@ -1341,6 +1357,7 @@ class ListView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : assert(
          (itemExtent == null && prototypeItem == null) ||
              (itemExtent == null && itemExtentBuilder == null) ||
@@ -1423,6 +1440,7 @@ class ListView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : assert(itemCount == null || itemCount >= 0),
        assert(semanticChildCount == null || semanticChildCount <= itemCount!),
        assert(
@@ -1548,6 +1566,7 @@ class ListView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : assert(itemCount >= 0),
        assert(
          findItemIndexCallback == null || findChildIndexCallback == null,
@@ -1617,6 +1636,7 @@ class ListView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : assert(
          (itemExtent == null && prototypeItem == null) ||
              (itemExtent == null && itemExtentBuilder == null) ||
@@ -2008,6 +2028,7 @@ class GridView extends BoxScrollView {
     super.keyboardDismissBehavior,
     super.restorationId,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : childrenDelegate = SliverChildListDelegate(
          children,
          addAutomaticKeepAlives: addAutomaticKeepAlives,
@@ -2068,6 +2089,7 @@ class GridView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : childrenDelegate = SliverChildBuilderDelegate(
          itemBuilder,
          findChildIndexCallback: findChildIndexCallback,
@@ -2106,6 +2128,7 @@ class GridView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   });
 
   /// Creates a scrollable, 2D array of widgets with a fixed number of tiles in
@@ -2152,6 +2175,7 @@ class GridView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
          crossAxisCount: crossAxisCount,
          mainAxisSpacing: mainAxisSpacing,
@@ -2211,6 +2235,7 @@ class GridView extends BoxScrollView {
     super.restorationId,
     super.clipBehavior,
     super.hitTestBehavior,
+    super.obscuredInsets,
   }) : gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
          maxCrossAxisExtent: maxCrossAxisExtent,
          mainAxisSpacing: mainAxisSpacing,

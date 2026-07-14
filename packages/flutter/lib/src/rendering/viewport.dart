@@ -432,6 +432,7 @@ abstract class RenderViewportBase<ParentDataClass extends ContainerParentDataMix
     ScrollCacheExtent? scrollCacheExtent,
     SliverPaintOrder paintOrder = SliverPaintOrder.firstIsTop,
     Clip clipBehavior = Clip.hardEdge,
+    EdgeInsets obscuredInsets = EdgeInsets.zero,
   }) : assert(axisDirectionToAxis(axisDirection) != axisDirectionToAxis(crossAxisDirection)),
        assert(cacheExtent != null || cacheExtentStyle == CacheExtentStyle.pixel),
        _axisDirection = axisDirection,
@@ -446,7 +447,8 @@ abstract class RenderViewportBase<ParentDataClass extends ContainerParentDataMix
              CacheExtentStyle.viewport => ScrollCacheExtent.viewport(cacheExtent!),
            },
        _paintOrder = paintOrder,
-       _clipBehavior = clipBehavior;
+       _clipBehavior = clipBehavior,
+       _obscuredInsets = obscuredInsets;
 
   /// Report the semantics of this node, for example for accessibility purposes.
   ///
@@ -511,6 +513,22 @@ abstract class RenderViewportBase<ParentDataClass extends ContainerParentDataMix
     }
     _crossAxisDirection = value;
     markNeedsLayout();
+  }
+
+  /// The parts of the viewport that are obscured by other UI elements.
+  ///
+  /// For example, if the body of a scaffold extends behind a bottom navigation
+  /// bar, this should be set to the height of the bottom navigation bar.
+  /// This is used to ensure that [showOnScreen] scrolls the target into the
+  /// unobstructed area of the viewport.
+  EdgeInsets get obscuredInsets => _obscuredInsets;
+  EdgeInsets _obscuredInsets;
+  set obscuredInsets(EdgeInsets value) {
+    if (value == _obscuredInsets) {
+      return;
+    }
+    _obscuredInsets = value;
+    markNeedsSemanticsUpdate();
   }
 
   /// The axis along which the viewport scrolls.
@@ -1211,12 +1229,28 @@ abstract class RenderViewportBase<ParentDataClass extends ContainerParentDataMix
         };
     }
 
-    final double mainAxisExtentDifference = switch (axis) {
-      Axis.horizontal => size.width - extentOfPinnedSlivers - rectLocal.width,
-      Axis.vertical => size.height - extentOfPinnedSlivers - rectLocal.height,
+    final double leadingInsets = switch (axisDirection) {
+      AxisDirection.up => obscuredInsets.bottom,
+      AxisDirection.down => obscuredInsets.top,
+      AxisDirection.left => obscuredInsets.right,
+      AxisDirection.right => obscuredInsets.left,
+    };
+    final double trailingInsets = switch (axisDirection) {
+      AxisDirection.up => obscuredInsets.top,
+      AxisDirection.down => obscuredInsets.bottom,
+      AxisDirection.left => obscuredInsets.left,
+      AxisDirection.right => obscuredInsets.right,
     };
 
-    final double targetOffset = leadingScrollOffset - mainAxisExtentDifference * alignment;
+    final double mainAxisExtentDifference = switch (axis) {
+      Axis.horizontal =>
+        size.width - leadingInsets - trailingInsets - extentOfPinnedSlivers - rectLocal.width,
+      Axis.vertical =>
+        size.height - leadingInsets - trailingInsets - extentOfPinnedSlivers - rectLocal.height,
+    };
+
+    final double targetOffset =
+        leadingScrollOffset - leadingInsets - mainAxisExtentDifference * alignment;
     final double offsetDifference = offset.pixels - targetOffset;
 
     targetRect = switch (axisDirection) {
@@ -1573,6 +1607,7 @@ class RenderViewport extends RenderViewportBase<SliverPhysicalContainerParentDat
     super.scrollCacheExtent,
     super.paintOrder,
     super.clipBehavior,
+    super.obscuredInsets,
   }) : assert(anchor >= 0.0 && anchor <= 1.0),
        assert(cacheExtentStyle != CacheExtentStyle.viewport || cacheExtent != null),
        _anchor = anchor,
@@ -2013,6 +2048,7 @@ class RenderShrinkWrappingViewport extends RenderViewportBase<SliverLogicalConta
     super.paintOrder,
     super.clipBehavior,
     super.scrollCacheExtent,
+    super.obscuredInsets,
     List<RenderSliver>? children,
   }) {
     addAll(children);

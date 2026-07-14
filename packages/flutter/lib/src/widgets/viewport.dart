@@ -77,6 +77,7 @@ class Viewport extends MultiChildRenderObjectWidget {
     this.scrollCacheExtent,
     this.paintOrder = SliverPaintOrder.firstIsTop,
     this.clipBehavior = Clip.hardEdge,
+    this.obscuredInsets = EdgeInsets.zero,
     List<Widget> slivers = const <Widget>[],
   }) : assert(center == null || slivers.where((Widget child) => child.key == center).length == 1),
        assert(cacheExtentStyle != CacheExtentStyle.viewport || cacheExtent != null),
@@ -163,6 +164,14 @@ class Viewport extends MultiChildRenderObjectWidget {
   /// Defaults to [Clip.hardEdge].
   final Clip clipBehavior;
 
+  /// The parts of the viewport that are obscured by other UI elements.
+  ///
+  /// For example, if the body of a scaffold extends behind a bottom navigation
+  /// bar, this should be set to the height of the bottom navigation bar.
+  /// This is used to ensure that [showOnScreen] scrolls the target into the
+  /// unobstructed area of the viewport.
+  final EdgeInsets obscuredInsets;
+
   ScrollCacheExtent? get _effectiveScrollCacheExtent {
     if (scrollCacheExtent != null) {
       return scrollCacheExtent;
@@ -228,6 +237,7 @@ class Viewport extends MultiChildRenderObjectWidget {
       scrollCacheExtent: _effectiveScrollCacheExtent,
       paintOrder: paintOrder,
       clipBehavior: clipBehavior,
+      obscuredInsets: obscuredInsets,
     );
   }
 
@@ -241,7 +251,8 @@ class Viewport extends MultiChildRenderObjectWidget {
       ..offset = offset
       ..scrollCacheExtent = _effectiveScrollCacheExtent
       ..paintOrder = paintOrder
-      ..clipBehavior = clipBehavior;
+      ..clipBehavior = clipBehavior
+      ..obscuredInsets = obscuredInsets;
   }
 
   @override
@@ -396,6 +407,7 @@ class ShrinkWrappingViewport extends MultiChildRenderObjectWidget {
     required this.offset,
     this.paintOrder = SliverPaintOrder.firstIsTop,
     this.clipBehavior = Clip.hardEdge,
+    this.obscuredInsets = EdgeInsets.zero,
     @Deprecated(
       'Use scrollCacheExtent instead. '
       'This feature was deprecated after v3.41.0-0.0.pre.',
@@ -448,6 +460,14 @@ class ShrinkWrappingViewport extends MultiChildRenderObjectWidget {
   /// Defaults to [Clip.hardEdge].
   final Clip clipBehavior;
 
+  /// The parts of the viewport that are obscured by other UI elements.
+  ///
+  /// For example, if the body of a scaffold extends behind a bottom navigation
+  /// bar, this should be set to the height of the bottom navigation bar.
+  /// This is used to ensure that [showOnScreen] scrolls the target into the
+  /// unobstructed area of the viewport.
+  final EdgeInsets obscuredInsets;
+
   /// {@macro flutter.rendering.RenderViewportBase.cacheExtent}
   ///
   /// See also:
@@ -494,6 +514,7 @@ class ShrinkWrappingViewport extends MultiChildRenderObjectWidget {
       paintOrder: paintOrder,
       clipBehavior: clipBehavior,
       scrollCacheExtent: _effectiveScrollCacheExtent,
+      obscuredInsets: obscuredInsets,
     );
   }
 
@@ -506,7 +527,8 @@ class ShrinkWrappingViewport extends MultiChildRenderObjectWidget {
       ..offset = offset
       ..paintOrder = paintOrder
       ..clipBehavior = clipBehavior
-      ..scrollCacheExtent = _effectiveScrollCacheExtent;
+      ..scrollCacheExtent = _effectiveScrollCacheExtent
+      ..obscuredInsets = obscuredInsets;
   }
 
   @override

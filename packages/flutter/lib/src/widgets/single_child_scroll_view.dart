@@ -16,6 +16,7 @@ import 'basic.dart';
 import 'focus_manager.dart';
 import 'focus_scope.dart';
 import 'framework.dart';
+import 'media_query.dart';
 import 'notification_listener.dart';
 import 'primary_scroll_controller.dart';
 import 'scroll_configuration.dart';
@@ -160,6 +161,7 @@ class SingleChildScrollView extends StatelessWidget {
     this.hitTestBehavior = HitTestBehavior.opaque,
     this.restorationId,
     this.keyboardDismissBehavior,
+    this.obscuredInsets,
   }) : assert(
          !(controller != null && (primary ?? false)),
          'Primary ScrollViews obtain their ScrollController via inheritance '
@@ -239,6 +241,16 @@ class SingleChildScrollView extends StatelessWidget {
   /// [ScrollBehavior.getKeyboardDismissBehavior].
   final ScrollViewKeyboardDismissBehavior? keyboardDismissBehavior;
 
+  /// The parts of the viewport that are obscured by other UI elements.
+  ///
+  /// For example, if the body of a scaffold extends behind a bottom navigation
+  /// bar, this should be set to the height of the bottom navigation bar.
+  /// This is used to ensure that [showOnScreen] scrolls the target into the
+  /// unobstructed area of the viewport.
+  ///
+  /// If null, it defaults to the ambient [MediaQueryData.padding] from [MediaQuery].
+  final EdgeInsets? obscuredInsets;
+
   AxisDirection _getDirection(BuildContext context) {
     return getAxisDirectionFromAxisReverseAndDirectionality(context, scrollDirection, reverse);
   }
@@ -271,6 +283,7 @@ class SingleChildScrollView extends StatelessWidget {
           axisDirection: axisDirection,
           offset: offset,
           clipBehavior: clipBehavior,
+          obscuredInsets: obscuredInsets ?? MediaQuery.paddingOf(context),
           child: contents,
         );
       },
@@ -309,11 +322,13 @@ class _SingleChildViewport extends SingleChildRenderObjectWidget {
     required this.offset,
     super.child,
     required this.clipBehavior,
+    this.obscuredInsets = EdgeInsets.zero,
   });
 
   final AxisDirection axisDirection;
   final ViewportOffset offset;
   final Clip clipBehavior;
+  final EdgeInsets obscuredInsets;
 
   @override
   _RenderSingleChildViewport createRenderObject(BuildContext context) {
@@ -321,6 +336,7 @@ class _SingleChildViewport extends SingleChildRenderObjectWidget {
       axisDirection: axisDirection,
       offset: offset,
       clipBehavior: clipBehavior,
+      obscuredInsets: obscuredInsets,
     );
   }
 
@@ -330,7 +346,8 @@ class _SingleChildViewport extends SingleChildRenderObjectWidget {
     renderObject
       ..axisDirection = axisDirection
       ..offset = offset
-      ..clipBehavior = clipBehavior;
+      ..clipBehavior = clipBehavior
+      ..obscuredInsets = obscuredInsets;
   }
 
   @override
@@ -352,9 +369,11 @@ class _RenderSingleChildViewport extends RenderBox
     required ViewportOffset offset,
     RenderBox? child,
     required Clip clipBehavior,
+    EdgeInsets obscuredInsets = EdgeInsets.zero,
   }) : _axisDirection = axisDirection,
        _offset = offset,
-       _clipBehavior = clipBehavior {
+       _clipBehavior = clipBehavior,
+       _obscuredInsets = obscuredInsets {
     this.child = child;
   }
 
@@ -397,6 +416,16 @@ class _RenderSingleChildViewport extends RenderBox
       markNeedsPaint();
       markNeedsSemanticsUpdate();
     }
+  }
+
+  EdgeInsets get obscuredInsets => _obscuredInsets;
+  EdgeInsets _obscuredInsets;
+  set obscuredInsets(EdgeInsets value) {
+    if (value == _obscuredInsets) {
+      return;
+    }
+    _obscuredInsets = value;
+    markNeedsSemanticsUpdate();
   }
 
   void _hasScrolled() {
@@ -624,19 +653,48 @@ class _RenderSingleChildViewport extends RenderBox
     final Rect bounds = MatrixUtils.transformRect(transform, rect);
     final Size contentSize = child!.size;
 
+    final double leadingInsets = switch (axisDirection) {
+      AxisDirection.up => obscuredInsets.bottom,
+      AxisDirection.down => obscuredInsets.top,
+      AxisDirection.left => obscuredInsets.right,
+      AxisDirection.right => obscuredInsets.left,
+    };
+    final double trailingInsets = switch (axisDirection) {
+      AxisDirection.up => obscuredInsets.top,
+      AxisDirection.down => obscuredInsets.bottom,
+      AxisDirection.left => obscuredInsets.left,
+      AxisDirection.right => obscuredInsets.right,
+    };
+
     final (
       double mainAxisExtent,
       double leadingScrollOffset,
       double targetMainAxisExtent,
     ) = switch (axisDirection) {
-      AxisDirection.up => (size.height, contentSize.height - bounds.bottom, bounds.height),
-      AxisDirection.left => (size.width, contentSize.width - bounds.right, bounds.width),
-      AxisDirection.right => (size.width, bounds.left, bounds.width),
-      AxisDirection.down => (size.height, bounds.top, bounds.height),
+      AxisDirection.up => (
+        size.height - leadingInsets - trailingInsets,
+        contentSize.height - bounds.bottom,
+        bounds.height,
+      ),
+      AxisDirection.left => (
+        size.width - leadingInsets - trailingInsets,
+        contentSize.width - bounds.right,
+        bounds.width,
+      ),
+      AxisDirection.right => (
+        size.width - leadingInsets - trailingInsets,
+        bounds.left,
+        bounds.width,
+      ),
+      AxisDirection.down => (
+        size.height - leadingInsets - trailingInsets,
+        bounds.top,
+        bounds.height,
+      ),
     };
 
     final double targetOffset =
-        leadingScrollOffset - (mainAxisExtent - targetMainAxisExtent) * alignment;
+        leadingScrollOffset - leadingInsets - (mainAxisExtent - targetMainAxisExtent) * alignment;
     final Rect targetRect = bounds.shift(_paintOffsetForPosition(targetOffset));
     return RevealedOffset(offset: targetOffset, rect: targetRect);
   }

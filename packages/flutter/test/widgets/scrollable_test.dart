@@ -1798,6 +1798,59 @@ void main() {
     );
     expect(tester.getSize(find.byType(Scrollable)), Size.zero);
   });
+
+  testWidgets('Scrollable respects obscuredInsets when revealing', (WidgetTester tester) async {
+    final ScrollController controller = ScrollController();
+    addTearDown(controller.dispose);
+
+    // Viewport height is 600.
+    // Obscured inset at bottom is 100.
+    // Usable height is 500.
+    // We have 10 items, each 100 high. Total height 1000.
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: SizedBox(
+            height: 600,
+            width: 400,
+            child: ListView.builder(
+              controller: controller,
+              itemCount: 10,
+              itemBuilder: (BuildContext context, int index) {
+                return Container(
+                  key: ValueKey<int>(index),
+                  height: 100,
+                  color: index.isEven ? const Color(0xFF00FF00) : const Color(0xFF0000FF),
+                  child: Text('Item $index'),
+                );
+              },
+              obscuredInsets: const EdgeInsets.only(bottom: 100),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Initial offset is 0.
+    expect(controller.offset, 0.0);
+
+    // We want to reveal Item 5 (offset 500 to 600).
+    // Since usable height is 500 (600 - 100), Item 5 (which starts at 500) is just offscreen in the usable area.
+    // If we call ensureVisible on Item 5:
+    // We want its bottom (600) to be at the bottom of the usable area (500).
+    // So it should scroll until the item bottom is at y = 500.
+    // Item bottom is at content offset 600.
+    // If it is at y = 500, the viewport top must be at `600 - 500 = 100`.
+    // So controller offset should become 100.
+
+    final RenderObject item5 = tester.renderObject(find.byKey(const ValueKey<int>(5)));
+    item5.showOnScreen(rect: item5.paintBounds, duration: Duration.zero);
+    await tester.pumpAndSettle();
+
+    // With obscuredInsets bottom 100, it should scroll to 100 to bring Item 5 fully into the usable area.
+    expect(controller.offset, 100.0);
+  });
 }
 
 // ignore: must_be_immutable
