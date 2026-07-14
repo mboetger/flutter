@@ -481,6 +481,9 @@ import java.util.Set;
     Log.v(TAG, "onStart()");
     ensureAlive();
     doInitialFlutterViewRun();
+    if (host.shouldDispatchAppLifecycleState() && flutterEngine != null) {
+      flutterEngine.getLifecycleChannel().appIsInactive();
+    }
     // This is a workaround for a bug on some OnePlus phones. The visibility of the application
     // window is still true after locking the screen on some OnePlus phones, and shows a black
     // screen when unlocked. We can work around this by changing the visibility of FlutterView in
