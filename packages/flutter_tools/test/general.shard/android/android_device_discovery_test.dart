@@ -607,6 +607,34 @@ my device (2)          device product:model
       expect(devices.first.id, 'my device (2)');
     },
   );
+
+  testWithoutContext(
+    'AndroidDevices can parse output for single-space wireless adb devices (reproduction test for #189430)',
+    () async {
+      final androidDevices = AndroidDevices(
+        userMessages: UserMessages(),
+        androidWorkflow: androidWorkflow,
+        androidSdk: FakeAndroidSdk(),
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          const FakeCommand(
+            command: <String>['adb', 'devices', '-l'],
+            stdout: '''
+List of devices attached
+adb-0123456789abcdef._adb-tls-connect._tcp device product:socrates model:22127RK46C device:socrates transport_id:1
+''',
+          ),
+        ]),
+        platform: FakePlatform(),
+        fileSystem: MemoryFileSystem.test(),
+      );
+
+      final List<Device> devices = await androidDevices.pollingGetDevices();
+
+      expect(devices, hasLength(1));
+      expect(devices.first.id, 'adb-0123456789abcdef._adb-tls-connect._tcp');
+    },
+  );
 }
 
 class FakeAndroidSdk extends Fake implements AndroidSdk {

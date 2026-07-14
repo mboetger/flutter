@@ -112,19 +112,29 @@ class AndroidDevices extends PollingDeviceDiscovery {
 
   // Parses the output of `adb devices -l`.
   //
-  // The regex is structured as:
-  // 1. Group 1 (Serial): Lazily matched to allow spaces in the serial (which
-  //    can happen during wireless ADB mDNS name conflicts, e.g., "device (2)").
-  //    The column separator requires at least two spaces or a tab to prevent
-  //    single spaces within a serial from being mis-matched.
-  // 2. Group 2 (State): Matches known ADB device states explicitly, including
+  // The regex is structured to support serials both with and without spaces,
+  // matching the longest serial name.
+  //
+  // 1. Alternation for Serial:
+  //    - Group 1 (Serial with spaces): Lazily matched to allow spaces in the
+  //      serial (which can happen during wireless ADB mDNS name conflicts,
+  //      e.g., "device (2)"). Requires at least two spaces or a tab after it
+  //      to prevent single spaces within the serial from being mis-matched.
+  //    - Group 2 (Serial without spaces): Matched if the serial contains no
+  //      spaces, followed by one or more spaces/tabs. This handles wireless
+  //      ADB devices whose long serials result in a single-space separator.
+  // 2. Group 3 (State): Matches known ADB device states explicitly, including
   //    "no permissions" (which contains a space). Explicitly listing states
   //    prevents false positive state matching on extra device info/attributes
   //    or serial name components.
-  // 3. Group 3 (Extra Info): Optional trailing details (e.g. key:value pairs
+  // 3. Group 4 (Extra Info): Optional trailing details (e.g. key:value pairs
   //    like "product:mokey model:mokey device:mokey transport_id:1" or "usb:123").
   static final _kDeviceRegex = RegExp(
-    r'^(.*?)(?:\s{2,}|\t+)'
+    r'^(?:'
+    r'(.*?)(?:\s{2,}|\t+)'
+    r'|'
+    r'([^\s]+)\s+'
+    r')'
     r'(device|offline|unauthorized|no permissions|bootloader|recovery|sideload|rescue|connecting|authorizing|host|unknown)'
     r'(?:\s+(.*)|$)',
   );
@@ -163,9 +173,9 @@ class AndroidDevices extends PollingDeviceDiscovery {
       if (_kDeviceRegex.hasMatch(line)) {
         final Match match = _kDeviceRegex.firstMatch(line)!;
 
-        final String deviceID = match[1]!;
-        final String deviceState = match[2]!;
-        String? rest = match[3];
+        final String deviceID = (match[1] ?? match[2])!;
+        final String deviceState = match[3]!;
+        String? rest = match[4];
 
         final info = <String, String>{};
         if (rest != null && rest.isNotEmpty) {
