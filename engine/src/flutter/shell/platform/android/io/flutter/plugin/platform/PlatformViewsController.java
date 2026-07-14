@@ -718,6 +718,9 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         parsePointerPropertiesList(touch.rawPointerPropertiesList)
             .toArray(new PointerProperties[touch.pointerCount]);
 
+    int sanitizedAction =
+        sanitizeAction(touch.action, touch.pointerCount, trackedEvent, pointerProperties);
+
     if (!usingVirtualDisplay && trackedEvent != null) {
       // We have the original event. Check if pointer counts and actions match.
       if (trackedEvent.getPointerCount() == touch.pointerCount
@@ -738,7 +741,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
       return MotionEvent.obtain(
           trackedEvent.getDownTime(),
           trackedEvent.getEventTime(),
-          touch.action, // Use framework's action
+          sanitizedAction,
           touch.pointerCount, // Use framework's pointer count
           pointerProperties,
           pointerCoords,
@@ -757,7 +760,7 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     return MotionEvent.obtain(
         touch.downTime.longValue(),
         touch.eventTime.longValue(),
-        touch.action,
+        sanitizedAction,
         touch.pointerCount,
         pointerProperties,
         pointerCoords,
@@ -769,6 +772,54 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         touch.edgeFlags,
         touch.source,
         touch.flags);
+  }
+
+  private int sanitizeAction(
+      int action,
+      int pointerCount,
+      MotionEvent trackedEvent,
+      PointerProperties[] pointerProperties) {
+    int actionMasked = action & MotionEvent.ACTION_MASK;
+    int actionPointerIndex =
+        (action & MotionEvent.ACTION_POINTER_INDEX_MASK) >> MotionEvent.ACTION_POINTER_INDEX_SHIFT;
+
+    if (actionMasked == MotionEvent.ACTION_POINTER_DOWN
+        || actionMasked == MotionEvent.ACTION_POINTER_UP) {
+      int newPointerIndex = -1;
+      if (trackedEvent != null && actionPointerIndex < trackedEvent.getPointerCount()) {
+        try {
+          int originalPointerId = trackedEvent.getPointerId(actionPointerIndex);
+          for (int i = 0; i < pointerProperties.length; i++) {
+            if (pointerProperties[i].id == originalPointerId) {
+              newPointerIndex = i;
+              break;
+            }
+          }
+        } catch (IllegalArgumentException e) {
+          // ignore
+        }
+      }
+
+      if (newPointerIndex != -1) {
+        return (newPointerIndex << MotionEvent.ACTION_POINTER_INDEX_SHIFT) | actionMasked;
+      } else if (actionPointerIndex >= pointerCount) {
+        if (pointerCount == 1) {
+          if (actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+            return MotionEvent.ACTION_DOWN;
+          } else if (actionMasked == MotionEvent.ACTION_POINTER_UP) {
+            return MotionEvent.ACTION_UP;
+          }
+        } else {
+          int safeIndex = pointerCount - 1;
+          return (safeIndex << MotionEvent.ACTION_POINTER_INDEX_SHIFT) | actionMasked;
+        }
+      }
+    } else {
+      if (actionPointerIndex >= pointerCount) {
+        return actionMasked;
+      }
+    }
+    return action;
   }
 
   public PlatformViewsController() {

@@ -856,6 +856,91 @@ public class PlatformViewsControllerTest {
   }
 
   @Test
+  public void toMotionEvent_sanitizesPointerIndexOutOfBounds() {
+    MotionEventTracker motionEventTracker = MotionEventTracker.getInstance();
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+
+    // Original event with 2 pointers, ACTION_POINTER_UP for the second pointer (index 1)
+    MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[2];
+    properties[0] = new MotionEvent.PointerProperties();
+    properties[0].id = 0;
+    properties[0].toolType = MotionEvent.TOOL_TYPE_FINGER;
+    properties[1] = new MotionEvent.PointerProperties();
+    properties[1].id = 1;
+    properties[1].toolType = MotionEvent.TOOL_TYPE_FINGER;
+
+    MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[2];
+    coords[0] = new MotionEvent.PointerCoords();
+    coords[0].x = 100;
+    coords[0].y = 100;
+    coords[1] = new MotionEvent.PointerCoords();
+    coords[1].x = 200;
+    coords[1].y = 200;
+
+    int actionPointerUpIndex1 =
+        MotionEvent.ACTION_POINTER_UP | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT);
+
+    MotionEvent original =
+        MotionEvent.obtain(
+            10, // downTime
+            10, // eventTime
+            actionPointerUpIndex1,
+            2, // pointerCount
+            properties,
+            coords,
+            0,
+            0,
+            1.0f,
+            1.0f,
+            0,
+            0,
+            0,
+            0);
+
+    MotionEventTracker.MotionEventId motionEventId = motionEventTracker.track(original);
+
+    // Framework filtered to 1 pointer (e.g. only pointer 0 remains)
+    List<List<Integer>> frameworkPointerProperties =
+        Arrays.asList(Arrays.asList(0, MotionEvent.TOOL_TYPE_FINGER));
+
+    List<List<Double>> frameworkPointerCoords =
+        Arrays.asList(Arrays.asList(0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 100.0, 100.0));
+
+    PlatformViewTouch touch =
+        new PlatformViewTouch(
+            0, // viewId
+            original.getDownTime(),
+            original.getEventTime(),
+            actionPointerUpIndex1, // Action still has index 1!
+            1, // pointerCount - mismatch! (original has 2, framework filtered to 1)
+            frameworkPointerProperties,
+            frameworkPointerCoords,
+            original.getMetaState(),
+            original.getButtonState(),
+            original.getXPrecision(),
+            original.getYPrecision(),
+            original.getDeviceId(),
+            original.getEdgeFlags(),
+            original.getSource(),
+            original.getFlags(),
+            motionEventId.getId());
+
+    MotionEvent resolvedEvent =
+        platformViewsController.toMotionEvent(
+            1, // density
+            touch,
+            false // usingVirtualDisplays
+            );
+
+    int resolvedAction = resolvedEvent.getAction();
+    int actionPointerIndex =
+        (resolvedAction & MotionEvent.ACTION_POINTER_INDEX_MASK)
+            >> MotionEvent.ACTION_POINTER_INDEX_SHIFT;
+
+    assertTrue(actionPointerIndex < resolvedEvent.getPointerCount());
+  }
+
+  @Test
   @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
   public void getPlatformViewById_hybridComposition() {
     PlatformViewsController platformViewsController = new PlatformViewsController();
