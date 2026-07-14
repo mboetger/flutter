@@ -971,6 +971,7 @@ void Shell::OnPlatformViewCreated(std::unique_ptr<Surface> surface) {
   // This incorrect assumption can lead to deadlock.
   // See `should_post_raster_task` for more.
   rasterizer_->DisableThreadMergerIfNeeded();
+  rasterizer_->TeardownExternalViewEmbedder();
 
   // The normal flow executed by this method is that the platform thread is
   // starting the sequence and waiting on the latch. Later the UI thread posts

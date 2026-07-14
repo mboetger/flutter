@@ -1696,6 +1696,52 @@ public class PlatformViewsControllerTest {
   }
 
   @Test
+  @Config(shadows = {ShadowFlutterSurfaceView.class, ShadowFlutterJNI.class})
+  public void cachedEngineReusedWithOverlaySurfaces_doesNotThrow() {
+    final PlatformViewsController platformViewsController = new PlatformViewsController();
+
+    final int platformViewId = 0;
+    assertNull(platformViewsController.getPlatformViewById(platformViewId));
+
+    final PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    final PlatformView platformView = mock(PlatformView.class);
+    when(platformView.getView()).thenReturn(mock(View.class));
+    when(viewFactory.create(any(), eq(platformViewId), any())).thenReturn(platformView);
+
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+
+    final FlutterJNI jni = new FlutterJNI();
+    jni.attachToNative();
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+
+    final FlutterView flutterView = mock(FlutterView.class);
+    platformViewsController.attachToView(flutterView);
+
+    final PlatformOverlayView overlayImageView = mock(PlatformOverlayView.class);
+    when(overlayImageView.acquireLatestImage()).thenReturn(true);
+
+    final FlutterOverlaySurface overlaySurface =
+        platformViewsController.createOverlaySurface(overlayImageView);
+
+    platformViewsController.onDisplayOverlaySurface(
+        overlaySurface.getId(), /* x=*/ 0, /* y=*/ 0, /* width=*/ 10, /* height=*/ 10);
+
+    platformViewsController.detachFromView();
+    platformViewsController.detach();
+
+    final FlutterView newFlutterView = mock(FlutterView.class);
+    platformViewsController.setFlutterJNI(jni);
+    attach(jni, platformViewsController);
+    platformViewsController.attachToView(newFlutterView);
+
+    platformViewsController.onDisplayOverlaySurface(
+        overlaySurface.getId(), /* x=*/ 0, /* y=*/ 0, /* width=*/ 10, /* height=*/ 10);
+
+    verify(newFlutterView, never()).addView(any());
+  }
+
+  @Test
   public void checkInputConnectionProxy_falseIfViewIsNull() {
     final PlatformViewsController platformViewsController = new PlatformViewsController();
     boolean shouldProxying = platformViewsController.checkInputConnectionProxy(null);
