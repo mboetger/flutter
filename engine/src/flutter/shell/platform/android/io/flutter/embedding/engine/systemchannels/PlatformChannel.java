@@ -105,8 +105,18 @@ public class PlatformChannel {
                 break;
               case "SystemChrome.setEnabledSystemUIMode":
                 try {
-                  SystemUiMode mode = decodeSystemUiMode((String) arguments);
-                  platformMessageHandler.showSystemUiMode(mode);
+                  SystemUiMode mode;
+                  SystemUiLayoutCutoutMode cutoutMode = null;
+                  if (arguments instanceof String) {
+                    mode = decodeSystemUiMode((String) arguments);
+                  } else {
+                    JSONObject args = (JSONObject) arguments;
+                    mode = decodeSystemUiMode(args.getString("mode"));
+                    if (!args.isNull("cutoutMode")) {
+                      cutoutMode = decodeSystemUiLayoutCutoutMode(args.getString("cutoutMode"));
+                    }
+                  }
+                  platformMessageHandler.showSystemUiMode(mode, cutoutMode);
                   result.success(null);
                 } catch (JSONException | NoSuchFieldException exception) {
                   // JSONException: One or more expected fields were either omitted or referenced an
@@ -375,6 +385,33 @@ public class PlatformChannel {
   }
 
   /**
+   * Decodes an object of JSON-encoded display cutout mode to a {@link SystemUiLayoutCutoutMode}.
+   *
+   * @throws JSONException if {@code encodedSystemUiLayoutCutoutMode} does not contain expected keys
+   *     and value types.
+   * @throws NoSuchFieldException if any of the given encoded mode name is invalid.
+   */
+  @NonNull
+  private SystemUiLayoutCutoutMode decodeSystemUiLayoutCutoutMode(
+      @NonNull String encodedSystemUiLayoutCutoutMode)
+      throws JSONException, NoSuchFieldException {
+    SystemUiLayoutCutoutMode mode =
+        SystemUiLayoutCutoutMode.fromValue(encodedSystemUiLayoutCutoutMode);
+    switch (mode) {
+      case DEFAULT:
+        return SystemUiLayoutCutoutMode.DEFAULT;
+      case SHORT_EDGES:
+        return SystemUiLayoutCutoutMode.SHORT_EDGES;
+      case NEVER:
+        return SystemUiLayoutCutoutMode.NEVER;
+      case ALWAYS:
+        return SystemUiLayoutCutoutMode.ALWAYS;
+    }
+
+    return SystemUiLayoutCutoutMode.DEFAULT;
+  }
+
+  /**
    * Decodes a JSON-encoded {@code encodedStyle} to a {@link SystemChromeStyle}.
    *
    * @throws JSONException if {@code encodedStyle} does not contain expected keys and value types.
@@ -493,6 +530,15 @@ public class PlatformChannel {
      * be set to transparent, making the buttons and icons hover over the fullscreen application.
      */
     void showSystemUiMode(@NonNull SystemUiMode mode);
+
+    /**
+     * The Flutter application would like the Android system to display the given {@code mode}
+     * with the specified {@code cutoutMode}.
+     */
+    default void showSystemUiMode(
+        @NonNull SystemUiMode mode, @Nullable SystemUiLayoutCutoutMode cutoutMode) {
+      showSystemUiMode(mode);
+    }
 
     /**
      * The Flutter application would like the Android system to notify the framework when the system
@@ -692,6 +738,31 @@ public class PlatformChannel {
 
     /** Returns the encoded {@link SystemUiMode} */
     SystemUiMode(@NonNull String encodedName) {
+      this.encodedName = encodedName;
+    }
+  }
+
+  /** The set of Android display cutout modes as perceived by the Flutter application. */
+  public enum SystemUiLayoutCutoutMode {
+    DEFAULT("SystemUiLayoutCutoutMode.defaultMode"),
+    SHORT_EDGES("SystemUiLayoutCutoutMode.shortEdges"),
+    NEVER("SystemUiLayoutCutoutMode.never"),
+    ALWAYS("SystemUiLayoutCutoutMode.always");
+
+    @NonNull
+    static SystemUiLayoutCutoutMode fromValue(@NonNull String encodedName)
+        throws NoSuchFieldException {
+      for (SystemUiLayoutCutoutMode mode : SystemUiLayoutCutoutMode.values()) {
+        if (mode.encodedName.equals(encodedName)) {
+          return mode;
+        }
+      }
+      throw new NoSuchFieldException("No such SystemUiLayoutCutoutMode: " + encodedName);
+    }
+
+    @NonNull private final String encodedName;
+
+    SystemUiLayoutCutoutMode(@NonNull String encodedName) {
       this.encodedName = encodedName;
     }
   }

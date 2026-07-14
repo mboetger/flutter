@@ -106,7 +106,14 @@ public class PlatformPlugin {
 
         @Override
         public void showSystemUiMode(@NonNull PlatformChannel.SystemUiMode mode) {
-          setSystemChromeEnabledSystemUIMode(mode);
+          setSystemChromeEnabledSystemUIMode(mode, null);
+        }
+
+        @Override
+        public void showSystemUiMode(
+            @NonNull PlatformChannel.SystemUiMode mode,
+            @Nullable PlatformChannel.SystemUiLayoutCutoutMode cutoutMode) {
+          setSystemChromeEnabledSystemUIMode(mode, cutoutMode);
         }
 
         @Override
@@ -278,13 +285,19 @@ public class PlatformPlugin {
         });
   }
 
-  private void setSystemChromeEnabledSystemUIMode(PlatformChannel.SystemUiMode systemUiMode) {
+  private void setSystemChromeEnabledSystemUIMode(
+      PlatformChannel.SystemUiMode systemUiMode,
+      @Nullable PlatformChannel.SystemUiLayoutCutoutMode cutoutMode) {
     int enabledOverlays;
 
     // If we were previously in edge-to-edge mode and are switching to a different mode,
     // restore the default window inset behavior.
     if (systemUiMode != PlatformChannel.SystemUiMode.EDGE_TO_EDGE) {
       disableEdgeToEdge();
+    }
+
+    if (cutoutMode != null) {
+      applyCutoutMode(cutoutMode);
     }
 
     if (systemUiMode == PlatformChannel.SystemUiMode.LEAN_BACK) {
@@ -385,6 +398,37 @@ public class PlatformPlugin {
 
     mEnabledOverlays = enabledOverlays;
     updateSystemUiOverlays();
+  }
+
+  private void applyCutoutMode(@NonNull PlatformChannel.SystemUiLayoutCutoutMode cutoutMode) {
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_28) {
+      Window window = activity.getWindow();
+      WindowManager.LayoutParams lp = window.getAttributes();
+      switch (cutoutMode) {
+        case DEFAULT:
+          lp.layoutInDisplayCutoutMode =
+              WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+          break;
+        case SHORT_EDGES:
+          lp.layoutInDisplayCutoutMode =
+              WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+          break;
+        case NEVER:
+          lp.layoutInDisplayCutoutMode =
+              WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
+          break;
+        case ALWAYS:
+          if (Build.VERSION.SDK_INT >= API_LEVELS.API_30) {
+            lp.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+          } else {
+            lp.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+          }
+          break;
+      }
+      window.setAttributes(lp);
+    }
   }
 
   private void setSystemChromeEnabledSystemUIOverlays(

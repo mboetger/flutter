@@ -226,6 +226,35 @@ enum SystemUiMode {
   manual,
 }
 
+/// Specifies the display cutout mode for Android devices in fullscreen.
+///
+/// Used by [SystemChrome.setEnabledSystemUIMode].
+enum SystemUiLayoutCutoutMode {
+  /// The window is allowed to extend into the cutout area only if the cutout is
+  /// completely contained within a system bar. Otherwise, the window is laid out
+  /// such that it does not overlap with the display cutout area.
+  ///
+  /// Corresponds to Android's `LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT`.
+  defaultMode,
+
+  /// The window is always allowed to extend into the DisplayCutout areas on the
+  /// short edges of the screen.
+  ///
+  /// Corresponds to Android's `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`.
+  shortEdges,
+
+  /// The window is never allowed to overlap with the DisplayCutout area.
+  ///
+  /// Corresponds to Android's `LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER`.
+  never,
+
+  /// The window is always allowed to extend into the DisplayCutout areas,
+  /// both in portrait and landscape orientations.
+  ///
+  /// Corresponds to Android's `LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`.
+  always,
+}
+
 /// Specifies a preference for the style of the system overlays.
 ///
 /// Used by [AppBar.systemOverlayStyle] for declaratively setting the style of
@@ -609,12 +638,23 @@ abstract final class SystemChrome {
   static Future<void> setEnabledSystemUIMode(
     SystemUiMode mode, {
     List<SystemUiOverlay>? overlays,
+    SystemUiLayoutCutoutMode? cutoutMode,
   }) async {
     if (mode != SystemUiMode.manual) {
-      await SystemChannels.platform.invokeMethod<void>(
-        'SystemChrome.setEnabledSystemUIMode',
-        mode.toString(),
-      );
+      if (cutoutMode == null) {
+        await SystemChannels.platform.invokeMethod<void>(
+          'SystemChrome.setEnabledSystemUIMode',
+          mode.toString(),
+        );
+      } else {
+        await SystemChannels.platform.invokeMethod<void>(
+          'SystemChrome.setEnabledSystemUIMode',
+          <String, dynamic>{
+            'mode': mode.toString(),
+            'cutoutMode': cutoutMode.toString(),
+          },
+        );
+      }
     } else {
       assert(mode == SystemUiMode.manual && overlays != null);
       await SystemChannels.platform.invokeMethod<void>(

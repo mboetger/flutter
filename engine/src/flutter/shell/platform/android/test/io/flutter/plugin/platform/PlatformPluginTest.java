@@ -960,4 +960,101 @@ public class PlatformPluginTest {
     verify(fakeDecorView).performHapticFeedback(HapticFeedbackConstants.REJECT);
     clearInvocations(fakeDecorView);
   }
+
+  @Config(sdk = API_LEVELS.API_28)
+  @Test
+  public void showSystemUiMode_setsCutoutModeShortEdges() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    WindowManager.LayoutParams mockLayoutParams = new WindowManager.LayoutParams();
+    mockLayoutParams.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(fakeWindow.getAttributes()).thenReturn(mockLayoutParams);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+        PlatformChannel.SystemUiMode.LEAN_BACK,
+        PlatformChannel.SystemUiLayoutCutoutMode.SHORT_EDGES
+    );
+
+    assertEquals(
+        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES,
+        mockLayoutParams.layoutInDisplayCutoutMode
+    );
+  }
+
+  @Config(sdk = API_LEVELS.API_28)
+  @Test
+  public void showSystemUiMode_setsCutoutModeNever() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    WindowManager.LayoutParams mockLayoutParams = new WindowManager.LayoutParams();
+    mockLayoutParams.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(fakeWindow.getAttributes()).thenReturn(mockLayoutParams);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+        PlatformChannel.SystemUiMode.LEAN_BACK,
+        PlatformChannel.SystemUiLayoutCutoutMode.NEVER
+    );
+
+    assertEquals(
+        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER,
+        mockLayoutParams.layoutInDisplayCutoutMode
+    );
+  }
+
+  @Config(sdk = API_LEVELS.API_30)
+  @Test
+  public void showSystemUiMode_setsCutoutModeAlways() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    WindowManager.LayoutParams mockLayoutParams = new WindowManager.LayoutParams();
+    mockLayoutParams.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(fakeWindow.getAttributes()).thenReturn(mockLayoutParams);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+        PlatformChannel.SystemUiMode.LEAN_BACK,
+        PlatformChannel.SystemUiLayoutCutoutMode.ALWAYS
+    );
+
+    assertEquals(
+        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS,
+        mockLayoutParams.layoutInDisplayCutoutMode
+    );
+  }
+
+  @Config(sdk = API_LEVELS.API_28)
+  @Test
+  public void showSystemUiMode_setsCutoutModeAlwaysFallbackToShortEdges() {
+    View fakeDecorView = mock(View.class);
+    Window fakeWindow = mock(Window.class);
+    Activity mockActivity = mock(Activity.class);
+    WindowManager.LayoutParams mockLayoutParams = new WindowManager.LayoutParams();
+    mockLayoutParams.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+    when(fakeWindow.getDecorView()).thenReturn(fakeDecorView);
+    when(fakeWindow.getAttributes()).thenReturn(mockLayoutParams);
+    when(mockActivity.getWindow()).thenReturn(fakeWindow);
+    PlatformPlugin platformPlugin = new PlatformPlugin(mockActivity, mockPlatformChannel);
+
+    platformPlugin.mPlatformMessageHandler.showSystemUiMode(
+        PlatformChannel.SystemUiMode.LEAN_BACK,
+        PlatformChannel.SystemUiLayoutCutoutMode.ALWAYS
+    );
+
+    assertEquals(
+        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES,
+        mockLayoutParams.layoutInDisplayCutoutMode
+    );
+  }
 }
+
