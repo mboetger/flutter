@@ -546,13 +546,31 @@ the configured path by running this command: flutter config --android-studio-dir
         javaPath = globals.fs.path.join(directory, 'jre', 'Contents', 'Home');
         // See https://github.com/flutter/flutter/issues/125246 for more context.
       } else {
-        javaPath = globals.fs.path.join(directory, 'jbr', 'Contents', 'Home');
+        final String jbrPath = globals.fs.path.join(directory, 'jbr', 'Contents', 'Home');
+        final String jrePath = globals.fs.path.join(directory, 'jre', 'Contents', 'Home');
+        final String jreJdkPath = globals.fs.path.join(directory, 'jre', 'jdk', 'Contents', 'Home');
+        if (version == null && !globals.fs.isDirectorySync(jbrPath) &&
+            (globals.fs.isDirectorySync(jrePath) || globals.fs.isDirectorySync(jreJdkPath))) {
+          if (globals.fs.isDirectorySync(jrePath)) {
+            javaPath = jrePath;
+          } else {
+            javaPath = jreJdkPath;
+          }
+        } else {
+          javaPath = jbrPath;
+        }
       }
     } else {
       if (version != null && version!.major < 2022) {
         javaPath = globals.fs.path.join(directory, 'jre');
       } else {
-        javaPath = globals.fs.path.join(directory, 'jbr');
+        final String jbrPath = globals.fs.path.join(directory, 'jbr');
+        final String jrePath = globals.fs.path.join(directory, 'jre');
+        if (version == null && !globals.fs.isDirectorySync(jbrPath) && globals.fs.isDirectorySync(jrePath)) {
+          javaPath = jrePath;
+        } else {
+          javaPath = jbrPath;
+        }
       }
     }
     final String javaExecutable = globals.fs.path.join(javaPath, 'bin', 'java');

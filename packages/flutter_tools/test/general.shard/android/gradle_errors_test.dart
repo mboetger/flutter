@@ -1381,16 +1381,16 @@ Could not compile build file '…/example/android/build.gradle'.
           usesAndroidX: true,
         );
 
-        // Ensure the error notes the incompatible Gradle/AGP/Java versions, links to related resources,
-        // and a portion of the path to where to change their gradle version.
+        final String normalizedStatusText = testLogger.statusText
+            .replaceAll(RegExp(r'[┌─┐│└┘]'), '')
+            .replaceAll(RegExp(r'\s+'), ' ');
         expect(
-          testLogger.statusText,
-          contains('Gradle version is incompatible with the Java version'),
+          normalizedStatusText,
+          contains('Your build failed because you are using a version of Java that is incompatible with the Gradle version used in the current project.'),
         );
-        expect(testLogger.statusText, contains('gradle-wrapper.properties'));
         expect(
-          testLogger.statusText,
-          contains('https://docs.gradle.org/current/userguide/compatibility.html#java'),
+          normalizedStatusText,
+          contains('To fix this problem, go to https://'),
         );
       },
       overrides: <Type, Generator>{

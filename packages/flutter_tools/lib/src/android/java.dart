@@ -82,38 +82,162 @@ class Java {
       platform: platform,
       processManager: processManager,
     );
-    final _JavaHomePathWithSource? home = _findJavaHome(
-      config: config,
-      logger: logger,
-      androidStudio: androidStudio,
-      platform: platform,
-    );
-    final String? binary = _findJavaBinary(
-      logger: logger,
-      javaHome: home?.path,
-      fileSystem: fileSystem,
-      operatingSystemUtils: os,
-      platform: platform,
-    );
 
-    if (binary == null) {
-      return null;
+    final List<Java> candidates = <Java>[];
+
+    // 1. Configured
+    final Object? configuredPath = config.getValue('jdk-dir');
+    if (configuredPath is String) {
+      final String binary = fileSystem.path.join(configuredPath, 'bin', 'java');
+      final Java java = Java(
+        javaHome: configuredPath,
+        binaryPath: binary,
+        javaSource: JavaSource.flutterConfig,
+        logger: logger,
+        fileSystem: fileSystem,
+        os: os,
+        platform: platform,
+        processManager: processManager,
+      );
+      if (java.canRun()) {
+        candidates.add(java);
+      }
     }
 
-    // If javaHome == null and binary is not null, it means that
-    // binary obtained from PATH as fallback.
-    final JavaSource javaSource = home?.source ?? JavaSource.path;
+    // 2. Android Studio
+    final String? studioJavaPath = androidStudio?.javaPath;
+    if (studioJavaPath != null) {
+      final String binary = fileSystem.path.join(studioJavaPath, 'bin', 'java');
+      final Java java = Java(
+        javaHome: studioJavaPath,
+        binaryPath: binary,
+        javaSource: JavaSource.androidStudio,
+        logger: logger,
+        fileSystem: fileSystem,
+        os: os,
+        platform: platform,
+        processManager: processManager,
+      );
+      if (java.canRun()) {
+        candidates.add(java);
+      }
+    }
 
-    return Java(
-      javaHome: home?.path,
-      binaryPath: binary,
-      javaSource: javaSource,
-      logger: logger,
-      fileSystem: fileSystem,
-      os: os,
-      platform: platform,
-      processManager: processManager,
-    );
+    // 3. JAVA_HOME
+    final String? javaHomeEnv = platform.environment[Java.javaHomeEnvironmentVariable];
+    if (javaHomeEnv != null) {
+      final String binary = fileSystem.path.join(javaHomeEnv, 'bin', 'java');
+      final Java java = Java(
+        javaHome: javaHomeEnv,
+        binaryPath: binary,
+        javaSource: JavaSource.javaHome,
+        logger: logger,
+        fileSystem: fileSystem,
+        os: os,
+        platform: platform,
+        processManager: processManager,
+      );
+      if (java.canRun()) {
+        candidates.add(java);
+      }
+    }
+
+    // Try to find the Gradle version.
+    Version? gradleVersion;
+    final List<String> possiblePaths = <String>[
+      fileSystem.path.join('android', 'gradle', 'wrapper', 'gradle-wrapper.properties'),
+      fileSystem.path.join('.android', 'gradle', 'wrapper', 'gradle-wrapper.properties'),
+      fileSystem.path.join('gradle', 'wrapper', 'gradle-wrapper.properties'),
+    ];
+    for (final String relativePath in possiblePaths) {
+      final File propertiesFile = fileSystem.file(
+        fileSystem.path.join(fileSystem.currentDirectory.path, relativePath),
+      );
+      if (propertiesFile.existsSync()) {
+        try {
+          final String content = propertiesFile.readAsStringSync();
+          final RegExpMatch? distributionUrl = RegExp(r'distributionUrl=(.*)', multiLine: true).firstMatch(content);
+          if (distributionUrl != null) {
+            final String? url = distributionUrl.group(1);
+            if (url != null) {
+              final List<String> parts = url.split('/');
+              if (parts.isNotEmpty) {
+                final String zipName = parts.last;
+                final List<String> zipParts = zipName.split('-');
+                if (zipParts.length >= 2) {
+                  final String decodedVersion = Uri.decodeComponent(zipParts[1]);
+                  gradleVersion = Version.parse(decodedVersion);
+                  if (gradleVersion != null) {
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } on Exception catch (e) {
+          logger.printTrace('Failed to parse Gradle version: $e');
+        }
+      }
+    }
+
+    Version? requiredJavaVersion;
+    if (gradleVersion != null) {
+      if (gradleVersion >= Version(8, 0, 0)) {
+        requiredJavaVersion = Version(17, 0, 0);
+      } else if (gradleVersion >= Version(7, 0, 0)) {
+        requiredJavaVersion = Version(11, 0, 0);
+      }
+    }
+
+    if (requiredJavaVersion != null) {
+      for (final Java candidate in candidates) {
+        final Version? candidateVersion = candidate.version;
+        if (candidateVersion != null && candidateVersion >= requiredJavaVersion) {
+          return candidate;
+        }
+      }
+    }
+
+    final bool needToSearchPath = candidates.isEmpty || (requiredJavaVersion != null);
+
+    if (needToSearchPath) {
+      // 4. PATH
+      final String? pathBinary = os.which(_javaExecutable)?.path;
+      if (pathBinary != null) {
+        String? javaHome;
+        if (fileSystem.path.basename(pathBinary) == _javaExecutable) {
+          final String binDir = fileSystem.path.dirname(pathBinary);
+          if (fileSystem.path.basename(binDir) == 'bin') {
+            javaHome = fileSystem.path.dirname(binDir);
+          }
+        }
+        final Java java = Java(
+          javaHome: javaHome,
+          binaryPath: pathBinary,
+          javaSource: JavaSource.path,
+          logger: logger,
+          fileSystem: fileSystem,
+          os: os,
+          platform: platform,
+          processManager: processManager,
+        );
+        if (java.canRun()) {
+          if (requiredJavaVersion != null) {
+            final Version? candidateVersion = java.version;
+            if (candidateVersion != null && candidateVersion >= requiredJavaVersion) {
+              return java;
+            }
+          }
+          candidates.add(java);
+        }
+      }
+    }
+
+    if (candidates.isNotEmpty) {
+      return candidates.first;
+    }
+
+    return null;
   }
 
   /// The path of the runtime environments' home directory.

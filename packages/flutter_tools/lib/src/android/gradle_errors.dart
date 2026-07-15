@@ -8,6 +8,7 @@ import '../base/error_handling_io.dart';
 import '../base/file_system.dart';
 import '../base/process.dart';
 import '../base/terminal.dart';
+import '../base/version.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
 import 'gradle_utils.dart' as utils;
@@ -519,7 +520,6 @@ final _unsupportedClassFileMajorVersionPattern = RegExp(
   r'Unsupported class file major version\s+\d+',
 );
 
-@visibleForTesting
 final incompatibleJavaAndGradleVersionsHandler = GradleHandledError(
   test: (String line) {
     return _unsupportedClassFileMajorVersionPattern.hasMatch(line);
@@ -527,15 +527,55 @@ final incompatibleJavaAndGradleVersionsHandler = GradleHandledError(
   handler:
       ({required String line, required FlutterProject project, required bool usesAndroidX}) async {
         final File gradlePropertiesFile = project.android.gradleWrapperPropertiesFile;
+        Version? gradleVersion;
+        if (gradlePropertiesFile.existsSync()) {
+          try {
+            final String content = gradlePropertiesFile.readAsStringSync();
+            final RegExpMatch? distributionUrl = RegExp(r'distributionUrl=(.*)', multiLine: true).firstMatch(content);
+            if (distributionUrl != null) {
+              final String? url = distributionUrl.group(1);
+              if (url != null) {
+                final List<String> parts = url.split('/');
+                if (parts.isNotEmpty) {
+                  final String zipName = parts.last;
+                  final List<String> zipParts = zipName.split('-');
+                  if (zipParts.length >= 2) {
+                    final String decodedVersion = Uri.decodeComponent(zipParts[1]);
+                    gradleVersion = Version.parse(decodedVersion);
+                  }
+                }
+              }
+            }
+          } on Exception {
+            // ignore
+          }
+        }
+
+        String javaVersionStr = '11';
+        if (gradleVersion != null) {
+          if (gradleVersion >= Version(8, 0, 0)) {
+            javaVersionStr = '17';
+          } else if (gradleVersion >= Version(7, 0, 0)) {
+            javaVersionStr = '11';
+          } else {
+            javaVersionStr = '8';
+          }
+        }
+
+        String downloadUrl = 'https://adoptium.net/temurin/releases/';
+        if (globals.platform.isMacOS) {
+          downloadUrl = 'https://adoptium.net/temurin/releases/?os=mac';
+        } else if (globals.platform.isWindows) {
+          downloadUrl = 'https://adoptium.net/temurin/releases/?os=windows';
+        } else if (globals.platform.isLinux) {
+          downloadUrl = 'https://adoptium.net/temurin/releases/?os=linux';
+        }
+
         globals.printBox(
-          "${globals.logger.terminal.warningMark} Your project's Gradle version "
-          'is incompatible with the Java version that Flutter is using for Gradle.\n\n'
-          'To fix this issue, first, check the Java version used by Flutter by '
-          'running `flutter doctor --verbose`.\n\n'
-          'Then, update the Gradle version specified in ${gradlePropertiesFile.path} '
-          'to be compatible with that Java version. '
-          'See the link below for more information on compatible Java/Gradle versions:\n'
-          '${AndroidProject.javaGradleCompatUrl}\n\n',
+          'Your build failed because you are using a version of Java that is incompatible '
+          'with the Gradle version used in the current project.\n'
+          'To fix this problem, go to $downloadUrl, and install Java $javaVersionStr.\n'
+          'Once installed, re-run this command.',
           title: _boxTitle,
         );
         return GradleBuildStatus.exit;
