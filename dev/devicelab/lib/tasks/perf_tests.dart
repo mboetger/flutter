@@ -1368,6 +1368,38 @@ class PerfTest {
       final String? localEngineHost = localEngineHostFromEnv;
       final String? localEngineSrcPath = localEngineSrcPathFromEnv;
 
+      final bool isAndroid =
+          deviceOperatingSystem == DeviceOperatingSystem.android ||
+          deviceOperatingSystem == DeviceOperatingSystem.androidArm ||
+          deviceOperatingSystem == DeviceOperatingSystem.androidArm64;
+
+      var androidGcCount = 0;
+      Process? logcatProcess;
+      StreamSubscription<String>? logcatSubscription;
+
+      if (isAndroid) {
+        try {
+          await exec(adbPath, <String>['-s', deviceId, 'logcat', '-c'], canFail: true);
+          logcatProcess = await startProcess(adbPath, <String>[
+            '-s',
+            deviceId,
+            'logcat',
+            'art:I',
+            '*:S',
+          ]);
+          logcatSubscription = logcatProcess.stdout
+              .transform<String>(utf8.decoder)
+              .transform<String>(const LineSplitter())
+              .listen((String line) {
+                if (line.contains('art') && line.contains('freed') && line.contains('GC')) {
+                  androidGcCount++;
+                }
+              });
+        } catch (e) {
+          print('Failed to start logcat: $e');
+        }
+      }
+
       if (createPlatforms.isNotEmpty) {
         // Ensure that the platform-specific manifests are freshly created and
         // do not contain any settings from previous runs.
@@ -1461,6 +1493,13 @@ class PerfTest {
         await resetManifest();
         await resetPlist();
         await selectedDevice.toggleFixedPerformanceMode(false);
+        if (logcatSubscription != null) {
+          await logcatSubscription.cancel();
+        }
+        if (logcatProcess != null) {
+          logcatProcess.kill();
+          await logcatProcess.exitCode;
+        }
       }
 
       final data =
@@ -1495,7 +1534,9 @@ class PerfTest {
           recordGPU = false;
       }
 
-      final isAndroid = deviceOperatingSystem == DeviceOperatingSystem.android;
+      if (isAndroid) {
+        data['android_gc_count'] = androidGcCount;
+      }
       return TaskResult.success(
         data,
         detailFiles: <String>[
@@ -1520,6 +1561,7 @@ class PerfTest {
                 if (data['99th_percentile_memory_usage'] != null) '99th_percentile_memory_usage',
               ],
               if (measureTotalGCTime) 'total_ui_gc_time',
+              if (isAndroid) ...<String>['android_gc_count'],
               if (data['30hz_frame_percentage'] != null) '30hz_frame_percentage',
               if (data['60hz_frame_percentage'] != null) '60hz_frame_percentage',
               if (data['80hz_frame_percentage'] != null) '80hz_frame_percentage',
