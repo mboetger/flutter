@@ -27,8 +27,12 @@
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/android/profiler_metrics_android.h"
+#include "flutter/shell/profiling/sampling_profiler.h"
 
 namespace flutter {
+
+static constexpr int kNumProfilerSamplesPerSec = 5;
 
 /// Inheriting ThreadConfigurer and use Android platform thread API to configure
 /// the thread priorities
@@ -94,6 +98,10 @@ AndroidShellHolder::AndroidShellHolder(
       Settings::MergedPlatformUIThread::kEnabled) {
     mask |= ThreadHost::Type::kUi;
   }
+#if FLUTTER_RUNTIME_MODE == FLUTTER_RUNTIME_MODE_DEBUG || \
+    FLUTTER_RUNTIME_MODE == FLUTTER_RUNTIME_MODE_PROFILE
+  mask |= ThreadHost::Type::kProfiler;
+#endif
 
   flutter::ThreadHost::ThreadHostConfig host_config(
       thread_label, mask, AndroidPlatformThreadConfigSetter);
@@ -176,6 +184,19 @@ AndroidShellHolder::AndroidShellHolder(
         },
         -1);
     FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
+#if FLUTTER_RUNTIME_MODE == FLUTTER_RUNTIME_MODE_DEBUG || \
+    FLUTTER_RUNTIME_MODE == FLUTTER_RUNTIME_MODE_PROFILE
+    if (thread_host_->profiler_thread) {
+      profiler_ = std::make_shared<SamplingProfiler>(
+          thread_label.c_str(), thread_host_->profiler_thread->GetTaskRunner(),
+          []() {
+            ProfilerMetricsAndroid profiler_metrics;
+            return profiler_metrics.GenerateSample();
+          },
+          kNumProfilerSamplesPerSec);
+      profiler_->Start();
+    }
+#endif
   }
 
   platform_view_ = weak_platform_view;

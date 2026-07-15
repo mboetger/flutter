@@ -18,6 +18,8 @@
 
 namespace flutter {
 
+class SamplingProfiler;
+
 //----------------------------------------------------------------------------
 /// @brief      This is the Android owner of the core engine Shell.
 ///
@@ -115,6 +117,7 @@ class AndroidShellHolder {
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
   std::shared_ptr<ThreadHost> thread_host_;
   std::unique_ptr<Shell> shell_;
+  std::shared_ptr<SamplingProfiler> profiler_;
   bool is_valid_ = false;
   uint64_t next_pointer_flow_id_ = 0;
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
