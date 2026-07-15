@@ -39,6 +39,7 @@ import io.flutter.plugin.localization.LocalizationPlugin;
 import io.flutter.plugin.platform.PlatformViewsController;
 import io.flutter.plugin.platform.PlatformViewsController2;
 import io.flutter.util.Preconditions;
+import io.flutter.util.TraceSection;
 import io.flutter.view.AccessibilityBridge;
 import io.flutter.view.FlutterCallbackInformation;
 import io.flutter.view.TextureRegistry;
@@ -202,13 +203,15 @@ public class FlutterJNI {
       @NonNull String engineCachesPath,
       long initTimeMillis,
       int apiLevel) {
-    if (FlutterJNI.initCalled) {
-      Log.w(TAG, "FlutterJNI.init called more than once");
-    }
+    try (TraceSection e = TraceSection.scoped("FlutterJNI#init")) {
+      if (FlutterJNI.initCalled) {
+        Log.w(TAG, "FlutterJNI.init called more than once");
+      }
 
-    FlutterJNI.nativeInit(
-        context, args, bundlePath, appStoragePath, engineCachesPath, initTimeMillis, apiLevel);
-    FlutterJNI.initCalled = true;
+      FlutterJNI.nativeInit(
+          context, args, bundlePath, appStoragePath, engineCachesPath, initTimeMillis, apiLevel);
+      FlutterJNI.initCalled = true;
+    }
   }
 
   private static boolean initCalled = false;
@@ -412,13 +415,15 @@ public class FlutterJNI {
    */
   @UiThread
   public void attachToNative() {
-    ensureRunningOnMainThread();
-    ensureNotAttachedToNative();
-    shellHolderLock.writeLock().lock();
-    try {
-      nativeShellHolderId = performNativeAttach(this);
-    } finally {
-      shellHolderLock.writeLock().unlock();
+    try (TraceSection e = TraceSection.scoped("FlutterJNI#attachToNative")) {
+      ensureRunningOnMainThread();
+      ensureNotAttachedToNative();
+      shellHolderLock.writeLock().lock();
+      try {
+        nativeShellHolderId = performNativeAttach(this);
+      } finally {
+        shellHolderLock.writeLock().unlock();
+      }
     }
   }
 
@@ -451,21 +456,23 @@ public class FlutterJNI {
       @Nullable String initialRoute,
       @Nullable List<String> entrypointArgs,
       long engineId) {
-    ensureRunningOnMainThread();
-    ensureAttachedToNative();
-    FlutterJNI spawnedJNI =
-        nativeSpawn(
-            nativeShellHolderId,
-            entrypointFunctionName,
-            pathToEntrypointFunction,
-            initialRoute,
-            entrypointArgs,
-            engineId);
-    Preconditions.checkState(
-        spawnedJNI.nativeShellHolderId != null && spawnedJNI.nativeShellHolderId != 0,
-        "Failed to spawn new JNI connected shell from existing shell.");
+    try (TraceSection e = TraceSection.scoped("FlutterJNI#spawn")) {
+      ensureRunningOnMainThread();
+      ensureAttachedToNative();
+      FlutterJNI spawnedJNI =
+          nativeSpawn(
+              nativeShellHolderId,
+              entrypointFunctionName,
+              pathToEntrypointFunction,
+              initialRoute,
+              entrypointArgs,
+              engineId);
+      Preconditions.checkState(
+          spawnedJNI.nativeShellHolderId != null && spawnedJNI.nativeShellHolderId != 0,
+          "Failed to spawn new JNI connected shell from existing shell.");
 
-    return spawnedJNI;
+      return spawnedJNI;
+    }
   }
 
   private native FlutterJNI nativeSpawn(
@@ -490,14 +497,17 @@ public class FlutterJNI {
    */
   @UiThread
   public void detachFromNativeAndReleaseResources() {
-    ensureRunningOnMainThread();
-    ensureAttachedToNative();
-    shellHolderLock.writeLock().lock();
-    try {
-      nativeDestroy(nativeShellHolderId);
-      nativeShellHolderId = null;
-    } finally {
-      shellHolderLock.writeLock().unlock();
+    try (TraceSection e =
+        TraceSection.scoped("FlutterJNI#detachFromNativeAndReleaseResources")) {
+      ensureRunningOnMainThread();
+      ensureAttachedToNative();
+      shellHolderLock.writeLock().lock();
+      try {
+        nativeDestroy(nativeShellHolderId);
+        nativeShellHolderId = null;
+      } finally {
+        shellHolderLock.writeLock().unlock();
+      }
     }
   }
 

@@ -47,6 +47,7 @@ import io.flutter.plugin.platform.PlatformViewsController2;
 import io.flutter.plugin.platform.PlatformViewsControllerDelegator;
 import io.flutter.plugin.text.ProcessTextPlugin;
 import io.flutter.util.ViewUtils;
+import io.flutter.util.TraceSection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -333,105 +334,106 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
       boolean automaticallyRegisterPlugins,
       boolean waitForRestorationData,
       @Nullable FlutterEngineGroup group) {
+    try (TraceSection e = TraceSection.scoped("FlutterEngine#Constructor")) {
+      this.engineId = nextEngineId++;
+      idToEngine.put(engineId, this);
 
-    this.engineId = nextEngineId++;
-    idToEngine.put(engineId, this);
+      AssetManager assetManager;
+      try {
+        assetManager = context.createPackageContext(context.getPackageName(), 0).getAssets();
+      } catch (NameNotFoundException e1) {
+        assetManager = context.getAssets();
+      }
 
-    AssetManager assetManager;
-    try {
-      assetManager = context.createPackageContext(context.getPackageName(), 0).getAssets();
-    } catch (NameNotFoundException e) {
-      assetManager = context.getAssets();
+      FlutterInjector injector = FlutterInjector.instance();
+
+      if (flutterJNI == null) {
+        flutterJNI = injector.getFlutterJNIFactory().provideFlutterJNI();
+      }
+      this.flutterJNI = flutterJNI;
+
+      this.dartExecutor = new DartExecutor(flutterJNI, assetManager, engineId);
+      this.dartExecutor.onAttachedToJNI();
+
+      DeferredComponentManager deferredComponentManager =
+          FlutterInjector.instance().deferredComponentManager();
+
+      accessibilityChannel = new AccessibilityChannel(dartExecutor, flutterJNI);
+      deferredComponentChannel = new DeferredComponentChannel(dartExecutor);
+      lifecycleChannel = new LifecycleChannel(dartExecutor);
+      localizationChannel = new LocalizationChannel(dartExecutor);
+      mouseCursorChannel = new MouseCursorChannel(dartExecutor);
+      navigationChannel = new NavigationChannel(dartExecutor);
+      backGestureChannel = new BackGestureChannel(dartExecutor);
+      platformChannel = new PlatformChannel(dartExecutor);
+      processTextChannel = new ProcessTextChannel(dartExecutor, context.getPackageManager());
+      restorationChannel = new RestorationChannel(dartExecutor, waitForRestorationData);
+      scribeChannel = new ScribeChannel(dartExecutor);
+      sensitiveContentChannel = new SensitiveContentChannel(dartExecutor);
+      settingsChannel = new SettingsChannel(dartExecutor);
+      spellCheckChannel = new SpellCheckChannel(dartExecutor);
+      systemChannel = new SystemChannel(dartExecutor);
+      textInputChannel = new TextInputChannel(dartExecutor);
+
+      if (deferredComponentManager != null) {
+        deferredComponentManager.setDeferredComponentChannel(deferredComponentChannel);
+      }
+
+      this.localizationPlugin = new LocalizationPlugin(context, localizationChannel);
+
+      if (flutterLoader == null) {
+        flutterLoader = injector.flutterLoader();
+      }
+
+      if (!flutterJNI.isAttached()) {
+        flutterLoader.startInitialization(context.getApplicationContext());
+        flutterLoader.ensureInitializationComplete(context, dartVmArgs);
+      }
+
+      PlatformViewsController2 platformViewsController2 = new PlatformViewsController2();
+      platformViewsController2.setRegistry(platformViewsController.getRegistry());
+      platformViewsController2.setFlutterJNI(flutterJNI);
+
+      platformViewsController.setFlutterJNI(flutterJNI);
+
+      flutterJNI.addEngineLifecycleListener(engineLifecycleListener);
+      flutterJNI.setPlatformViewsController(platformViewsController);
+      flutterJNI.setPlatformViewsController2(platformViewsController2);
+      flutterJNI.setLocalizationPlugin(localizationPlugin);
+      flutterJNI.setDeferredComponentManager(injector.deferredComponentManager());
+      flutterJNI.setSettingsChannel(settingsChannel);
+
+      // It should typically be a fresh, unattached JNI. But on a spawned engine, the JNI instance
+      // is already attached to a native shell. In that case, the Java FlutterEngine is created around
+      // an existing shell.
+      if (!flutterJNI.isAttached()) {
+        attachToJni();
+      }
+
+      this.renderer = new FlutterRenderer(flutterJNI);
+      this.platformViewsController = platformViewsController;
+      this.platformViewsController2 = platformViewsController2;
+
+      this.platformViewsControllerDelegator =
+          new PlatformViewsControllerDelegator(platformViewsController, platformViewsController2);
+
+      this.pluginRegistry =
+          new FlutterEngineConnectionRegistry(
+              context.getApplicationContext(), this, flutterLoader, group);
+
+      localizationPlugin.sendLocalesToFlutter(context.getResources().getConfiguration());
+
+      // Only automatically register plugins if both constructor parameter and
+      // loaded AndroidManifest config turn this feature on.
+      if (automaticallyRegisterPlugins && flutterLoader.automaticallyRegisterPlugins()) {
+        GeneratedPluginRegister.registerGeneratedPlugins(this);
+      }
+
+      ViewUtils.calculateMaximumDisplayMetrics(context, this);
+
+      ProcessTextPlugin processTextPlugin = new ProcessTextPlugin(this.getProcessTextChannel());
+      this.pluginRegistry.add(processTextPlugin);
     }
-
-    FlutterInjector injector = FlutterInjector.instance();
-
-    if (flutterJNI == null) {
-      flutterJNI = injector.getFlutterJNIFactory().provideFlutterJNI();
-    }
-    this.flutterJNI = flutterJNI;
-
-    this.dartExecutor = new DartExecutor(flutterJNI, assetManager, engineId);
-    this.dartExecutor.onAttachedToJNI();
-
-    DeferredComponentManager deferredComponentManager =
-        FlutterInjector.instance().deferredComponentManager();
-
-    accessibilityChannel = new AccessibilityChannel(dartExecutor, flutterJNI);
-    deferredComponentChannel = new DeferredComponentChannel(dartExecutor);
-    lifecycleChannel = new LifecycleChannel(dartExecutor);
-    localizationChannel = new LocalizationChannel(dartExecutor);
-    mouseCursorChannel = new MouseCursorChannel(dartExecutor);
-    navigationChannel = new NavigationChannel(dartExecutor);
-    backGestureChannel = new BackGestureChannel(dartExecutor);
-    platformChannel = new PlatformChannel(dartExecutor);
-    processTextChannel = new ProcessTextChannel(dartExecutor, context.getPackageManager());
-    restorationChannel = new RestorationChannel(dartExecutor, waitForRestorationData);
-    scribeChannel = new ScribeChannel(dartExecutor);
-    sensitiveContentChannel = new SensitiveContentChannel(dartExecutor);
-    settingsChannel = new SettingsChannel(dartExecutor);
-    spellCheckChannel = new SpellCheckChannel(dartExecutor);
-    systemChannel = new SystemChannel(dartExecutor);
-    textInputChannel = new TextInputChannel(dartExecutor);
-
-    if (deferredComponentManager != null) {
-      deferredComponentManager.setDeferredComponentChannel(deferredComponentChannel);
-    }
-
-    this.localizationPlugin = new LocalizationPlugin(context, localizationChannel);
-
-    if (flutterLoader == null) {
-      flutterLoader = injector.flutterLoader();
-    }
-
-    if (!flutterJNI.isAttached()) {
-      flutterLoader.startInitialization(context.getApplicationContext());
-      flutterLoader.ensureInitializationComplete(context, dartVmArgs);
-    }
-
-    PlatformViewsController2 platformViewsController2 = new PlatformViewsController2();
-    platformViewsController2.setRegistry(platformViewsController.getRegistry());
-    platformViewsController2.setFlutterJNI(flutterJNI);
-
-    platformViewsController.setFlutterJNI(flutterJNI);
-
-    flutterJNI.addEngineLifecycleListener(engineLifecycleListener);
-    flutterJNI.setPlatformViewsController(platformViewsController);
-    flutterJNI.setPlatformViewsController2(platformViewsController2);
-    flutterJNI.setLocalizationPlugin(localizationPlugin);
-    flutterJNI.setDeferredComponentManager(injector.deferredComponentManager());
-    flutterJNI.setSettingsChannel(settingsChannel);
-
-    // It should typically be a fresh, unattached JNI. But on a spawned engine, the JNI instance
-    // is already attached to a native shell. In that case, the Java FlutterEngine is created around
-    // an existing shell.
-    if (!flutterJNI.isAttached()) {
-      attachToJni();
-    }
-
-    this.renderer = new FlutterRenderer(flutterJNI);
-    this.platformViewsController = platformViewsController;
-    this.platformViewsController2 = platformViewsController2;
-
-    this.platformViewsControllerDelegator =
-        new PlatformViewsControllerDelegator(platformViewsController, platformViewsController2);
-
-    this.pluginRegistry =
-        new FlutterEngineConnectionRegistry(
-            context.getApplicationContext(), this, flutterLoader, group);
-
-    localizationPlugin.sendLocalesToFlutter(context.getResources().getConfiguration());
-
-    // Only automatically register plugins if both constructor parameter and
-    // loaded AndroidManifest config turn this feature on.
-    if (automaticallyRegisterPlugins && flutterLoader.automaticallyRegisterPlugins()) {
-      GeneratedPluginRegister.registerGeneratedPlugins(this);
-    }
-
-    ViewUtils.calculateMaximumDisplayMetrics(context, this);
-
-    ProcessTextPlugin processTextPlugin = new ProcessTextPlugin(this.getProcessTextChannel());
-    this.pluginRegistry.add(processTextPlugin);
   }
 
   private void attachToJni() {
