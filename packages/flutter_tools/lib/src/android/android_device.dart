@@ -21,6 +21,8 @@ import '../convert.dart';
 import '../device.dart';
 import '../device_port_forwarder.dart';
 import '../device_vm_service_discovery_for_attach.dart';
+import '../artifacts.dart';
+import '../globals.dart' as globals;
 import '../project.dart';
 import '../protocol_discovery.dart';
 import '../vmservice.dart';
@@ -547,6 +549,39 @@ class AndroidDevice extends Device {
     }
 
     final TargetPlatform devicePlatform = await targetPlatform;
+
+    LocalEngineInfo? localEngineInfo;
+    try {
+      localEngineInfo = globals.artifacts?.localEngineInfo;
+    } on UnsupportedError {
+      // Zone context is not supported in some tests.
+    }
+    if (localEngineInfo != null) {
+      final String localEngineName = localEngineInfo.localTargetName;
+      if (!localEngineName.startsWith('android')) {
+        throwToolExit(
+          'Target platform mismatch: local engine is built for "$localEngineName", '
+          'but the target device is an Android device.',
+        );
+      }
+      TargetPlatform? localTargetPlatform;
+      if (localEngineName.contains('x64')) {
+        localTargetPlatform = TargetPlatform.android_x64;
+      } else if (localEngineName.contains('arm64')) {
+        localTargetPlatform = TargetPlatform.android_arm64;
+      } else if (localEngineName.contains('arm')) {
+        localTargetPlatform = TargetPlatform.android_arm;
+      } else {
+        localTargetPlatform = TargetPlatform.android_arm;
+      }
+
+      if (localTargetPlatform != devicePlatform) {
+        throwToolExit(
+          'Target platform mismatch between local engine ($localEngineName, mapped to ${localTargetPlatform.getName()}) '
+          'and Android device (${devicePlatform.getName()}).',
+        );
+      }
+    }
 
     var builtPackage = package;
     AndroidArch androidArch;
