@@ -182,6 +182,7 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface",
     "//flutter/shell/platform/android/surface:native_window",
+    "//flutter/shell/profiling",
     "//flutter/skia",
     "//flutter/txt",
     "//flutter/vulkan",
