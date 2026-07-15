@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:isolate';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -375,6 +377,37 @@ void main() {
       expect(error?.code, '404');
       expect(error?.message, 'Not Found.');
       expect(error?.details, 'hello');
+    });
+
+    test('using EventChannel on a background isolate without initialization throws StateError', () async {
+      await expectLater(
+        Isolate.run(() async {
+          const EventChannel channel = EventChannel('ch');
+          channel.receiveBroadcastStream('hello').listen((_) {});
+        }),
+        throwsA(isA<RemoteError>().having(
+          (RemoteError e) => e.toString(),
+          'message',
+          contains('BackgroundIsolateBinaryMessenger.ensureInitialized'),
+        )),
+      );
+    });
+
+    test('using EventChannel on a background isolate with initialization throws UnsupportedError', () async {
+      final RootIsolateToken? token = RootIsolateToken.instance;
+      expect(token, isNotNull);
+      await expectLater(
+        Isolate.run(() async {
+          BackgroundIsolateBinaryMessenger.ensureInitialized(token!);
+          const EventChannel channel = EventChannel('ch');
+          channel.receiveBroadcastStream('hello').listen((_) {});
+        }),
+        throwsA(isA<RemoteError>().having(
+          (RemoteError e) => e.toString(),
+          'message',
+          contains('Background isolates do not support setMessageHandler()'),
+        )),
+      );
     });
   });
 }
