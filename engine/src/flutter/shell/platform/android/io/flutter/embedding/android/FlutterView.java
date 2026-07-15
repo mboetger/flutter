@@ -1172,6 +1172,7 @@ public class FlutterView extends FrameLayout
     }
 
     this.flutterEngine = flutterEngine;
+    this.flutterEngine.getPlatformJNI().addFrameTimingListener(frameTimingListener);
 
     // Instruct our FlutterRenderer that we are now its designated RenderSurface.
     FlutterRenderer flutterRenderer = this.flutterEngine.getRenderer();
@@ -1342,6 +1343,7 @@ public class FlutterView extends FrameLayout
     releaseImageView();
 
     previousRenderSurface = null;
+    flutterEngine.getPlatformJNI().removeFrameTimingListener(frameTimingListener);
     flutterEngine = null;
   }
 
@@ -1635,5 +1637,211 @@ public class FlutterView extends FrameLayout
      * from the associated {@code FlutterView}.
      */
     void onFlutterEngineDetachedFromFlutterView();
+  }
+
+  private final io.flutter.embedding.engine.FlutterJNI.FrameTimingListener frameTimingListener =
+      new io.flutter.embedding.engine.FlutterJNI.FrameTimingListener() {
+        @Override
+        public void onFrameRasterized(final long[] frameStats) {
+          post(
+              new Runnable() {
+                @Override
+                public void run() {
+                  notifyFrameMetricsListeners(frameStats);
+                }
+              });
+        }
+      };
+
+  private static java.lang.reflect.Constructor<android.view.FrameMetrics> frameMetricsConstructor;
+  private static java.lang.reflect.Field timingDataField;
+  private static int[] durations;
+  private static int intendedVsyncIdx = -1;
+  private static int vsyncIdx = -1;
+  private static boolean frameMetricsReflectionInitialized = false;
+
+  private static void initializeFrameMetricsReflection() {
+    if (frameMetricsReflectionInitialized) {
+      return;
+    }
+    if (android.os.Build.VERSION.SDK_INT >= API_LEVELS.API_24) {
+      try {
+        frameMetricsConstructor = android.view.FrameMetrics.class.getDeclaredConstructor();
+        frameMetricsConstructor.setAccessible(true);
+
+        timingDataField = android.view.FrameMetrics.class.getDeclaredField("mTimingData");
+        timingDataField.setAccessible(true);
+
+        java.lang.reflect.Field durationsField = android.view.FrameMetrics.class.getDeclaredField("DURATIONS");
+        durationsField.setAccessible(true);
+        durations = (int[]) durationsField.get(null);
+
+        Class<?> indexClass = null;
+        for (Class<?> clazz : android.view.FrameMetrics.class.getDeclaredClasses()) {
+          if (clazz.getSimpleName().equals("Index")) {
+            indexClass = clazz;
+            break;
+          }
+        }
+        if (indexClass != null) {
+          java.lang.reflect.Field intendedVsyncField = indexClass.getDeclaredField("INTENDED_VSYNC");
+          intendedVsyncField.setAccessible(true);
+          intendedVsyncIdx = intendedVsyncField.getInt(null);
+
+          java.lang.reflect.Field vsyncField = indexClass.getDeclaredField("VSYNC");
+          vsyncField.setAccessible(true);
+          vsyncIdx = vsyncField.getInt(null);
+        }
+      } catch (Exception e) {
+        Log.e(TAG, "Failed to initialize FrameMetrics reflection", e);
+      }
+    }
+    frameMetricsReflectionInitialized = true;
+  }
+
+  @Nullable
+  private android.view.FrameMetrics createFrameMetrics(long[] frameStats) {
+    initializeFrameMetricsReflection();
+    if (frameMetricsConstructor == null || timingDataField == null || durations == null) {
+      return null;
+    }
+    try {
+      android.view.FrameMetrics frameMetrics = frameMetricsConstructor.newInstance();
+      long[] timingData = (long[]) timingDataField.get(frameMetrics);
+      if (timingData == null) {
+        return null;
+      }
+
+      long vsyncStart = frameStats[0];
+      long buildStart = frameStats[1];
+      long buildFinish = frameStats[2];
+      long rasterStart = frameStats[3];
+      long rasterFinish = frameStats[4];
+
+      timingData[durations[0]] = vsyncStart;
+      timingData[durations[1]] = buildStart;
+
+      timingData[durations[2]] = buildStart;
+      timingData[durations[3]] = buildStart;
+
+      timingData[durations[4]] = buildStart;
+      timingData[durations[5]] = buildStart;
+
+      timingData[durations[6]] = buildStart;
+      timingData[durations[7]] = buildStart;
+
+      timingData[durations[8]] = buildStart;
+      timingData[durations[9]] = buildFinish;
+
+      timingData[durations[10]] = buildFinish;
+      timingData[durations[11]] = rasterStart;
+
+      timingData[durations[12]] = rasterStart;
+      timingData[durations[13]] = rasterFinish;
+
+      timingData[durations[14]] = rasterFinish;
+      timingData[durations[15]] = rasterFinish;
+
+      timingData[durations[16]] = vsyncStart;
+      timingData[durations[17]] = rasterFinish;
+
+      if (intendedVsyncIdx >= 0) {
+        timingData[intendedVsyncIdx] = vsyncStart;
+      }
+      if (vsyncIdx >= 0) {
+        timingData[vsyncIdx] = vsyncStart;
+      }
+
+      return frameMetrics;
+    } catch (Exception e) {
+      Log.e(TAG, "Failed to create and populate FrameMetrics", e);
+    }
+    return null;
+  }
+
+  private void notifyFrameMetricsListeners(long[] frameStats) {
+    if (android.os.Build.VERSION.SDK_INT < API_LEVELS.API_24) {
+      return;
+    }
+    try {
+      java.lang.reflect.Field observersField = android.view.View.class.getDeclaredField("mFrameMetricsObservers");
+      observersField.setAccessible(true);
+
+      java.util.Set<Object> allObservers = new java.util.HashSet<>();
+
+      android.view.View rootView = getRootView();
+      if (rootView != null) {
+        java.util.List<?> rootObservers = (java.util.List<?>) observersField.get(rootView);
+        if (rootObservers != null) {
+          allObservers.addAll(rootObservers);
+        }
+      }
+
+      java.util.List<?> selfObservers = (java.util.List<?>) observersField.get(this);
+      if (selfObservers != null) {
+        allObservers.addAll(selfObservers);
+      }
+
+      if (allObservers.isEmpty()) {
+        return;
+      }
+
+      android.view.FrameMetrics frameMetrics = createFrameMetrics(frameStats);
+      if (frameMetrics == null) {
+        return;
+      }
+
+      android.view.Window window = null;
+      android.content.Context context = getContext();
+      while (context instanceof android.content.ContextWrapper) {
+        if (context instanceof android.app.Activity) {
+          window = ((android.app.Activity) context).getWindow();
+          break;
+        }
+        context = ((android.content.ContextWrapper) context).getBaseContext();
+      }
+
+      Class<?> observerClass = Class.forName("android.view.FrameMetricsObserver");
+      java.lang.reflect.Field listenerField = observerClass.getDeclaredField("mListener");
+      listenerField.setAccessible(true);
+      java.lang.reflect.Field observerDelegateField = observerClass.getDeclaredField("mObserver");
+      observerDelegateField.setAccessible(true);
+
+      Class<?> hwObserverClass = Class.forName("android.graphics.HardwareRendererObserver");
+      java.lang.reflect.Field handlerField = hwObserverClass.getDeclaredField("mHandler");
+      handlerField.setAccessible(true);
+
+
+
+      for (Object observer : allObservers) {
+        final android.view.Window.OnFrameMetricsAvailableListener listener =
+            (android.view.Window.OnFrameMetricsAvailableListener) listenerField.get(observer);
+
+        Object hwObserver = observerDelegateField.get(observer);
+        android.os.Handler handler = null;
+        if (hwObserver != null) {
+          handler = (android.os.Handler) handlerField.get(hwObserver);
+        }
+
+        if (listener != null) {
+          if (handler != null) {
+            final android.view.Window finalWindow = window;
+            final android.view.FrameMetrics finalMetrics = frameMetrics;
+            handler.post(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    listener.onFrameMetricsAvailable(finalWindow, finalMetrics, 0);
+                  }
+                });
+          } else {
+            listener.onFrameMetricsAvailable(window, frameMetrics, 0);
+          }
+        }
+      }
+
+    } catch (Exception e) {
+      Log.e(TAG, "Failed to notify FrameMetricsAvailableListeners", e);
+    }
   }
 }

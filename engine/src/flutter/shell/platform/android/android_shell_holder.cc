@@ -164,6 +164,11 @@ AndroidShellHolder::AndroidShellHolder(
       );
 
   if (shell_) {
+    shell_->SetFrameRasterizedCallback(
+        [jni_facade = jni_facade_](const FrameTiming& timing) {
+          jni_facade->OnFrameRasterized(timing);
+        });
+
     shell_->GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers([]() {
       if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
         FML_LOG(ERROR) << "Failed to set Workers task runner priority";
@@ -204,6 +209,12 @@ AndroidShellHolder::AndroidShellHolder(
   FML_DCHECK(platform_view_);
   FML_DCHECK(thread_host_);
   is_valid_ = shell_ != nullptr;
+  if (shell_) {
+    shell_->SetFrameRasterizedCallback(
+        [jni_facade = jni_facade_](const FrameTiming& timing) {
+          jni_facade->OnFrameRasterized(timing);
+        });
+  }
 }
 
 AndroidShellHolder::~AndroidShellHolder() {

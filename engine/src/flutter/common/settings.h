@@ -340,7 +340,7 @@ struct Settings {
 
   // Callback to handle the timings of a rasterized frame. This is called as
   // soon as a frame is rasterized.
-  FrameRasterizedCallback frame_rasterized_callback;
+  mutable FrameRasterizedCallback frame_rasterized_callback;
 
   // This data will be available to the isolate immediately on launch via the
   // PlatformDispatcher.getPersistentIsolateData callback. This is meant for

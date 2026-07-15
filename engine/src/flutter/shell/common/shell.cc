@@ -922,6 +922,10 @@ const Settings& Shell::GetSettings() const {
   return settings_;
 }
 
+void Shell::SetFrameRasterizedCallback(const FrameRasterizedCallback& callback) {
+  settings_.frame_rasterized_callback = callback;
+}
+
 const TaskRunners& Shell::GetTaskRunners() const {
   return task_runners_;
 }

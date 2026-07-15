@@ -225,6 +225,8 @@ class Shell final : public PlatformView::Delegate,
   ///
   const Settings& GetSettings() const override;
 
+  void SetFrameRasterizedCallback(const FrameRasterizedCallback& callback);
+
   //------------------------------------------------------------------------------
   /// @brief      If callers wish to interact directly with any shell
   ///             subcomponents, they must (on the platform thread) obtain a

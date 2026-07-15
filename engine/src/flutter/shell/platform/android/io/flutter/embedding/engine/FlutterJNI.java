@@ -393,6 +393,9 @@ public class FlutterJNI {
   @NonNull
   private final Set<FlutterUiResizeListener> flutterUiResizeListeners = new CopyOnWriteArraySet<>();
 
+  @NonNull
+  private final Set<FrameTimingListener> frameTimingListeners = new CopyOnWriteArraySet<>();
+
   @NonNull private final Looper mainLooper; // cached to avoid synchronization on repeat access.
 
   // ------ Start Native Attach/Detach Support ----
@@ -1263,6 +1266,30 @@ public class FlutterJNI {
       @NonNull EngineLifecycleListener engineLifecycleListener) {
     ensureRunningOnMainThread();
     engineLifecycleListeners.remove(engineLifecycleListener);
+  }
+
+  public interface FrameTimingListener {
+    void onFrameRasterized(long[] frameStats);
+  }
+
+  @UiThread
+  public void addFrameTimingListener(@NonNull FrameTimingListener listener) {
+    ensureRunningOnMainThread();
+    frameTimingListeners.add(listener);
+  }
+
+  @UiThread
+  public void removeFrameTimingListener(@NonNull FrameTimingListener listener) {
+    ensureRunningOnMainThread();
+    frameTimingListeners.remove(listener);
+  }
+
+  @Keep
+  @SuppressWarnings("unused")
+  void handleFrameRasterized(@NonNull long[] frameStats) {
+    for (FrameTimingListener listener : frameTimingListeners) {
+      listener.onFrameRasterized(frameStats);
+    }
   }
 
   // Called by native.

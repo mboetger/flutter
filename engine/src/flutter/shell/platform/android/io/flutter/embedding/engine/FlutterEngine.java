@@ -552,6 +552,11 @@ public class FlutterEngine implements ViewUtils.DisplayUpdater {
     return dartExecutor;
   }
 
+  @NonNull
+  public FlutterJNI getPlatformJNI() {
+    return flutterJNI;
+  }
+
   /**
    * The rendering system associated with this {@code FlutterEngine}.
    *

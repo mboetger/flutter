@@ -21,6 +21,8 @@ struct ASurfaceTransaction;
 
 namespace flutter {
 
+class FrameTiming;
+
 #if FML_OS_ANDROID
 using JavaLocalRef = fml::jni::ScopedJavaLocalRef<jobject>;
 #else
@@ -97,6 +99,11 @@ class PlatformViewAndroidJNI {
   /// @brief      Indicates that a hot restart is about to happen.
   ///
   virtual void FlutterViewOnPreEngineRestart() = 0;
+
+  //----------------------------------------------------------------------------
+  /// @brief      Indicates that a frame timing has been rasterized.
+  ///
+  virtual void OnFrameRasterized(const FrameTiming& timing) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Attach the SurfaceTexture to the OpenGL ES context that is

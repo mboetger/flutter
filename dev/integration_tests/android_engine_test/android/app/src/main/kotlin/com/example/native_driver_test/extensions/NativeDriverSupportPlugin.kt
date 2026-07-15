@@ -8,8 +8,11 @@ package com.example.android_engine_test.extensions
 
 import android.app.Activity
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.Window
 import io.flutter.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -17,12 +20,16 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import java.util.concurrent.atomic.AtomicInteger
 
 class NativeDriverSupportPlugin :
     ActivityAware,
     FlutterPlugin,
     MethodCallHandler {
     private val tag = "NativeDriverSupportPlugin"
+    private var handlerThread: HandlerThread? = null
+    private var frameMetricsListener: Window.OnFrameMetricsAvailableListener? = null
+    private val frameCount = AtomicInteger(0)
     private lateinit var channel: MethodChannel
     private var activity: Activity? = null
 
@@ -104,9 +111,50 @@ class NativeDriverSupportPlugin :
                 pressUp.recycle()
                 result.success(null)
             }
+            "register_frame_metrics_listener" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    frameCount.set(0)
+                    val thread = HandlerThread("FrameMetricsListenerThread")
+                    thread.start()
+                    handlerThread = thread
+                    val handler = Handler(thread.looper)
+                    val listener = Window.OnFrameMetricsAvailableListener { _, _, _ ->
+                        frameCount.incrementAndGet()
+                    }
+                    frameMetricsListener = listener
+                    activity.window.addOnFrameMetricsAvailableListener(listener, handler)
+                    result.success(mapOf("success" to true))
+                } else {
+                    result.error("UNSUPPORTED", "Frame metrics require API 24+", null)
+                }
+            }
+            "unregister_frame_metrics_listener" -> {
+                cleanUpFrameMetrics()
+                result.success(mapOf("success" to true))
+            }
+            "get_frame_metrics_count" -> {
+                result.success(mapOf("count" to frameCount.get()))
+            }
             else -> {
                 result.notImplemented()
             }
+        }
+    }
+
+    private fun cleanUpFrameMetrics() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val listener = frameMetricsListener
+            val act = activity
+            if (listener != null && act != null) {
+                try {
+                    act.window.removeOnFrameMetricsAvailableListener(listener)
+                } catch (e: Exception) {
+                    Log.e(tag, "Failed to remove frame metrics listener", e)
+                }
+                frameMetricsListener = null
+            }
+            handlerThread?.quitSafely()
+            handlerThread = null
         }
     }
 
@@ -115,6 +163,7 @@ class NativeDriverSupportPlugin :
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        cleanUpFrameMetrics()
         activity = null
     }
 
@@ -123,6 +172,7 @@ class NativeDriverSupportPlugin :
     }
 
     override fun onDetachedFromActivity() {
+        cleanUpFrameMetrics()
         activity = null
     }
 }

@@ -116,6 +116,10 @@ class PlatformViewAndroid final : public PlatformView {
     return android_context_;
   }
 
+  const std::shared_ptr<PlatformViewAndroidJNI>& GetJNI() const {
+    return jni_facade_;
+  }
+
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override {
     return platform_message_handler_;

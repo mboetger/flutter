@@ -4,6 +4,8 @@
 
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 
+#include "flutter/common/settings.h"
+
 #include <android/hardware_buffer_jni.h>
 #include <android/native_window_jni.h>
 #include <dlfcn.h>
@@ -102,6 +104,7 @@ static jfieldID g_jni_shell_holder_field = nullptr;
     "()Lio/flutter/embedding/engine/FlutterOverlaySurface;")                  \
   V(g_destroy_overlay_surfaces_method, destroyOverlaySurfaces, "()V")         \
   V(g_maybe_resize_surface_view, maybeResizeSurfaceView, "(II)V")             \
+  V(g_handle_frame_rasterized_method, handleFrameRasterized, "([J)V")         \
   //
 
 #define FLUTTER_DECLARE_JNI(global_field, jni_name, jni_arg) \
@@ -1537,6 +1540,36 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnPreEngineRestart() {
   }
 
   env->CallVoidMethod(java_object.obj(), g_on_engine_restart_method);
+
+  FML_CHECK(fml::jni::CheckException(env));
+}
+
+void PlatformViewAndroidJNIImpl::OnFrameRasterized(const FrameTiming& timing) {
+  JNIEnv* env = fml::jni::AttachCurrentThread();
+
+  auto java_object = java_object_.get(env);
+  if (java_object.is_null()) {
+    return;
+  }
+
+  jlongArray j_timing_data = env->NewLongArray(6);
+  if (j_timing_data == nullptr) {
+    return;
+  }
+
+  jlong timing_data[6];
+  timing_data[0] = timing.Get(FrameTiming::kVsyncStart).ToEpochDelta().ToNanoseconds();
+  timing_data[1] = timing.Get(FrameTiming::kBuildStart).ToEpochDelta().ToNanoseconds();
+  timing_data[2] = timing.Get(FrameTiming::kBuildFinish).ToEpochDelta().ToNanoseconds();
+  timing_data[3] = timing.Get(FrameTiming::kRasterStart).ToEpochDelta().ToNanoseconds();
+  timing_data[4] = timing.Get(FrameTiming::kRasterFinish).ToEpochDelta().ToNanoseconds();
+  timing_data[5] = timing.Get(FrameTiming::kRasterFinishWallTime).ToEpochDelta().ToNanoseconds();
+
+  env->SetLongArrayRegion(j_timing_data, 0, 6, timing_data);
+
+  env->CallVoidMethod(java_object.obj(), g_handle_frame_rasterized_method, j_timing_data);
+
+  env->DeleteLocalRef(j_timing_data);
 
   FML_CHECK(fml::jni::CheckException(env));
 }
