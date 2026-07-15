@@ -606,6 +606,27 @@ class AndroidDevice extends Device {
     }
 
     final bool traceStartup = platformArgs['trace-startup'] as bool? ?? false;
+    final bool traceSystrace = debuggingOptions.traceSystrace;
+    Process? perfettoProcess;
+    if (traceStartup && traceSystrace) {
+      final List<String> perfettoCmd = adbCommandForDevice(<String>[
+        'shell',
+        'perfetto',
+        '-c',
+        '-',
+        '--txt',
+        '-o',
+        '/data/local/tmp/trace.perfetto',
+      ]);
+      try {
+        perfettoProcess = await _processManager.start(perfettoCmd);
+        perfettoProcess.stdin.write(_perfettoConfig);
+        await perfettoProcess.stdin.close();
+      } on Exception catch (err) {
+        _logger.printError('Failed to start perfetto: $err');
+      }
+    }
+
     ProtocolDiscovery? vmServiceDiscovery;
 
     if (debuggingOptions.debuggingEnabled) {
@@ -719,11 +740,36 @@ class AndroidDevice extends Device {
       RegExp(r'(Error:|Error type|Security\s?exception)', caseSensitive: false),
     )) {
       _logger.printError(result.trim(), wrap: false);
+      perfettoProcess?.kill();
       return LaunchResult.failed();
+    }
+
+    Future<void> stopPerfettoAndPull() async {
+      if (perfettoProcess == null) {
+        return;
+      }
+      perfettoProcess.kill();
+      await perfettoProcess.exitCode;
+      try {
+        String buildDir;
+        try {
+          buildDir = getBuildDirectory(null, _fileSystem);
+        } catch (_) {
+          buildDir = 'build';
+        }
+        await runAdbCheckedAsync(<String>[
+          'pull',
+          '/data/local/tmp/trace.perfetto',
+          _fileSystem.path.join(buildDir, 'start_up_systrace.perfetto'),
+        ]);
+      } on Exception catch (err) {
+        _logger.printError('Failed to pull perfetto trace: $err');
+      }
     }
 
     _package = builtPackage;
     if (!debuggingOptions.debuggingEnabled) {
+      await stopPerfettoAndPull();
       return LaunchResult.succeeded();
     }
 
@@ -739,12 +785,15 @@ class AndroidDevice extends Device {
             'Error waiting for a debug connection: '
             'The log reader stopped unexpectedly',
           );
+          perfettoProcess?.kill();
           return LaunchResult.failed();
         }
       }
+      await stopPerfettoAndPull();
       return LaunchResult.succeeded(vmServiceUri: vmServiceUri);
     } on Exception catch (error) {
       _logger.printError('Error waiting for a debug connection: $error');
+      perfettoProcess?.kill();
       return LaunchResult.failed();
     } finally {
       await vmServiceDiscovery?.cancel();
@@ -1439,3 +1488,25 @@ class AndroidDevicePortForwarder extends DevicePortForwarder {
 bool _allowHeapCorruptionOnWindows(int exitCode, Platform platform) {
   return exitCode == -1073740940 && platform.isWindows;
 }
+
+const String _perfettoConfig = '''
+buffers {
+  size_kb: 20480
+  fill_policy: RING_BUFFER
+}
+data_sources {
+  config {
+    name: "linux.ftrace"
+    ftrace_config {
+      atrace_categories: "gfx"
+      atrace_categories: "view"
+      atrace_categories: "wm"
+      atrace_categories: "am"
+      atrace_categories: "hal"
+      atrace_categories: "dalvik"
+      atrace_categories: "sched"
+      atrace_categories: "freq"
+    }
+  }
+}
+''';
