@@ -187,6 +187,22 @@ public class FlutterView extends FrameLayout
       };
 
   @VisibleForTesting
+  final FlutterEngine.EngineLifecycleListener engineLifecycleListener =
+      new FlutterEngine.EngineLifecycleListener() {
+        @Override
+        public void onPreEngineRestart() {
+          Log.v(TAG, "onPreEngineRestart() Recreating KeyboardManager.");
+          if (keyboardManager != null) {
+            keyboardManager.destroy();
+          }
+          keyboardManager = new KeyboardManager(FlutterView.this);
+        }
+
+        @Override
+        public void onEngineWillDestroy() {}
+      };
+
+  @VisibleForTesting
   final FlutterUiResizeListener flutterUiResizeListener =
       new FlutterUiResizeListener() {
         @Override
@@ -1172,6 +1188,7 @@ public class FlutterView extends FrameLayout
     }
 
     this.flutterEngine = flutterEngine;
+    flutterEngine.addEngineLifecycleListener(engineLifecycleListener);
 
     // Instruct our FlutterRenderer that we are now its designated RenderSurface.
     FlutterRenderer flutterRenderer = this.flutterEngine.getRenderer();
@@ -1289,6 +1306,8 @@ public class FlutterView extends FrameLayout
       Log.v(TAG, "FlutterView not attached to an engine. Not detaching.");
       return;
     }
+
+    flutterEngine.removeEngineLifecycleListener(engineLifecycleListener);
 
     // Notify engine attachment listeners of the detachment.
     for (FlutterEngineAttachmentListener listener : flutterEngineAttachmentListeners) {

@@ -60,6 +60,7 @@ extern NSNotificationName const FlutterViewControllerShowHomeIndicator;
 - (void)handlePressEvent:(FlutterUIPressProxy*)press
               nextAction:(void (^)())nextAction API_AVAILABLE(ios(13.4));
 - (void)addInternalPlugins;
+- (void)recreatePlatformKeyboardManager;
 - (void)deregisterNotifications;
 
 - (BOOL)supportsShowingSystemContextMenu;

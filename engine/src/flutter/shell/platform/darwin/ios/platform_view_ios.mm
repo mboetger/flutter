@@ -195,6 +195,7 @@ void PlatformViewIOS::OnPreEngineRestart() const {
   [owner_controller_.platformViewsController reset];
   [owner_controller_.restorationPlugin reset];
   [owner_controller_.textInputPlugin reset];
+  [owner_controller_ recreatePlatformKeyboardManager];
 }
 
 // |PlatformView|

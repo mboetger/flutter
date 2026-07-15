@@ -815,6 +815,11 @@ static UIView* GetViewOrPlaceholder(UIView* existing_view) {
   self.keyboardManager = nil;
 }
 
+- (void)recreatePlatformKeyboardManager {
+  [self removeInternalPlugins];
+  [self addInternalPlugins];
+}
+
 - (void)viewWillAppear:(BOOL)animated {
   TRACE_EVENT0("flutter", "viewWillAppear");
   if (self.engine.viewController == self) {

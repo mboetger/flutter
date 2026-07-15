@@ -1496,4 +1496,36 @@ public class FlutterViewTest {
     flutterView.autofill(values);
     // No exception should be thrown
   }
+
+  @Test
+  public void onPreEngineRestart_recreatesKeyboardManager() throws Exception {
+    FlutterView flutterView = new FlutterView(ctx);
+    FlutterEngine flutterEngine = new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni);
+
+    flutterView.attachToFlutterEngine(flutterEngine);
+
+    // Get the keyboard manager before restart
+    Field keyboardManagerField = FlutterView.class.getDeclaredField("keyboardManager");
+    keyboardManagerField.setAccessible(true);
+    KeyboardManager oldKeyboardManager = (KeyboardManager) keyboardManagerField.get(flutterView);
+    assertTrue(oldKeyboardManager != null);
+
+    // Capture the EngineLifecycleListener that FlutterView registered on the FlutterEngine.
+    Field listenersField = FlutterEngine.class.getDeclaredField("engineLifecycleListeners");
+    listenersField.setAccessible(true);
+    java.util.Set<FlutterEngine.EngineLifecycleListener> listeners =
+        (java.util.Set<FlutterEngine.EngineLifecycleListener>) listenersField.get(flutterEngine);
+
+    // Trigger onPreEngineRestart on all registered listeners
+    boolean listenerFound = false;
+    for (FlutterEngine.EngineLifecycleListener listener : listeners) {
+      listener.onPreEngineRestart();
+      listenerFound = true;
+    }
+    assertTrue("EngineLifecycleListener not registered", listenerFound);
+
+    // Verify keyboard manager is recreated (the instance is different)
+    KeyboardManager newKeyboardManager = (KeyboardManager) keyboardManagerField.get(flutterView);
+    assertNotSame(oldKeyboardManager, newKeyboardManager);
+  }
 }
