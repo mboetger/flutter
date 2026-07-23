@@ -61,9 +61,16 @@ Future<void> main(List<String> args) async {
 
   ktlintArgs.addAll(existingFiles);
 
-  print('Running: $ktlintBin ${ktlintArgs.join(' ')}');
-  final Process result = await Process.start(ktlintBin, ktlintArgs, mode: ProcessStartMode.inheritStdio);
-  final int exitCode = await result.exitCode;
+  Process process;
+  if (Platform.isWindows) {
+    final List<String> javaArgs = <String>['-jar', ktlintBin]..addAll(ktlintArgs);
+    print('Running: java ${javaArgs.join(' ')}');
+    process = await Process.start('java', javaArgs, mode: ProcessStartMode.inheritStdio);
+  } else {
+    print('Running: $ktlintBin ${ktlintArgs.join(' ')}');
+    process = await Process.start(ktlintBin, ktlintArgs, mode: ProcessStartMode.inheritStdio);
+  }
+  final int exitCode = await process.exitCode;
 
   if (exitCode == 0) {
     print('ktlint passed!');
@@ -157,7 +164,7 @@ Future<String> _ensureKtlintBinary(String version) async {
   }
 
   final String cacheDir = '$home/.cipd/cache/ktlint/$version';
-  final String binName = Platform.isWindows ? 'ktlint.exe' : 'ktlint';
+  final String binName = 'ktlint';
   final String ktlintBin = '$cacheDir/$binName';
 
   if (File(ktlintBin).existsSync()) {
@@ -168,17 +175,9 @@ Future<String> _ensureKtlintBinary(String version) async {
   print('Downloading ktlint $version via CIPD...');
   Directory(cacheDir).createSync(recursive: true);
 
-  // Determine platform for CIPD
-  String cipdPlatform = 'linux-amd64';
-  if (Platform.isMacOS) {
-    final String arch = _getArch();
-    cipdPlatform = 'mac-$arch';
-  } else if (Platform.isWindows) {
-    cipdPlatform = 'windows-amd64';
-  } else if (Platform.isLinux) {
-    final String arch = _getArch();
-    cipdPlatform = 'linux-$arch';
-  }
+  // We always use the linux-amd64 package because it is the only one available
+  // in CIPD and it contains a cross-platform shell script wrapper around a JAR.
+  const String cipdPlatform = 'linux-amd64';
 
   final String ensureContent = 'flutter/ktlint/$cipdPlatform $version\n';
   
@@ -206,12 +205,4 @@ Future<String> _ensureKtlintBinary(String version) async {
   }
 
   return ktlintBin;
-}
-
-String _getArch() {
-  final String version = Platform.version.toLowerCase();
-  if (version.contains('arm64') || version.contains('aarch64')) {
-    return 'arm64';
-  }
-  return 'amd64';
 }
