@@ -16,6 +16,8 @@ import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.HapticFeedbackConstants;
 import android.view.SoundEffectConstants;
 import android.view.View;
@@ -74,65 +76,77 @@ public class PlatformPlugin {
     default void setFrameworkHandlesBack(boolean frameworkHandlesBack) {}
   }
 
+  private final Handler mainThreadHandler = new Handler(Looper.getMainLooper());
+
+  private void runOnMainThread(Runnable runnable) {
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+      runnable.run();
+    } else {
+      mainThreadHandler.post(runnable);
+    }
+  }
+
   @VisibleForTesting
   final PlatformChannel.PlatformMessageHandler mPlatformMessageHandler =
       new PlatformChannel.PlatformMessageHandler() {
         @Override
         public void playSystemSound(@NonNull PlatformChannel.SoundType soundType) {
-          PlatformPlugin.this.playSystemSound(soundType);
+          runOnMainThread(() -> PlatformPlugin.this.playSystemSound(soundType));
         }
 
         @Override
         public void vibrateHapticFeedback(
             @NonNull PlatformChannel.HapticFeedbackType feedbackType) {
-          PlatformPlugin.this.vibrateHapticFeedback(feedbackType);
+          runOnMainThread(() -> PlatformPlugin.this.vibrateHapticFeedback(feedbackType));
         }
 
         @Override
         public void setPreferredOrientations(int androidOrientation) {
-          setSystemChromePreferredOrientations(androidOrientation);
+          runOnMainThread(() -> setSystemChromePreferredOrientations(androidOrientation));
         }
 
         @Override
         public void setApplicationSwitcherDescription(
             @NonNull PlatformChannel.AppSwitcherDescription description) {
-          setSystemChromeApplicationSwitcherDescription(description);
+          runOnMainThread(
+              () -> setSystemChromeApplicationSwitcherDescription(description));
         }
 
         @Override
         public void showSystemOverlays(@NonNull List<PlatformChannel.SystemUiOverlay> overlays) {
-          setSystemChromeEnabledSystemUIOverlays(overlays);
+          runOnMainThread(() -> setSystemChromeEnabledSystemUIOverlays(overlays));
         }
 
         @Override
         public void showSystemUiMode(@NonNull PlatformChannel.SystemUiMode mode) {
-          setSystemChromeEnabledSystemUIMode(mode);
+          runOnMainThread(() -> setSystemChromeEnabledSystemUIMode(mode));
         }
 
         @Override
         public void setSystemUiChangeListener() {
-          setSystemChromeChangeListener();
+          runOnMainThread(() -> setSystemChromeChangeListener());
         }
 
         @Override
         public void restoreSystemUiOverlays() {
-          restoreSystemChromeSystemUIOverlays();
+          runOnMainThread(() -> restoreSystemChromeSystemUIOverlays());
         }
 
         @Override
         public void setSystemUiOverlayStyle(
             @NonNull PlatformChannel.SystemChromeStyle systemUiOverlayStyle) {
-          setSystemChromeSystemUIOverlayStyle(systemUiOverlayStyle);
+          runOnMainThread(() -> setSystemChromeSystemUIOverlayStyle(systemUiOverlayStyle));
         }
 
         @Override
         public void setFrameworkHandlesBack(boolean frameworkHandlesBack) {
-          PlatformPlugin.this.setFrameworkHandlesBack(frameworkHandlesBack);
+          runOnMainThread(
+              () -> PlatformPlugin.this.setFrameworkHandlesBack(frameworkHandlesBack));
         }
 
         @Override
         public void popSystemNavigator() {
-          PlatformPlugin.this.popSystemNavigator();
+          runOnMainThread(() -> PlatformPlugin.this.popSystemNavigator());
         }
 
         @Override
@@ -153,7 +167,7 @@ public class PlatformPlugin {
 
         @Override
         public void share(@NonNull String text) {
-          PlatformPlugin.this.share(text);
+          runOnMainThread(() -> PlatformPlugin.this.share(text));
         }
       };
 

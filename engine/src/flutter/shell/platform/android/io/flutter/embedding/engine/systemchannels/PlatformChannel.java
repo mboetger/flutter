@@ -10,6 +10,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import io.flutter.Log;
 import io.flutter.embedding.engine.dart.DartExecutor;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.JSONMethodCodec;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -211,7 +212,12 @@ public class PlatformChannel {
    * <p>See {@link DartExecutor}.
    */
   public PlatformChannel(@NonNull DartExecutor dartExecutor) {
-    channel = new MethodChannel(dartExecutor, "flutter/platform", JSONMethodCodec.INSTANCE);
+    BinaryMessenger.TaskQueue taskQueue =
+        dartExecutor.getBinaryMessenger() != null
+            ? dartExecutor.getBinaryMessenger().makeBackgroundTaskQueue()
+            : dartExecutor.makeBackgroundTaskQueue();
+    channel =
+        new MethodChannel(dartExecutor, "flutter/platform", JSONMethodCodec.INSTANCE, taskQueue);
     channel.setMethodCallHandler(parsingMethodCallHandler);
   }
 
