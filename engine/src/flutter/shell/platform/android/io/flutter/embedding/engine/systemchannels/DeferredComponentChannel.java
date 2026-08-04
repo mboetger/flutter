@@ -11,6 +11,7 @@ import io.flutter.FlutterInjector;
 import io.flutter.Log;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.deferredcomponents.DeferredComponentManager;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.StandardMethodCodec;
@@ -82,8 +83,13 @@ public class DeferredComponentChannel {
    * <p>See {@link DartExecutor}.
    */
   public DeferredComponentChannel(@NonNull DartExecutor dartExecutor) {
+    BinaryMessenger.TaskQueue taskQueue =
+        dartExecutor.getBinaryMessenger() != null
+            ? dartExecutor.getBinaryMessenger().makeBackgroundTaskQueue()
+            : dartExecutor.makeBackgroundTaskQueue();
     this.channel =
-        new MethodChannel(dartExecutor, "flutter/deferredcomponent", StandardMethodCodec.INSTANCE);
+        new MethodChannel(
+            dartExecutor, "flutter/deferredcomponent", StandardMethodCodec.INSTANCE, taskQueue);
     channel.setMethodCallHandler(parsingMethodHandler);
     deferredComponentManager = FlutterInjector.instance().deferredComponentManager();
     componentNameToResults = new HashMap<>();
