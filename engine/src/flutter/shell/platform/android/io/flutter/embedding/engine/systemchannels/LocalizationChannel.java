@@ -9,6 +9,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import io.flutter.Log;
 import io.flutter.embedding.engine.dart.DartExecutor;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.JSONMethodCodec;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -59,8 +60,13 @@ public class LocalizationChannel {
       };
 
   public LocalizationChannel(@NonNull DartExecutor dartExecutor) {
+    BinaryMessenger.TaskQueue taskQueue =
+        dartExecutor.getBinaryMessenger() != null
+            ? dartExecutor.getBinaryMessenger().makeBackgroundTaskQueue()
+            : dartExecutor.makeBackgroundTaskQueue();
     this.channel =
-        new MethodChannel(dartExecutor, "flutter/localization", JSONMethodCodec.INSTANCE);
+        new MethodChannel(
+            dartExecutor, "flutter/localization", JSONMethodCodec.INSTANCE, taskQueue);
     channel.setMethodCallHandler(handler);
   }
 
