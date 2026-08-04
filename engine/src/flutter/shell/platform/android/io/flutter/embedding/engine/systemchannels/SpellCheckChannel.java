@@ -8,6 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import io.flutter.Log;
 import io.flutter.embedding.engine.dart.DartExecutor;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.StandardMethodCodec;
@@ -73,7 +74,13 @@ public class SpellCheckChannel {
       };
 
   public SpellCheckChannel(@NonNull DartExecutor dartExecutor) {
-    channel = new MethodChannel(dartExecutor, "flutter/spellcheck", StandardMethodCodec.INSTANCE);
+    BinaryMessenger.TaskQueue taskQueue =
+        dartExecutor.getBinaryMessenger() != null
+            ? dartExecutor.getBinaryMessenger().makeBackgroundTaskQueue()
+            : dartExecutor.makeBackgroundTaskQueue();
+    channel =
+        new MethodChannel(
+            dartExecutor, "flutter/spellcheck", StandardMethodCodec.INSTANCE, taskQueue);
     channel.setMethodCallHandler(parsingMethodHandler);
   }
 
