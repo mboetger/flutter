@@ -26,6 +26,8 @@ class TestVulkanSurface {
 
   sk_sp<SkImage> GetSurfaceSnapshot() const;
 
+  sk_sp<SkSurface> GetSkSurface() const { return surface_; }
+
   VkImage GetImage();
 
  private:
