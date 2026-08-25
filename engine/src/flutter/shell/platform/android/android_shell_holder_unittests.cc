@@ -228,5 +228,161 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
       holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
 }
 
+TEST(AndroidShellHolder, SurfaceTeardownAndRecreateLifecycle) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+  EXPECT_TRUE(holder->IsValid());
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  auto window1 = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  platform_view->NotifyCreated(window1);
+  platform_view->NotifyChanged(DlISize(1080, 1920));
+
+  auto window2 = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  platform_view->NotifySurfaceWindowChanged(window2);
+
+  platform_view->NotifyDestroyed();
+
+  auto window3 = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  platform_view->NotifyCreated(window3);
+  platform_view->NotifyChanged(DlISize(1080, 1920));
+
+  EXPECT_TRUE(holder->IsValid());
+  EXPECT_NE(platform_view->GetAndroidContext(), nullptr);
+}
+
+TEST(AndroidShellHolder, HandleMultiplePlatformMessagesWithResponses) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+  EXPECT_TRUE(holder->IsValid());
+  EXPECT_TRUE(holder->GetPlatformMessageHandler());
+
+  // Message 1 with payload response (receives response_id = 1 from
+  // PlatformMessageHandlerAndroid)
+  fml::RefPtr<MockPlatformMessageResponse> response1 =
+      MockPlatformMessageResponse::Create();
+  constexpr char kPayload[] = "payload";
+  fml::MallocMapping bytes1 =
+      fml::MallocMapping::Copy(kPayload, sizeof(kPayload) - 1);
+  auto message1 = std::make_unique<PlatformMessage>(
+      /*channel=*/"channel1", /*data=*/std::move(bytes1),
+      /*response=*/response1);
+
+  int expected_response_id1 = 1;
+  EXPECT_CALL(*jni, FlutterViewHandlePlatformMessage(::testing::_,
+                                                     expected_response_id1));
+  EXPECT_CALL(*response1, Complete(::testing::_));
+
+  holder->GetPlatformMessageHandler()->HandlePlatformMessage(
+      std::move(message1));
+  constexpr char kAck[] = "ack";
+  auto response_bytes = std::make_unique<fml::MallocMapping>(
+      fml::MallocMapping::Copy(kAck, sizeof(kAck) - 1));
+  holder->GetPlatformMessageHandler()->InvokePlatformMessageResponseCallback(
+      expected_response_id1, std::move(response_bytes));
+
+  // Message 2 with empty response (receives response_id = 2)
+  fml::RefPtr<MockPlatformMessageResponse> response2 =
+      MockPlatformMessageResponse::Create();
+  auto message2 = std::make_unique<PlatformMessage>(
+      /*channel=*/"channel2", /*data=*/fml::MallocMapping(),
+      /*response=*/response2);
+
+  int expected_response_id2 = 2;
+  EXPECT_CALL(*jni, FlutterViewHandlePlatformMessage(::testing::_,
+                                                     expected_response_id2));
+  EXPECT_CALL(*response2, CompleteEmpty());
+
+  holder->GetPlatformMessageHandler()->HandlePlatformMessage(
+      std::move(message2));
+  holder->GetPlatformMessageHandler()
+      ->InvokePlatformMessageEmptyResponseCallback(expected_response_id2);
+}
+
+TEST(AndroidShellHolder, SetSemanticsTreeAndLocale) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  PlatformView* pv = platform_view.get();
+
+  EXPECT_CALL(*jni, FlutterViewSetSemanticsTreeEnabled(true));
+  pv->SetSemanticsTreeEnabled(true);
+
+  EXPECT_CALL(*jni, FlutterViewSetSemanticsTreeEnabled(false));
+  pv->SetSemanticsTreeEnabled(false);
+
+  EXPECT_CALL(*jni, FlutterViewSetApplicationLocale("fr-FR"));
+  pv->SetApplicationLocale("fr-FR");
+
+  EXPECT_CALL(*jni, FlutterViewSetApplicationLocale("zh-Hans-CN"));
+  pv->SetApplicationLocale("zh-Hans-CN");
+}
+
+TEST(AndroidShellHolder, OnPreEngineRestart) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  PlatformView* pv = platform_view.get();
+
+  EXPECT_CALL(*jni, FlutterViewOnPreEngineRestart());
+  pv->OnPreEngineRestart();
+}
+
+TEST(AndroidShellHolder, UpdateDisplayMetrics) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+
+  EXPECT_CALL(*jni, GetDisplayRefreshRate())
+      .WillRepeatedly(::testing::Return(60.0));
+  EXPECT_CALL(*jni, GetDisplayWidth())
+      .WillRepeatedly(::testing::Return(1080.0));
+  EXPECT_CALL(*jni, GetDisplayHeight())
+      .WillRepeatedly(::testing::Return(1920.0));
+  EXPECT_CALL(*jni, GetDisplayDensity())
+      .WillRepeatedly(::testing::Return(2.625));
+
+  holder->UpdateDisplayMetrics();
+}
+
+TEST(AndroidShellHolder, NotifyLowMemoryWarning) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+
+  holder->NotifyLowMemoryWarning();
+  EXPECT_TRUE(holder->IsValid());
+}
+
 }  // namespace testing
 }  // namespace flutter
