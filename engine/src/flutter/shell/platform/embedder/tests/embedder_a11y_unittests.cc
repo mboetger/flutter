@@ -13,6 +13,7 @@
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/lib/ui/semantics/semantics_node.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_semantics_update.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/testing/testing.h"
 #include "third_party/tonic/converter/dart_converter.h"
@@ -883,6 +884,203 @@ TEST_F(EmbedderA11yTest, A11yTreesAreConsistentWithMultipleViews) {
   ASSERT_EQ(result, FlutterEngineResult::kSuccess);
   notify_semantics_enabled_latch_3.Wait();
 #endif
+}
+
+TEST_F(EmbedderA11yTest, CompleteSemanticsNode2FieldsPopulated) {
+  SemanticsNodeUpdates updates;
+  CustomAccessibilityActionUpdates actions;
+
+  SemanticsNode node;
+  node.id = 42;
+  node.flags = SemanticsFlags{};
+  node.actions = static_cast<int32_t>(SemanticsAction::kTap);
+  node.maxValueLength = 100;
+  node.currentValueLength = 25;
+  node.traversalParent = 1;
+  node.role = SemanticsRole::kTab;
+  node.validationResult = SemanticsValidationResult::kValid;
+  node.linkUrl = "https://flutter.dev";
+  node.locale = "en-US";
+  node.minValue = "0.0";
+  node.maxValue = "100.0";
+  node.label = "Sample Label";
+  node.hint = "Sample Hint";
+  node.value = "Sample Value";
+  node.increasedValue = "Sample Inc";
+  node.decreasedValue = "Sample Dec";
+  node.tooltip = "Sample Tooltip";
+  node.identifier = "sample_identifier";
+  node.headingLevel = 3;
+  node.textDirection = 2;
+  node.rect = SkRect::MakeLTRB(10.0f, 20.0f, 30.0f, 40.0f);
+  node.transform = SkM44(1, 2, 0, 3, 4, 5, 0, 6, 0, 0, 1, 0, 7, 8, 0, 9);
+  node.hitTestTransform = SkM44(9, 8, 0, 7, 6, 5, 0, 4, 0, 0, 1, 0, 3, 2, 0, 1);
+  node.childrenInTraversalOrder = {2, 3};
+  node.childrenInHitTestOrder = {3, 2};
+  node.customAccessibilityActions = {101};
+
+  updates[42] = node;
+
+  CustomAccessibilityAction action;
+  action.id = 101;
+  action.overrideId = static_cast<int32_t>(SemanticsAction::kTap);
+  action.label = "Custom Tap";
+  action.hint = "Custom Tap Hint";
+  actions[101] = action;
+
+  EmbedderSemanticsUpdate2 update(1, updates, actions);
+  const FlutterSemanticsUpdate2* semantic_update = update.get();
+  ASSERT_NE(semantic_update, nullptr);
+  ASSERT_EQ(semantic_update->node_count, 1u);
+  ASSERT_EQ(semantic_update->custom_action_count, 1u);
+  ASSERT_EQ(semantic_update->view_id, 1);
+
+  const FlutterSemanticsNode2* node2 = semantic_update->nodes[0];
+  ASSERT_NE(node2, nullptr);
+  EXPECT_EQ(node2->struct_size, sizeof(FlutterSemanticsNode2));
+  EXPECT_EQ(node2->id, 42);
+  EXPECT_EQ(node2->max_value_length, 100);
+  EXPECT_EQ(node2->current_value_length, 25);
+  EXPECT_EQ(node2->traversal_parent, 1);
+  EXPECT_EQ(node2->role, kFlutterSemanticsRoleTab);
+  EXPECT_EQ(node2->validation_result, kFlutterSemanticsValidationResultValid);
+  EXPECT_STREQ(node2->link_url, "https://flutter.dev");
+  EXPECT_STREQ(node2->locale, "en-US");
+  EXPECT_STREQ(node2->min_value, "0.0");
+  EXPECT_STREQ(node2->max_value, "100.0");
+  EXPECT_STREQ(node2->label, "Sample Label");
+  EXPECT_STREQ(node2->hint, "Sample Hint");
+  EXPECT_STREQ(node2->value, "Sample Value");
+  EXPECT_STREQ(node2->increased_value, "Sample Inc");
+  EXPECT_STREQ(node2->decreased_value, "Sample Dec");
+  EXPECT_STREQ(node2->tooltip, "Sample Tooltip");
+  EXPECT_STREQ(node2->identifier, "sample_identifier");
+  EXPECT_EQ(node2->heading_level, 3);
+  EXPECT_EQ(node2->text_direction, kFlutterTextDirectionLTR);
+  EXPECT_FLOAT_EQ(node2->rect.left, 10.0f);
+  EXPECT_FLOAT_EQ(node2->rect.top, 20.0f);
+  EXPECT_FLOAT_EQ(node2->rect.right, 30.0f);
+  EXPECT_FLOAT_EQ(node2->rect.bottom, 40.0f);
+  EXPECT_EQ(node2->hit_test_transform.scaleX, 9.0);
+  EXPECT_EQ(node2->hit_test_transform.skewX, 8.0);
+  EXPECT_EQ(node2->hit_test_transform.transX, 7.0);
+  EXPECT_EQ(node2->hit_test_transform.skewY, 6.0);
+  EXPECT_EQ(node2->hit_test_transform.scaleY, 5.0);
+  EXPECT_EQ(node2->hit_test_transform.transY, 4.0);
+  EXPECT_EQ(node2->hit_test_transform.pers0, 3.0);
+  EXPECT_EQ(node2->hit_test_transform.pers1, 2.0);
+  EXPECT_EQ(node2->hit_test_transform.pers2, 1.0);
+
+  const FlutterSemanticsCustomAction2* action2 =
+      semantic_update->custom_actions[0];
+  ASSERT_NE(action2, nullptr);
+  EXPECT_EQ(action2->struct_size, sizeof(FlutterSemanticsCustomAction2));
+  EXPECT_EQ(action2->id, 101);
+  EXPECT_EQ(action2->override_action, kFlutterSemanticsActionTap);
+  EXPECT_STREQ(action2->label, "Custom Tap");
+  EXPECT_STREQ(action2->hint, "Custom Tap Hint");
+}
+
+static_assert(static_cast<int>(SemanticsRole::kNone) ==
+              static_cast<int>(kFlutterSemanticsRoleNone));
+static_assert(static_cast<int>(SemanticsRole::kTab) ==
+              static_cast<int>(kFlutterSemanticsRoleTab));
+static_assert(static_cast<int>(SemanticsRole::kTabBar) ==
+              static_cast<int>(kFlutterSemanticsRoleTabBar));
+static_assert(static_cast<int>(SemanticsRole::kTabPanel) ==
+              static_cast<int>(kFlutterSemanticsRoleTabPanel));
+static_assert(static_cast<int>(SemanticsRole::kDialog) ==
+              static_cast<int>(kFlutterSemanticsRoleDialog));
+static_assert(static_cast<int>(SemanticsRole::kAlertDialog) ==
+              static_cast<int>(kFlutterSemanticsRoleAlertDialog));
+static_assert(static_cast<int>(SemanticsRole::kTable) ==
+              static_cast<int>(kFlutterSemanticsRoleTable));
+static_assert(static_cast<int>(SemanticsRole::kCell) ==
+              static_cast<int>(kFlutterSemanticsRoleCell));
+static_assert(static_cast<int>(SemanticsRole::kRow) ==
+              static_cast<int>(kFlutterSemanticsRoleRow));
+static_assert(static_cast<int>(SemanticsRole::kColumnHeader) ==
+              static_cast<int>(kFlutterSemanticsRoleColumnHeader));
+static_assert(static_cast<int>(SemanticsRole::kDragHandle) ==
+              static_cast<int>(kFlutterSemanticsRoleDragHandle));
+static_assert(static_cast<int>(SemanticsRole::kSpinButton) ==
+              static_cast<int>(kFlutterSemanticsRoleSpinButton));
+static_assert(static_cast<int>(SemanticsRole::kComboBox) ==
+              static_cast<int>(kFlutterSemanticsRoleComboBox));
+static_assert(static_cast<int>(SemanticsRole::kMenuBar) ==
+              static_cast<int>(kFlutterSemanticsRoleMenuBar));
+static_assert(static_cast<int>(SemanticsRole::kMenu) ==
+              static_cast<int>(kFlutterSemanticsRoleMenu));
+static_assert(static_cast<int>(SemanticsRole::kMenuItem) ==
+              static_cast<int>(kFlutterSemanticsRoleMenuItem));
+static_assert(static_cast<int>(SemanticsRole::kMenuItemCheckbox) ==
+              static_cast<int>(kFlutterSemanticsRoleMenuItemCheckbox));
+static_assert(static_cast<int>(SemanticsRole::kMenuItemRadio) ==
+              static_cast<int>(kFlutterSemanticsRoleMenuItemRadio));
+static_assert(static_cast<int>(SemanticsRole::kList) ==
+              static_cast<int>(kFlutterSemanticsRoleList));
+static_assert(static_cast<int>(SemanticsRole::kListItem) ==
+              static_cast<int>(kFlutterSemanticsRoleListItem));
+static_assert(static_cast<int>(SemanticsRole::kForm) ==
+              static_cast<int>(kFlutterSemanticsRoleForm));
+static_assert(static_cast<int>(SemanticsRole::kTooltip) ==
+              static_cast<int>(kFlutterSemanticsRoleTooltip));
+static_assert(static_cast<int>(SemanticsRole::kLoadingSpinner) ==
+              static_cast<int>(kFlutterSemanticsRoleLoadingSpinner));
+static_assert(static_cast<int>(SemanticsRole::kProgressBar) ==
+              static_cast<int>(kFlutterSemanticsRoleProgressBar));
+static_assert(static_cast<int>(SemanticsRole::kHotKey) ==
+              static_cast<int>(kFlutterSemanticsRoleHotKey));
+static_assert(static_cast<int>(SemanticsRole::kRadioGroup) ==
+              static_cast<int>(kFlutterSemanticsRoleRadioGroup));
+static_assert(static_cast<int>(SemanticsRole::kStatus) ==
+              static_cast<int>(kFlutterSemanticsRoleStatus));
+static_assert(static_cast<int>(SemanticsRole::kAlert) ==
+              static_cast<int>(kFlutterSemanticsRoleAlert));
+static_assert(static_cast<int>(SemanticsRole::kComplementary) ==
+              static_cast<int>(kFlutterSemanticsRoleComplementary));
+static_assert(static_cast<int>(SemanticsRole::kContentInfo) ==
+              static_cast<int>(kFlutterSemanticsRoleContentInfo));
+static_assert(static_cast<int>(SemanticsRole::kMain) ==
+              static_cast<int>(kFlutterSemanticsRoleMain));
+static_assert(static_cast<int>(SemanticsRole::kNavigation) ==
+              static_cast<int>(kFlutterSemanticsRoleNavigation));
+static_assert(static_cast<int>(SemanticsRole::kRegion) ==
+              static_cast<int>(kFlutterSemanticsRoleRegion));
+
+static_assert(static_cast<int>(SemanticsValidationResult::kNone) ==
+              static_cast<int>(kFlutterSemanticsValidationResultNone));
+static_assert(static_cast<int>(SemanticsValidationResult::kValid) ==
+              static_cast<int>(kFlutterSemanticsValidationResultValid));
+static_assert(static_cast<int>(SemanticsValidationResult::kInvalid) ==
+              static_cast<int>(kFlutterSemanticsValidationResultInvalid));
+
+TEST_F(EmbedderA11yTest, DefaultSemanticsNode2FieldsPopulated) {
+  SemanticsNodeUpdates updates;
+  CustomAccessibilityActionUpdates actions;
+
+  SemanticsNode default_node;
+  default_node.id = 0;
+  updates[0] = default_node;
+
+  EmbedderSemanticsUpdate2 update(0, updates, actions);
+  const FlutterSemanticsUpdate2* semantic_update = update.get();
+  ASSERT_NE(semantic_update, nullptr);
+  ASSERT_EQ(semantic_update->node_count, 1u);
+
+  const FlutterSemanticsNode2* node = semantic_update->nodes[0];
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->struct_size, sizeof(FlutterSemanticsNode2));
+  EXPECT_EQ(node->id, 0);
+  EXPECT_EQ(node->max_value_length, -1);
+  EXPECT_EQ(node->current_value_length, -1);
+  EXPECT_EQ(node->traversal_parent, 0);
+  EXPECT_EQ(node->role, kFlutterSemanticsRoleNone);
+  EXPECT_EQ(node->validation_result, kFlutterSemanticsValidationResultNone);
+  EXPECT_STREQ(node->link_url, "");
+  EXPECT_STREQ(node->locale, "");
+  EXPECT_STREQ(node->min_value, "");
+  EXPECT_STREQ(node->max_value, "");
 }
 
 }  // namespace testing
