@@ -459,6 +459,17 @@ class Shell final : public PlatformView::Delegate,
   const std::shared_ptr<fml::ConcurrentTaskRunner>
   GetConcurrentWorkerTaskRunner() const;
 
+  // |PlatformView::Delegate|
+  void LoadDartDeferredLibrary(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions) override;
+
+  // |PlatformView::Delegate|
+  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
+                                    const std::string error_message,
+                                    bool transient) override;
+
   // Infer the VM ref and the isolate snapshot based on the settings.
   //
   // If the VM is already running, the settings are ignored, but the returned
@@ -686,16 +697,6 @@ class Shell final : public PlatformView::Delegate,
   // |PlatformView::Delegate|
   std::shared_ptr<fml::BasicTaskRunner>
   OnPlatformViewGetShutdownSafeIOTaskRunner() const override;
-
-  // |PlatformView::Delegate|
-  void LoadDartDeferredLibrary(
-      intptr_t loading_unit_id,
-      std::unique_ptr<const fml::Mapping> snapshot_data,
-      std::unique_ptr<const fml::Mapping> snapshot_instructions) override;
-
-  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
-                                    const std::string error_message,
-                                    bool transient) override;
 
   // |PlatformView::Delegate|
   void UpdateAssetResolverByType(

@@ -2509,7 +2509,7 @@ typedef struct {
   };
 } FlutterEngineAOTDataSource;
 
-// Logging callback for Dart application messages.
+/// Logging callback for Dart application messages.
 //
 // The `tag` parameter contains a null-terminated string containing a logging
 // tag or component name that can be used to identify system log messages from
@@ -2519,6 +2519,54 @@ typedef struct {
 typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
                                           const char* /* message */,
                                           void* /* user_data */);
+
+/// The callback invoked by the engine when Dart requests a deferred library
+/// to be loaded. The callback is invoked on the platform thread.
+typedef void (*FlutterRequestDartDeferredLibraryCallback)(
+    intptr_t loading_unit_id,
+    void* user_data);
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterLoadDeferredLibraryInfo).
+  size_t struct_size;
+
+  /// The unique loading unit ID of the deferred library to load.
+  intptr_t loading_unit_id;
+
+  /// The isolate snapshot data mapping for the deferred library. Must be mapped
+  /// with read-only permissions and must remain valid for the lifetime of the
+  /// running isolate. Must not be null.
+  const uint8_t* isolate_snapshot_data;
+
+  /// The size of the isolate snapshot data buffer in bytes. Must be greater
+  /// than 0.
+  size_t isolate_snapshot_data_size;
+
+  /// The isolate snapshot instructions mapping for the deferred library. In
+  /// AOT mode, this must be mapped with read-execute permissions and must
+  /// remain valid for the lifetime of the running isolate. May be null if the
+  /// loading unit contains no executable code or when not running in AOT mode.
+  const uint8_t* isolate_snapshot_instructions;
+
+  /// The size of the isolate snapshot instructions buffer in bytes. Must be 0
+  /// if isolate_snapshot_instructions is null.
+  size_t isolate_snapshot_instructions_size;
+} FlutterLoadDeferredLibraryInfo;
+
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterLoadDeferredLibraryErrorInfo).
+  size_t struct_size;
+
+  /// The unique loading unit ID of the deferred library that failed to load.
+  intptr_t loading_unit_id;
+
+  /// The error message describing the failure. Must be null-terminated.
+  const char* error_message;
+
+  /// Whether the failure is transient (i.e. retryable).
+  bool transient;
+} FlutterLoadDeferredLibraryErrorInfo;
 
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
@@ -2838,6 +2886,12 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// The callback invoked by the engine when the Dart VM requests a deferred
+  /// library to be loaded. The callback is invoked from a task posted to the
+  /// platform thread.
+  FlutterRequestDartDeferredLibraryCallback
+      request_dart_deferred_library_callback;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3640,6 +3694,36 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Loads a Dart deferred library (loading unit) into the running
+///             isolate.
+///
+/// @param[in]  engine     A running engine instance.
+/// @param[in]  load_info  The information describing the deferred library to
+///                        load.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryInfo* load_info);
+
+//------------------------------------------------------------------------------
+/// @brief      Notifies the engine that a requested Dart deferred library
+/// failed
+///             to load.
+///
+/// @param[in]  engine      A running engine instance.
+/// @param[in]  error_info  The information describing the load failure.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryErrorInfo* error_info);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3774,6 +3858,12 @@ typedef FlutterEngineResult (*FlutterEngineRemoveViewFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterViewFocusEvent* event);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryInfo* load_info);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryErrorInfo* error_info);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3824,6 +3914,8 @@ typedef struct {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
+  FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

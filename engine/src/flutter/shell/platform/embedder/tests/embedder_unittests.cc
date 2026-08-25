@@ -4316,6 +4316,147 @@ TEST_F(EmbedderTest, PlatformThreadIsolatesWithCustomPlatformTaskRunner) {
   ASSERT_EQ(platform_thread_id, ffi_call_thread_id);
 }
 
+TEST_F(EmbedderTest, InvalidDartDeferredLibraryArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterLoadDeferredLibraryInfo load_info = {};
+  load_info.struct_size = sizeof(FlutterLoadDeferredLibraryInfo);
+  load_info.loading_unit_id = 1;
+
+  FlutterLoadDeferredLibraryErrorInfo error_info = {};
+  error_info.struct_size = sizeof(FlutterLoadDeferredLibraryErrorInfo);
+  error_info.loading_unit_id = 1;
+  error_info.error_message = "Test error";
+  error_info.transient = false;
+
+  // Invalid engine handle.
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(nullptr, &load_info),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(nullptr, &error_info),
+            kInvalidArguments);
+
+  // Null info pointers.
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), nullptr),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), nullptr),
+            kInvalidArguments);
+
+  // Invalid struct sizes.
+  FlutterLoadDeferredLibraryInfo invalid_load_info = load_info;
+  invalid_load_info.struct_size = sizeof(FlutterLoadDeferredLibraryInfo) - 1;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibrary(engine.get(), &invalid_load_info),
+      kInvalidArguments);
+
+  FlutterLoadDeferredLibraryErrorInfo invalid_error_info = error_info;
+  invalid_error_info.struct_size =
+      sizeof(FlutterLoadDeferredLibraryErrorInfo) - 1;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(),
+                                                      &invalid_error_info),
+            kInvalidArguments);
+
+  // Null error message.
+  FlutterLoadDeferredLibraryErrorInfo null_msg_error_info = error_info;
+  null_msg_error_info.error_message = nullptr;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(),
+                                                      &null_msg_error_info),
+            kInvalidArguments);
+
+  // Null isolate snapshot data or zero data size.
+  uint8_t dummy_byte = 0;
+  FlutterLoadDeferredLibraryInfo null_data_load_info = load_info;
+  null_data_load_info.isolate_snapshot_data = nullptr;
+  null_data_load_info.isolate_snapshot_data_size = 10;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibrary(engine.get(), &null_data_load_info),
+      kInvalidArguments);
+
+  FlutterLoadDeferredLibraryInfo zero_data_size_load_info = load_info;
+  zero_data_size_load_info.isolate_snapshot_data = &dummy_byte;
+  zero_data_size_load_info.isolate_snapshot_data_size = 0;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(),
+                                                 &zero_data_size_load_info),
+            kInvalidArguments);
+
+  // Mismatched instruction pointer and size.
+  FlutterLoadDeferredLibraryInfo mismatch_instr_load_info = load_info;
+  mismatch_instr_load_info.isolate_snapshot_data = &dummy_byte;
+  mismatch_instr_load_info.isolate_snapshot_data_size = 1;
+  mismatch_instr_load_info.isolate_snapshot_instructions = nullptr;
+  mismatch_instr_load_info.isolate_snapshot_instructions_size = 10;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(),
+                                                 &mismatch_instr_load_info),
+            kInvalidArguments);
+
+  mismatch_instr_load_info.isolate_snapshot_instructions = &dummy_byte;
+  mismatch_instr_load_info.isolate_snapshot_instructions_size = 0;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(),
+                                                 &mismatch_instr_load_info),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, CanLoadDartDeferredLibraryAndError) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterLoadDeferredLibraryErrorInfo error_info = {};
+  error_info.struct_size = sizeof(FlutterLoadDeferredLibraryErrorInfo);
+  error_info.loading_unit_id = 99;
+  error_info.error_message = "Deferred loading failed";
+  error_info.transient = true;
+
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibraryError(engine.get(), &error_info),
+      kSuccess);
+
+  uint8_t dummy_data[] = {0x00, 0x01};
+  FlutterLoadDeferredLibraryInfo load_info = {};
+  load_info.struct_size = sizeof(FlutterLoadDeferredLibraryInfo);
+  load_info.loading_unit_id = 99;
+  load_info.isolate_snapshot_data = dummy_data;
+  load_info.isolate_snapshot_data_size = sizeof(dummy_data);
+  load_info.isolate_snapshot_instructions = nullptr;
+  load_info.isolate_snapshot_instructions_size = 0;
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &load_info),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, CanSetDeferredLibraryCallbackInProjectArgs) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  static intptr_t s_requested_unit_id = 0;
+  static void* s_received_user_data = nullptr;
+  s_requested_unit_id = 0;
+  s_received_user_data = nullptr;
+
+  builder.GetProjectArgs().request_dart_deferred_library_callback =
+      [](intptr_t loading_unit_id, void* user_data) {
+        s_requested_unit_id = loading_unit_id;
+        s_received_user_data = user_data;
+      };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  auto* embedder_engine = reinterpret_cast<EmbedderEngine*>(engine.get());
+  auto platform_view = embedder_engine->GetShell().GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->RequestDartDeferredLibrary(123);
+  EXPECT_EQ(s_requested_unit_id, 123);
+  EXPECT_EQ(s_received_user_data, &context);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

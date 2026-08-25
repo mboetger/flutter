@@ -227,5 +227,59 @@ TEST(PlatformViewEmbedderTest, DeletionDisabledDispatch) {
   EXPECT_FALSE(did_call);
 }
 
+TEST(PlatformViewEmbedderTest, RequestDartDeferredLibrary) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "RequestDartDeferredLibrary",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  intptr_t requested_loading_unit_id = 0;
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask(
+      [&latch, task_runners, &requested_loading_unit_id] {
+        MockDelegate delegate;
+        EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+        PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+        platform_dispatch_table.request_dart_deferred_library_callback =
+            [&requested_loading_unit_id](intptr_t loading_unit_id) {
+              requested_loading_unit_id = loading_unit_id;
+            };
+        std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+        auto embedder = std::make_unique<PlatformViewEmbedder>(
+            delegate, task_runners, software_dispatch_table,
+            platform_dispatch_table, external_view_embedder);
+
+        embedder->RequestDartDeferredLibrary(42);
+        latch.Signal();
+      });
+  latch.Wait();
+
+  EXPECT_EQ(requested_loading_unit_id, 42);
+}
+
+TEST(PlatformViewEmbedderTest, RequestDartDeferredLibraryNullCallback) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "RequestDartDeferredLibraryNullCallback",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask([&latch, task_runners] {
+    MockDelegate delegate;
+    EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+    PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+    platform_dispatch_table.request_dart_deferred_library_callback = nullptr;
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+    auto embedder = std::make_unique<PlatformViewEmbedder>(
+        delegate, task_runners, software_dispatch_table,
+        platform_dispatch_table, external_view_embedder);
+
+    // Should be a safe no-op when callback is null.
+    embedder->RequestDartDeferredLibrary(42);
+    latch.Signal();
+  });
+  latch.Wait();
+}
+
 }  // namespace testing
 }  // namespace flutter
