@@ -46,9 +46,43 @@ TestVulkanContext::TestVulkanContext() {
     return;
   }
 
+  instance_extensions_ = {"VK_KHR_surface"};
+  if (vk_->EnumerateInstanceExtensionProperties) {
+    uint32_t count = 0;
+    if (vk_->EnumerateInstanceExtensionProperties(nullptr, &count, nullptr) ==
+            VK_SUCCESS &&
+        count > 0) {
+      std::vector<VkExtensionProperties> properties(count);
+      if (vk_->EnumerateInstanceExtensionProperties(
+              nullptr, &count, properties.data()) == VK_SUCCESS) {
+        for (const auto& prop : properties) {
+          std::string name(prop.extensionName);
+          if (name == "VK_KHR_xcb_surface" || name == "VK_KHR_xlib_surface" ||
+              name == "VK_KHR_wayland_surface" ||
+              name == "VK_KHR_android_surface" ||
+              name == "VK_KHR_win32_surface" ||
+              name == "VK_MVK_macos_surface" ||
+              name == "VK_EXT_metal_surface" ||
+              name == "VK_KHR_portability_enumeration") {
+            instance_extensions_.push_back(name);
+          }
+        }
+      }
+    }
+  }
+
+  for (const auto& ext : instance_extensions_) {
+    instance_extensions_c_str_.push_back(ext.c_str());
+  }
+
+  device_extensions_ = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  for (const auto& ext : device_extensions_) {
+    device_extensions_c_str_.push_back(ext.c_str());
+  }
+
   application_ = std::make_unique<vulkan::VulkanApplication>(
-      *vk_, "Flutter Unittests", std::vector<std::string>{},
-      VK_MAKE_VERSION(1, 0, 0), VK_MAKE_VERSION(1, 1, 0), true);
+      *vk_, "Flutter Unittests", instance_extensions_, VK_MAKE_VERSION(1, 0, 0),
+      VK_MAKE_VERSION(1, 1, 0), true);
   if (!application_->IsValid()) {
     FML_LOG(ERROR) << "Failed to initialize basic Vulkan state.";
     return;

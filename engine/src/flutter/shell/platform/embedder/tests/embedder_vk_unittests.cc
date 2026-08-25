@@ -129,6 +129,35 @@ TEST_F(EmbedderTest, CanSwapOutVulkanCalls) {
   EXPECT_TRUE(g_vulkan_proc_info.did_call_queue_submit);
 }
 
+TEST_F(EmbedderTest, CanRenderWithImpellerVulkanCompositor) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_impeller_test");
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Send a window metrics events so frames may be scheduled.
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(ImageMatchesFixture("impeller_test.png", rendered_scene));
+}
+
 }  // namespace testing
 }  // namespace flutter
 

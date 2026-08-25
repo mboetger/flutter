@@ -29,6 +29,14 @@ EmbedderTestContextVulkan::EmbedderTestContextVulkan(std::string assets_path)
       .device = vulkan_context_->device_->GetHandle(),
       .queue_family_index = vulkan_context_->device_->GetGraphicsQueueIndex(),
       .queue = vulkan_context_->device_->GetQueueHandle(),
+      .enabled_instance_extension_count =
+          vulkan_context_->GetInstanceExtensions().size(),
+      .enabled_instance_extensions = const_cast<const char**>(
+          vulkan_context_->GetInstanceExtensions().data()),
+      .enabled_device_extension_count =
+          vulkan_context_->GetDeviceExtensions().size(),
+      .enabled_device_extensions = const_cast<const char**>(
+          vulkan_context_->GetDeviceExtensions().data()),
       .get_instance_proc_address_callback =
           EmbedderTestContextVulkan::InstanceProcAddr,
       .get_next_image_callback =
