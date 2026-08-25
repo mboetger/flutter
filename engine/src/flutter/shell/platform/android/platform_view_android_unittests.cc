@@ -277,5 +277,20 @@ TEST(FlutterMainSelectedRenderingAPI, SelectsSoftwareRenderingWhenRequested) {
 }
 #endif  // !SLIMPELLER
 
+TEST(FlutterMainTest, IsEmbedderAPIEnabledReflectsSettings) {
+  {
+    Settings settings;
+    settings.enable_embedder_api = true;
+    FlutterMain flutter_main(settings, AndroidRenderingAPI::kSoftware);
+    EXPECT_TRUE(flutter_main.IsEmbedderAPIEnabled());
+  }
+  {
+    Settings settings;
+    settings.enable_embedder_api = false;
+    FlutterMain flutter_main(settings, AndroidRenderingAPI::kSoftware);
+    EXPECT_FALSE(flutter_main.IsEmbedderAPIEnabled());
+  }
+}
+
 }  // namespace testing
 }  // namespace flutter

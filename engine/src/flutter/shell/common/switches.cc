@@ -464,7 +464,8 @@ Settings SettingsFromCommandLine(const fml::CommandLine& command_line,
       command_line.HasOption(FlagForSwitch(Switch::EnableVulkanGPUTracing));
 
   settings.enable_embedder_api =
-      command_line.HasOption(FlagForSwitch(Switch::EnableEmbedderAPI));
+      command_line.HasOption(FlagForSwitch(Switch::EnableEmbedderAPI)) ||
+      command_line.HasOption(FlagForSwitch(Switch::EnableAndroidEmbedderAPI));
 
   settings.prefetched_default_font_manager = command_line.HasOption(
       FlagForSwitch(Switch::PrefetchedDefaultFontManager));

@@ -88,9 +88,16 @@ TEST(SwitchesTest, RouteParsedFlag) {
 
 TEST(SwitchesTest, EnableEmbedderAPI) {
   {
-    // enable
+    // enable via --enable-embedder-api
     fml::CommandLine command_line = fml::CommandLineFromInitializerList(
         {"command", "--enable-embedder-api"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, true);
+  }
+  {
+    // enable via --enable-android-embedder-api
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api"});
     Settings settings = SettingsFromCommandLine(command_line);
     EXPECT_EQ(settings.enable_embedder_api, true);
   }
