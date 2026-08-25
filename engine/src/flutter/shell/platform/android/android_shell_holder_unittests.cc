@@ -321,7 +321,7 @@ TEST(AndroidShellHolder, SetSemanticsTreeAndLocale) {
 
   auto platform_view = holder->GetPlatformView();
   ASSERT_TRUE(platform_view);
-  PlatformView* pv = platform_view.get();
+  PlatformViewAndroid* pv = platform_view.get();
 
   EXPECT_CALL(*jni, FlutterViewSetSemanticsTreeEnabled(true));
   pv->SetSemanticsTreeEnabled(true);
@@ -346,7 +346,7 @@ TEST(AndroidShellHolder, OnPreEngineRestart) {
 
   auto platform_view = holder->GetPlatformView();
   ASSERT_TRUE(platform_view);
-  PlatformView* pv = platform_view.get();
+  PlatformViewAndroid* pv = platform_view.get();
 
   EXPECT_CALL(*jni, FlutterViewOnPreEngineRestart());
   pv->OnPreEngineRestart();
