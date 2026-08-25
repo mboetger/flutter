@@ -43,9 +43,15 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
   bool ResourceContextClearCurrent() override;
 
   // |AndroidSurface|
+  bool OnGLContextMakeCurrent() override;
+
+  // |AndroidSurface|
   bool SetNativeWindow(
       fml::RefPtr<AndroidNativeWindow> window,
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) override;
+
+  // |AndroidSurface|
+  bool PresentOnscreenSurface() override;
 
   // |AndroidSurface|
   std::unique_ptr<Surface> CreateSnapshotSurface() override;
@@ -78,14 +84,11 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
   std::shared_ptr<AndroidContextGLImpeller> android_context_;
   std::unique_ptr<impeller::egl::Surface> onscreen_surface_;
   std::unique_ptr<impeller::egl::Surface> offscreen_surface_;
+  std::unique_ptr<impeller::egl::Surface> raster_pbuffer_surface_;
   fml::RefPtr<AndroidNativeWindow> native_window_;
 
   bool is_valid_ = false;
   std::optional<bool> should_clear_context_between_frames_;
-
-  bool OnGLContextMakeCurrent();
-
-  bool RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidSurfaceGLImpeller);
 };

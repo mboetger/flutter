@@ -43,6 +43,7 @@ executable("flutter_shell_native_unittests") {
   visibility = [ "*" ]
   testonly = true
   sources = [
+    "android_compositor_unittests.cc",
     "android_context_gl_impeller_unittests.cc",
     "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
@@ -63,6 +64,7 @@ executable("flutter_shell_native_unittests") {
     "//flutter/fml",
     "//flutter/shell/platform/android/jni:jni_mock",
     "//flutter/shell/platform/android/jni:mock_jni_env",
+    "//flutter/shell/platform/android/surface:surface_mock",
     "//flutter/third_party/googletest:gmock",
     "//flutter/third_party/googletest:gtest",
   ]
@@ -88,6 +90,8 @@ source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
   sources = [
+    "android_compositor.cc",
+    "android_compositor.h",
     "android_context_dynamic_impeller.cc",
     "android_context_dynamic_impeller.h",
     "android_context_gl_impeller.cc",

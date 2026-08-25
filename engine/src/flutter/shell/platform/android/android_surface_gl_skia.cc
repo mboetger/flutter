@@ -10,7 +10,6 @@
 #include "flutter/fml/logging.h"
 #include "flutter/fml/memory/ref_ptr.h"
 #include "flutter/shell/platform/android/android_egl_surface.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
 
 namespace flutter {
 
@@ -116,6 +115,14 @@ bool AndroidSurfaceGLSkia::SetNativeWindow(
   return true;
 }
 
+// |AndroidSurface|
+bool AndroidSurfaceGLSkia::PresentOnscreenSurface() {
+  if (!onscreen_surface_) {
+    return false;
+  }
+  return onscreen_surface_->SwapBuffers(std::nullopt);
+}
+
 std::unique_ptr<GLContextResult> AndroidSurfaceGLSkia::GLContextMakeCurrent() {
   FML_DCHECK(IsValid());
   FML_DCHECK(onscreen_surface_);
@@ -123,6 +130,18 @@ std::unique_ptr<GLContextResult> AndroidSurfaceGLSkia::GLContextMakeCurrent() {
   auto default_context_result = std::make_unique<GLContextDefaultResult>(
       status != AndroidEGLSurfaceMakeCurrentStatus::kFailure);
   return std::move(default_context_result);
+}
+
+bool AndroidSurfaceGLSkia::OnGLContextMakeCurrent() {
+  if (onscreen_surface_) {
+    auto status = onscreen_surface_->MakeCurrent();
+    return status != AndroidEGLSurfaceMakeCurrentStatus::kFailure;
+  }
+  if (offscreen_surface_) {
+    auto status = offscreen_surface_->MakeCurrent();
+    return status != AndroidEGLSurfaceMakeCurrentStatus::kFailure;
+  }
+  return false;
 }
 
 bool AndroidSurfaceGLSkia::GLContextClearCurrent() {

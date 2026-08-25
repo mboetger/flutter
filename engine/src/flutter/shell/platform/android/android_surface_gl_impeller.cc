@@ -79,9 +79,10 @@ AndroidSurfaceGLImpeller::AndroidSurfaceGLImpeller(
     const std::shared_ptr<AndroidContextGLImpeller>& android_context)
     : android_context_(android_context) {
   offscreen_surface_ = android_context_->CreateOffscreenSurface();
+  raster_pbuffer_surface_ = android_context_->CreateOffscreenSurface();
 
-  if (!offscreen_surface_) {
-    FML_DLOG(ERROR) << "Could not create offscreen surface.";
+  if (!offscreen_surface_ || !raster_pbuffer_surface_) {
+    FML_DLOG(ERROR) << "Could not create offscreen surfaces.";
     return;
   }
 
@@ -100,12 +101,15 @@ bool AndroidSurfaceGLImpeller::IsValid() const {
 // |AndroidSurface|
 std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
     GrDirectContext* gr_context) {
+  GLContextMakeCurrent();
   auto surface = std::make_unique<GPUSurfaceGLImpeller>(
       this,                                    // delegate
       android_context_->GetImpellerContext(),  // context
       true                                     // render to surface
   );
   if (!surface->IsValid()) {
+    FML_LOG(ERROR) << "AndroidSurfaceGLImpeller::CreateGPUSurface failed: "
+                      "GPUSurfaceGLImpeller is invalid.";
     return nullptr;
   }
   return surface;
@@ -119,17 +123,33 @@ void AndroidSurfaceGLImpeller::TeardownOnScreenContext() {
 
 // |AndroidSurface|
 bool AndroidSurfaceGLImpeller::OnScreenSurfaceResize(const DlISize& size) {
-  // The size is unused. It was added only for iOS where the sizes were
-  // necessary to re-create auxiliary buffers (stencil, depth, etc.).
-  return RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
+  if (!native_window_) {
+    return false;
+  }
+  onscreen_surface_.reset();
+  onscreen_surface_ =
+      android_context_->CreateOnscreenSurface(native_window_->handle());
+  if (!onscreen_surface_) {
+    FML_DLOG(ERROR) << "Could not create onscreen surface.";
+    return false;
+  }
+  return true;
 }
 
 // |AndroidSurface|
 bool AndroidSurfaceGLImpeller::ResourceContextMakeCurrent() {
   if (!offscreen_surface_) {
+    FML_LOG(ERROR) << "AndroidSurfaceGLImpeller::ResourceContextMakeCurrent: "
+                      "offscreen_surface_ is null.";
     return false;
   }
-  return android_context_->ResourceContextMakeCurrent(offscreen_surface_.get());
+  bool success =
+      android_context_->ResourceContextMakeCurrent(offscreen_surface_.get());
+  if (!success) {
+    FML_LOG(ERROR) << "AndroidSurfaceGLImpeller::ResourceContextMakeCurrent: "
+                      "android_context_->ResourceContextMakeCurrent failed.";
+  }
+  return success;
 }
 
 // |AndroidSurface|
@@ -142,7 +162,26 @@ bool AndroidSurfaceGLImpeller::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
   native_window_ = std::move(window);
-  return RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
+  if (!native_window_) {
+    onscreen_surface_.reset();
+    return true;
+  }
+  onscreen_surface_.reset();
+  onscreen_surface_ =
+      android_context_->CreateOnscreenSurface(native_window_->handle());
+  if (!onscreen_surface_) {
+    FML_DLOG(ERROR) << "Could not create onscreen surface.";
+    return false;
+  }
+  return true;
+}
+
+// |AndroidSurface|
+bool AndroidSurfaceGLImpeller::PresentOnscreenSurface() {
+  if (!onscreen_surface_) {
+    return false;
+  }
+  return onscreen_surface_->Present();
 }
 
 // |AndroidSurface|
@@ -191,20 +230,26 @@ AndroidSurfaceGLImpeller::GLContextMakeCurrent() {
 }
 
 bool AndroidSurfaceGLImpeller::OnGLContextMakeCurrent() {
-  if (!onscreen_surface_) {
-    return false;
+  if (onscreen_surface_ && onscreen_surface_->IsValid()) {
+    return android_context_->OnscreenContextMakeCurrent(
+        onscreen_surface_.get());
   }
-
-  return android_context_->OnscreenContextMakeCurrent(onscreen_surface_.get());
+  if (raster_pbuffer_surface_ && raster_pbuffer_surface_->IsValid()) {
+    return android_context_->RasterPbufferContextMakeCurrent(
+        raster_pbuffer_surface_.get());
+  }
+  return false;
 }
 
 // |GPUSurfaceGLDelegate|
 bool AndroidSurfaceGLImpeller::GLContextClearCurrent() {
-  if (!onscreen_surface_) {
-    return false;
+  if (onscreen_surface_ && onscreen_surface_->IsValid()) {
+    return android_context_->OnscreenContextClearCurrent();
   }
-
-  return android_context_->OnscreenContextClearCurrent();
+  if (raster_pbuffer_surface_ && raster_pbuffer_surface_->IsValid()) {
+    return android_context_->RasterPbufferContextClearCurrent();
+  }
+  return false;
 }
 
 // |GPUSurfaceGLDelegate|
@@ -244,23 +289,6 @@ GLFBOInfo AndroidSurfaceGLImpeller::GLContextFBO(GLFrameInfo frame_info) const {
 // |GPUSurfaceGLDelegate|
 sk_sp<const GrGLInterface> AndroidSurfaceGLImpeller::GetGLInterface() const {
   return nullptr;
-}
-
-bool AndroidSurfaceGLImpeller::
-    RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent() {
-  GLContextClearCurrent();
-  if (!native_window_) {
-    return false;
-  }
-  onscreen_surface_.reset();
-  auto onscreen_surface =
-      android_context_->CreateOnscreenSurface(native_window_->handle());
-  if (!onscreen_surface) {
-    FML_DLOG(ERROR) << "Could not create onscreen surface.";
-    return false;
-  }
-  onscreen_surface_ = std::move(onscreen_surface);
-  return OnGLContextMakeCurrent();
 }
 
 }  // namespace flutter
