@@ -56,6 +56,9 @@ EmbedderTestContextGL::EmbedderTestContextGL(std::string assets_path)
             *present_info);
       },
       .populate_existing_damage = nullptr,
+      .setup_callback = [](void* context) -> bool {
+        return reinterpret_cast<EmbedderTestContextGL*>(context)->GLSetup();
+      },
   };
 }
 
@@ -137,6 +140,23 @@ void EmbedderTestContextGL::SetGLPopulateExistingDamageCallback(
 void EmbedderTestContextGL::SetGLPresentCallback(GLPresentCallback callback) {
   std::scoped_lock lock(gl_callback_mutex_);
   gl_present_callback_ = std::move(callback);
+}
+
+void EmbedderTestContextGL::SetGLSetupCallback(GLSetupCallback callback) {
+  std::scoped_lock lock(gl_callback_mutex_);
+  gl_setup_callback_ = std::move(callback);
+}
+
+bool EmbedderTestContextGL::GLSetup() {
+  GLSetupCallback callback;
+  {
+    std::scoped_lock lock(gl_callback_mutex_);
+    callback = gl_setup_callback_;
+  }
+  if (callback) {
+    return callback();
+  }
+  return true;
 }
 
 uint32_t EmbedderTestContextGL::GLGetFramebuffer(FlutterFrameInfo frame_info) {

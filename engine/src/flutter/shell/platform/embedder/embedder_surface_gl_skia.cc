@@ -125,4 +125,14 @@ sk_sp<GrDirectContext> EmbedderSurfaceGLSkia::CreateResourceContext() const {
   return nullptr;
 }
 
+// |EmbedderSurface|
+void EmbedderSurfaceGLSkia::SetupImpellerContext() {
+  if (gl_dispatch_table_.gl_setup_callback) {
+    if (!gl_dispatch_table_.gl_setup_callback()) {
+      FML_LOG(ERROR) << "GL setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
+}
+
 }  // namespace flutter

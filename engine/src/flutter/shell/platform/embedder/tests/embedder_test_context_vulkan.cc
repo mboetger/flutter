@@ -49,6 +49,10 @@ EmbedderTestContextVulkan::EmbedderTestContextVulkan(std::string assets_path)
         return reinterpret_cast<EmbedderTestContextVulkan*>(context)
             ->PresentImage(reinterpret_cast<VkImage>(image->image));
       },
+      .setup_callback = [](void* context) -> bool {
+        return reinterpret_cast<EmbedderTestContextVulkan*>(context)
+            ->VulkanSetup();
+      },
   };
 }
 
@@ -75,6 +79,18 @@ bool EmbedderTestContextVulkan::PresentImage(VkImage image) {
   FireRootSurfacePresentCallbackIfPresent(
       [&]() { return surface_->GetSurfaceSnapshot(); });
   present_count_++;
+  return true;
+}
+
+void EmbedderTestContextVulkan::SetVulkanSetupCallback(
+    VulkanSetupCallback callback) {
+  vulkan_setup_callback_ = std::move(callback);
+}
+
+bool EmbedderTestContextVulkan::VulkanSetup() {
+  if (vulkan_setup_callback_) {
+    return vulkan_setup_callback_();
+  }
   return true;
 }
 

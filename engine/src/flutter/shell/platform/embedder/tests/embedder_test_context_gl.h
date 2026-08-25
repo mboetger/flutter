@@ -20,6 +20,7 @@ class EmbedderTestContextGL : public EmbedderTestContext {
       std::function<void(intptr_t id, FlutterDamage* existing_damage)>;
   using GLPresentCallback =
       std::function<void(FlutterPresentInfo present_info)>;
+  using GLSetupCallback = std::function<bool(void)>;
 
   explicit EmbedderTestContextGL(std::string assets_path = "");
 
@@ -73,6 +74,8 @@ class EmbedderTestContextGL : public EmbedderTestContext {
   ///
   void SetGLPresentCallback(GLPresentCallback callback);
 
+  void SetGLSetupCallback(GLSetupCallback callback);
+
   void GLPopulateExistingDamage(const intptr_t id,
                                 FlutterDamage* existing_damage);
 
@@ -92,6 +95,7 @@ class EmbedderTestContextGL : public EmbedderTestContext {
   GLGetFBOCallback gl_get_fbo_callback_;
   GLPresentCallback gl_present_callback_;
   GLPopulateExistingDamageCallback gl_populate_existing_damage_callback_;
+  GLSetupCallback gl_setup_callback_;
 
   bool GLMakeCurrent();
 
@@ -102,6 +106,8 @@ class EmbedderTestContextGL : public EmbedderTestContext {
   uint32_t GLGetFramebuffer(FlutterFrameInfo frame_info);
 
   bool GLMakeResourceCurrent();
+
+  bool GLSetup();
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderTestContextGL);
 };

@@ -16,6 +16,8 @@ namespace testing {
 
 class EmbedderTestContextVulkan : public EmbedderTestContext {
  public:
+  using VulkanSetupCallback = std::function<bool(void)>;
+
   explicit EmbedderTestContextVulkan(std::string assets_path = "");
 
   ~EmbedderTestContextVulkan() override;
@@ -33,11 +35,14 @@ class EmbedderTestContextVulkan : public EmbedderTestContext {
   void SetVulkanInstanceProcAddressCallback(
       FlutterVulkanInstanceProcAddressCallback callback);
 
+  void SetVulkanSetupCallback(VulkanSetupCallback callback);
+
   static void* InstanceProcAddr(void* user_data,
                                 FlutterVulkanInstanceHandle instance,
                                 const char* name);
 
  private:
+  bool VulkanSetup();
   // |EmbedderTestContext|
   void SetSurface(DlISize surface_size) override;
 
@@ -52,6 +57,7 @@ class EmbedderTestContextVulkan : public EmbedderTestContext {
 
   DlISize surface_size_;
   size_t present_count_ = 0;
+  VulkanSetupCallback vulkan_setup_callback_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderTestContextVulkan);
 };

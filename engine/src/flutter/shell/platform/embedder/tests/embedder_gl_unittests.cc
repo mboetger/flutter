@@ -3602,6 +3602,37 @@ TEST_F(EmbedderTest, MustRunWithPopulateExistingDamageAndFBOCallback) {
   ASSERT_TRUE(engine.is_valid());
 }
 
+TEST_F(EmbedderTest, OpenGLSetupCallbackInvokedOnRasterThread) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  fml::AutoResetWaitableEvent setup_latch;
+  context.SetGLSetupCallback([&setup_latch, &context]() {
+    EXPECT_FALSE(context.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
+    setup_latch.Signal();
+    return true;
+  });
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(100, 100));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  setup_latch.Wait();
+}
+
+TEST_F(EmbedderTest, OpenGLSetupCallbackBackwardsCompatibleWithOldStructSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  // Simulate older embedder binary with smaller FlutterOpenGLRendererConfig
+  // struct size.
+  context.GetRendererConfig().open_gl.struct_size =
+      offsetof(FlutterOpenGLRendererConfig, setup_callback);
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(100, 100));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
 TEST_F(EmbedderTest,
        MustNotRunWhenPopulateExistingDamageButNoOtherFBOCallback) {
   auto& context = GetEmbedderContext<EmbedderTestContextGL>();

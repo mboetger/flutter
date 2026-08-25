@@ -220,6 +220,16 @@ EmbedderSurfaceGLImpeller::CreateImpellerContext() const {
 }
 
 // |EmbedderSurface|
+void EmbedderSurfaceGLImpeller::SetupImpellerContext() {
+  if (gl_dispatch_table_.gl_setup_callback) {
+    if (!gl_dispatch_table_.gl_setup_callback()) {
+      FML_LOG(ERROR) << "GL setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
+}
+
+// |EmbedderSurface|
 sk_sp<GrDirectContext> EmbedderSurfaceGLImpeller::CreateResourceContext()
     const {
   if (gl_dispatch_table_.gl_make_resource_current_callback()) {

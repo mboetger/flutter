@@ -855,6 +855,11 @@ typedef struct {
   /// ID. Not specifying populate_existing_damage will result in full
   /// repaint (i.e. rendering all the pixels on the screen at every frame).
   FlutterFrameBufferWithDamageCallback populate_existing_damage;
+  /// An optional callback invoked on the raster thread before raster-thread
+  /// rendering operations begin. This allows the embedder to perform
+  /// thread-specific graphics context setup (e.g. creating thread-local EGL
+  /// contexts) on the raster thread.
+  BoolCallback setup_callback;
 } FlutterOpenGLRendererConfig;
 
 /// Alias for id<MTLDevice>.
@@ -1075,6 +1080,10 @@ typedef struct {
   /// without any additional synchronization.
   /// Not used if a FlutterCompositor is supplied in FlutterProjectArgs.
   FlutterVulkanPresentCallback present_image_callback;
+  /// An optional callback invoked on the raster thread before raster-thread
+  /// rendering operations begin. This allows the embedder to perform
+  /// thread-specific graphics context setup on the raster thread.
+  BoolCallback setup_callback;
 
 } FlutterVulkanRendererConfig;
 

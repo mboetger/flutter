@@ -79,5 +79,44 @@ TEST(EmbedderSurfaceGLImpellerTest, GLES2ContextDoesNotHaveGLES3Shaders) {
       std::string_view(reinterpret_cast<const char*>(source->GetMapping()));
   EXPECT_THAT(text, StartsWith("#version 100"));
 }
+TEST(EmbedderSurfaceGLImpellerTest,
+     SetupImpellerContextInvokesGLSetupCallback) {
+  auto gl_dispatch_table = StubDispatchTable(/* version */ "OpenGL ES 3.0");
+  bool setup_called = false;
+  gl_dispatch_table.gl_setup_callback = [&setup_called]() {
+    setup_called = true;
+    return true;
+  };
+
+  auto surface = EmbedderSurfaceGLImpeller(gl_dispatch_table,
+                                           /* fbo_reset_after_present */ false,
+                                           /* external_view_embedder */ nullptr,
+                                           /* io_task_runner */ nullptr);
+
+  EXPECT_FALSE(setup_called);
+  surface.SetupImpellerContext();
+  EXPECT_TRUE(setup_called);
+}
+
+TEST(EmbedderSurfaceGLImpellerTest,
+     SetupImpellerContextReturnsFalseWhenCallbackFails) {
+  auto gl_dispatch_table = StubDispatchTable(/* version */ "OpenGL ES 3.0");
+  bool setup_called = false;
+  gl_dispatch_table.gl_setup_callback = [&setup_called]() {
+    setup_called = true;
+    return false;
+  };
+
+  auto surface = EmbedderSurfaceGLImpeller(gl_dispatch_table,
+                                           /* fbo_reset_after_present */ false,
+                                           /* external_view_embedder */ nullptr,
+                                           /* io_task_runner */ nullptr);
+
+  EXPECT_TRUE(surface.IsValid());
+  surface.SetupImpellerContext();
+  EXPECT_TRUE(setup_called);
+  EXPECT_FALSE(surface.IsValid());
+}
+
 }  // namespace testing
 }  // namespace flutter

@@ -26,6 +26,12 @@ class EmbedderSurface {
 
   virtual sk_sp<GrDirectContext> CreateResourceContext() const;
 
+  /// Performs any deferred setup of the graphics/Impeller context.
+  ///
+  /// This is intended to be called from the raster thread so that context
+  /// initialization can be performed off the startup path on the raster thread.
+  virtual void SetupImpellerContext();
+
   /// Release any platform specific resources associated with the graphics
   /// context created by `CreateResourceContext`.
   ///

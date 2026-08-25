@@ -19,6 +19,8 @@ sk_sp<GrDirectContext> EmbedderSurface::CreateResourceContext() const {
   return nullptr;
 }
 
+void EmbedderSurface::SetupImpellerContext() {}
+
 void EmbedderSurface::ReleaseResourceContext() const {}
 
 }  // namespace flutter

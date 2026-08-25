@@ -120,6 +120,16 @@ sk_sp<GrDirectContext> EmbedderSurfaceVulkan::CreateResourceContext() const {
   return resource_context_;
 }
 
+// |EmbedderSurface|
+void EmbedderSurfaceVulkan::SetupImpellerContext() {
+  if (vulkan_dispatch_table_.setup_callback) {
+    if (!vulkan_dispatch_table_.setup_callback()) {
+      FML_LOG(ERROR) << "Vulkan setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
+}
+
 sk_sp<GrDirectContext> EmbedderSurfaceVulkan::CreateGrContext(
     VkInstance instance,
     uint32_t version,
