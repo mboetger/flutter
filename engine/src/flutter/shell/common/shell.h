@@ -470,6 +470,11 @@ class Shell final : public PlatformView::Delegate,
                                     const std::string error_message,
                                     bool transient) override;
 
+  // |PlatformView::Delegate|
+  void UpdateAssetResolverByType(
+      std::unique_ptr<AssetResolver> updated_asset_resolver,
+      AssetResolver::AssetResolverType type) override;
+
   // Infer the VM ref and the isolate snapshot based on the settings.
   //
   // If the VM is already running, the settings are ignored, but the returned
@@ -697,11 +702,6 @@ class Shell final : public PlatformView::Delegate,
   // |PlatformView::Delegate|
   std::shared_ptr<fml::BasicTaskRunner>
   OnPlatformViewGetShutdownSafeIOTaskRunner() const override;
-
-  // |PlatformView::Delegate|
-  void UpdateAssetResolverByType(
-      std::unique_ptr<AssetResolver> updated_asset_resolver,
-      AssetResolver::AssetResolverType type) override;
 
   // |Animator::Delegate|
   void OnAnimatorBeginFrame(fml::TimePoint frame_target_time,

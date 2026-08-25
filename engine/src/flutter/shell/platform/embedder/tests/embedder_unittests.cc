@@ -4457,6 +4457,106 @@ TEST_F(EmbedderTest, CanSetDeferredLibraryCallbackInProjectArgs) {
   EXPECT_EQ(s_received_user_data, &context);
 }
 
+TEST_F(EmbedderTest, InvalidAssetResolverArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterAssetResolverConfig config = {};
+  config.struct_size = sizeof(FlutterAssetResolverConfig);
+  config.type = kFlutterAssetResolverTypeCustom;
+  config.get_asset = [](const char*, FlutterAssetMapping*, void*) {
+    return false;
+  };
+
+  // Invalid engine handle.
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(nullptr, &config),
+            kInvalidArguments);
+
+  // Null config.
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), nullptr),
+            kInvalidArguments);
+
+  // Invalid struct size.
+  FlutterAssetResolverConfig invalid_size_config = config;
+  invalid_size_config.struct_size = sizeof(FlutterAssetResolverConfig) - 1;
+  EXPECT_EQ(
+      FlutterEngineUpdateAssetResolver(engine.get(), &invalid_size_config),
+      kInvalidArguments);
+
+  // Null get_asset callback.
+  FlutterAssetResolverConfig null_cb_config = config;
+  null_cb_config.get_asset = nullptr;
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &null_cb_config),
+            kInvalidArguments);
+
+  // Startup validation: null array with non-zero count.
+  EmbedderConfigBuilder invalid_builder(context);
+  invalid_builder.SetSurface(DlISize(1, 1));
+  invalid_builder.GetProjectArgs().custom_asset_resolvers = nullptr;
+  invalid_builder.GetProjectArgs().custom_asset_resolvers_count = 1;
+  auto invalid_engine = invalid_builder.LaunchEngine();
+  EXPECT_FALSE(invalid_engine.is_valid());
+
+  // Startup validation: null resolver in array.
+  EmbedderConfigBuilder null_elem_builder(context);
+  null_elem_builder.SetSurface(DlISize(1, 1));
+  const FlutterAssetResolverConfig* null_resolvers[] = {nullptr};
+  null_elem_builder.GetProjectArgs().custom_asset_resolvers = null_resolvers;
+  null_elem_builder.GetProjectArgs().custom_asset_resolvers_count = 1;
+  auto null_elem_engine = null_elem_builder.LaunchEngine();
+  EXPECT_FALSE(null_elem_engine.is_valid());
+}
+
+TEST_F(EmbedderTest, CanUpdateAssetResolver) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterAssetResolverConfig config = {};
+  config.struct_size = sizeof(FlutterAssetResolverConfig);
+  config.type = kFlutterAssetResolverTypeCustom;
+  config.get_asset = [](const char* name, FlutterAssetMapping* mapping,
+                        void* user_data) -> bool {
+    static const char* kData = "custom asset payload";
+    mapping->struct_size = sizeof(FlutterAssetMapping);
+    mapping->data = reinterpret_cast<const uint8_t*>(kData);
+    mapping->size = std::strlen(kData);
+    return true;
+  };
+
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &config), kSuccess);
+}
+
+TEST_F(EmbedderTest, CanLaunchWithCustomAssetResolversInProjectArgs) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  FlutterAssetResolverConfig resolver_config = {};
+  resolver_config.struct_size = sizeof(FlutterAssetResolverConfig);
+  resolver_config.type = kFlutterAssetResolverTypeCustom;
+  resolver_config.get_asset = [](const char*, FlutterAssetMapping* mapping,
+                                 void*) -> bool {
+    static const char* kData = "startup asset";
+    mapping->struct_size = sizeof(FlutterAssetMapping);
+    mapping->data = reinterpret_cast<const uint8_t*>(kData);
+    mapping->size = std::strlen(kData);
+    return true;
+  };
+
+  const FlutterAssetResolverConfig* resolvers[] = {&resolver_config};
+  builder.GetProjectArgs().custom_asset_resolvers = resolvers;
+  builder.GetProjectArgs().custom_asset_resolvers_count = 1;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
 }  // namespace testing
 }  // namespace flutter
 

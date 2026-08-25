@@ -97,6 +97,10 @@ class EmbedderEngine {
                                     const std::string& error_message,
                                     bool transient);
 
+  bool UpdateAssetResolver(
+      std::unique_ptr<AssetResolver> updated_asset_resolver,
+      AssetResolver::AssetResolverType type);
+
   Shell& GetShell();
 
  private:
