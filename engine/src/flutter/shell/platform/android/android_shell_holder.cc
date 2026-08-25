@@ -25,55 +25,13 @@
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/android_thread_config.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/android/platform_view_android_adapter.h"
 
 namespace flutter {
 
-/// Inheriting ThreadConfigurer and use Android platform thread API to configure
-/// the thread priorities
-static void AndroidPlatformThreadConfigSetter(
-    const fml::Thread::ThreadConfig& config) {
-  // set thread name
-  fml::Thread::SetCurrentThreadName(config);
-  // set thread priority
-  switch (config.priority) {
-    case fml::Thread::ThreadPriority::kBackground: {
-      fml::RequestAffinity(fml::CpuAffinity::kEfficiency);
-      if (::setpriority(PRIO_PROCESS, 0, 10) != 0) {
-        FML_LOG(ERROR) << "Failed to set IO task runner priority";
-      }
-      break;
-    }
-    case fml::Thread::ThreadPriority::kDisplay: {
-      fml::RequestAffinity(fml::CpuAffinity::kNotEfficiency);
-      if (::setpriority(PRIO_PROCESS, 0, -1) != 0) {
-        FML_LOG(ERROR) << "Failed to set UI task runner priority";
-      }
-      break;
-    }
-    case fml::Thread::ThreadPriority::kRaster: {
-      fml::RequestAffinity(fml::CpuAffinity::kNotEfficiency);
-      // Android describes -8 as "most important display threads, for
-      // compositing the screen and retrieving input events". Conservatively
-      // set the raster thread to slightly lower priority than it.
-      if (::setpriority(PRIO_PROCESS, 0, -5) != 0) {
-        // Defensive fallback. Depending on the OEM, it may not be possible
-        // to set priority to -5.
-        if (::setpriority(PRIO_PROCESS, 0, -2) != 0) {
-          FML_LOG(ERROR) << "Failed to set raster task runner priority";
-        }
-      }
-      break;
-    }
-    default:
-      fml::RequestAffinity(fml::CpuAffinity::kNotPerformance);
-      if (::setpriority(PRIO_PROCESS, 0, 0) != 0) {
-        FML_LOG(ERROR) << "Failed to set priority";
-      }
-  }
-}
 static PlatformData GetDefaultPlatformData() {
   PlatformData platform_data;
   platform_data.lifecycle_state = "AppLifecycleState.detached";
