@@ -49,10 +49,20 @@ class APKAssetProviderImpl : public APKAssetProviderInternal {
 
   std::unique_ptr<fml::Mapping> GetAsMapping(
       const std::string& asset_name) const override {
-    std::stringstream ss;
-    ss << directory_.c_str() << "/" << asset_name;
-    AAsset* asset = AAssetManager_open(asset_manager_, ss.str().c_str(),
-                                       AASSET_MODE_BUFFER);
+    std::string path;
+    if (directory_.empty()) {
+      path = asset_name;
+    } else if (asset_name.rfind(directory_ + "/", 0) == 0) {
+      path = asset_name;
+    } else {
+      path = directory_ + "/" + asset_name;
+    }
+    AAsset* asset =
+        AAssetManager_open(asset_manager_, path.c_str(), AASSET_MODE_BUFFER);
+    if (!asset && !directory_.empty()) {
+      asset = AAssetManager_open(asset_manager_, asset_name.c_str(),
+                                 AASSET_MODE_BUFFER);
+    }
     if (!asset) {
       return nullptr;
     }
@@ -102,6 +112,66 @@ std::unique_ptr<fml::Mapping> APKAssetProvider::GetAsMapping(
 
 std::unique_ptr<APKAssetProvider> APKAssetProvider::Clone() const {
   return std::make_unique<APKAssetProvider>(impl_);
+}
+
+bool APKAssetProvider::GetAsset(const char* asset_name,
+                                FlutterAssetMapping* mapping_out) const {
+  if (!asset_name || !mapping_out || !impl_) {
+    return false;
+  }
+  auto mapping = impl_->GetAsMapping(asset_name);
+  if (!mapping) {
+    return false;
+  }
+
+  static const uint8_t kEmptyBuffer = 0;
+  const uint8_t* data = mapping->GetMapping();
+  if (data == nullptr) {
+    if (mapping->GetSize() == 0) {
+      data = &kEmptyBuffer;
+    } else {
+      return false;
+    }
+  }
+
+  mapping_out->struct_size = sizeof(FlutterAssetMapping);
+  mapping_out->data = data;
+  mapping_out->size = mapping->GetSize();
+  auto* raw_mapping = mapping.release();
+  mapping_out->release_proc = [](void* release_user_data) {
+    delete static_cast<fml::Mapping*>(release_user_data);
+  };
+  mapping_out->release_user_data = raw_mapping;
+  return true;
+}
+
+bool APKAssetProvider::GetAssetCallback(const char* asset_name,
+                                        FlutterAssetMapping* mapping_out,
+                                        void* user_data) {
+  if (!user_data || !asset_name || !mapping_out) {
+    return false;
+  }
+  return static_cast<APKAssetProvider*>(user_data)->GetAsset(asset_name,
+                                                             mapping_out);
+}
+
+bool APKAssetProvider::IsValidAfterAssetManagerChangeCallback(void* user_data) {
+  if (!user_data) {
+    return true;
+  }
+  return static_cast<APKAssetProvider*>(user_data)
+      ->IsValidAfterAssetManagerChange();
+}
+
+FlutterAssetResolverConfig APKAssetProvider::GetAssetResolverConfig() const {
+  FlutterAssetResolverConfig config = {};
+  config.struct_size = sizeof(FlutterAssetResolverConfig);
+  config.user_data = const_cast<APKAssetProvider*>(this);
+  config.type = kFlutterAssetResolverTypeAPK;
+  config.get_asset = &APKAssetProvider::GetAssetCallback;
+  config.is_valid_after_asset_manager_change =
+      &APKAssetProvider::IsValidAfterAssetManagerChangeCallback;
+  return config;
 }
 
 bool APKAssetProvider::operator==(const AssetResolver& other) const {

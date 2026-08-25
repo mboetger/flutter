@@ -11,6 +11,7 @@
 #include "flutter/assets/asset_resolver.h"
 #include "flutter/fml/memory/ref_counted.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -42,6 +43,23 @@ class APKAssetProvider final : public AssetResolver {
   // This method is intended for use in tests. Callers must not
   // delete the returned pointer.
   APKAssetProviderInternal* GetImpl() const { return impl_.get(); }
+
+  // Produces a 'FlutterAssetResolverConfig' suitable for passing to the public
+  // Embedder API (such as 'FlutterProjectArgs' or
+  // 'FlutterEngineUpdateAssetResolver'). The caller must ensure that this
+  // APKAssetProvider instance outlives the active usage of the returned
+  // configuration.
+  FlutterAssetResolverConfig GetAssetResolverConfig() const;
+
+  // Resolves an asset mapping into a 'FlutterAssetMapping'. Returns true if
+  // found and populates 'mapping_out'.
+  bool GetAsset(const char* asset_name, FlutterAssetMapping* mapping_out) const;
+
+  static bool GetAssetCallback(const char* asset_name,
+                               FlutterAssetMapping* mapping_out,
+                               void* user_data);
+
+  static bool IsValidAfterAssetManagerChangeCallback(void* user_data);
 
   bool operator==(const AssetResolver& other) const override;
 
