@@ -269,21 +269,24 @@ TEST(AndroidShellHolder, HandleMultiplePlatformMessagesWithResponses) {
   EXPECT_TRUE(holder->IsValid());
   EXPECT_TRUE(holder->GetPlatformMessageHandler());
 
-  // Message 1 with payload response (receives response_id = 1 from PlatformMessageHandlerAndroid)
+  // Message 1 with payload response (receives response_id = 1 from
+  // PlatformMessageHandlerAndroid)
   fml::RefPtr<MockPlatformMessageResponse> response1 =
       MockPlatformMessageResponse::Create();
   constexpr char kPayload[] = "payload";
   fml::MallocMapping bytes1 =
       fml::MallocMapping::Copy(kPayload, sizeof(kPayload) - 1);
   auto message1 = std::make_unique<PlatformMessage>(
-      /*channel=*/"channel1", /*data=*/std::move(bytes1), /*response=*/response1);
+      /*channel=*/"channel1", /*data=*/std::move(bytes1),
+      /*response=*/response1);
 
   int expected_response_id1 = 1;
-  EXPECT_CALL(*jni,
-              FlutterViewHandlePlatformMessage(::testing::_, expected_response_id1));
+  EXPECT_CALL(*jni, FlutterViewHandlePlatformMessage(::testing::_,
+                                                     expected_response_id1));
   EXPECT_CALL(*response1, Complete(::testing::_));
 
-  holder->GetPlatformMessageHandler()->HandlePlatformMessage(std::move(message1));
+  holder->GetPlatformMessageHandler()->HandlePlatformMessage(
+      std::move(message1));
   constexpr char kAck[] = "ack";
   auto response_bytes = std::make_unique<fml::MallocMapping>(
       fml::MallocMapping::Copy(kAck, sizeof(kAck) - 1));
@@ -298,11 +301,12 @@ TEST(AndroidShellHolder, HandleMultiplePlatformMessagesWithResponses) {
       /*response=*/response2);
 
   int expected_response_id2 = 2;
-  EXPECT_CALL(*jni,
-              FlutterViewHandlePlatformMessage(::testing::_, expected_response_id2));
+  EXPECT_CALL(*jni, FlutterViewHandlePlatformMessage(::testing::_,
+                                                     expected_response_id2));
   EXPECT_CALL(*response2, CompleteEmpty());
 
-  holder->GetPlatformMessageHandler()->HandlePlatformMessage(std::move(message2));
+  holder->GetPlatformMessageHandler()->HandlePlatformMessage(
+      std::move(message2));
   holder->GetPlatformMessageHandler()
       ->InvokePlatformMessageEmptyResponseCallback(expected_response_id2);
 }
@@ -317,7 +321,7 @@ TEST(AndroidShellHolder, SetSemanticsTreeAndLocale) {
 
   auto platform_view = holder->GetPlatformView();
   ASSERT_TRUE(platform_view);
-  PlatformView* pv = platform_view.get();
+  PlatformViewAndroid* pv = platform_view.get();
 
   EXPECT_CALL(*jni, FlutterViewSetSemanticsTreeEnabled(true));
   pv->SetSemanticsTreeEnabled(true);
@@ -342,7 +346,7 @@ TEST(AndroidShellHolder, OnPreEngineRestart) {
 
   auto platform_view = holder->GetPlatformView();
   ASSERT_TRUE(platform_view);
-  PlatformView* pv = platform_view.get();
+  PlatformViewAndroid* pv = platform_view.get();
 
   EXPECT_CALL(*jni, FlutterViewOnPreEngineRestart());
   pv->OnPreEngineRestart();
@@ -356,10 +360,14 @@ TEST(AndroidShellHolder, UpdateDisplayMetrics) {
       settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
   EXPECT_NE(holder.get(), nullptr);
 
-  EXPECT_CALL(*jni, GetDisplayRefreshRate()).WillRepeatedly(::testing::Return(60.0));
-  EXPECT_CALL(*jni, GetDisplayWidth()).WillRepeatedly(::testing::Return(1080.0));
-  EXPECT_CALL(*jni, GetDisplayHeight()).WillRepeatedly(::testing::Return(1920.0));
-  EXPECT_CALL(*jni, GetDisplayDensity()).WillRepeatedly(::testing::Return(2.625));
+  EXPECT_CALL(*jni, GetDisplayRefreshRate())
+      .WillRepeatedly(::testing::Return(60.0));
+  EXPECT_CALL(*jni, GetDisplayWidth())
+      .WillRepeatedly(::testing::Return(1080.0));
+  EXPECT_CALL(*jni, GetDisplayHeight())
+      .WillRepeatedly(::testing::Return(1920.0));
+  EXPECT_CALL(*jni, GetDisplayDensity())
+      .WillRepeatedly(::testing::Return(2.625));
 
   holder->UpdateDisplayMetrics();
 }

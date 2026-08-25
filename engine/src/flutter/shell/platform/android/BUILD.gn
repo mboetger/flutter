@@ -49,6 +49,7 @@ executable("flutter_shell_native_unittests") {
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
     "image_lru_unittests.cc",
+    "platform_view_android_adapter_unittests.cc",
     "platform_view_android_jni_impl_unittests.cc",
     "platform_view_android_unittests.cc",
   ]
@@ -127,6 +128,8 @@ source_set("flutter_shell_native_src") {
     "platform_message_response_android.h",
     "platform_view_android.cc",
     "platform_view_android.h",
+    "platform_view_android_adapter.cc",
+    "platform_view_android_adapter.h",
     "platform_view_android_jni_impl.cc",
     "platform_view_android_jni_impl.h",
     "surface_texture_external_texture.cc",
