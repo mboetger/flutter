@@ -10,6 +10,7 @@
 
 #include "embedder.h"
 #include "embedder_engine.h"
+#include "embedder_struct_macros.h"
 #include "flutter/common/constants.h"
 #include "flutter/flow/raster_cache.h"
 #include "flutter/fml/file.h"
@@ -4871,6 +4872,28 @@ TEST_F(EmbedderTest, CanChainSpawnEngines) {
   engine_a.reset();
   // Shutdown C last.
   EXPECT_EQ(FlutterEngineShutdown(engine_c), kSuccess);
+}
+
+TEST(EmbedderRendererConfigTest, SetupCallbackSafeAccess) {
+  // Test OpenGL renderer config safe access.
+  FlutterOpenGLRendererConfig gl_config = {};
+  gl_config.struct_size = sizeof(FlutterOpenGLRendererConfig);
+  gl_config.setup_callback = [](void*) -> bool { return true; };
+  EXPECT_NE(SAFE_ACCESS((&gl_config), setup_callback, nullptr), nullptr);
+
+  // When struct size is smaller (legacy embedder binary).
+  gl_config.struct_size = offsetof(FlutterOpenGLRendererConfig, setup_callback);
+  EXPECT_EQ(SAFE_ACCESS((&gl_config), setup_callback, nullptr), nullptr);
+
+  // Test Vulkan renderer config safe access.
+  FlutterVulkanRendererConfig vk_config = {};
+  vk_config.struct_size = sizeof(FlutterVulkanRendererConfig);
+  vk_config.setup_callback = [](void*) -> bool { return true; };
+  EXPECT_NE(SAFE_ACCESS((&vk_config), setup_callback, nullptr), nullptr);
+
+  // When struct size is smaller (legacy embedder binary).
+  vk_config.struct_size = offsetof(FlutterVulkanRendererConfig, setup_callback);
+  EXPECT_EQ(SAFE_ACCESS((&vk_config), setup_callback, nullptr), nullptr);
 }
 
 }  // namespace testing

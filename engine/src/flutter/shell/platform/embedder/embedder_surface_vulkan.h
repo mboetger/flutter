@@ -24,7 +24,8 @@ class EmbedderSurfaceVulkan final : public EmbedderSurface,
     std::function<FlutterVulkanImage(const DlISize& frame_size)>
         get_next_image;  // required
     std::function<bool(VkImage image, VkFormat format)>
-        present_image;  // required
+        present_image;                         // required
+    std::function<bool(void)> setup_callback;  // optional
   };
 
   EmbedderSurfaceVulkan(
@@ -69,6 +70,9 @@ class EmbedderSurfaceVulkan final : public EmbedderSurface,
 
   // |EmbedderSurface|
   sk_sp<GrDirectContext> CreateResourceContext() const override;
+
+  // |EmbedderSurface|
+  void SetupImpellerContext() override;
 
   sk_sp<GrDirectContext> CreateGrContext(VkInstance instance,
                                          uint32_t version,

@@ -129,6 +129,33 @@ TEST_F(EmbedderTest, CanSwapOutVulkanCalls) {
   EXPECT_TRUE(g_vulkan_proc_info.did_call_queue_submit);
 }
 
+TEST_F(EmbedderTest, VulkanSetupCallbackInvokedOnRasterThread) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  fml::AutoResetWaitableEvent setup_latch;
+  context.SetVulkanSetupCallback([&setup_latch, &context]() {
+    EXPECT_FALSE(context.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
+    setup_latch.Signal();
+    return true;
+  });
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(100, 100));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  setup_latch.Wait();
+}
+
+TEST_F(EmbedderTest, VulkanSetupCallbackBackwardsCompatibleWithOldStructSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  context.GetRendererConfig().vulkan.struct_size =
+      offsetof(FlutterVulkanRendererConfig, setup_callback);
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(100, 100));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
 }  // namespace testing
 }  // namespace flutter
 

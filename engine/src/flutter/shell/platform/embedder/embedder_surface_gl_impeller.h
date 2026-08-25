@@ -59,6 +59,9 @@ class EmbedderSurfaceGLImpeller final : public EmbedderSurface,
   // |EmbedderSurface|
   std::shared_ptr<impeller::Context> CreateImpellerContext() const override;
 
+  // |EmbedderSurface|
+  void SetupImpellerContext() override;
+
   // |GPUSurfaceGLDelegate|
   std::unique_ptr<GLContextResult> GLContextMakeCurrent() override;
 

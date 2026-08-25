@@ -94,6 +94,16 @@ EmbedderSurfaceVulkanImpeller::CreateImpellerContext() const {
   return context_;
 }
 
+// |EmbedderSurface|
+void EmbedderSurfaceVulkanImpeller::SetupImpellerContext() {
+  if (vulkan_dispatch_table_.setup_callback) {
+    if (!vulkan_dispatch_table_.setup_callback()) {
+      FML_LOG(ERROR) << "Vulkan setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
+}
+
 // |GPUSurfaceVulkanDelegate|
 const vulkan::VulkanProcTable& EmbedderSurfaceVulkanImpeller::vk() {
   return *vk_;
