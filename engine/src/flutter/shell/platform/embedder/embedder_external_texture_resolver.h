@@ -34,6 +34,11 @@ class EmbedderExternalTextureResolver {
       EmbedderExternalTextureMetal::ExternalTextureCallback metal_callback);
 #endif
 
+  EmbedderExternalTextureResolver(
+      const EmbedderExternalTextureResolver& other) = default;
+  EmbedderExternalTextureResolver& operator=(
+      const EmbedderExternalTextureResolver& other) = default;
+
   std::unique_ptr<Texture> ResolveExternalTexture(int64_t texture_id);
 
   bool SupportsExternalTextures();
@@ -46,8 +51,6 @@ class EmbedderExternalTextureResolver {
 #ifdef SHELL_ENABLE_METAL
   EmbedderExternalTextureMetal::ExternalTextureCallback metal_callback_;
 #endif
-
-  FML_DISALLOW_COPY_AND_ASSIGN(EmbedderExternalTextureResolver);
 };
 }  // namespace flutter
 
