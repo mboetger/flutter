@@ -2520,6 +2520,47 @@ typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
                                           const char* /* message */,
                                           void* /* user_data */);
 
+/// Mapping of a memory buffer provided by the embedder to Flutter.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterMapping).
+  size_t struct_size;
+
+  /// Pointer to the continuous mapped memory buffer.
+  const uint8_t* mapping;
+
+  /// The size of the mapped memory buffer in bytes.
+  size_t size;
+
+  /// User data or context associated with this mapping.
+  void* user_data;
+
+  /// Callback called when Flutter has finished using this mapping and it can be
+  /// released. Optional; if null, Flutter assumes memory does not need custom
+  /// release.
+  VoidCallback release_callback;
+} FlutterMapping;
+
+/// Resolves an asset identified by name into a `FlutterMapping`.
+///
+/// If asset resolution is successful, the callback must populate `mapping_out`
+/// and return true. If asset resolution fails, returns false.
+typedef bool (*FlutterAssetResolverGetAssetCallback)(
+    const char* /* full_path */,
+    FlutterMapping* /* mapping_out */,
+    void* /* user_data */);
+
+/// An asset resolver provided by the embedder to locate and load assets.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAssetResolver).
+  size_t struct_size;
+
+  /// User data passed to callbacks.
+  void* user_data;
+
+  /// Callback to resolve an asset.
+  FlutterAssetResolverGetAssetCallback get_asset_callback;
+} FlutterAssetResolver;
+
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
@@ -2838,6 +2879,15 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// The number of asset resolvers provided in `asset_resolvers`.
+  size_t asset_resolvers_count;
+
+  /// An array of pointers to `FlutterAssetResolver`.
+  ///
+  /// The pointers and `FlutterAssetResolver` structs can be collected after the
+  /// call to `FlutterEngineInitialize` or `FlutterEngineRun` returns.
+  const FlutterAssetResolver** asset_resolvers;
 } FlutterProjectArgs;
 
 typedef struct {

@@ -69,6 +69,71 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "rapidjson/rapidjson.h"
 #include "rapidjson/writer.h"
 
+namespace flutter {
+
+class EmbedderAssetResolver final : public AssetResolver {
+ public:
+  explicit EmbedderAssetResolver(FlutterAssetResolver resolver)
+      : resolver_(resolver) {}
+
+  ~EmbedderAssetResolver() override = default;
+
+  bool IsValid() const override {
+    return resolver_.get_asset_callback != nullptr;
+  }
+
+  bool IsValidAfterAssetManagerChange() const override { return true; }
+
+  AssetResolverType GetType() const override {
+    return AssetResolverType::kEmbedderAssetResolver;
+  }
+
+  std::unique_ptr<fml::Mapping> GetAsMapping(
+      const std::string& asset_name) const override {
+    if (resolver_.get_asset_callback == nullptr) {
+      return nullptr;
+    }
+    FlutterMapping mapping = {};
+    mapping.struct_size = sizeof(FlutterMapping);
+    if (!resolver_.get_asset_callback(asset_name.c_str(), &mapping,
+                                      resolver_.user_data)) {
+      return nullptr;
+    }
+    if (mapping.mapping == nullptr) {
+      return nullptr;
+    }
+    if (mapping.release_callback != nullptr) {
+      return std::make_unique<fml::NonOwnedMapping>(
+          mapping.mapping, mapping.size,
+          [release_callback = mapping.release_callback,
+           user_data = mapping.user_data](const uint8_t* data, size_t size) {
+            release_callback(user_data);
+          });
+    } else {
+      return std::make_unique<fml::NonOwnedMapping>(mapping.mapping,
+                                                    mapping.size);
+    }
+  }
+
+  bool operator==(const AssetResolver& other) const override {
+    if (other.GetType() != GetType()) {
+      return false;
+    }
+    const auto* other_resolver =
+        static_cast<const EmbedderAssetResolver*>(&other);
+    return resolver_.user_data == other_resolver->resolver_.user_data &&
+           resolver_.get_asset_callback ==
+               other_resolver->resolver_.get_asset_callback;
+  }
+
+ private:
+  FlutterAssetResolver resolver_;
+
+  FML_DISALLOW_COPY_AND_ASSIGN(EmbedderAssetResolver);
+};
+
+}  // namespace flutter
+
 // Note: the IMPELLER_SUPPORTS_RENDERING may be defined even when the
 // embedder/BUILD.gn variable impeller_supports_rendering is disabled.
 #ifdef SHELL_ENABLE_GL
@@ -2473,6 +2538,19 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   if (SAFE_ACCESS(args, engine_id, 0) != 0) {
     run_configuration.SetEngineId(args->engine_id);
+  }
+
+  if (SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
+    for (size_t i = 0; i < args->asset_resolvers_count; ++i) {
+      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
+      if (resolver != nullptr &&
+          resolver->struct_size >= sizeof(FlutterAssetResolver) &&
+          resolver->get_asset_callback != nullptr) {
+        run_configuration.AddAssetResolver(
+            std::make_unique<flutter::EmbedderAssetResolver>(*resolver));
+      }
+    }
   }
 
   if (!run_configuration.IsValid()) {

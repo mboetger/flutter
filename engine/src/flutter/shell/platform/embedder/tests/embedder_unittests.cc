@@ -4316,6 +4316,88 @@ TEST_F(EmbedderTest, PlatformThreadIsolatesWithCustomPlatformTaskRunner) {
   ASSERT_EQ(platform_thread_id, ffi_call_thread_id);
 }
 
+TEST_F(EmbedderTest, CustomAssetResolverLoadsAssetAndInvokesReleaseCallback) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  static const std::string kAssetContent =
+      "Custom asset payload from embedder!";
+  static const std::string kAssetName = "custom_test_asset.bin";
+
+  struct ResolverContext {
+    bool release_called = false;
+    int asset_requests = 0;
+  };
+  ResolverContext resolver_ctx;
+
+  auto get_asset_cb = [](const char* name, FlutterMapping* mapping_out,
+                         void* user_data) -> bool {
+    auto* ctx = static_cast<ResolverContext*>(user_data);
+    ctx->asset_requests++;
+    if (std::string(name) == kAssetName) {
+      mapping_out->struct_size = sizeof(FlutterMapping);
+      mapping_out->mapping =
+          reinterpret_cast<const uint8_t*>(kAssetContent.data());
+      mapping_out->size = kAssetContent.size();
+      mapping_out->user_data = user_data;
+      mapping_out->release_callback = [](void* udata) {
+        auto* c = static_cast<ResolverContext*>(udata);
+        c->release_called = true;
+      };
+      return true;
+    }
+    return false;
+  };
+
+  FlutterAssetResolver asset_resolver = {
+      .struct_size = sizeof(FlutterAssetResolver),
+      .user_data = &resolver_ctx,
+      .get_asset_callback = get_asset_cb,
+  };
+
+  const FlutterAssetResolver* asset_resolvers[] = {&asset_resolver};
+  builder.GetProjectArgs().asset_resolvers_count = 1;
+  builder.GetProjectArgs().asset_resolvers = asset_resolvers;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  auto* embedder_engine = reinterpret_cast<EmbedderEngine*>(engine.get());
+  fml::AutoResetWaitableEvent latch;
+  embedder_engine->GetTaskRunners().GetUITaskRunner()->PostTask([&]() {
+    auto asset_manager =
+        embedder_engine->GetShell().GetEngine()->GetAssetManager();
+    EXPECT_NE(asset_manager, nullptr);
+
+    // 1. Verify unknown asset returns nullptr
+    auto unknown_mapping =
+        asset_manager->GetAsMapping("non_existent_asset.txt");
+    EXPECT_EQ(unknown_mapping, nullptr);
+
+    // 2. Verify known asset is loaded successfully
+    auto mapping = asset_manager->GetAsMapping(kAssetName);
+    EXPECT_NE(mapping, nullptr);
+    if (mapping) {
+      EXPECT_EQ(mapping->GetSize(), kAssetContent.size());
+      EXPECT_EQ(memcmp(mapping->GetMapping(), kAssetContent.data(),
+                       kAssetContent.size()),
+                0);
+
+      // Release callback should not have been called yet
+      EXPECT_FALSE(resolver_ctx.release_called);
+
+      // 3. Reset mapping and verify release callback was invoked
+      mapping.reset();
+      EXPECT_TRUE(resolver_ctx.release_called);
+    }
+    latch.Signal();
+  });
+  latch.Wait();
+
+  engine.reset();
+}
+
 }  // namespace testing
 }  // namespace flutter
 
