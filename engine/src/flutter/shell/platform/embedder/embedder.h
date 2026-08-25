@@ -2568,6 +2568,71 @@ typedef struct {
   bool transient;
 } FlutterLoadDeferredLibraryErrorInfo;
 
+/// Types of asset resolvers supported by the engine.
+typedef enum {
+  /// A directory-based asset bundle on the file system.
+  kFlutterAssetResolverTypeDirectory = 0,
+  /// An Android APK asset provider.
+  kFlutterAssetResolverTypeAPK = 1,
+  /// A custom user-defined asset resolver.
+  kFlutterAssetResolverTypeCustom = 2,
+} FlutterAssetResolverType;
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAssetMapping).
+  size_t struct_size;
+
+  /// Pointer to the asset data buffer. Must not be null.
+  const uint8_t* data;
+
+  /// Size of the asset data buffer in bytes. May be 0 for empty assets.
+  size_t size;
+
+  /// Optional callback invoked when the engine is done with the asset buffer.
+  /// If null, the buffer is assumed not to need explicit release.
+  ///
+  /// This callback may be invoked concurrently from background worker threads.
+  VoidCallback release_proc;
+
+  /// User data passed to `release_proc`.
+  void* release_user_data;
+} FlutterAssetMapping;
+
+/// Callback invoked to resolve a single asset by name.
+///
+/// If the asset is found, the callback must populate `asset_mapping_out` with a
+/// valid buffer and return true. If the asset does not exist, the callback must
+/// return false.
+///
+/// The callback may be invoked concurrently from background threads.
+typedef bool (*FlutterAssetResolverGetAssetCallback)(
+    const char* /* asset_name */,
+    FlutterAssetMapping* /* asset_mapping_out */,
+    void* /* user_data */);
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAssetResolverConfig).
+  size_t struct_size;
+
+  /// User data passed to the callbacks.
+  void* user_data;
+
+  /// The type of asset resolver.
+  FlutterAssetResolverType type;
+
+  /// Callback invoked to resolve an asset by name. Must not be null.
+  ///
+  /// This callback may be invoked concurrently from background threads.
+  FlutterAssetResolverGetAssetCallback get_asset;
+
+  /// Optional callback to determine if the resolver remains valid after the
+  /// asset manager changes (e.g. during a hot restart). If null, the resolver
+  /// is assumed to remain valid.
+  ///
+  /// This callback is invoked on the UI thread.
+  bool (*is_valid_after_asset_manager_change)(void* user_data);
+} FlutterAssetResolverConfig;
+
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
@@ -2892,6 +2957,13 @@ typedef struct {
   /// platform thread.
   FlutterRequestDartDeferredLibraryCallback
       request_dart_deferred_library_callback;
+
+  /// Array of custom asset resolvers to be registered with the engine at
+  /// startup.
+  const FlutterAssetResolverConfig** custom_asset_resolvers;
+
+  /// The number of custom asset resolvers in `custom_asset_resolvers`.
+  size_t custom_asset_resolvers_count;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3724,6 +3796,21 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterLoadDeferredLibraryErrorInfo* error_info);
 
+//------------------------------------------------------------------------------
+/// @brief      Updates or replaces an asset resolver in the running engine's
+///             asset manager.
+///
+/// @param[in]  engine           A running engine instance.
+/// @param[in]  resolver_config  The configuration of the asset resolver to
+///                              update.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineUpdateAssetResolver(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolverConfig* resolver_config);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3864,6 +3951,9 @@ typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterLoadDeferredLibraryErrorInfo* error_info);
+typedef FlutterEngineResult (*FlutterEngineUpdateAssetResolverFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolverConfig* resolver_config);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3916,6 +4006,7 @@ typedef struct {
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
+  FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------
