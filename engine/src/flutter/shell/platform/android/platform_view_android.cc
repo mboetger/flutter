@@ -184,36 +184,40 @@ PlatformViewAndroid::~PlatformViewAndroid() = default;
 
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
-  if (android_surface_) {
-    InstallFirstFrameCallback();
+  InstallFirstFrameCallback();
+  if (!delegate_.OnPlatformViewGetSettings().enable_embedder_api) {
+    if (android_surface_) {
+      fml::AutoResetWaitableEvent latch;
+      fml::TaskRunner::RunNowOrPostTask(
+          task_runners_.GetRasterTaskRunner(),
+          [&latch, surface = android_surface_.get(),
+           native_window = std::move(native_window),
+           jni_facade = jni_facade_]() {
+            surface->SetNativeWindow(native_window, jni_facade);
+            latch.Signal();
+          });
+      latch.Wait();
+    }
 
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->SetNativeWindow(native_window, jni_facade);
-          latch.Signal();
-        });
+    std::unique_ptr<Surface> surface;
+    fml::ManualResetWaitableEvent latch;
+    fml::TaskRunner::RunNowOrPostTask(task_runners_.GetRasterTaskRunner(),
+                                      [this, &surface, &latch]() {
+                                        surface = CreateRenderingSurface();
+                                        if (surface && !surface->IsValid()) {
+                                          surface.reset();
+                                        }
+                                        latch.Signal();
+                                      });
     latch.Wait();
+    if (!surface) {
+      FML_LOG(ERROR) << "Failed to create platform view rendering surface";
+      return;
+    }
+    delegate_.OnPlatformViewCreated(std::move(surface));
+  } else {
+    delegate_.OnPlatformViewScheduleFrame();
   }
-
-  std::unique_ptr<Surface> surface;
-  fml::ManualResetWaitableEvent latch;
-  fml::TaskRunner::RunNowOrPostTask(task_runners_.GetRasterTaskRunner(),
-                                    [this, &surface, &latch]() {
-                                      surface = CreateRenderingSurface();
-                                      if (surface && !surface->IsValid()) {
-                                        surface.reset();
-                                      }
-                                      latch.Signal();
-                                    });
-  latch.Wait();
-  if (!surface) {
-    FML_LOG(ERROR) << "Failed to create platform view rendering surface";
-    return;
-  }
-  delegate_.OnPlatformViewCreated(std::move(surface));
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
@@ -363,34 +367,30 @@ void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
   jni_facade_->FlutterViewSetSemanticsTreeEnabled(enabled);
 }
 
-void PlatformViewAndroid::RegisterExternalTexture(
+std::unique_ptr<Texture> PlatformViewAndroid::CreateSurfaceTexture(
     int64_t texture_id,
-    const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+    const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) const {
   switch (android_context_->RenderingApi()) {
     case AndroidRenderingAPI::kImpellerOpenGLES:
       // Impeller GLES.
-      delegate_.OnPlatformViewRegisterTexture(
-          std::make_shared<SurfaceTextureExternalTextureGLImpeller>(
-              std::static_pointer_cast<impeller::ContextGLES>(
-                  android_context_->GetImpellerContext()),  //
-              texture_id,                                   //
-              surface_texture,                              //
-              jni_facade_                                   //
-              ));
-      break;
+      return std::make_unique<SurfaceTextureExternalTextureGLImpeller>(
+          std::static_pointer_cast<impeller::ContextGLES>(
+              android_context_->GetImpellerContext()),  //
+          texture_id,                                   //
+          surface_texture,                              //
+          jni_facade_                                   //
+      );
 #if !SLIMPELLER
     case AndroidRenderingAPI::kSkiaOpenGLES:
       // Legacy GL.
-      delegate_.OnPlatformViewRegisterTexture(
-          std::make_shared<SurfaceTextureExternalTextureGLSkia>(
-              texture_id,       //
-              surface_texture,  //
-              jni_facade_       //
-              ));
-      break;
+      return std::make_unique<SurfaceTextureExternalTextureGLSkia>(
+          texture_id,       //
+          surface_texture,  //
+          jni_facade_       //
+      );
     case AndroidRenderingAPI::kSoftware:
       FML_LOG(INFO) << "Software rendering does not support external textures.";
-      break;
+      return nullptr;
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerVulkan:
       FML_LOG(IMPORTANT)
@@ -398,19 +398,59 @@ void PlatformViewAndroid::RegisterExternalTexture(
              "register surface textures to the new surface producer "
              "API. See https://docs.flutter.dev/release/breaking-changes/"
              "android-surface-plugins";
-      delegate_.OnPlatformViewRegisterTexture(
-          std::make_shared<SurfaceTextureExternalTextureVKImpeller>(
-              std::static_pointer_cast<impeller::ContextVK>(
-                  android_context_->GetImpellerContext()),  //
-              texture_id,                                   //
-              surface_texture,                              //
-              jni_facade_                                   //
-              ));
-      break;
+      return std::make_unique<SurfaceTextureExternalTextureVKImpeller>(
+          std::static_pointer_cast<impeller::ContextVK>(
+              android_context_->GetImpellerContext()),  //
+          texture_id,                                   //
+          surface_texture,                              //
+          jni_facade_                                   //
+      );
     case AndroidRenderingAPI::kImpellerAutoselect:
     default:
       FML_CHECK(false);
-      break;
+      return nullptr;
+  }
+}
+
+std::unique_ptr<Texture> PlatformViewAndroid::CreateImageTexture(
+    int64_t texture_id,
+    const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
+    ImageExternalTexture::ImageLifecycle lifecycle) const {
+  switch (android_context_->RenderingApi()) {
+#if !SLIMPELLER
+    case AndroidRenderingAPI::kSkiaOpenGLES:
+      // Legacy GL.
+      return std::make_unique<ImageExternalTextureGLSkia>(
+          std::static_pointer_cast<AndroidContextGLSkia>(android_context_),
+          texture_id, image_texture_entry, jni_facade_, lifecycle);
+    case AndroidRenderingAPI::kSoftware:
+      FML_LOG(INFO) << "Software rendering does not support external textures.";
+      return nullptr;
+#endif  // !SLIMPELLER
+    case AndroidRenderingAPI::kImpellerOpenGLES:
+      // Impeller GLES.
+      return std::make_unique<ImageExternalTextureGLImpeller>(
+          std::static_pointer_cast<impeller::ContextGLES>(
+              android_context_->GetImpellerContext()),
+          texture_id, image_texture_entry, jni_facade_, lifecycle);
+    case AndroidRenderingAPI::kImpellerVulkan:
+      return std::make_unique<ImageExternalTextureVKImpeller>(
+          std::static_pointer_cast<impeller::ContextVK>(
+              android_context_->GetImpellerContext()),
+          texture_id, image_texture_entry, jni_facade_, lifecycle);
+    case AndroidRenderingAPI::kImpellerAutoselect:
+    default:
+      FML_CHECK(false);
+      return nullptr;
+  }
+}
+
+void PlatformViewAndroid::RegisterExternalTexture(
+    int64_t texture_id,
+    const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+  auto texture = CreateSurfaceTexture(texture_id, surface_texture);
+  if (texture) {
+    delegate_.OnPlatformViewRegisterTexture(std::move(texture));
   }
 }
 
@@ -418,37 +458,9 @@ void PlatformViewAndroid::RegisterImageTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
     ImageExternalTexture::ImageLifecycle lifecycle) {
-  switch (android_context_->RenderingApi()) {
-#if !SLIMPELLER
-    case AndroidRenderingAPI::kSkiaOpenGLES:
-      // Legacy GL.
-      delegate_.OnPlatformViewRegisterTexture(
-          std::make_shared<ImageExternalTextureGLSkia>(
-              std::static_pointer_cast<AndroidContextGLSkia>(android_context_),
-              texture_id, image_texture_entry, jni_facade_, lifecycle));
-      break;
-    case AndroidRenderingAPI::kSoftware:
-      FML_LOG(INFO) << "Software rendering does not support external textures.";
-      break;
-#endif  // !SLIMPELLER
-    case AndroidRenderingAPI::kImpellerOpenGLES:
-      // Impeller GLES.
-      delegate_.OnPlatformViewRegisterTexture(
-          std::make_shared<ImageExternalTextureGLImpeller>(
-              std::static_pointer_cast<impeller::ContextGLES>(
-                  android_context_->GetImpellerContext()),
-              texture_id, image_texture_entry, jni_facade_, lifecycle));
-      break;
-    case AndroidRenderingAPI::kImpellerVulkan:
-      delegate_.OnPlatformViewRegisterTexture(
-          std::make_shared<ImageExternalTextureVKImpeller>(
-              std::static_pointer_cast<impeller::ContextVK>(
-                  android_context_->GetImpellerContext()),
-              texture_id, image_texture_entry, jni_facade_, lifecycle));
-      break;
-    case AndroidRenderingAPI::kImpellerAutoselect:
-      FML_CHECK(false);
-      break;
+  auto texture = CreateImageTexture(texture_id, image_texture_entry, lifecycle);
+  if (texture) {
+    delegate_.OnPlatformViewRegisterTexture(std::move(texture));
   }
 }
 

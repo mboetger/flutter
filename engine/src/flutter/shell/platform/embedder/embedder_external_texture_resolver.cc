@@ -9,6 +9,10 @@
 
 namespace flutter {
 
+EmbedderExternalTextureResolver::EmbedderExternalTextureResolver(
+    CustomExternalTextureCallback custom_callback)
+    : custom_callback_(std::move(custom_callback)) {}
+
 #ifdef SHELL_ENABLE_GL
 EmbedderExternalTextureResolver::EmbedderExternalTextureResolver(
     EmbedderExternalTextureGL::ExternalTextureCallback gl_callback)
@@ -21,18 +25,22 @@ EmbedderExternalTextureResolver::EmbedderExternalTextureResolver(
     : metal_callback_(std::move(metal_callback)) {}
 #endif
 
-std::unique_ptr<Texture>
+std::shared_ptr<Texture>
 EmbedderExternalTextureResolver::ResolveExternalTexture(int64_t texture_id) {
+  if (custom_callback_) {
+    return custom_callback_(texture_id);
+  }
+
 #ifdef SHELL_ENABLE_GL
   if (gl_callback_) {
-    return std::make_unique<EmbedderExternalTextureGL>(texture_id,
+    return std::make_shared<EmbedderExternalTextureGL>(texture_id,
                                                        gl_callback_);
   }
 #endif
 
 #ifdef SHELL_ENABLE_METAL
   if (metal_callback_) {
-    return std::make_unique<EmbedderExternalTextureMetal>(texture_id,
+    return std::make_shared<EmbedderExternalTextureMetal>(texture_id,
                                                           metal_callback_);
   }
 #endif
@@ -40,7 +48,11 @@ EmbedderExternalTextureResolver::ResolveExternalTexture(int64_t texture_id) {
   return nullptr;
 }
 
-bool EmbedderExternalTextureResolver::SupportsExternalTextures() {
+bool EmbedderExternalTextureResolver::SupportsExternalTextures() const {
+  if (custom_callback_) {
+    return true;
+  }
+
 #ifdef SHELL_ENABLE_GL
   if (gl_callback_) {
     return true;
