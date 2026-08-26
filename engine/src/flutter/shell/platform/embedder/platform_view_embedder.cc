@@ -19,7 +19,8 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
       : parent_(std::move(parent)),
         platform_task_runner_(std::move(platform_task_runner)) {}
 
-  virtual void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) {
+  void HandlePlatformMessage(
+      std::unique_ptr<PlatformMessage> message) override {
     platform_task_runner_->PostTask(fml::MakeCopyable(
         [parent = parent_, message = std::move(message)]() mutable {
           if (parent) {
@@ -31,14 +32,25 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
         }));
   }
 
-  virtual bool DoesHandlePlatformMessageOnPlatformThread() const {
+  bool DoesHandlePlatformMessageOnPlatformThread() const override {
     return true;
   }
 
-  virtual void InvokePlatformMessageResponseCallback(
+  void InvokePlatformMessageResponseCallback(
       int response_id,
-      std::unique_ptr<fml::Mapping> mapping) {}
-  virtual void InvokePlatformMessageEmptyResponseCallback(int response_id) {}
+      std::unique_ptr<fml::Mapping> mapping) override {
+    if (parent_) {
+      reinterpret_cast<PlatformViewEmbedder*>(parent_.get())
+          ->InvokePlatformMessageResponseCallback(response_id,
+                                                  std::move(mapping));
+    }
+  }
+  void InvokePlatformMessageEmptyResponseCallback(int response_id) override {
+    if (parent_) {
+      reinterpret_cast<PlatformViewEmbedder*>(parent_.get())
+          ->InvokePlatformMessageEmptyResponseCallback(response_id);
+    }
+  }
 
  private:
   fml::WeakPtr<PlatformView> parent_;
@@ -160,6 +172,13 @@ std::shared_ptr<impeller::Context> PlatformViewEmbedder::GetImpellerContext()
 }
 
 // |PlatformView|
+void PlatformViewEmbedder::SetupImpellerContext() {
+  if (embedder_surface_) {
+    embedder_surface_->SetupImpellerContext();
+  }
+}
+
+// |PlatformView|
 sk_sp<GrDirectContext> PlatformViewEmbedder::CreateResourceContext() const {
   if (embedder_surface_ == nullptr) {
     FML_LOG(ERROR) << "Embedder surface was null.";
@@ -237,6 +256,25 @@ void PlatformViewEmbedder::RequestDartDeferredLibrary(
 std::shared_ptr<PlatformMessageHandler>
 PlatformViewEmbedder::GetPlatformMessageHandler() const {
   return platform_message_handler_;
+}
+
+void PlatformViewEmbedder::InvokePlatformMessageResponseCallback(
+    int response_id,
+    std::unique_ptr<fml::Mapping> mapping) {
+  if (platform_dispatch_table_.platform_message_response_completion_callback !=
+      nullptr) {
+    platform_dispatch_table_.platform_message_response_completion_callback(
+        response_id, std::move(mapping));
+  }
+}
+
+void PlatformViewEmbedder::InvokePlatformMessageEmptyResponseCallback(
+    int response_id) {
+  if (platform_dispatch_table_
+          .platform_message_empty_response_completion_callback != nullptr) {
+    platform_dispatch_table_
+        .platform_message_empty_response_completion_callback(response_id);
+  }
 }
 
 }  // namespace flutter

@@ -6,6 +6,8 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_SHELL_HOLDER_H_
 
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "flutter/fml/macros.h"
 #include "flutter/shell/common/run_configuration.h"
@@ -13,6 +15,7 @@
 #include "flutter/shell/common/thread_host.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
+#include "flutter/shell/platform/android/embedder_surface_android.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 
@@ -92,6 +95,10 @@ class AndroidShellHolder {
 
   fml::WeakPtr<PlatformViewAndroid> GetPlatformView();
 
+  PlatformViewAndroid* GetPlatformViewAndroid();
+
+  EmbedderSurfaceAndroid* GetEmbedderSurfaceAndroid();
+
   bool IsSurfaceControlEnabled();
 
   Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
@@ -112,7 +119,9 @@ class AndroidShellHolder {
  private:
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
+  std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
+  EmbedderSurfaceAndroid* embedder_surface_ = nullptr;
   std::shared_ptr<ThreadHost> thread_host_;
   std::unique_ptr<Shell> shell_;
   bool is_valid_ = false;
@@ -136,7 +145,8 @@ class AndroidShellHolder {
                      const std::shared_ptr<ThreadHost>& thread_host,
                      std::unique_ptr<Shell> shell,
                      std::unique_ptr<APKAssetProvider> apk_asset_provider,
-                     const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+                     std::unique_ptr<PlatformViewAndroid> platform_view_android,
+                     EmbedderSurfaceAndroid* embedder_surface,
                      AndroidRenderingAPI rendering_api);
   static void ThreadDestructCallback(void* value);
   std::optional<RunConfiguration> BuildRunConfiguration(

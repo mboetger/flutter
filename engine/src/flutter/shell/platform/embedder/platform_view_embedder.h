@@ -50,6 +50,11 @@ class PlatformViewEmbedder final : public PlatformView {
       std::function<void(const ViewFocusChangeRequest&)>;
   using RequestDartDeferredLibraryCallback =
       std::function<void(intptr_t loading_unit_id)>;
+  using PlatformMessageResponseCompletionCallback =
+      std::function<void(int response_id,
+                         std::unique_ptr<fml::Mapping> mapping)>;
+  using PlatformMessageEmptyResponseCompletionCallback =
+      std::function<void(int response_id)>;
 
   struct PlatformDispatchTable {
     UpdateSemanticsCallback update_semantics_callback;  // optional
@@ -64,6 +69,10 @@ class PlatformViewEmbedder final : public PlatformView {
         view_focus_change_request_callback;  // optional
     RequestDartDeferredLibraryCallback
         request_dart_deferred_library_callback;  // optional
+    PlatformMessageResponseCompletionCallback
+        platform_message_response_completion_callback;  // optional
+    PlatformMessageEmptyResponseCompletionCallback
+        platform_message_empty_response_completion_callback;  // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -120,6 +129,12 @@ class PlatformViewEmbedder final : public PlatformView {
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override;
 
+  void InvokePlatformMessageResponseCallback(
+      int response_id,
+      std::unique_ptr<fml::Mapping> mapping);
+
+  void InvokePlatformMessageEmptyResponseCallback(int response_id);
+
  private:
   class EmbedderPlatformMessageHandler;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
@@ -135,6 +150,9 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   std::shared_ptr<impeller::Context> GetImpellerContext() const override;
+
+  // |PlatformView|
+  void SetupImpellerContext() override;
 
   // |PlatformView|
   sk_sp<GrDirectContext> CreateResourceContext() const override;
