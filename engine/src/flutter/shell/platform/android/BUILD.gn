@@ -45,6 +45,7 @@ executable("flutter_shell_native_unittests") {
   sources = [
     "android_compositor_unittests.cc",
     "android_context_gl_impeller_unittests.cc",
+    "android_engine_unittests.cc",
     "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
     "android_thread_config_unittests.cc",
@@ -102,6 +103,8 @@ source_set("flutter_shell_native_src") {
     "android_display.h",
     "android_egl_surface.cc",
     "android_egl_surface.h",
+    "android_engine.cc",
+    "android_engine.h",
     "android_environment_gl.cc",
     "android_environment_gl.h",
     "android_shell_holder.cc",
@@ -164,11 +167,8 @@ source_set("flutter_shell_native_src") {
     ]
   }
 
-  sources += get_target_outputs(":icudtl_asm")
-
   public_deps = [
     ":android_gpu_configuration",
-    ":icudtl_asm",
     ":image_generator",
     "//flutter/assets",
     "//flutter/common",
@@ -190,7 +190,7 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface",
     "//flutter/shell/platform/android/surface:native_window",
-    "//flutter/shell/platform/embedder:embedder_headers",
+    "//flutter/shell/platform/embedder:embedder_as_internal_library",
     "//flutter/skia",
     "//flutter/txt",
     "//flutter/vulkan",
