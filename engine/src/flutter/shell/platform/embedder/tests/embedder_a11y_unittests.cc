@@ -13,6 +13,7 @@
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/lib/ui/semantics/semantics_node.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_semantics_update.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/testing/testing.h"
 #include "third_party/tonic/converter/dart_converter.h"
@@ -883,6 +884,60 @@ TEST_F(EmbedderA11yTest, A11yTreesAreConsistentWithMultipleViews) {
   ASSERT_EQ(result, FlutterEngineResult::kSuccess);
   notify_semantics_enabled_latch_3.Wait();
 #endif
+}
+
+TEST_F(EmbedderTest, SemanticsNode2ExtendedFields) {
+  flutter::SemanticsNodeUpdates nodes;
+  flutter::CustomAccessibilityActionUpdates actions;
+
+  // Test node ID constant.
+  constexpr int32_t kNodeId = 42;
+  // Maximum character limit in text field.
+  constexpr int32_t kMaxValueLength = 100;
+  // Current character length in text field.
+  constexpr int32_t kCurrentValueLength = 10;
+  // Accessibility traversal parent node ID.
+  constexpr int32_t kTraversalParent = 5;
+  // Heading rank level.
+  constexpr int32_t kHeadingLevel = 2;
+
+  flutter::SemanticsNode node;
+  node.id = kNodeId;
+  node.maxValueLength = kMaxValueLength;
+  node.currentValueLength = kCurrentValueLength;
+  node.traversalParent = kTraversalParent;
+  node.minValue = "0.0";
+  node.maxValue = "100.0";
+  node.linkUrl = "https://flutter.dev";
+  node.role = flutter::SemanticsRole::kTab;
+  node.validationResult = flutter::SemanticsValidationResult::kValid;
+  node.locale = "en-US";
+  node.headingLevel = kHeadingLevel;
+  node.identifier = "test_tab";
+
+  nodes[node.id] = node;
+
+  flutter::EmbedderSemanticsUpdate2 update(0, nodes, actions);
+  const FlutterSemanticsUpdate2* semantics_update = update.get();
+  ASSERT_NE(semantics_update, nullptr);
+  ASSERT_EQ(semantics_update->node_count, 1u);
+
+  const FlutterSemanticsNode2* semantics_node = semantics_update->nodes[0];
+  ASSERT_NE(semantics_node, nullptr);
+  ASSERT_EQ(semantics_node->struct_size, sizeof(FlutterSemanticsNode2));
+  ASSERT_EQ(semantics_node->id, kNodeId);
+  ASSERT_EQ(semantics_node->max_value_length, kMaxValueLength);
+  ASSERT_EQ(semantics_node->current_value_length, kCurrentValueLength);
+  ASSERT_EQ(semantics_node->traversal_parent, kTraversalParent);
+  ASSERT_STREQ(semantics_node->min_value, "0.0");
+  ASSERT_STREQ(semantics_node->max_value, "100.0");
+  ASSERT_STREQ(semantics_node->link_url, "https://flutter.dev");
+  ASSERT_EQ(semantics_node->role, kFlutterSemanticsRoleTab);
+  ASSERT_EQ(semantics_node->validation_result,
+            kFlutterSemanticsValidationResultValid);
+  ASSERT_STREQ(semantics_node->locale, "en-US");
+  ASSERT_EQ(semantics_node->heading_level, kHeadingLevel);
+  ASSERT_STREQ(semantics_node->identifier, "test_tab");
 }
 
 }  // namespace testing

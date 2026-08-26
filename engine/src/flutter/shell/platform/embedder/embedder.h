@@ -1696,6 +1696,54 @@ typedef struct {
   int32_t heading_level;
 } FlutterSemanticsNode;
 
+/// The role of a semantics node in the semantics tree.
+///
+/// Must match `SemanticsRole` in `lib/ui/semantics.dart`.
+typedef enum {
+  kFlutterSemanticsRoleNone = 0,
+  kFlutterSemanticsRoleTab = 1,
+  kFlutterSemanticsRoleTabBar = 2,
+  kFlutterSemanticsRoleTabPanel = 3,
+  kFlutterSemanticsRoleDialog = 4,
+  kFlutterSemanticsRoleAlertDialog = 5,
+  kFlutterSemanticsRoleTable = 6,
+  kFlutterSemanticsRoleCell = 7,
+  kFlutterSemanticsRoleRow = 8,
+  kFlutterSemanticsRoleColumnHeader = 9,
+  kFlutterSemanticsRoleDragHandle = 10,
+  kFlutterSemanticsRoleSpinButton = 11,
+  kFlutterSemanticsRoleComboBox = 12,
+  kFlutterSemanticsRoleMenuBar = 13,
+  kFlutterSemanticsRoleMenu = 14,
+  kFlutterSemanticsRoleMenuItem = 15,
+  kFlutterSemanticsRoleMenuItemCheckbox = 16,
+  kFlutterSemanticsRoleMenuItemRadio = 17,
+  kFlutterSemanticsRoleList = 18,
+  kFlutterSemanticsRoleListItem = 19,
+  kFlutterSemanticsRoleForm = 20,
+  kFlutterSemanticsRoleTooltip = 21,
+  kFlutterSemanticsRoleLoadingSpinner = 22,
+  kFlutterSemanticsRoleProgressBar = 23,
+  kFlutterSemanticsRoleHotKey = 24,
+  kFlutterSemanticsRoleRadioGroup = 25,
+  kFlutterSemanticsRoleStatus = 26,
+  kFlutterSemanticsRoleAlert = 27,
+  kFlutterSemanticsRoleComplementary = 28,
+  kFlutterSemanticsRoleContentInfo = 29,
+  kFlutterSemanticsRoleMain = 30,
+  kFlutterSemanticsRoleNavigation = 31,
+  kFlutterSemanticsRoleRegion = 32,
+} FlutterSemanticsRole;
+
+/// The validation result of a semantics node.
+///
+/// Must match `SemanticsValidationResult` in `lib/ui/semantics.dart`.
+typedef enum {
+  kFlutterSemanticsValidationResultNone = 0,
+  kFlutterSemanticsValidationResultValid = 1,
+  kFlutterSemanticsValidationResultInvalid = 2,
+} FlutterSemanticsValidationResult;
+
 /// A node in the Flutter semantics tree.
 ///
 /// The semantics tree is maintained during the semantics phase of the pipeline
@@ -1705,7 +1753,7 @@ typedef struct {
 ///
 /// @see https://api.flutter.dev/flutter/semantics/SemanticsNode-class.html
 typedef struct {
-  /// The size of this struct. Must be sizeof(FlutterSemanticsNode).
+  /// The size of this struct. Must be sizeof(FlutterSemanticsNode2).
   size_t struct_size;
   /// The unique identifier for this node.
   int32_t id;
@@ -1810,6 +1858,26 @@ typedef struct {
   /// This is usually used for UI testing with tools that work by querying the
   /// native accessibility, like UI Automator, XCUITest, or Appium.
   const char* identifier;
+  /// The maximum number of characters that can be entered into the text field.
+  /// A value of -1 means there is no limit.
+  int32_t max_value_length;
+  /// The current number of characters entered into the text field.
+  /// A value of -1 means the length is unknown.
+  int32_t current_value_length;
+  /// The parent node ID for accessibility traversal, or 0 if none.
+  int32_t traversal_parent;
+  /// The minimum possible value of this node (e.g. for sliders).
+  const char* min_value;
+  /// The maximum possible value of this node (e.g. for sliders).
+  const char* max_value;
+  /// A link URL associated with the node.
+  const char* link_url;
+  /// The semantic role of the node.
+  FlutterSemanticsRole role;
+  /// The validation result of the node.
+  FlutterSemanticsValidationResult validation_result;
+  /// A locale string in BCP 47 format for the node.
+  const char* locale;
 } FlutterSemanticsNode2;
 
 /// `FlutterSemanticsCustomAction` ID used as a sentinel to signal the end of a

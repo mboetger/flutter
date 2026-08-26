@@ -344,6 +344,15 @@ void EmbedderSemanticsUpdate2::AddNode(const SemanticsNode& node) {
       flags_.back().get(),
       node.headingLevel,
       node.identifier.c_str(),
+      node.maxValueLength,
+      node.currentValueLength,
+      node.traversalParent,
+      node.minValue.c_str(),
+      node.maxValue.c_str(),
+      node.linkUrl.c_str(),
+      static_cast<FlutterSemanticsRole>(node.role),
+      static_cast<FlutterSemanticsValidationResult>(node.validationResult),
+      node.locale.c_str(),
   });
 }
 
