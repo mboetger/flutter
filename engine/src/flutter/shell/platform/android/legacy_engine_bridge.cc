@@ -25,72 +25,13 @@
 #include "flutter/shell/platform/android/android_display.h"
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
+#include "flutter/shell/platform/android/android_thread_priority.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/embedder_surface_android.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
 namespace flutter {
-
-// Android platform thread priority constants:
-// Priority 10 represents nice priority for low-priority background work.
-constexpr int kBackgroundThreadNicePriority = 10;
-// Priority -1 gives slight priority boost to UI display thread.
-constexpr int kDisplayThreadNicePriority = -1;
-// Priority -5 gives display-level compositor priority to raster thread.
-constexpr int kRasterThreadPrimaryNicePriority = -5;
-// Priority -2 is a conservative fallback if -5 is disallowed by the OEM.
-constexpr int kRasterThreadFallbackNicePriority = -2;
-// Priority 0 represents standard normal thread nice priority.
-constexpr int kNormalThreadNicePriority = 0;
-// Priority 1 gives workers slightly lower priority than interactive UI.
-constexpr int kWorkerThreadNicePriority = 1;
-
-/// Inheriting ThreadConfigurer and use Android platform thread API to configure
-/// the thread priorities
-static void AndroidPlatformThreadConfigSetter(
-    const fml::Thread::ThreadConfig& config) {
-  // set thread name
-  fml::Thread::SetCurrentThreadName(config);
-  // set thread priority
-  switch (config.priority) {
-    case fml::Thread::ThreadPriority::kBackground: {
-      fml::RequestAffinity(fml::CpuAffinity::kEfficiency);
-      if (::setpriority(PRIO_PROCESS, 0, kBackgroundThreadNicePriority) != 0) {
-        FML_LOG(ERROR) << "Failed to set IO task runner priority";
-      }
-      break;
-    }
-    case fml::Thread::ThreadPriority::kDisplay: {
-      fml::RequestAffinity(fml::CpuAffinity::kNotEfficiency);
-      if (::setpriority(PRIO_PROCESS, 0, kDisplayThreadNicePriority) != 0) {
-        FML_LOG(ERROR) << "Failed to set UI task runner priority";
-      }
-      break;
-    }
-    case fml::Thread::ThreadPriority::kRaster: {
-      fml::RequestAffinity(fml::CpuAffinity::kNotEfficiency);
-      // Android describes -8 as "most important display threads, for
-      // compositing the screen and retrieving input events". Conservatively
-      // set the raster thread to slightly lower priority than it.
-      if (::setpriority(PRIO_PROCESS, 0, kRasterThreadPrimaryNicePriority) !=
-          0) {
-        // Defensive fallback. Depending on the OEM, it may not be possible
-        // to set priority to -5.
-        if (::setpriority(PRIO_PROCESS, 0, kRasterThreadFallbackNicePriority) !=
-            0) {
-          FML_LOG(ERROR) << "Failed to set raster task runner priority";
-        }
-      }
-      break;
-    }
-    default:
-      fml::RequestAffinity(fml::CpuAffinity::kNotPerformance);
-      if (::setpriority(PRIO_PROCESS, 0, kNormalThreadNicePriority) != 0) {
-        FML_LOG(ERROR) << "Failed to set priority";
-      }
-  }
-}
 
 static PlatformData GetDefaultPlatformData() {
   PlatformData platform_data;
@@ -275,12 +216,8 @@ LegacyEngineBridge::LegacyEngineBridge(
       );
 
   if (shell_) {
-    shell_->GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers([]() {
-      if (::setpriority(PRIO_PROCESS, gettid(), kWorkerThreadNicePriority) !=
-          0) {
-        FML_LOG(ERROR) << "Failed to set Workers task runner priority";
-      }
-    });
+    shell_->GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers(
+        []() { AndroidConfigureWorkerThreadPriority(); });
 
     shell_->RegisterImageDecoder(
         [runner = task_runners.GetIOTaskRunner()](sk_sp<SkData> buffer) {
