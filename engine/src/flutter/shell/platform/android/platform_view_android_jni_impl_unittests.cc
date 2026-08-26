@@ -9,7 +9,6 @@
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/shell/platform/android/android_engine.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
@@ -150,10 +149,10 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
   EXPECT_CALL(mock_env, GetIntArrayRegion(_, _, _, _)).Times(0);
 
   Settings settings;
-  settings.enable_software_rendering = false;
+  settings.enable_software_rendering = true;
   auto jni = std::make_shared<JNIMock>();
-  auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  auto engine = std::make_unique<AndroidEngine>(settings, jni,
+                                                AndroidRenderingAPI::kSoftware);
 
   jobject jcaller = reinterpret_cast<jobject>(123);
   jintArray bounds = reinterpret_cast<jintArray>(456);
@@ -161,7 +160,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
   jintArray state = reinterpret_cast<jintArray>(1011);
 
   set_viewport_metrics(&mock_env, jcaller,
-                       reinterpret_cast<jlong>(holder.get()), 1.0f, 100, 100, 0,
+                       reinterpret_cast<jlong>(engine.get()), 1.0f, 100, 100, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
                        0, 0, 0, 0, 0, 0, 0, 0);
 }

@@ -22,28 +22,20 @@
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
 #include "flutter/lib/ui/plugins/callback_cache.h"
+#include "flutter/runtime/dart_snapshot.h"
+#include "flutter/shell/common/display.h"
 #include "flutter/shell/platform/android/android_engine.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 
-#define ANDROID_SHELL_HOLDER \
-  (reinterpret_cast<AndroidShellHolder*>(shell_holder))
-
 namespace flutter {
 
 static fml::WeakPtr<PlatformViewAndroid> GetPlatformView(jlong shell_holder) {
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
-    return engine ? engine->GetPlatformView()
-                  : fml::WeakPtr<PlatformViewAndroid>();
-  } else {
-    auto* holder = reinterpret_cast<AndroidShellHolder*>(shell_holder);
-    return holder ? holder->GetPlatformView()
-                  : fml::WeakPtr<PlatformViewAndroid>();
-  }
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  return engine ? engine->GetPlatformView()
+                : fml::WeakPtr<PlatformViewAndroid>();
 }
 
 static fml::jni::ScopedJavaGlobalRef<jclass>* g_flutter_callback_info_class =
@@ -64,10 +56,6 @@ static fml::jni::ScopedJavaGlobalRef<jclass>* g_image_class = nullptr;
 static fml::jni::ScopedJavaGlobalRef<jclass>* g_hardware_buffer_class = nullptr;
 
 static fml::jni::ScopedJavaGlobalRef<jclass>* g_java_long_class = nullptr;
-
-static fml::jni::ScopedJavaGlobalRef<jclass>* g_bitmap_class = nullptr;
-
-static fml::jni::ScopedJavaGlobalRef<jclass>* g_bitmap_config_class = nullptr;
 
 // Called By Native
 
@@ -164,12 +152,6 @@ static jmethodID g_overlay_surface_id_method = nullptr;
 
 static jmethodID g_overlay_surface_surface_method = nullptr;
 
-static jmethodID g_bitmap_create_bitmap_method = nullptr;
-
-static jmethodID g_bitmap_copy_pixels_from_buffer_method = nullptr;
-
-static jmethodID g_bitmap_config_value_of = nullptr;
-
 // Mutators
 static fml::jni::ScopedJavaGlobalRef<jclass>* g_mutators_stack_class = nullptr;
 static jmethodID g_mutators_stack_init_method = nullptr;
@@ -199,33 +181,18 @@ static jlong AttachJNI(JNIEnv* env, jclass clazz, jobject flutterJNI) {
   fml::jni::JavaObjectWeakGlobalRef java_object(env, flutterJNI);
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade =
       std::make_shared<PlatformViewAndroidJNIImpl>(java_object);
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    auto engine = std::make_unique<AndroidEngine>(
-        FlutterMain::Get().GetSettings(), jni_facade,
-        FlutterMain::Get().GetAndroidRenderingAPI());
-    if (engine->IsValid()) {
-      return reinterpret_cast<jlong>(engine.release());
-    } else {
-      return 0;
-    }
+  auto engine = std::make_unique<AndroidEngine>(
+      FlutterMain::Get().GetSettings(), jni_facade,
+      FlutterMain::Get().GetAndroidRenderingAPI());
+  if (engine->IsValid()) {
+    return reinterpret_cast<jlong>(engine.release());
   } else {
-    auto shell_holder = std::make_unique<AndroidShellHolder>(
-        FlutterMain::Get().GetSettings(), jni_facade,
-        FlutterMain::Get().GetAndroidRenderingAPI());
-    if (shell_holder->IsValid()) {
-      return reinterpret_cast<jlong>(shell_holder.release());
-    } else {
-      return 0;
-    }
+    return 0;
   }
 }
 
 static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    delete reinterpret_cast<AndroidEngine*>(shell_holder);
-  } else {
-    delete reinterpret_cast<AndroidShellHolder*>(shell_holder);
-  }
+  delete reinterpret_cast<AndroidEngine*>(shell_holder);
 }
 
 // Signature is similar to RunBundleAndSnapshotFromLibrary but it can't change
@@ -233,10 +200,10 @@ static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
 // AOT.
 //
 // The shell_holder instance must be a pointer address to the current
-// AndroidShellHolder or AndroidEngine whose Shell/Engine will be used to spawn.
+// AndroidEngine whose Shell/Engine will be used to spawn.
 //
 // This creates a Java Long that points to the newly created
-// AndroidShellHolder/AndroidEngine raw pointer, connects that Long to a newly
+// AndroidEngine raw pointer, connects that Long to a newly
 // created FlutterJNI instance, then returns the FlutterJNI instance.
 static jobject SpawnJNI(JNIEnv* env,
                         jobject jcaller,
@@ -266,29 +233,14 @@ static jobject SpawnJNI(JNIEnv* env,
   auto initial_route = fml::jni::JavaStringToString(env, jInitialRoute);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  jlong spawned_native_ptr = 0;
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
-    auto spawned_engine =
-        engine->Spawn(jni_facade, entrypoint, libraryUrl, initial_route,
-                      entrypoint_args, engineId);
-    if (spawned_engine == nullptr || !spawned_engine->IsValid()) {
-      FML_LOG(ERROR) << "Could not spawn AndroidEngine";
-      return nullptr;
-    }
-    spawned_native_ptr = reinterpret_cast<jlong>(spawned_engine.release());
-  } else {
-    auto spawned_shell_holder =
-        ANDROID_SHELL_HOLDER->Spawn(jni_facade, entrypoint, libraryUrl,
-                                    initial_route, entrypoint_args, engineId);
-
-    if (spawned_shell_holder == nullptr || !spawned_shell_holder->IsValid()) {
-      FML_LOG(ERROR) << "Could not spawn Shell";
-      return nullptr;
-    }
-    spawned_native_ptr =
-        reinterpret_cast<jlong>(spawned_shell_holder.release());
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  auto spawned_engine = engine->Spawn(jni_facade, entrypoint, libraryUrl,
+                                      initial_route, entrypoint_args, engineId);
+  if (spawned_engine == nullptr || !spawned_engine->IsValid()) {
+    FML_LOG(ERROR) << "Could not spawn AndroidEngine";
+    return nullptr;
   }
+  jlong spawned_native_ptr = reinterpret_cast<jlong>(spawned_engine.get());
 
   jobject javaLong = env->CallStaticObjectMethod(
       g_java_long_class->obj(), g_long_constructor, spawned_native_ptr);
@@ -297,6 +249,7 @@ static jobject SpawnJNI(JNIEnv* env,
     return nullptr;
   }
 
+  spawned_engine.release();
   env->SetObjectField(jni, g_jni_shell_holder_field, javaLong);
 
   return jni;
@@ -370,15 +323,10 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
   auto libraryUrl = fml::jni::JavaStringToString(env, jLibraryUrl);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
-    if (engine) {
-      engine->Launch(std::move(apk_asset_provider), entrypoint, libraryUrl,
-                     entrypoint_args, engineId);
-    }
-  } else {
-    ANDROID_SHELL_HOLDER->Launch(std::move(apk_asset_provider), entrypoint,
-                                 libraryUrl, entrypoint_args, engineId);
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    engine->Launch(std::move(apk_asset_provider), entrypoint, libraryUrl,
+                   entrypoint_args, engineId);
   }
 }
 
@@ -502,64 +450,22 @@ static void SetViewportMetrics(JNIEnv* env,
 static void UpdateDisplayMetrics(JNIEnv* env,
                                  jobject jcaller,
                                  jlong shell_holder) {
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
-    if (engine) {
-      engine->UpdateDisplayMetrics();
-    }
-  } else {
-    ANDROID_SHELL_HOLDER->UpdateDisplayMetrics();
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    engine->UpdateDisplayMetrics();
   }
 }
 
 static bool IsSurfaceControlEnabled(JNIEnv* env,
                                     jobject jcaller,
                                     jlong shell_holder) {
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
-    return engine ? engine->IsSurfaceControlEnabled() : false;
-  } else {
-    return ANDROID_SHELL_HOLDER->IsSurfaceControlEnabled();
-  }
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  return engine ? engine->IsSurfaceControlEnabled() : false;
 }
 
 static jobject GetBitmap(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  Rasterizer::Screenshot screenshot = {nullptr, DlISize(), "",
-                                       Rasterizer::ScreenshotFormat::kUnknown};
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    // Screenshots via embedder path will be hooked up in compositor.
-  } else {
-    screenshot = ANDROID_SHELL_HOLDER->Screenshot(
-        Rasterizer::ScreenshotType::UncompressedImage, false);
-  }
-  if (screenshot.data == nullptr) {
-    return nullptr;
-  }
-
-  jstring argb = env->NewStringUTF("ARGB_8888");
-  if (argb == nullptr) {
-    return nullptr;
-  }
-
-  jobject bitmap_config = env->CallStaticObjectMethod(
-      g_bitmap_config_class->obj(), g_bitmap_config_value_of, argb);
-  if (bitmap_config == nullptr) {
-    return nullptr;
-  }
-
-  auto bitmap = env->CallStaticObjectMethod(
-      g_bitmap_class->obj(), g_bitmap_create_bitmap_method,
-      screenshot.frame_size.width, screenshot.frame_size.height, bitmap_config);
-
-  fml::jni::ScopedJavaLocalRef<jobject> buffer(
-      env,
-      env->NewDirectByteBuffer(const_cast<uint8_t*>(screenshot.data->bytes()),
-                               screenshot.data->size()));
-
-  env->CallVoidMethod(bitmap, g_bitmap_copy_pixels_from_buffer_method,
-                      buffer.obj());
-
-  return bitmap;
+  // Screenshots under Embedder API are rendered directly to views/surfaces.
+  return nullptr;
 }
 
 static void DispatchPlatformMessage(JNIEnv* env,
@@ -751,13 +657,9 @@ static void InvokePlatformMessageEmptyResponseCallback(JNIEnv* env,
 static void NotifyLowMemoryWarning(JNIEnv* env,
                                    jobject obj,
                                    jlong shell_holder) {
-  if (FlutterMain::Get().IsEmbedderAPIEnabled()) {
-    auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
-    if (engine) {
-      engine->NotifyLowMemoryWarning();
-    }
-  } else {
-    ANDROID_SHELL_HOLDER->NotifyLowMemoryWarning();
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    engine->NotifyLowMemoryWarning();
   }
 }
 
@@ -1137,43 +1039,6 @@ bool RegisterApi(JNIEnv* env) {
   if (g_overlay_surface_surface_method == nullptr) {
     FML_LOG(ERROR)
         << "Could not locate FlutterOverlaySurface#getSurface() method";
-    return false;
-  }
-
-  g_bitmap_class = new fml::jni::ScopedJavaGlobalRef<jclass>(
-      env, env->FindClass("android/graphics/Bitmap"));
-  if (g_bitmap_class->is_null()) {
-    FML_LOG(ERROR) << "Could not locate Bitmap Class";
-    return false;
-  }
-
-  g_bitmap_create_bitmap_method = env->GetStaticMethodID(
-      g_bitmap_class->obj(), "createBitmap",
-      "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
-  if (g_bitmap_create_bitmap_method == nullptr) {
-    FML_LOG(ERROR) << "Could not locate Bitmap.createBitmap method";
-    return false;
-  }
-
-  g_bitmap_copy_pixels_from_buffer_method = env->GetMethodID(
-      g_bitmap_class->obj(), "copyPixelsFromBuffer", "(Ljava/nio/Buffer;)V");
-  if (g_bitmap_copy_pixels_from_buffer_method == nullptr) {
-    FML_LOG(ERROR) << "Could not locate Bitmap.copyPixelsFromBuffer method";
-    return false;
-  }
-
-  g_bitmap_config_class = new fml::jni::ScopedJavaGlobalRef<jclass>(
-      env, env->FindClass("android/graphics/Bitmap$Config"));
-  if (g_bitmap_config_class->is_null()) {
-    FML_LOG(ERROR) << "Could not locate Bitmap.Config Class";
-    return false;
-  }
-
-  g_bitmap_config_value_of = env->GetStaticMethodID(
-      g_bitmap_config_class->obj(), "valueOf",
-      "(Ljava/lang/String;)Landroid/graphics/Bitmap$Config;");
-  if (g_bitmap_config_value_of == nullptr) {
-    FML_LOG(ERROR) << "Could not locate Bitmap.Config.valueOf method";
     return false;
   }
 
