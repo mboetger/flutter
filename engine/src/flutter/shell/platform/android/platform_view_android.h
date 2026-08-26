@@ -153,6 +153,15 @@ class PlatformViewAndroid final {
 
   void SetAccessibilityFeatures(int32_t flags);
 
+  std::unique_ptr<Texture> CreateSurfaceTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) const;
+
+  std::unique_ptr<Texture> CreateImageTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
+      ImageExternalTexture::ImageLifecycle lifecycle) const;
+
   void RegisterExternalTexture(
       int64_t texture_id,
       const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);

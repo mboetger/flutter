@@ -292,5 +292,160 @@ TEST(FlutterMainTest, IsEmbedderAPIEnabledReflectsSettings) {
   }
 }
 
+TEST(PlatformViewAndroidTest, CreateAndRegisterExternalTextures) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto task_runner = fml::MessageLoop::GetCurrent().GetTaskRunner();
+  TaskRunners task_runners("test", task_runner, task_runner, task_runner,
+                           task_runner);
+
+  MockPlatformViewAndroidDelegate delegate;
+  Settings settings;
+  settings.enable_software_rendering = false;
+  EXPECT_CALL(delegate, OnPlatformViewGetSettings())
+      .WillRepeatedly(::testing::ReturnRef(settings));
+  EXPECT_CALL(delegate, OnPlatformViewGetShutdownSafeIOTaskRunner())
+      .WillRepeatedly(::testing::Return(nullptr));
+
+  auto jni = std::make_shared<JNIMock>();
+  auto platform_view = std::make_unique<PlatformViewAndroid>(
+      delegate, task_runners, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  // Surface texture creation and registration.
+  fml::jni::ScopedJavaGlobalRef<jobject> null_surface_texture;
+  auto surface_texture =
+      platform_view->CreateSurfaceTexture(101, null_surface_texture);
+  ASSERT_NE(surface_texture, nullptr);
+  EXPECT_EQ(surface_texture->Id(), 101);
+
+  EXPECT_CALL(delegate, OnPlatformViewRegisterTexture(::testing::_))
+      .WillOnce([](std::shared_ptr<flutter::Texture> tex) {
+        ASSERT_NE(tex, nullptr);
+        EXPECT_EQ(tex->Id(), 101);
+      });
+  platform_view->RegisterExternalTexture(101, null_surface_texture);
+
+  // Image texture creation and registration.
+  fml::jni::ScopedJavaGlobalRef<jobject> null_image_texture;
+  auto image_texture = platform_view->CreateImageTexture(
+      202, null_image_texture,
+      ImageExternalTexture::ImageLifecycle::kKeepAlive);
+  ASSERT_NE(image_texture, nullptr);
+  EXPECT_EQ(image_texture->Id(), 202);
+
+  EXPECT_CALL(delegate, OnPlatformViewRegisterTexture(::testing::_))
+      .WillOnce([](std::shared_ptr<flutter::Texture> tex) {
+        ASSERT_NE(tex, nullptr);
+        EXPECT_EQ(tex->Id(), 202);
+      });
+  platform_view->RegisterImageTexture(
+      202, null_image_texture,
+      ImageExternalTexture::ImageLifecycle::kKeepAlive);
+}
+
+TEST(PlatformViewAndroidTest, SoftwareRenderingReturnsNullTextures) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto task_runner = fml::MessageLoop::GetCurrent().GetTaskRunner();
+  TaskRunners task_runners("test", task_runner, task_runner, task_runner,
+                           task_runner);
+
+  MockPlatformViewAndroidDelegate delegate;
+  Settings settings;
+  settings.enable_software_rendering = true;
+  EXPECT_CALL(delegate, OnPlatformViewGetSettings())
+      .WillRepeatedly(::testing::ReturnRef(settings));
+  EXPECT_CALL(delegate, OnPlatformViewGetShutdownSafeIOTaskRunner())
+      .WillRepeatedly(::testing::Return(nullptr));
+
+  auto jni = std::make_shared<JNIMock>();
+  auto platform_view = std::make_unique<PlatformViewAndroid>(
+      delegate, task_runners, jni, AndroidRenderingAPI::kSoftware);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  EXPECT_EQ(platform_view->CreateSurfaceTexture(301, null_ref), nullptr);
+  EXPECT_EQ(platform_view->CreateImageTexture(
+                302, null_ref, ImageExternalTexture::ImageLifecycle::kReset),
+            nullptr);
+
+  // RegisterExternalTexture / RegisterImageTexture should safely no-op and not
+  // call delegate.
+  EXPECT_CALL(delegate, OnPlatformViewRegisterTexture(::testing::_)).Times(0);
+  platform_view->RegisterExternalTexture(301, null_ref);
+  platform_view->RegisterImageTexture(
+      302, null_ref, ImageExternalTexture::ImageLifecycle::kReset);
+}
+
+TEST(PlatformViewAndroidTest, CreateAndRegisterExternalTexturesVulkan) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto task_runner = fml::MessageLoop::GetCurrent().GetTaskRunner();
+  TaskRunners task_runners("test", task_runner, task_runner, task_runner,
+                           task_runner);
+
+  MockPlatformViewAndroidDelegate delegate;
+  Settings settings;
+  settings.enable_software_rendering = false;
+  EXPECT_CALL(delegate, OnPlatformViewGetSettings())
+      .WillRepeatedly(::testing::ReturnRef(settings));
+  EXPECT_CALL(delegate, OnPlatformViewGetShutdownSafeIOTaskRunner())
+      .WillRepeatedly(::testing::Return(nullptr));
+
+  auto jni = std::make_shared<JNIMock>();
+  auto platform_view = std::make_unique<PlatformViewAndroid>(
+      delegate, task_runners, jni, AndroidRenderingAPI::kImpellerVulkan);
+
+  // Vulkan Surface Texture creation & registration.
+  fml::jni::ScopedJavaGlobalRef<jobject> null_surface_texture;
+  auto surface_texture =
+      platform_view->CreateSurfaceTexture(401, null_surface_texture);
+  ASSERT_NE(surface_texture, nullptr);
+  EXPECT_EQ(surface_texture->Id(), 401);
+
+  EXPECT_CALL(delegate, OnPlatformViewRegisterTexture(::testing::_))
+      .WillOnce([](std::shared_ptr<flutter::Texture> tex) {
+        ASSERT_NE(tex, nullptr);
+        EXPECT_EQ(tex->Id(), 401);
+      });
+  platform_view->RegisterExternalTexture(401, null_surface_texture);
+
+  // Vulkan Image Texture creation & registration.
+  fml::jni::ScopedJavaGlobalRef<jobject> null_image_texture;
+  auto image_texture = platform_view->CreateImageTexture(
+      402, null_image_texture, ImageExternalTexture::ImageLifecycle::kReset);
+  ASSERT_NE(image_texture, nullptr);
+  EXPECT_EQ(image_texture->Id(), 402);
+
+  EXPECT_CALL(delegate, OnPlatformViewRegisterTexture(::testing::_))
+      .WillOnce([](std::shared_ptr<flutter::Texture> tex) {
+        ASSERT_NE(tex, nullptr);
+        EXPECT_EQ(tex->Id(), 402);
+      });
+  platform_view->RegisterImageTexture(
+      402, null_image_texture, ImageExternalTexture::ImageLifecycle::kReset);
+}
+
+TEST(PlatformViewAndroidTest, TextureLifecycleUnregisterAndMarkFrameAvailable) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto task_runner = fml::MessageLoop::GetCurrent().GetTaskRunner();
+  TaskRunners task_runners("test", task_runner, task_runner, task_runner,
+                           task_runner);
+
+  MockPlatformViewAndroidDelegate delegate;
+  Settings settings;
+  settings.enable_software_rendering = false;
+  EXPECT_CALL(delegate, OnPlatformViewGetSettings())
+      .WillRepeatedly(::testing::ReturnRef(settings));
+  EXPECT_CALL(delegate, OnPlatformViewGetShutdownSafeIOTaskRunner())
+      .WillRepeatedly(::testing::Return(nullptr));
+
+  auto jni = std::make_shared<JNIMock>();
+  auto platform_view = std::make_unique<PlatformViewAndroid>(
+      delegate, task_runners, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  EXPECT_CALL(delegate, OnPlatformViewUnregisterTexture(501)).Times(1);
+  platform_view->UnregisterTexture(501);
+
+  EXPECT_CALL(delegate, OnPlatformViewMarkTextureFrameAvailable(501)).Times(1);
+  platform_view->MarkTextureFrameAvailable(501);
+}
+
 }  // namespace testing
 }  // namespace flutter

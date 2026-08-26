@@ -4896,6 +4896,89 @@ TEST(EmbedderRendererConfigTest, SetupCallbackSafeAccess) {
   EXPECT_EQ(SAFE_ACCESS((&vk_config), setup_callback, nullptr), nullptr);
 }
 
+namespace {
+class EmbedderTestTexture : public Texture {
+ public:
+  explicit EmbedderTestTexture(int64_t id) : Texture(id) {}
+  ~EmbedderTestTexture() override = default;
+
+  void Paint(PaintContext& context,
+             const DlRect& bounds,
+             bool freeze,
+             const DlImageSampling sampling) override {}
+  void MarkNewFrameAvailable() override {}
+  void OnTextureUnregistered() override {}
+  void OnGrContextCreated() override {}
+  void OnGrContextDestroyed() override {}
+};
+}  // namespace
+
+TEST(EmbedderExternalTextureResolverTest, CustomExternalTextureCallback) {
+  EmbedderExternalTextureResolver default_resolver;
+  EXPECT_FALSE(default_resolver.SupportsExternalTextures());
+  EXPECT_EQ(default_resolver.ResolveExternalTexture(100), nullptr);
+
+  int callback_invocations = 0;
+  int64_t requested_texture_id = 0;
+  EmbedderExternalTextureResolver custom_resolver(
+      [&](int64_t id) -> std::unique_ptr<Texture> {
+        callback_invocations++;
+        requested_texture_id = id;
+        if (id < 0) {
+          return nullptr;
+        }
+        return std::make_unique<EmbedderTestTexture>(id);
+      });
+
+  EXPECT_TRUE(custom_resolver.SupportsExternalTextures());
+  auto texture = custom_resolver.ResolveExternalTexture(42);
+  EXPECT_EQ(callback_invocations, 1);
+  EXPECT_EQ(requested_texture_id, 42);
+  ASSERT_NE(texture, nullptr);
+  EXPECT_EQ(texture->Id(), 42);
+
+  // When callback returns nullptr for invalid/unregistered id.
+  auto null_texture = custom_resolver.ResolveExternalTexture(-1);
+  EXPECT_EQ(callback_invocations, 2);
+  EXPECT_EQ(requested_texture_id, -1);
+  EXPECT_EQ(null_texture, nullptr);
+
+  // Copy construction preserves custom resolver callback.
+  EmbedderExternalTextureResolver copied_resolver(custom_resolver);
+  EXPECT_TRUE(copied_resolver.SupportsExternalTextures());
+  auto copied_texture = copied_resolver.ResolveExternalTexture(84);
+  EXPECT_EQ(callback_invocations, 3);
+  EXPECT_EQ(requested_texture_id, 84);
+  ASSERT_NE(copied_texture, nullptr);
+  EXPECT_EQ(copied_texture->Id(), 84);
+
+  // Copy assignment preserves custom resolver callback.
+  EmbedderExternalTextureResolver copy_assigned;
+  copy_assigned = copied_resolver;
+  EXPECT_TRUE(copy_assigned.SupportsExternalTextures());
+  auto copy_assigned_texture = copy_assigned.ResolveExternalTexture(85);
+  EXPECT_EQ(callback_invocations, 4);
+  EXPECT_EQ(requested_texture_id, 85);
+  ASSERT_NE(copy_assigned_texture, nullptr);
+
+  // Move construction transfers custom resolver callback.
+  EmbedderExternalTextureResolver moved_resolver(std::move(custom_resolver));
+  EXPECT_TRUE(moved_resolver.SupportsExternalTextures());
+  auto moved_texture = moved_resolver.ResolveExternalTexture(90);
+  EXPECT_EQ(callback_invocations, 5);
+  EXPECT_EQ(requested_texture_id, 90);
+  ASSERT_NE(moved_texture, nullptr);
+
+  // Move assignment transfers custom resolver callback.
+  EmbedderExternalTextureResolver move_assigned;
+  move_assigned = std::move(copied_resolver);
+  EXPECT_TRUE(move_assigned.SupportsExternalTextures());
+  auto move_assigned_texture = move_assigned.ResolveExternalTexture(91);
+  EXPECT_EQ(callback_invocations, 6);
+  EXPECT_EQ(requested_texture_id, 91);
+  ASSERT_NE(move_assigned_texture, nullptr);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
