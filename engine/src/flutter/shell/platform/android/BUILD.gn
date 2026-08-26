@@ -45,6 +45,7 @@ executable("flutter_shell_native_unittests") {
   sources = [
     "android_compositor_unittests.cc",
     "android_context_gl_impeller_unittests.cc",
+    "android_engine_bridge_unittests.cc",
     "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
     "android_surface_manager_unittests.cc",

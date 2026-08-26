@@ -36,10 +36,9 @@ class EmbedderPlatformViewDelegate;
 ///
 class EmbedderEngineBridge : public AndroidEngineBridge {
  public:
-  EmbedderEngineBridge(
-      const flutter::Settings& settings,
-      std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
-      AndroidRenderingAPI android_rendering_api);
+  EmbedderEngineBridge(const flutter::Settings& settings,
+                       std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+                       AndroidRenderingAPI android_rendering_api);
 
   ~EmbedderEngineBridge() override;
 
