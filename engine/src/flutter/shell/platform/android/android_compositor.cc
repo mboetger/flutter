@@ -11,11 +11,12 @@
 #include "flutter/fml/make_copyable.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/impeller/renderer/backend/vulkan/context_vk.h"
 
 namespace flutter {
 
 namespace {
-constexpr uint32_t kGLFramebuffer = 0x8D40;
+constexpr uint32_t kGLRGBA8 = 0x8058;
 }  // namespace
 
 AndroidCompositor::AndroidCompositor(
@@ -28,15 +29,14 @@ AndroidCompositor::AndroidCompositor(
       surface_factory_(std::move(surface_factory)),
       task_runners_(task_runners),
       surface_pool_(
-          std::make_unique<SurfacePool>(/*use_new_surface_methods=*/true)),
-      weak_factory_(this) {}
+          std::make_unique<SurfacePool>(/*use_new_surface_methods=*/true)) {
+  if (surface_factory_) {
+    android_surface_ = surface_factory_->CreateSurface();
+  }
+}
 
 AndroidCompositor::~AndroidCompositor() {
   Teardown();
-}
-
-fml::WeakPtr<AndroidCompositor> AndroidCompositor::GetWeakPtr() {
-  return weak_factory_.GetWeakPtr();
 }
 
 FlutterCompositor AndroidCompositor::GetFlutterCompositor() {
@@ -105,7 +105,7 @@ bool AndroidCompositor::CreateBackingStore(
     default: {
       backing_store_out->type = kFlutterBackingStoreTypeOpenGL;
       backing_store_out->open_gl.type = kFlutterOpenGLTargetTypeFramebuffer;
-      backing_store_out->open_gl.framebuffer.target = kGLFramebuffer;
+      backing_store_out->open_gl.framebuffer.target = kGLRGBA8;
       backing_store_out->open_gl.framebuffer.name = 0;
       backing_store_out->open_gl.framebuffer.user_data = nullptr;
       backing_store_out->open_gl.framebuffer.destruction_callback = [](void*) {
@@ -146,20 +146,39 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
                                 size_t layers_count) {
   TRACE_EVENT0("flutter", "AndroidCompositor::Present");
 
+  const bool is_hcpp = IsSurfaceControlEnabled();
+
   if (layers_count == 0) {
     if (jni_facade_) {
-      task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
-          [weak_this = GetWeakPtr(), jni_facade = jni_facade_,
-           views_visible_last_frame = views_visible_last_frame_]() {
-            if (weak_this) {
-              weak_this->HideOverlayLayerIfNeeded();
-            }
-            for (int64_t id : views_visible_last_frame) {
-              jni_facade->hidePlatformView2(id);
-            }
-            jni_facade->swapTransaction();
-            jni_facade->onEndFrame2();
-          }));
+      if (is_hcpp) {
+        task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
+            [weak_this = weak_from_this(), jni_facade = jni_facade_,
+             views_visible_last_frame = views_visible_last_frame_]() {
+              if (auto strong_this = weak_this.lock()) {
+                strong_this->HideOverlayLayerIfNeeded();
+              }
+              for (int64_t id : views_visible_last_frame) {
+                jni_facade->hidePlatformView2(id);
+              }
+              jni_facade->swapTransaction();
+              jni_facade->onEndFrame2();
+            }));
+      } else {
+        if (!views_visible_last_frame_.empty()) {
+          if (legacy_overlay_created_) {
+            legacy_overlay_gpu_surface_.reset();
+            legacy_overlay_surface_.reset();
+            legacy_overlay_metadata_.reset();
+            legacy_overlay_created_ = false;
+          }
+          task_runners_.GetPlatformTaskRunner()->PostTask(
+              fml::MakeCopyable([jni_facade = jni_facade_]() {
+                jni_facade->FlutterViewDestroyOverlaySurfaces();
+                jni_facade->FlutterViewBeginFrame();
+                jni_facade->FlutterViewEndFrame();
+              }));
+        }
+      }
     }
     views_visible_last_frame_.clear();
     return true;
@@ -183,18 +202,38 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
 
   if (!has_platform_views) {
     if (jni_facade_) {
-      task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
-          [weak_this = GetWeakPtr(), jni_facade = jni_facade_,
-           views_visible_last_frame = views_visible_last_frame_]() {
-            if (weak_this) {
-              weak_this->HideOverlayLayerIfNeeded();
-            }
-            for (int64_t id : views_visible_last_frame) {
-              jni_facade->hidePlatformView2(id);
-            }
-            jni_facade->swapTransaction();
-            jni_facade->onEndFrame2();
-          }));
+      if (is_hcpp) {
+        task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
+            [weak_this = weak_from_this(), jni_facade = jni_facade_,
+             views_visible_last_frame = views_visible_last_frame_]() {
+              if (auto strong_this = weak_this.lock()) {
+                strong_this->HideOverlayLayerIfNeeded();
+              }
+              for (int64_t id : views_visible_last_frame) {
+                jni_facade->hidePlatformView2(id);
+              }
+              jni_facade->swapTransaction();
+              jni_facade->onEndFrame2();
+            }));
+      } else {
+        if (!views_visible_last_frame_.empty()) {
+          if (legacy_overlay_created_) {
+            legacy_overlay_gpu_surface_.reset();
+            legacy_overlay_surface_.reset();
+            legacy_overlay_metadata_.reset();
+            legacy_overlay_created_ = false;
+          }
+          task_runners_.GetPlatformTaskRunner()->PostTask(
+              fml::MakeCopyable([jni_facade = jni_facade_]() {
+                jni_facade->FlutterViewDestroyOverlaySurfaces();
+                jni_facade->FlutterViewBeginFrame();
+                jni_facade->FlutterViewEndFrame();
+              }));
+        }
+      }
+    }
+    if (!is_hcpp && android_surface_) {
+      android_surface_->PresentOnscreenSurface();
     }
     views_visible_last_frame_.clear();
     return true;
@@ -251,38 +290,150 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
       }
     }
 
-    task_runners_.GetPlatformTaskRunner()->PostTask(
-        fml::MakeCopyable([weak_this = GetWeakPtr(), jni_facade = jni_facade_,
-                           display_infos = std::move(display_infos),
-                           views_visible_last_frame = views_visible_last_frame_,
-                           current_views = current_visible_views,
-                           has_overlay_backing_store]() mutable {
-          if (weak_this) {
-            if (has_overlay_backing_store) {
-              weak_this->ShowOverlayLayerIfNeeded();
+    if (is_hcpp) {
+      task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
+          [weak_this = weak_from_this(), jni_facade = jni_facade_,
+           display_infos = std::move(display_infos),
+           views_visible_last_frame = views_visible_last_frame_,
+           current_views = current_visible_views,
+           has_overlay_backing_store]() mutable {
+            if (auto strong_this = weak_this.lock()) {
+              if (has_overlay_backing_store) {
+                strong_this->ShowOverlayLayerIfNeeded();
+              } else {
+                strong_this->HideOverlayLayerIfNeeded();
+              }
+            }
+
+            absl::flat_hash_set<int64_t> current_set(current_views.begin(),
+                                                     current_views.end());
+
+            for (const auto& info : display_infos) {
+              jni_facade->onDisplayPlatformView2(
+                  info.view_id, info.x, info.y, info.width, info.height,
+                  info.view_width, info.view_height, info.mutators_stack);
+            }
+
+            for (int64_t old_view_id : views_visible_last_frame) {
+              if (!current_set.contains(old_view_id)) {
+                jni_facade->hidePlatformView2(old_view_id);
+              }
+            }
+
+            jni_facade->swapTransaction();
+            jni_facade->onEndFrame2();
+          }));
+    } else {
+      struct OverlayInfo {
+        int32_t x;
+        int32_t y;
+        int32_t width;
+        int32_t height;
+      };
+      std::vector<OverlayInfo> overlay_infos;
+      seen_platform_view = false;
+      for (size_t i = 0; i < layers_count; ++i) {
+        const FlutterLayer* layer = layers[i];
+        if (layer == nullptr) {
+          continue;
+        }
+        if (layer->type == kFlutterLayerContentTypePlatformView) {
+          seen_platform_view = true;
+        } else if (layer->type == kFlutterLayerContentTypeBackingStore &&
+                   seen_platform_view) {
+          OverlayInfo o;
+          o.x = static_cast<int32_t>(std::round(layer->offset.x));
+          o.y = static_cast<int32_t>(std::round(layer->offset.y));
+          o.width = static_cast<int32_t>(std::round(layer->size.width));
+          o.height = static_cast<int32_t>(std::round(layer->size.height));
+          overlay_infos.push_back(o);
+        }
+      }
+
+      if (!overlay_infos.empty()) {
+        DlISize target_size =
+            frame_size_.width > 0 && frame_size_.height > 0
+                ? frame_size_
+                : DlISize(overlay_infos[0].width, overlay_infos[0].height);
+        if (target_size.width <= 0 || target_size.height <= 0) {
+          target_size = DlISize(1, 1);
+        }
+
+        if (!legacy_overlay_created_) {
+          fml::AutoResetWaitableEvent latch;
+          fml::TaskRunner::RunNowOrPostTask(
+              task_runners_.GetPlatformTaskRunner(), [&]() {
+                if (jni_facade_) {
+                  legacy_overlay_metadata_ =
+                      jni_facade_->FlutterViewCreateOverlaySurface();
+                }
+                latch.Signal();
+              });
+          latch.Wait();
+          legacy_overlay_created_ = true;
+          if (legacy_overlay_metadata_ && surface_factory_ &&
+              legacy_overlay_metadata_->window) {
+            legacy_overlay_surface_ = surface_factory_->CreateSurface();
+            if (legacy_overlay_surface_) {
+              legacy_overlay_surface_->SetNativeWindow(
+                  legacy_overlay_metadata_->window, jni_facade_);
+              legacy_overlay_surface_->OnScreenSurfaceResize(target_size);
+              legacy_overlay_surface_->SetupImpellerSurface();
+              legacy_overlay_gpu_surface_ =
+                  legacy_overlay_surface_->CreateGPUSurface();
+            }
+          }
+        }
+        if (legacy_overlay_gpu_surface_) {
+          auto frame = legacy_overlay_gpu_surface_->AcquireFrame(target_size);
+          if (frame) {
+            auto* canvas = frame->Canvas();
+            if (canvas) {
+              canvas->Clear(DlColor::kTransparent());
+            }
+            frame->Submit();
+          }
+          if (android_surface_) {
+            android_surface_->OnGLContextMakeCurrent();
+          }
+        }
+      } else if (legacy_overlay_created_) {
+        legacy_overlay_gpu_surface_.reset();
+        legacy_overlay_surface_.reset();
+        legacy_overlay_metadata_.reset();
+        legacy_overlay_created_ = false;
+      }
+
+      bool has_overlay = legacy_overlay_metadata_ && !overlay_infos.empty();
+      int32_t overlay_id =
+          legacy_overlay_metadata_ ? legacy_overlay_metadata_->id : 0;
+
+      if (android_surface_) {
+        android_surface_->PresentOnscreenSurface();
+      }
+
+      task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
+          [weak_this = weak_from_this(), jni_facade = jni_facade_,
+           display_infos = std::move(display_infos),
+           overlay_infos = std::move(overlay_infos), has_overlay,
+           overlay_id]() mutable {
+            jni_facade->FlutterViewBeginFrame();
+            for (const auto& info : display_infos) {
+              jni_facade->FlutterViewOnDisplayPlatformView(
+                  info.view_id, info.x, info.y, info.width, info.height,
+                  info.view_width, info.view_height, info.mutators_stack);
+            }
+            if (has_overlay) {
+              for (const auto& o : overlay_infos) {
+                jni_facade->FlutterViewDisplayOverlaySurface(
+                    overlay_id, o.x, o.y, o.width, o.height);
+              }
             } else {
-              weak_this->HideOverlayLayerIfNeeded();
+              jni_facade->FlutterViewDestroyOverlaySurfaces();
             }
-          }
-
-          absl::flat_hash_set<int64_t> current_set(current_views.begin(),
-                                                   current_views.end());
-
-          for (const auto& info : display_infos) {
-            jni_facade->onDisplayPlatformView2(
-                info.view_id, info.x, info.y, info.width, info.height,
-                info.view_width, info.view_height, info.mutators_stack);
-          }
-
-          for (int64_t old_view_id : views_visible_last_frame) {
-            if (!current_set.contains(old_view_id)) {
-              jni_facade->hidePlatformView2(old_view_id);
-            }
-          }
-
-          jni_facade->swapTransaction();
-          jni_facade->onEndFrame2();
-        }));
+            jni_facade->FlutterViewEndFrame();
+          }));
+    }
   }
 
   views_visible_last_frame_.clear();
@@ -342,6 +493,9 @@ std::shared_ptr<AndroidSurfaceFactory> AndroidCompositor::GetSurfaceFactory()
 
 bool AndroidCompositor::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window) {
+  if (!android_surface_ && surface_factory_) {
+    android_surface_ = surface_factory_->CreateSurface();
+  }
   if (android_surface_) {
     return android_surface_->SetNativeWindow(std::move(window), jni_facade_);
   }
@@ -384,6 +538,21 @@ void AndroidCompositor::DestroySurfaces() {
         });
     latch.Wait();
   }
+  if (legacy_overlay_created_) {
+    legacy_overlay_gpu_surface_.reset();
+    legacy_overlay_surface_.reset();
+    fml::AutoResetWaitableEvent latch;
+    fml::TaskRunner::RunNowOrPostTask(
+        task_runners_.GetPlatformTaskRunner(), [&]() {
+          if (jni_facade_) {
+            jni_facade_->FlutterViewDestroyOverlaySurfaces();
+          }
+          legacy_overlay_metadata_.reset();
+          legacy_overlay_created_ = false;
+          latch.Signal();
+        });
+    latch.Wait();
+  }
   overlay_layer_is_shown_.store(false);
 }
 
@@ -407,6 +576,30 @@ void AndroidCompositor::HideOverlayLayerIfNeeded() {
 
 bool AndroidCompositor::IsOverlayLayerShown() const {
   return overlay_layer_is_shown_.load();
+}
+
+void AndroidCompositor::SetSurfaceControlEnabledForTesting(
+    std::optional<bool> enabled) {
+  surface_control_enabled_for_testing_ = enabled;
+}
+
+bool AndroidCompositor::IsSurfaceControlEnabled() const {
+  if (surface_control_enabled_for_testing_.has_value()) {
+    return *surface_control_enabled_for_testing_;
+  }
+  if (!android_context_) {
+    return false;
+  }
+  if (android_context_->RenderingApi() !=
+      AndroidRenderingAPI::kImpellerVulkan) {
+    return false;
+  }
+  auto impeller_context = android_context_->GetImpellerContext();
+  if (!impeller_context) {
+    return false;
+  }
+  return impeller::ContextVK::Cast(*impeller_context)
+      .GetShouldEnableSurfaceControlSwapchain();
 }
 
 SurfacePool* AndroidCompositor::GetSurfacePool() const {

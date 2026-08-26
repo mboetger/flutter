@@ -22,7 +22,7 @@ namespace flutter {
 class EmbedderExternalTextureResolver {
  public:
   using CustomExternalTextureCallback =
-      std::function<std::unique_ptr<Texture>(int64_t)>;
+      std::function<std::shared_ptr<Texture>(int64_t)>;
 
   EmbedderExternalTextureResolver() = default;
 
@@ -50,7 +50,7 @@ class EmbedderExternalTextureResolver {
   EmbedderExternalTextureResolver& operator=(
       EmbedderExternalTextureResolver&& other) = default;
 
-  std::unique_ptr<Texture> ResolveExternalTexture(int64_t texture_id);
+  std::shared_ptr<Texture> ResolveExternalTexture(int64_t texture_id);
 
   bool SupportsExternalTextures() const;
 

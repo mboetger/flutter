@@ -75,8 +75,9 @@ class AndroidCompositorTest : public ::testing::Test {
         AndroidRenderingAPI::kImpellerOpenGLES);
     surface_factory_ = std::make_shared<TestAndroidSurfaceFactory>(
         []() { return std::make_unique<AndroidSurfaceMock>(); });
-    compositor_ = std::make_unique<AndroidCompositor>(
+    compositor_ = std::make_shared<AndroidCompositor>(
         android_context_, jni_mock_, surface_factory_, task_runners_);
+    compositor_->SetSurfaceControlEnabledForTesting(true);
   }
 
   void TearDown() override {
@@ -92,7 +93,7 @@ class AndroidCompositorTest : public ::testing::Test {
   std::shared_ptr<JNIMock> jni_mock_;
   std::shared_ptr<AndroidContext> android_context_;
   std::shared_ptr<AndroidSurfaceFactory> surface_factory_;
-  std::unique_ptr<AndroidCompositor> compositor_;
+  std::shared_ptr<AndroidCompositor> compositor_;
 };
 
 TEST_F(AndroidCompositorTest, GetFlutterCompositorCallbacks) {
@@ -118,7 +119,7 @@ TEST_F(AndroidCompositorTest, CreateAndCollectBackingStoreOpenGL) {
       c.create_backing_store_callback(&config, &backing_store, c.user_data));
   EXPECT_EQ(backing_store.type, kFlutterBackingStoreTypeOpenGL);
   EXPECT_EQ(backing_store.open_gl.type, kFlutterOpenGLTargetTypeFramebuffer);
-  EXPECT_EQ(backing_store.open_gl.framebuffer.target, 0x8D40u);
+  EXPECT_EQ(backing_store.open_gl.framebuffer.target, 0x8058u);
   EXPECT_EQ(backing_store.open_gl.framebuffer.name, 0u);
 
   EXPECT_TRUE(c.collect_backing_store_callback(&backing_store, c.user_data));
@@ -128,7 +129,7 @@ TEST_F(AndroidCompositorTest, CreateAndCollectBackingStoreOpenGL) {
 TEST_F(AndroidCompositorTest, CreateAndCollectBackingStoreSoftware) {
   auto software_context =
       std::make_shared<AndroidContext>(AndroidRenderingAPI::kSoftware);
-  auto soft_compositor = std::make_unique<AndroidCompositor>(
+  auto soft_compositor = std::make_shared<AndroidCompositor>(
       software_context, jni_mock_, surface_factory_, task_runners_);
 
   FlutterBackingStoreConfig config = {};
@@ -153,7 +154,7 @@ TEST_F(AndroidCompositorTest, CreateAndCollectBackingStoreSoftware) {
 TEST_F(AndroidCompositorTest, CreateAndCollectBackingStoreVulkan) {
   auto vk_context =
       std::make_shared<AndroidContext>(AndroidRenderingAPI::kImpellerVulkan);
-  auto vk_compositor = std::make_unique<AndroidCompositor>(
+  auto vk_compositor = std::make_shared<AndroidCompositor>(
       vk_context, jni_mock_, surface_factory_, task_runners_);
 
   FlutterBackingStoreConfig config = {};
@@ -174,6 +175,9 @@ TEST_F(AndroidCompositorTest, CreateAndCollectBackingStoreVulkan) {
 }
 
 TEST_F(AndroidCompositorTest, PresentEmptyLayers) {
+  EXPECT_CALL(*jni_mock_, swapTransaction()).Times(1);
+  EXPECT_CALL(*jni_mock_, onEndFrame2()).Times(1);
+
   FlutterPresentViewInfo info = {};
   info.struct_size = sizeof(info);
   info.view_id = 0;
@@ -183,6 +187,7 @@ TEST_F(AndroidCompositorTest, PresentEmptyLayers) {
 
   FlutterCompositor c = compositor_->GetFlutterCompositor();
   EXPECT_TRUE(c.present_view_callback(&info));
+  PostTaskSync(task_runners_.GetPlatformTaskRunner(), []() {});
 }
 
 TEST_F(AndroidCompositorTest, PresentSingleBackingStoreLayer) {
@@ -339,7 +344,8 @@ TEST_F(AndroidCompositorTest, SurfaceLifecycleAndResize) {
 
   EXPECT_CALL(*mock_surface_ptr, OnScreenSurfaceResize(DlISize{1080, 1920}))
       .WillOnce(Return(true));
-  EXPECT_CALL(*mock_surface_ptr, TeardownOnScreenContext()).Times(1);
+  EXPECT_CALL(*mock_surface_ptr, TeardownOnScreenContext())
+      .Times(::testing::AtLeast(1));
   EXPECT_CALL(*jni_mock_, MaybeResizeSurfaceView(1080, 1920)).Times(1);
 
   compositor_->SetAndroidSurface(std::move(mock_surface));
@@ -635,8 +641,9 @@ TEST_F(AndroidCompositorTest,
 }
 
 TEST_F(AndroidCompositorTest, PresentWithWeakPtrDestructionSafety) {
-  auto temp_compositor = std::make_unique<AndroidCompositor>(
+  auto temp_compositor = std::make_shared<AndroidCompositor>(
       android_context_, jni_mock_, surface_factory_, task_runners_);
+  temp_compositor->SetSurfaceControlEnabledForTesting(true);
 
   FlutterBackingStore base_store = {};
   base_store.struct_size = sizeof(base_store);
@@ -660,6 +667,46 @@ TEST_F(AndroidCompositorTest, PresentWithWeakPtrDestructionSafety) {
   temp_compositor.reset();
 
   // Flush platform task runner and verify no crash/use-after-free occurs.
+  PostTaskSync(task_runners_.GetPlatformTaskRunner(), []() {});
+}
+
+TEST_F(AndroidCompositorTest, HybridCompositionPresentWithPlatformViews) {
+  compositor_->SetSurfaceControlEnabledForTesting(false);
+
+  FlutterBackingStore base_store = {};
+  base_store.struct_size = sizeof(base_store);
+  base_store.type = kFlutterBackingStoreTypeOpenGL;
+
+  FlutterLayer base_layer = {};
+  base_layer.struct_size = sizeof(base_layer);
+  base_layer.type = kFlutterLayerContentTypeBackingStore;
+  base_layer.backing_store = &base_store;
+  base_layer.offset = {0, 0};
+  base_layer.size = {800, 600};
+
+  FlutterPlatformView platform_view = {};
+  platform_view.struct_size = sizeof(platform_view);
+  platform_view.identifier = 42;
+  platform_view.mutations_count = 0;
+  platform_view.mutations = nullptr;
+
+  FlutterLayer pv_layer = {};
+  pv_layer.struct_size = sizeof(pv_layer);
+  pv_layer.type = kFlutterLayerContentTypePlatformView;
+  pv_layer.platform_view = &platform_view;
+  pv_layer.offset = {50, 100};
+  pv_layer.size = {200, 300};
+
+  const FlutterLayer* layers[] = {&base_layer, &pv_layer};
+
+  EXPECT_CALL(*jni_mock_, FlutterViewBeginFrame()).Times(1);
+  EXPECT_CALL(*jni_mock_,
+              FlutterViewOnDisplayPlatformView(42, 50, 100, 200, 300, _, _, _))
+      .Times(1);
+  EXPECT_CALL(*jni_mock_, FlutterViewDestroyOverlaySurfaces()).Times(1);
+  EXPECT_CALL(*jni_mock_, FlutterViewEndFrame()).Times(1);
+
+  EXPECT_TRUE(compositor_->Present(0, layers, 2));
   PostTaskSync(task_runners_.GetPlatformTaskRunner(), []() {});
 }
 

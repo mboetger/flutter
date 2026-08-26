@@ -186,6 +186,7 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/android/surface:native_window",
     "//flutter/shell/platform/embedder:embedder_as_internal_library",
     "//flutter/skia",
+    "//flutter/third_party/rapidjson",
     "//flutter/txt",
     "//flutter/vulkan",
   ]

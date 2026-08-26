@@ -64,6 +64,8 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
 
   fml::WeakPtr<PlatformViewAndroid> GetPlatformView();
 
+  std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler() const;
+
   std::shared_ptr<AndroidCompositor> GetAndroidCompositor() const;
 
   bool IsSurfaceControlEnabled();
@@ -71,6 +73,10 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
   void NotifyLowMemoryWarning();
 
   void UpdateDisplayMetrics();
+
+  void AttachSurfaceWindow(fml::RefPtr<AndroidNativeWindow> window);
+  void OnSurfaceDestroyed();
+  void OnSurfaceChanged(int width, int height);
 
   FLUTTER_API_SYMBOL(FlutterEngine) GetEmbedderEngine() const {
     return engine_;
@@ -139,7 +145,6 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
 
   void InitializeTaskRunners();
   void SetupEmbedderProcTable();
-  bool InitializeEngine();
 
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
@@ -169,6 +174,9 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
   std::unordered_map<int64_t, std::shared_ptr<flutter::Texture>>
       external_textures_;
+  std::vector<std::unique_ptr<flutter::PlatformMessage>>
+      pending_platform_messages_;
+  std::unordered_map<int64_t, ViewportMetrics> last_viewport_metrics_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidEngine);
 };

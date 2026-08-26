@@ -38,9 +38,15 @@ class AndroidSurface {
 
   virtual bool ResourceContextClearCurrent() = 0;
 
+  virtual bool OnGLContextMakeCurrent() { return false; }
+
+  virtual bool GLContextClearCurrent() { return false; }
+
   virtual bool SetNativeWindow(
       fml::RefPtr<AndroidNativeWindow> window,
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) = 0;
+
+  virtual bool PresentOnscreenSurface() { return false; }
 
   virtual std::unique_ptr<Surface> CreateSnapshotSurface();
 

@@ -33,7 +33,8 @@ namespace flutter {
 ///             render layers and embedded platform views to Android surfaces
 ///             and JNI calls.
 ///
-class AndroidCompositor {
+class AndroidCompositor
+    : public std::enable_shared_from_this<AndroidCompositor> {
  public:
   AndroidCompositor(std::shared_ptr<AndroidContext> android_context,
                     std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
@@ -41,11 +42,6 @@ class AndroidCompositor {
                     const TaskRunners& task_runners);
 
   ~AndroidCompositor();
-
-  //----------------------------------------------------------------------------
-  /// @brief Returns a weak pointer to this compositor instance.
-  ///
-  fml::WeakPtr<AndroidCompositor> GetWeakPtr();
 
   //----------------------------------------------------------------------------
   /// @brief Returns a FlutterCompositor struct configured with callbacks
@@ -135,6 +131,16 @@ class AndroidCompositor {
   bool IsOverlayLayerShown() const;
 
   //----------------------------------------------------------------------------
+  /// @brief Whether SurfaceControl / HCPP platform view strategy is enabled.
+  ///
+  bool IsSurfaceControlEnabled() const;
+
+  //----------------------------------------------------------------------------
+  /// @brief Sets whether SurfaceControl / HCPP is enabled for testing.
+  ///
+  void SetSurfaceControlEnabledForTesting(std::optional<bool> enabled);
+
+  //----------------------------------------------------------------------------
   /// @brief Returns the SurfacePool managing overlay surfaces.
   ///
   SurfacePool* GetSurfacePool() const;
@@ -209,7 +215,13 @@ class AndroidCompositor {
   DlISize frame_size_{0, 0};
   double device_pixel_ratio_ = 1.0;
 
-  fml::WeakPtrFactory<AndroidCompositor> weak_factory_;
+  bool legacy_overlay_created_ = false;
+  std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
+      legacy_overlay_metadata_;
+  std::unique_ptr<AndroidSurface> legacy_overlay_surface_;
+  std::unique_ptr<Surface> legacy_overlay_gpu_surface_;
+
+  std::optional<bool> surface_control_enabled_for_testing_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidCompositor);
 };

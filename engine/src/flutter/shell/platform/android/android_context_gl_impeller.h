@@ -32,6 +32,9 @@ class AndroidContextGLImpeller : public AndroidContext {
   std::unique_ptr<impeller::egl::Surface> CreateOffscreenSurface();
   bool OnscreenContextMakeCurrent(impeller::egl::Surface* onscreen_surface);
   bool OnscreenContextClearCurrent();
+  bool RasterPbufferContextMakeCurrent(
+      impeller::egl::Surface* raster_pbuffer_surface);
+  bool RasterPbufferContextClearCurrent();
   std::unique_ptr<impeller::egl::Surface> CreateOnscreenSurface(
       EGLNativeWindowType window);
 
@@ -44,6 +47,7 @@ class AndroidContextGLImpeller : public AndroidContext {
   std::unique_ptr<impeller::egl::Config> offscreen_config_;
   std::unique_ptr<impeller::egl::Context> onscreen_context_;
   std::unique_ptr<impeller::egl::Context> offscreen_context_;
+  std::unique_ptr<impeller::egl::Context> raster_pbuffer_context_;
   bool is_valid_ = false;
   std::shared_ptr<fml::BasicTaskRunner> io_task_runner_;
 

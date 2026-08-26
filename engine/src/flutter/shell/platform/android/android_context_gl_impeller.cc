@@ -168,6 +168,13 @@ AndroidContextGLImpeller::AndroidContextGLImpeller(
     return;
   }
 
+  auto raster_pbuffer_context =
+      display_->CreateContext(*offscreen_config, onscreen_context.get());
+  if (!raster_pbuffer_context) {
+    FML_LOG(ERROR) << "Could not create raster pbuffer context.";
+    return;
+  }
+
   // Creating the impeller::Context requires a current context, which requires
   // some surface.
   auto offscreen_surface =
@@ -203,7 +210,8 @@ AndroidContextGLImpeller::AndroidContextGLImpeller(
         }
       };
   if (!onscreen_context->AddLifecycleListener(listener).has_value() ||
-      !offscreen_context->AddLifecycleListener(listener).has_value()) {
+      !offscreen_context->AddLifecycleListener(listener).has_value() ||
+      !raster_pbuffer_context->AddLifecycleListener(listener).has_value()) {
     FML_LOG(ERROR) << "Could not add lifecycle listeners";
   }
 
@@ -211,6 +219,7 @@ AndroidContextGLImpeller::AndroidContextGLImpeller(
   offscreen_config_ = std::move(offscreen_config);
   onscreen_context_ = std::move(onscreen_context);
   offscreen_context_ = std::move(offscreen_context);
+  raster_pbuffer_context_ = std::move(raster_pbuffer_context);
   SetImpellerContext(impeller_context);
 
   is_valid_ = true;
@@ -232,11 +241,23 @@ bool AndroidContextGLImpeller::ResourceContextClearCurrent() {
 
 bool AndroidContextGLImpeller::ResourceContextMakeCurrent(
     impeller::egl::Surface* offscreen_surface) {
-  if (!offscreen_context_ || !offscreen_surface) {
+  if (!offscreen_context_) {
+    FML_LOG(ERROR) << "AndroidContextGLImpeller::ResourceContextMakeCurrent: "
+                      "offscreen_context_ is null.";
+    return false;
+  }
+  if (!offscreen_surface) {
+    FML_LOG(ERROR) << "AndroidContextGLImpeller::ResourceContextMakeCurrent: "
+                      "offscreen_surface is null.";
     return false;
   }
 
-  return offscreen_context_->MakeCurrent(*offscreen_surface);
+  bool success = offscreen_context_->MakeCurrent(*offscreen_surface);
+  if (!success) {
+    FML_LOG(ERROR) << "AndroidContextGLImpeller::ResourceContextMakeCurrent: "
+                      "offscreen_context_->MakeCurrent failed.";
+  }
+  return success;
 }
 
 std::unique_ptr<impeller::egl::Surface>
@@ -259,6 +280,23 @@ bool AndroidContextGLImpeller::OnscreenContextClearCurrent() {
   }
 
   return onscreen_context_->ClearCurrent();
+}
+
+bool AndroidContextGLImpeller::RasterPbufferContextMakeCurrent(
+    impeller::egl::Surface* raster_pbuffer_surface) {
+  if (!raster_pbuffer_context_ || !raster_pbuffer_surface) {
+    return false;
+  }
+
+  return raster_pbuffer_context_->MakeCurrent(*raster_pbuffer_surface);
+}
+
+bool AndroidContextGLImpeller::RasterPbufferContextClearCurrent() {
+  if (!raster_pbuffer_context_) {
+    return false;
+  }
+
+  return raster_pbuffer_context_->ClearCurrent();
 }
 
 std::unique_ptr<impeller::egl::Surface>

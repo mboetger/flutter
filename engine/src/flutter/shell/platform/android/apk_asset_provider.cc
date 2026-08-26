@@ -49,10 +49,20 @@ class APKAssetProviderImpl : public APKAssetProviderInternal {
 
   std::unique_ptr<fml::Mapping> GetAsMapping(
       const std::string& asset_name) const override {
-    std::stringstream ss;
-    ss << directory_.c_str() << "/" << asset_name;
-    AAsset* asset = AAssetManager_open(asset_manager_, ss.str().c_str(),
-                                       AASSET_MODE_BUFFER);
+    std::string path;
+    if (directory_.empty()) {
+      path = asset_name;
+    } else if (asset_name.rfind(directory_ + "/", 0) == 0) {
+      path = asset_name;
+    } else {
+      path = directory_ + "/" + asset_name;
+    }
+    AAsset* asset =
+        AAssetManager_open(asset_manager_, path.c_str(), AASSET_MODE_BUFFER);
+    if (!asset && !directory_.empty()) {
+      asset = AAssetManager_open(asset_manager_, asset_name.c_str(),
+                                 AASSET_MODE_BUFFER);
+    }
     if (!asset) {
       return nullptr;
     }

@@ -50,12 +50,21 @@ class AndroidSurfaceDynamicImpeller : public AndroidSurface {
   bool ResourceContextClearCurrent() override;
 
   // |AndroidSurface|
+  bool OnGLContextMakeCurrent() override;
+
+  // |AndroidSurface|
+  bool GLContextClearCurrent() override;
+
+  // |AndroidSurface|
   std::shared_ptr<impeller::Context> GetImpellerContext() override;
 
   // |AndroidSurface|
   bool SetNativeWindow(
       fml::RefPtr<AndroidNativeWindow> window,
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) override;
+
+  // |AndroidSurface|
+  bool PresentOnscreenSurface() override;
 
   // |AndroidSurface|
   std::unique_ptr<Surface> CreateSnapshotSurface() override;

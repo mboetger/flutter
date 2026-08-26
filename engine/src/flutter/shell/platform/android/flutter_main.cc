@@ -65,8 +65,11 @@ bool IsVivante() {
 }  // anonymous namespace
 
 FlutterMain::FlutterMain(const flutter::Settings& settings,
-                         flutter::AndroidRenderingAPI android_rendering_api)
-    : settings_(settings), android_rendering_api_(android_rendering_api) {}
+                         flutter::AndroidRenderingAPI android_rendering_api,
+                         std::vector<std::string> args)
+    : settings_(settings),
+      android_rendering_api_(android_rendering_api),
+      args_(std::move(args)) {}
 
 FlutterMain::~FlutterMain() = default;
 
@@ -81,7 +84,7 @@ FlutterMain& FlutterMain::Get() {
 void FlutterMain::InitForTesting(
     const flutter::Settings& settings,
     flutter::AndroidRenderingAPI android_rendering_api) {
-  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api));
+  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api, {}));
 }
 
 void FlutterMain::ResetForTesting() {
@@ -212,7 +215,8 @@ void FlutterMain::Init(JNIEnv* env,
 
   // Not thread safe. Will be removed when FlutterMain is refactored to no
   // longer be a singleton.
-  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api));
+  g_flutter_main.reset(
+      new FlutterMain(settings, android_rendering_api, std::move(args)));
   g_flutter_main->SetupDartVMServiceUriCallback(env);
 }
 

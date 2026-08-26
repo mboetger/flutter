@@ -1160,6 +1160,40 @@ typedef struct {
   /// If |has_constraints| is `true`, this must be greater than or equal to
   /// |min_height_constraint| and |height|.
   size_t max_height_constraint;
+  /// Physical padding top of window.
+  double physical_padding_top;
+  /// Physical padding right of window.
+  double physical_padding_right;
+  /// Physical padding bottom of window.
+  double physical_padding_bottom;
+  /// Physical padding left of window.
+  double physical_padding_left;
+  /// Physical system gesture inset top.
+  double physical_system_gesture_inset_top;
+  /// Physical system gesture inset right.
+  double physical_system_gesture_inset_right;
+  /// Physical system gesture inset bottom.
+  double physical_system_gesture_inset_bottom;
+  /// Physical system gesture inset left.
+  double physical_system_gesture_inset_left;
+  /// Touch slop.
+  double physical_touch_slop;
+  /// Display features count (number of features).
+  size_t display_features_count;
+  /// Display features bounds (4 doubles per feature: left, top, right, bottom).
+  const double* display_features_bounds;
+  /// Display features type (1 int32 per feature).
+  const int32_t* display_features_type;
+  /// Display features state (1 int32 per feature).
+  const int32_t* display_features_state;
+  /// Display corner radius top left (-1.0 if not specified).
+  double physical_display_corner_radius_top_left;
+  /// Display corner radius top right (-1.0 if not specified).
+  double physical_display_corner_radius_top_right;
+  /// Display corner radius bottom right (-1.0 if not specified).
+  double physical_display_corner_radius_bottom_right;
+  /// Display corner radius bottom left (-1.0 if not specified).
+  double physical_display_corner_radius_bottom_left;
 } FlutterWindowMetricsEvent;
 
 typedef struct {
@@ -1459,6 +1493,33 @@ typedef struct {
   /// The maximum bound of the pressure of the current pointer, where 0.0 is the
   /// default maximum bound.
   double pressure_max;
+  /// The embedder identifier for the pointer, used for platform views motion
+  /// event routing.
+  int64_t embedder_id;
+  /// Whether the pointer event was obscured by another window or layer.
+  int64_t obscured;
+  /// Whether the pointer event was synthesized by the embedder.
+  int64_t synthesized;
+  /// Major radius of the ellipse of the contact area in physical pixels.
+  double radius_major;
+  /// Minor radius of the ellipse of the contact area in physical pixels.
+  double radius_minor;
+  /// Minimum possible radius of the contact area in physical pixels.
+  double radius_min;
+  /// Maximum possible radius of the contact area in physical pixels.
+  double radius_max;
+  /// Orientation of the pointer in radians [-pi/2, pi/2].
+  double orientation;
+  /// Tilt of the pointer in radians [0, pi/2].
+  double tilt;
+  /// Size of the contact area.
+  double size;
+  /// Distance from the screen for hovering pointers.
+  double distance;
+  /// Maximum distance from the screen.
+  double distance_max;
+  /// Platform-specific data associated with the pointer event.
+  int64_t platform_data;
 } FlutterPointerEvent;
 
 typedef enum {
@@ -2605,6 +2666,12 @@ typedef void (*FlutterRequestDartDeferredLibraryCallback)(
     intptr_t loading_unit_id,
     void* user_data);
 
+/// The callback invoked by the engine when an external texture needs to be
+/// resolved by ID. The embedder returns an opaque handle to a Texture.
+typedef const void* (*FlutterCustomExternalTextureCallback)(
+    int64_t texture_identifier,
+    void* user_data);
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterLoadDeferredLibraryInfo).
   size_t struct_size;
@@ -3043,6 +3110,12 @@ typedef struct {
 
   /// The number of custom asset resolvers in `custom_asset_resolvers`.
   size_t custom_asset_resolvers_count;
+
+  /// The callback invoked by the engine to resolve an external texture.
+  FlutterCustomExternalTextureCallback custom_external_texture_callback;
+
+  /// Optional initial route. If null or empty, defaults to "/".
+  const char* initial_route;
 } FlutterProjectArgs;
 
 /// Information used to spawn a new engine from an existing running engine.
@@ -3319,6 +3392,12 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterPointerEvent* events,
     size_t events_count);
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSendPointerDataPacket(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const uint8_t* packet_data,
+    size_t packet_size);
 
 //------------------------------------------------------------------------------
 /// @brief      Sends a key event to the engine. The framework will decide
@@ -3971,6 +4050,10 @@ typedef FlutterEngineResult (*FlutterEngineSendPointerEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterPointerEvent* events,
     size_t events_count);
+typedef FlutterEngineResult (*FlutterEngineSendPointerDataPacketFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const uint8_t* packet_data,
+    size_t packet_size);
 typedef FlutterEngineResult (*FlutterEngineSendKeyEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterKeyEvent* event,
@@ -4139,6 +4222,7 @@ typedef struct {
   FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
   FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
   FlutterEngineSpawnFnPtr Spawn;
+  FlutterEngineSendPointerDataPacketFnPtr SendPointerDataPacket;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

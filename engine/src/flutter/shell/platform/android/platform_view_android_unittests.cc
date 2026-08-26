@@ -118,7 +118,7 @@ TEST(PlatformViewAndroidTest, CreateAndInvokeLifecycleHooks) {
   auto window1 = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   EXPECT_CALL(delegate, OnPlatformViewSetNextFrameCallback(::testing::_));
-  EXPECT_CALL(delegate, OnPlatformViewCreated(::testing::_));
+  EXPECT_CALL(delegate, OnPlatformViewScheduleFrame()).Times(2);
   platform_view->NotifyCreated(window1);
 
   platform_view->NotifyChanged(DlISize(800, 600));

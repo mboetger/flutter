@@ -194,6 +194,12 @@ class PlatformViewAndroid final {
     return android_context_;
   }
 
+  AndroidSurface* GetAndroidSurface() const { return android_surface_.get(); }
+
+  std::shared_ptr<AndroidSurfaceFactoryImpl> GetSurfaceFactory() const {
+    return surface_factory_;
+  }
+
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler() const {
     return platform_message_handler_;
   }

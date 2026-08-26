@@ -5,6 +5,7 @@
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 
 #include <android/hardware_buffer_jni.h>
+#include <android/log.h>
 #include <android/native_window_jni.h>
 #include <dlfcn.h>
 #include <jni.h>
@@ -265,9 +266,13 @@ static void SurfaceCreated(JNIEnv* env,
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
-  auto platform_view = GetPlatformView(shell_holder);
-  if (platform_view) {
-    platform_view->NotifyCreated(std::move(window));
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    engine->AttachSurfaceWindow(window);
+    auto platform_view = engine->GetPlatformView();
+    if (platform_view) {
+      platform_view->NotifyCreated(std::move(window));
+    }
   }
 }
 
@@ -281,9 +286,13 @@ static void SurfaceWindowChanged(JNIEnv* env,
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
-  auto platform_view = GetPlatformView(shell_holder);
-  if (platform_view) {
-    platform_view->NotifySurfaceWindowChanged(std::move(window));
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    engine->AttachSurfaceWindow(window);
+    auto platform_view = engine->GetPlatformView();
+    if (platform_view) {
+      platform_view->NotifySurfaceWindowChanged(std::move(window));
+    }
   }
 }
 
@@ -292,16 +301,24 @@ static void SurfaceChanged(JNIEnv* env,
                            jlong shell_holder,
                            jint width,
                            jint height) {
-  auto platform_view = GetPlatformView(shell_holder);
-  if (platform_view) {
-    platform_view->NotifyChanged(DlISize(width, height));
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    engine->OnSurfaceChanged(width, height);
+    auto platform_view = engine->GetPlatformView();
+    if (platform_view) {
+      platform_view->NotifyChanged(DlISize(width, height));
+    }
   }
 }
 
 static void SurfaceDestroyed(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  auto platform_view = GetPlatformView(shell_holder);
-  if (platform_view) {
-    platform_view->NotifyDestroyed();
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    engine->OnSurfaceDestroyed();
+    auto platform_view = engine->GetPlatformView();
+    if (platform_view) {
+      platform_view->NotifyDestroyed();
+    }
   }
 }
 
@@ -631,15 +648,30 @@ static void InvokePlatformMessageResponseCallback(JNIEnv* env,
                                                   jint responseId,
                                                   jobject message,
                                                   jint position) {
-  uint8_t* response_data =
-      static_cast<uint8_t*>(env->GetDirectBufferAddress(message));
-  FML_DCHECK(response_data != nullptr);
-  auto mapping = std::make_unique<fml::MallocMapping>(
-      fml::MallocMapping::Copy(response_data, response_data + position));
-  auto platform_view = GetPlatformView(shell_holder);
-  if (platform_view && platform_view->GetPlatformMessageHandler()) {
-    platform_view->GetPlatformMessageHandler()
-        ->InvokePlatformMessageResponseCallback(responseId, std::move(mapping));
+  std::unique_ptr<fml::MallocMapping> mapping;
+  if (message != nullptr) {
+    if (position > 0) {
+      uint8_t* response_data =
+          static_cast<uint8_t*>(env->GetDirectBufferAddress(message));
+      if (response_data != nullptr) {
+        mapping = std::make_unique<fml::MallocMapping>(
+            fml::MallocMapping::Copy(response_data, position));
+      }
+    } else {
+      mapping = std::make_unique<fml::MallocMapping>();
+    }
+  }
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    auto message_handler = engine->GetPlatformMessageHandler();
+    if (message_handler) {
+      if (mapping) {
+        message_handler->InvokePlatformMessageResponseCallback(
+            responseId, std::move(mapping));
+      } else {
+        message_handler->InvokePlatformMessageEmptyResponseCallback(responseId);
+      }
+    }
   }
 }
 
@@ -647,10 +679,12 @@ static void InvokePlatformMessageEmptyResponseCallback(JNIEnv* env,
                                                        jobject jcaller,
                                                        jlong shell_holder,
                                                        jint responseId) {
-  auto platform_view = GetPlatformView(shell_holder);
-  if (platform_view && platform_view->GetPlatformMessageHandler()) {
-    platform_view->GetPlatformMessageHandler()
-        ->InvokePlatformMessageEmptyResponseCallback(responseId);
+  auto* engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+  if (engine) {
+    auto message_handler = engine->GetPlatformMessageHandler();
+    if (message_handler) {
+      message_handler->InvokePlatformMessageEmptyResponseCallback(responseId);
+    }
   }
 }
 
@@ -1382,10 +1416,12 @@ void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
       fml::jni::StringToJavaString(env, message->channel());
 
   if (message->hasData()) {
+    static uint8_t dummy_buffer = 0;
+    void* buffer_addr = message->data().GetMapping()
+                            ? const_cast<uint8_t*>(message->data().GetMapping())
+                            : &dummy_buffer;
     fml::jni::ScopedJavaLocalRef<jobject> message_array(
-        env, env->NewDirectByteBuffer(
-                 const_cast<uint8_t*>(message->data().GetMapping()),
-                 message->data().GetSize()));
+        env, env->NewDirectByteBuffer(buffer_addr, message->data().GetSize()));
     // Message data is deleted in CleanupMessageData.
     fml::MallocMapping mapping = message->releaseData();
     env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
@@ -1450,10 +1486,13 @@ void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessageResponse(
                         g_handle_platform_message_response_method, responseId,
                         nullptr);
   } else {
+    static uint8_t dummy_buffer = 0;
+    void* buffer_addr = data->GetMapping()
+                            ? const_cast<uint8_t*>(data->GetMapping())
+                            : &dummy_buffer;
     // Convert the vector to a Java byte array.
     fml::jni::ScopedJavaLocalRef<jobject> data_array(
-        env, env->NewDirectByteBuffer(const_cast<uint8_t*>(data->GetMapping()),
-                                      data->GetSize()));
+        env, env->NewDirectByteBuffer(buffer_addr, data->GetSize()));
 
     env->CallVoidMethod(java_object.obj(),
                         g_handle_platform_message_response_method, responseId,

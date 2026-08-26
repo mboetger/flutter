@@ -23,6 +23,7 @@ class FlutterMain {
   static FlutterMain& Get();
 
   const flutter::Settings& GetSettings() const;
+  const std::vector<std::string>& GetArgs() const { return args_; }
   flutter::AndroidRenderingAPI GetAndroidRenderingAPI();
   bool IsEmbedderAPIEnabled() const { return settings_.enable_embedder_api; }
 
@@ -33,7 +34,8 @@ class FlutterMain {
   static void ResetForTesting();
 
   explicit FlutterMain(const flutter::Settings& settings,
-                       flutter::AndroidRenderingAPI android_rendering_api);
+                       flutter::AndroidRenderingAPI android_rendering_api,
+                       std::vector<std::string> args = {});
 
   static AndroidRenderingAPI SelectedRenderingAPI(
       const flutter::Settings& settings,
@@ -42,6 +44,7 @@ class FlutterMain {
  private:
   const flutter::Settings settings_;
   const flutter::AndroidRenderingAPI android_rendering_api_;
+  const std::vector<std::string> args_;
   DartServiceIsolate::CallbackHandle vm_service_uri_callback_ = 0;
 
   static void Init(JNIEnv* env,
