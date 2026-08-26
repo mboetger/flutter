@@ -26,7 +26,8 @@ TEST(AndroidThreadPriorityTest, ToFlutterThreadPriorityMapping) {
 }
 
 TEST(AndroidThreadPriorityTest, AndroidPlatformThreadPrioritySetterExecution) {
-  // Test executing priority setters on background threads to avoid perturbing test runner.
+  // Test executing priority setters on background threads to avoid perturbing
+  // test runner.
   std::thread bg_thread([]() {
     AndroidPlatformThreadPrioritySetter(FlutterThreadPriority::kBackground);
     AndroidPlatformThreadPrioritySetter(FlutterThreadPriority::kDisplay);
@@ -38,8 +39,8 @@ TEST(AndroidThreadPriorityTest, AndroidPlatformThreadPrioritySetterExecution) {
 
 TEST(AndroidThreadPriorityTest, AndroidPlatformThreadConfigSetterExecution) {
   std::thread test_thread([]() {
-    fml::Thread::ThreadConfig config(
-        "test_bg_thread", fml::Thread::ThreadPriority::kBackground);
+    fml::Thread::ThreadConfig config("test_bg_thread",
+                                     fml::Thread::ThreadPriority::kBackground);
     AndroidPlatformThreadConfigSetter(config);
 
     char thread_name[16] = {};
@@ -50,9 +51,7 @@ TEST(AndroidThreadPriorityTest, AndroidPlatformThreadConfigSetterExecution) {
 }
 
 TEST(AndroidThreadPriorityTest, AndroidConfigureWorkerThreadPriorityExecution) {
-  std::thread worker_thread([]() {
-    AndroidConfigureWorkerThreadPriority();
-  });
+  std::thread worker_thread([]() { AndroidConfigureWorkerThreadPriority(); });
   worker_thread.join();
 }
 
@@ -62,10 +61,12 @@ TEST(AndroidThreadPriorityTest, CreateAndroidCustomTaskRunnersDefaults) {
   EXPECT_EQ(runners.platform_task_runner, nullptr);
   EXPECT_EQ(runners.render_task_runner, nullptr);
   EXPECT_EQ(runners.ui_task_runner, nullptr);
-  EXPECT_EQ(runners.thread_priority_setter, AndroidPlatformThreadPrioritySetter);
+  EXPECT_EQ(runners.thread_priority_setter,
+            AndroidPlatformThreadPrioritySetter);
 }
 
-TEST(AndroidThreadPriorityTest, CreateAndroidCustomTaskRunnersWithDescriptions) {
+TEST(AndroidThreadPriorityTest,
+     CreateAndroidCustomTaskRunnersWithDescriptions) {
   FlutterTaskRunnerDescription platform_desc = {};
   platform_desc.struct_size = sizeof(FlutterTaskRunnerDescription);
   platform_desc.identifier = 1;
@@ -78,21 +79,21 @@ TEST(AndroidThreadPriorityTest, CreateAndroidCustomTaskRunnersWithDescriptions) 
   ui_desc.struct_size = sizeof(FlutterTaskRunnerDescription);
   ui_desc.identifier = 3;
 
-  FlutterCustomTaskRunners runners = CreateAndroidCustomTaskRunners(
-      &platform_desc, &render_desc, &ui_desc);
+  FlutterCustomTaskRunners runners =
+      CreateAndroidCustomTaskRunners(&platform_desc, &render_desc, &ui_desc);
   EXPECT_EQ(runners.struct_size, sizeof(FlutterCustomTaskRunners));
   EXPECT_EQ(runners.platform_task_runner, &platform_desc);
   EXPECT_EQ(runners.render_task_runner, &render_desc);
   EXPECT_EQ(runners.ui_task_runner, &ui_desc);
-  EXPECT_EQ(runners.thread_priority_setter, AndroidPlatformThreadPrioritySetter);
+  EXPECT_EQ(runners.thread_priority_setter,
+            AndroidPlatformThreadPrioritySetter);
 }
 
 TEST(AndroidThreadPriorityTest, EmbedderThreadHostIntegration) {
   bool priority_setter_called = false;
-  auto custom_priority_setter =
-      +[](FlutterThreadPriority priority) {
-        AndroidPlatformThreadPrioritySetter(priority);
-      };
+  auto custom_priority_setter = +[](FlutterThreadPriority priority) {
+    AndroidPlatformThreadPrioritySetter(priority);
+  };
 
   FlutterCustomTaskRunners custom_runners = {};
   custom_runners.struct_size = sizeof(FlutterCustomTaskRunners);

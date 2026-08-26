@@ -10,21 +10,26 @@
 
 namespace flutter {
 
-// Android nice priority levels range from -20 (highest priority) to 19 (lowest priority).
+// Android nice priority levels range from -20 (highest priority) to 19 (lowest
+// priority).
 
-// Priority 10 represents standard background task priority (THREAD_PRIORITY_BACKGROUND in Android SDK).
+// Priority 10 represents standard background task priority
+// (THREAD_PRIORITY_BACKGROUND in Android SDK).
 constexpr int kBackgroundThreadNicePriority = 10;
 
-// Priority -4 represents Android display/UI thread priority (THREAD_PRIORITY_DISPLAY in Android SDK).
+// Priority -4 represents Android display/UI thread priority
+// (THREAD_PRIORITY_DISPLAY in Android SDK).
 constexpr int kDisplayThreadNicePriority = -4;
 
 // Priority -5 gives display-level compositor priority to the raster thread.
 constexpr int kRasterThreadPrimaryNicePriority = -5;
 
-// Priority -2 is a conservative fallback if -5 is disallowed by OEM process limits.
+// Priority -2 is a conservative fallback if -5 is disallowed by OEM process
+// limits.
 constexpr int kRasterThreadFallbackNicePriority = -2;
 
-// Priority 0 represents standard normal thread nice priority (THREAD_PRIORITY_DEFAULT in Android SDK).
+// Priority 0 represents standard normal thread nice priority
+// (THREAD_PRIORITY_DEFAULT in Android SDK).
 constexpr int kNormalThreadNicePriority = 0;
 
 // Priority 1 gives workers slightly lower priority than interactive UI tasks.

@@ -52,8 +52,8 @@ void AndroidPlatformThreadPrioritySetter(FlutterThreadPriority priority) {
           0) {
         // Defensive fallback. Depending on the OEM, it may not be possible
         // to set priority to -5.
-        if (::setpriority(PRIO_PROCESS, 0,
-                          kRasterThreadFallbackNicePriority) != 0) {
+        if (::setpriority(PRIO_PROCESS, 0, kRasterThreadFallbackNicePriority) !=
+            0) {
           FML_LOG(ERROR) << "Failed to set raster task runner priority";
         }
       }
