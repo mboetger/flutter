@@ -102,7 +102,8 @@ class PlatformViewAndroid final {
     return android_context_;
   }
 
-  std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler() const {
+  const std::shared_ptr<PlatformMessageHandler>& GetPlatformMessageHandler()
+      const {
     return platform_message_handler_;
   }
 
@@ -169,8 +170,7 @@ class PlatformViewAndroid final {
   fml::WeakPtr<PlatformView> platform_view_;
 
   PlatformViewAndroidDelegate platform_view_android_delegate_;
-
-  std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
+  std::shared_ptr<PlatformMessageHandler> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
 
   void InstallFirstFrameCallback();

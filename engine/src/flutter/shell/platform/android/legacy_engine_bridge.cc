@@ -77,8 +77,8 @@ static void AndroidPlatformThreadConfigSetter(
           0) {
         // Defensive fallback. Depending on the OEM, it may not be possible
         // to set priority to -5.
-        if (::setpriority(PRIO_PROCESS, 0,
-                          kRasterThreadFallbackNicePriority) != 0) {
+        if (::setpriority(PRIO_PROCESS, 0, kRasterThreadFallbackNicePriority) !=
+            0) {
           FML_LOG(ERROR) << "Failed to set raster task runner priority";
         }
       }
@@ -460,6 +460,9 @@ void LegacyEngineBridge::NotifyLowMemoryWarning() {
 
 const std::shared_ptr<PlatformMessageHandler>&
 LegacyEngineBridge::GetPlatformMessageHandler() const {
+  if (platform_view_android_) {
+    return platform_view_android_->GetPlatformMessageHandler();
+  }
   return shell_->GetPlatformMessageHandler();
 }
 

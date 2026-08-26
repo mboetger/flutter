@@ -59,7 +59,8 @@ class AndroidEngineBridge {
   virtual bool IsValid() const = 0;
 
   //----------------------------------------------------------------------------
-  /// @brief      Spawns a new AndroidEngineBridge sharing resources where possible.
+  /// @brief      Spawns a new AndroidEngineBridge sharing resources where
+  /// possible.
   ///
   virtual std::unique_ptr<AndroidEngineBridge> Spawn(
       std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
