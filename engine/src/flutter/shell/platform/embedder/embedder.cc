@@ -12,6 +12,10 @@
 #include <string>
 #include <vector>
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 #include "impeller/base/flags.h"
 
 #include "flutter/fml/build_config.h"
@@ -1699,6 +1703,57 @@ MakeViewportMetricsFromWindowMetrics(
            "physical height or width.";
   }
 
+  metrics.physical_padding_top =
+      SAFE_ACCESS(flutter_metrics, physical_padding_top, 0.0);
+  metrics.physical_padding_right =
+      SAFE_ACCESS(flutter_metrics, physical_padding_right, 0.0);
+  metrics.physical_padding_bottom =
+      SAFE_ACCESS(flutter_metrics, physical_padding_bottom, 0.0);
+  metrics.physical_padding_left =
+      SAFE_ACCESS(flutter_metrics, physical_padding_left, 0.0);
+
+  metrics.physical_system_gesture_inset_top =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_top, 0.0);
+  metrics.physical_system_gesture_inset_right =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_right, 0.0);
+  metrics.physical_system_gesture_inset_bottom =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_bottom, 0.0);
+  metrics.physical_system_gesture_inset_left =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_left, 0.0);
+
+  metrics.physical_touch_slop =
+      SAFE_ACCESS(flutter_metrics, physical_touch_slop, -1.0);
+
+  size_t display_features_count =
+      SAFE_ACCESS(flutter_metrics, display_features_count, 0);
+  const double* display_features_bounds =
+      SAFE_ACCESS(flutter_metrics, display_features_bounds, nullptr);
+  const int32_t* display_features_type =
+      SAFE_ACCESS(flutter_metrics, display_features_type, nullptr);
+  const int32_t* display_features_state =
+      SAFE_ACCESS(flutter_metrics, display_features_state, nullptr);
+
+  if (display_features_count > 0 && display_features_bounds &&
+      display_features_type && display_features_state) {
+    metrics.physical_display_features_bounds.assign(
+        display_features_bounds,
+        display_features_bounds + (display_features_count * 4));
+    metrics.physical_display_features_type.assign(
+        display_features_type, display_features_type + display_features_count);
+    metrics.physical_display_features_state.assign(
+        display_features_state,
+        display_features_state + display_features_count);
+  }
+
+  metrics.physical_display_corner_radius_top_left = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_top_left, -1.0);
+  metrics.physical_display_corner_radius_top_right = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_top_right, -1.0);
+  metrics.physical_display_corner_radius_bottom_right = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_bottom_right, -1.0);
+  metrics.physical_display_corner_radius_bottom_left = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_bottom_left, -1.0);
+
   return metrics;
 }
 
@@ -2143,9 +2198,9 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   if (!flutter::DartVM::IsRunningPrecompiledCode()) {
     // Verify the assets path contains Dart 2 kernel assets if assets_path is
-    // provided.
+    // provided and no custom asset resolvers are present.
     const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
-    if (!settings.assets_path.empty()) {
+    if (!settings.assets_path.empty() && custom_asset_resolvers_count == 0) {
       std::string application_kernel_path = fml::paths::JoinPaths(
           {settings.assets_path, kApplicationKernelSnapshotFileName});
       if (!fml::IsFile(application_kernel_path)) {
@@ -2221,11 +2276,18 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     platform_message_response_callback =
         [ptr = args->platform_message_callback,
          user_data](std::unique_ptr<flutter::PlatformMessage> message) {
+          static const uint8_t dummy_empty_byte = 0;
+          const uint8_t* message_data = nullptr;
+          if (message->hasData()) {
+            message_data = message->data().GetMapping()
+                               ? message->data().GetMapping()
+                               : &dummy_empty_byte;
+          }
           auto handle = new FlutterPlatformMessageResponseHandle();
           const FlutterPlatformMessage incoming_message = {
               sizeof(FlutterPlatformMessage),  // struct_size
               message->channel().c_str(),      // channel
-              message->data().GetMapping(),    // message
+              message_data,                    // message
               message->data().GetSize(),       // message_size
               handle,                          // response_handle
           };
@@ -2376,7 +2438,22 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   using ExternalTextureResolver = flutter::EmbedderExternalTextureResolver;
   std::unique_ptr<ExternalTextureResolver> external_texture_resolver;
-  external_texture_resolver = std::make_unique<ExternalTextureResolver>();
+  if (SAFE_ACCESS(args, custom_external_texture_callback, nullptr) != nullptr) {
+    auto custom_callback =
+        [ptr = args->custom_external_texture_callback, user_data](
+            int64_t texture_identifier) -> std::shared_ptr<flutter::Texture> {
+      const void* raw_texture = ptr(texture_identifier, user_data);
+      if (!raw_texture) {
+        return nullptr;
+      }
+      return *static_cast<const std::shared_ptr<flutter::Texture>*>(
+          raw_texture);
+    };
+    external_texture_resolver =
+        std::make_unique<ExternalTextureResolver>(custom_callback);
+  } else {
+    external_texture_resolver = std::make_unique<ExternalTextureResolver>();
+  }
 
 #ifdef SHELL_ENABLE_GL
   flutter::EmbedderExternalTextureGL::ExternalTextureCallback
@@ -2485,9 +2562,17 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   };
 
-  auto run_configuration =
-      flutter::RunConfiguration::InferFromSettings(settings);
-
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+  if (fml::UniqueFD::traits_type::IsValid(settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(settings.assets_dir), true));
+  }
+  if (!settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
   if (custom_asset_resolvers_count > 0 && custom_asset_resolvers != nullptr) {
     for (size_t i = 0; i < custom_asset_resolvers_count; ++i) {
       const auto* resolver_config = custom_asset_resolvers[i];
@@ -2499,10 +2584,20 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
             kInvalidArguments,
             "Invalid FlutterAssetResolverConfig in custom_asset_resolvers.");
       }
-      run_configuration.AddAssetResolver(
+      asset_manager->PushBack(
           std::make_unique<flutter::EmbedderAssetResolver>(*resolver_config));
     }
   }
+
+  auto isolate_configuration = flutter::IsolateConfiguration::InferFromSettings(
+      settings, asset_manager, task_runners.GetIOTaskRunner());
+  if (!isolate_configuration) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Could not infer isolate configuration from settings.");
+  }
+  flutter::RunConfiguration run_configuration(std::move(isolate_configuration),
+                                              std::move(asset_manager));
 
   if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
@@ -2527,6 +2622,13 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   if (SAFE_ACCESS(args, engine_id, 0) != 0) {
     run_configuration.SetEngineId(args->engine_id);
+  }
+
+  if (SAFE_ACCESS(args, initial_route, nullptr) != nullptr) {
+    auto initial_route = std::string{args->initial_route};
+    if (!initial_route.empty()) {
+      run_configuration.SetInitialRoute(std::move(initial_route));
+    }
   }
 
   if (!run_configuration.IsValid()) {
@@ -2881,8 +2983,7 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
   for (size_t i = 0; i < events_count; ++i) {
     flutter::PointerData pointer_data;
     pointer_data.Clear();
-    // this is currely in use only on android embedding.
-    pointer_data.embedder_id = 0;
+    pointer_data.embedder_id = SAFE_ACCESS(current, embedder_id, 0);
     pointer_data.time_stamp = SAFE_ACCESS(current, timestamp, 0);
     pointer_data.change = ToPointerDataChange(
         SAFE_ACCESS(current, phase, FlutterPointerPhase::kCancel));
@@ -2899,6 +3000,8 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
         SAFE_ACCESS(current, signal_kind, kFlutterPointerSignalKindNone));
     pointer_data.scroll_delta_x = SAFE_ACCESS(current, scroll_delta_x, 0.0);
     pointer_data.scroll_delta_y = SAFE_ACCESS(current, scroll_delta_y, 0.0);
+    pointer_data.obscured = SAFE_ACCESS(current, obscured, 0);
+    pointer_data.synthesized = SAFE_ACCESS(current, synthesized, 0);
     FlutterPointerDeviceKind device_kind =
         SAFE_ACCESS(current, device_kind, kFlutterPointerDeviceKindMouse);
     // For backwards compatibility with embedders written before the device
@@ -2911,16 +3014,17 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
 
     } else {
       pointer_data.kind = ToPointerDataKind(device_kind);
+      int64_t current_buttons = SAFE_ACCESS(current, buttons, 0);
       if (pointer_data.kind == flutter::PointerData::DeviceKind::kTouch) {
-        // For touch events, set the button internally rather than requiring
-        // it at the API level, since it's a confusing construction to expose.
-        if (pointer_data.change == flutter::PointerData::Change::kDown ||
-            pointer_data.change == flutter::PointerData::Change::kMove) {
+        if (current_buttons != 0) {
+          pointer_data.buttons = current_buttons;
+        } else if (pointer_data.change == flutter::PointerData::Change::kDown ||
+                   pointer_data.change == flutter::PointerData::Change::kMove) {
           pointer_data.buttons = flutter::kPointerButtonTouchContact;
         }
       } else {
         // Buttons use the same mask values, so pass them through directly.
-        pointer_data.buttons = SAFE_ACCESS(current, buttons, 0);
+        pointer_data.buttons = current_buttons;
       }
     }
     pointer_data.pan_x = SAFE_ACCESS(current, pan_x, 0.0);
@@ -2933,12 +3037,46 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
     pointer_data.pressure = SAFE_ACCESS(current, pressure, 0.0);
     pointer_data.pressure_min = SAFE_ACCESS(current, pressure_min, 0.0);
     pointer_data.pressure_max = SAFE_ACCESS(current, pressure_max, 0.0);
+    pointer_data.radius_major = SAFE_ACCESS(current, radius_major, 0.0);
+    pointer_data.radius_minor = SAFE_ACCESS(current, radius_minor, 0.0);
+    pointer_data.radius_min = SAFE_ACCESS(current, radius_min, 0.0);
+    pointer_data.radius_max = SAFE_ACCESS(current, radius_max, 0.0);
+    pointer_data.orientation = SAFE_ACCESS(current, orientation, 0.0);
+    pointer_data.tilt = SAFE_ACCESS(current, tilt, 0.0);
+    pointer_data.size = SAFE_ACCESS(current, size, 0.0);
+    pointer_data.distance = SAFE_ACCESS(current, distance, 0.0);
+    pointer_data.distance_max = SAFE_ACCESS(current, distance_max, 0.0);
+    pointer_data.platformData = SAFE_ACCESS(current, platform_data, 0);
     pointer_data.view_id =
         SAFE_ACCESS(current, view_id, kFlutterImplicitViewId);
     packet->SetPointerData(i, pointer_data);
     current = reinterpret_cast<const FlutterPointerEvent*>(
         reinterpret_cast<const uint8_t*>(current) + current->struct_size);
   }
+
+  return reinterpret_cast<flutter::EmbedderEngine*>(engine)
+                 ->DispatchPointerDataPacket(std::move(packet))
+             ? kSuccess
+             : LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                                  "Could not dispatch pointer events to the "
+                                  "running Flutter application.");
+}
+
+FlutterEngineResult FlutterEngineSendPointerDataPacket(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const uint8_t* packet_data,
+    size_t packet_size) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (packet_data == nullptr || packet_size == 0) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid pointer data packet.");
+  }
+
+  auto packet = std::make_unique<flutter::PointerDataPacket>(
+      const_cast<uint8_t*>(packet_data), packet_size);
 
   return reinterpret_cast<flutter::EmbedderEngine*>(engine)
                  ->DispatchPointerDataPacket(std::move(packet))
@@ -3107,7 +3245,7 @@ FlutterEngineResult FlutterEngineSendPlatformMessage(
   }
 
   std::unique_ptr<flutter::PlatformMessage> message;
-  if (message_size == 0) {
+  if (message_data == nullptr) {
     message = std::make_unique<flutter::PlatformMessage>(
         flutter_message->channel, response);
   } else {
@@ -3188,11 +3326,11 @@ FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
   auto response = handle->message->response();
 
   if (response) {
-    if (data_length == 0) {
+    if (data == nullptr) {
       response->CompleteEmpty();
     } else {
-      response->Complete(std::make_unique<fml::DataMapping>(
-          std::vector<uint8_t>({data, data + data_length})));
+      response->Complete(std::make_unique<fml::MallocMapping>(
+          fml::MallocMapping::Copy(data, data_length)));
     }
   }
 
@@ -3213,7 +3351,7 @@ FlutterEngineResult FlutterEngineRegisterExternalTexture(
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
 
-  if (texture_identifier == 0) {
+  if (texture_identifier < 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Texture identifier was invalid.");
   }
@@ -3232,7 +3370,7 @@ FlutterEngineResult FlutterEngineUnregisterExternalTexture(
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
 
-  if (texture_identifier == 0) {
+  if (texture_identifier < 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Texture identifier was invalid.");
   }
@@ -3252,7 +3390,7 @@ FlutterEngineResult FlutterEngineMarkExternalTextureFrameAvailable(
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
-  if (texture_identifier == 0) {
+  if (texture_identifier < 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid texture identifier.");
   }
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)
@@ -3982,7 +4120,8 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
   }
 
   auto run_configuration = flutter::RunConfiguration::InferFromSettings(
-      parent_engine->GetShell().GetSettings());
+      parent_engine->GetShell().GetSettings(), nullptr,
+      flutter::IsolateLaunchType::kExistingGroup);
 
   const char* entrypoint = SAFE_ACCESS(spawn_info, entrypoint, nullptr);
   const char* library_uri = SAFE_ACCESS(spawn_info, library_uri, nullptr);
@@ -4115,6 +4254,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
            FlutterEngineLoadDartDeferredLibraryError);
   SET_PROC(UpdateAssetResolver, FlutterEngineUpdateAssetResolver);
   SET_PROC(Spawn, FlutterEngineSpawn);
+  SET_PROC(SendPointerDataPacket, FlutterEngineSendPointerDataPacket);
 #undef SET_PROC
 
   return kSuccess;
