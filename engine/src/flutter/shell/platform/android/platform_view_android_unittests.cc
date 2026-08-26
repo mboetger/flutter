@@ -2,6 +2,7 @@
 
 #include "flutter/common/settings.h"
 #include "flutter/fml/message_loop.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
@@ -445,6 +446,30 @@ TEST(PlatformViewAndroidTest, TextureLifecycleUnregisterAndMarkFrameAvailable) {
 
   EXPECT_CALL(delegate, OnPlatformViewMarkTextureFrameAvailable(501)).Times(1);
   platform_view->MarkTextureFrameAvailable(501);
+}
+
+TEST(PlatformViewAndroidTest, JNIDispatchSwitchingUnderEmbedderAPI) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+
+  Settings settings;
+  settings.enable_embedder_api = true;
+  settings.enable_software_rendering = true;
+
+  FlutterMain flutter_main(settings, AndroidRenderingAPI::kSoftware);
+  EXPECT_TRUE(flutter_main.IsEmbedderAPIEnabled());
+
+  auto jni = std::make_shared<JNIMock>();
+  auto engine = std::make_unique<AndroidEngine>(settings, jni,
+                                                AndroidRenderingAPI::kSoftware);
+  ASSERT_TRUE(engine->IsValid());
+
+  auto platform_view = engine->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  // Verify platform view methods work correctly through the engine delegate.
+  platform_view->ScheduleFrame();
+  platform_view->SetSemanticsEnabled(false);
+  platform_view->SetAccessibilityFeatures(0);
 }
 
 }  // namespace testing
