@@ -57,7 +57,8 @@ EmbedderEngine::~EmbedderEngine() = default;
 
 std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
     RunConfiguration run_configuration,
-    const std::string& initial_route) {
+    const std::string& initial_route,
+    std::unique_ptr<EmbedderExternalTextureResolver> custom_texture_resolver) {
   if (!IsValid()) {
     return nullptr;
   }
@@ -72,7 +73,9 @@ std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
   }
 
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver;
-  if (external_texture_resolver_) {
+  if (custom_texture_resolver) {
+    external_texture_resolver = std::move(custom_texture_resolver);
+  } else if (external_texture_resolver_) {
     external_texture_resolver =
         std::make_unique<EmbedderExternalTextureResolver>(
             *external_texture_resolver_);

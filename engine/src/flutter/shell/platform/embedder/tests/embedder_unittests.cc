@@ -4684,6 +4684,45 @@ TEST_F(EmbedderTest, CanSpawnEngine) {
             kSuccess);
 }
 
+TEST_F(EmbedderTest,
+       CanSpawnEngineWithExternalTextureCallbackAndLegacyStructSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Test 1: Spawning with legacy struct size (before
+  // external_texture_frame_callback was added)
+  FlutterEngineSpawnInfo legacy_spawn_info = {};
+  legacy_spawn_info.struct_size =
+      offsetof(FlutterEngineSpawnInfo, external_texture_frame_callback);
+  legacy_spawn_info.initial_route = "/";
+
+  FLUTTER_API_SYMBOL(FlutterEngine) spawned_engine = nullptr;
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &legacy_spawn_info, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+  EXPECT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+
+  // Test 2: Spawning with external_texture_frame_callback set
+  FlutterEngineSpawnInfo texture_spawn_info = {};
+  texture_spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo);
+  texture_spawn_info.initial_route = "/";
+  texture_spawn_info.external_texture_frame_callback =
+      [](void* user_data, int64_t texture_identifier, size_t width,
+         size_t height,
+         FlutterExternalTextureFrame* frame_out) -> bool { return false; };
+
+  spawned_engine = nullptr;
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &texture_spawn_info, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+  EXPECT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+}
+
 TEST_F(EmbedderTest, CanSpawnEngineWithCustomEntrypointAndRoute) {
   auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
   EmbedderConfigBuilder builder(context);
@@ -4977,6 +5016,113 @@ TEST(EmbedderExternalTextureResolverTest, CustomExternalTextureCallback) {
   EXPECT_EQ(callback_invocations, 6);
   EXPECT_EQ(requested_texture_id, 91);
   ASSERT_NE(move_assigned_texture, nullptr);
+}
+
+TEST(EmbedderExternalTextureTest,
+     EmbedderExternalTextureResolverFrameCallback) {
+  int callback_invocations = 0;
+  int64_t requested_texture_id = 0;
+  size_t requested_width = 0;
+  size_t requested_height = 0;
+
+  EmbedderExternalTextureResolver::ExternalTextureFrameCallback frame_cb =
+      [&](int64_t id, size_t width, size_t height,
+          FlutterExternalTextureFrame* frame_out) -> bool {
+    callback_invocations++;
+    requested_texture_id = id;
+    requested_width = width;
+    requested_height = height;
+    if (id < 0) {
+      return false;
+    }
+    frame_out->type = kFlutterExternalTextureFrameTypeHardwareBuffer;
+    frame_out->hardware_buffer.struct_size =
+        sizeof(FlutterHardwareBufferTexture);
+    frame_out->hardware_buffer.hardware_buffer =
+        reinterpret_cast<void*>(0x1234);
+    frame_out->hardware_buffer.width = width;
+    frame_out->hardware_buffer.height = height;
+    return true;
+  };
+
+  EmbedderExternalTextureResolver resolver(frame_cb);
+  EXPECT_TRUE(resolver.SupportsExternalTextures());
+
+  auto texture = resolver.ResolveExternalTexture(100);
+  ASSERT_NE(texture, nullptr);
+  EXPECT_EQ(texture->Id(), 100);
+
+  // Copy construction
+  EmbedderExternalTextureResolver copied_resolver(resolver);
+  EXPECT_TRUE(copied_resolver.SupportsExternalTextures());
+  auto copied_texture = copied_resolver.ResolveExternalTexture(101);
+  ASSERT_NE(copied_texture, nullptr);
+  EXPECT_EQ(copied_texture->Id(), 101);
+
+  // Copy assignment
+  EmbedderExternalTextureResolver copy_assigned;
+  copy_assigned = copied_resolver;
+  EXPECT_TRUE(copy_assigned.SupportsExternalTextures());
+  auto copy_assigned_texture = copy_assigned.ResolveExternalTexture(102);
+  ASSERT_NE(copy_assigned_texture, nullptr);
+  EXPECT_EQ(copy_assigned_texture->Id(), 102);
+
+  // Move construction
+  EmbedderExternalTextureResolver moved_resolver(std::move(resolver));
+  EXPECT_TRUE(moved_resolver.SupportsExternalTextures());
+  auto moved_texture = moved_resolver.ResolveExternalTexture(103);
+  ASSERT_NE(moved_texture, nullptr);
+  EXPECT_EQ(moved_texture->Id(), 103);
+
+  // Move assignment
+  EmbedderExternalTextureResolver move_assigned;
+  move_assigned = std::move(copied_resolver);
+  EXPECT_TRUE(move_assigned.SupportsExternalTextures());
+  auto move_assigned_texture = move_assigned.ResolveExternalTexture(104);
+  ASSERT_NE(move_assigned_texture, nullptr);
+  EXPECT_EQ(move_assigned_texture->Id(), 104);
+}
+
+TEST(EmbedderExternalTextureTest,
+     EmbedderExternalTextureHardwareBufferDestruction) {
+  bool destruction_called = false;
+
+  EmbedderExternalTexture::ExternalTextureFrameCallback frame_cb =
+      [&](int64_t id, size_t width, size_t height,
+          FlutterExternalTextureFrame* frame_out) -> bool {
+    frame_out->type = kFlutterExternalTextureFrameTypeHardwareBuffer;
+    frame_out->hardware_buffer.struct_size =
+        sizeof(FlutterHardwareBufferTexture);
+    frame_out->hardware_buffer.hardware_buffer =
+        reinterpret_cast<void*>(0xbeef);
+    frame_out->hardware_buffer.user_data = &destruction_called;
+    frame_out->hardware_buffer.destruction_callback = [](void* user_data) {
+      *reinterpret_cast<bool*>(user_data) = true;
+    };
+    frame_out->hardware_buffer.width = 100;
+    frame_out->hardware_buffer.height = 100;
+    return true;
+  };
+
+  EmbedderExternalTexture texture(42, frame_cb);
+  EXPECT_EQ(texture.Id(), 42);
+
+  // Trigger frame resolution with null GPU contexts (e.g. software fallback)
+  Texture::PaintContext paint_context = {
+      .canvas = nullptr,
+      .gr_context = nullptr,
+      .aiks_context = nullptr,
+      .paint = nullptr,
+  };
+  texture.Paint(paint_context, DlRect::MakeWH(100, 100), false,
+                DlImageSampling::kNearestNeighbor);
+
+  // Verifies that unresolvable HardwareBuffer frame invokes
+  // destruction_callback immediately.
+  EXPECT_TRUE(destruction_called);
+
+  texture.MarkNewFrameAvailable();
+  texture.OnTextureUnregistered();
 }
 
 }  // namespace testing

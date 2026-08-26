@@ -44,8 +44,11 @@ class EmbedderEngine {
 
   ~EmbedderEngine();
 
-  std::unique_ptr<EmbedderEngine> Spawn(RunConfiguration run_configuration,
-                                        const std::string& initial_route);
+  std::unique_ptr<EmbedderEngine> Spawn(
+      RunConfiguration run_configuration,
+      const std::string& initial_route,
+      std::unique_ptr<EmbedderExternalTextureResolver> custom_texture_resolver =
+          nullptr);
 
   bool LaunchShell();
 

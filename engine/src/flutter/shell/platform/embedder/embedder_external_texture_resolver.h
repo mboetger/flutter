@@ -18,15 +18,22 @@
 #include "flutter/shell/platform/embedder/embedder_external_texture_metal.h"
 #endif
 
+#include "flutter/shell/platform/embedder/embedder_external_texture.h"
+
 namespace flutter {
 class EmbedderExternalTextureResolver {
  public:
   using CustomExternalTextureCallback =
       std::function<std::shared_ptr<Texture>(int64_t)>;
+  using ExternalTextureFrameCallback = std::function<
+      bool(int64_t, size_t, size_t, FlutterExternalTextureFrame*)>;
 
   EmbedderExternalTextureResolver() = default;
 
   ~EmbedderExternalTextureResolver() = default;
+
+  explicit EmbedderExternalTextureResolver(
+      ExternalTextureFrameCallback frame_callback);
 
   explicit EmbedderExternalTextureResolver(
       CustomExternalTextureCallback custom_callback);
@@ -55,6 +62,7 @@ class EmbedderExternalTextureResolver {
   bool SupportsExternalTextures() const;
 
  private:
+  ExternalTextureFrameCallback frame_callback_;
   CustomExternalTextureCallback custom_callback_;
 
 #ifdef SHELL_ENABLE_GL

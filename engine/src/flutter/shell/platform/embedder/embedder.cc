@@ -2438,7 +2438,17 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   using ExternalTextureResolver = flutter::EmbedderExternalTextureResolver;
   std::unique_ptr<ExternalTextureResolver> external_texture_resolver;
-  if (SAFE_ACCESS(args, custom_external_texture_callback, nullptr) != nullptr) {
+  if (SAFE_ACCESS(args, external_texture_frame_callback, nullptr) != nullptr) {
+    auto frame_callback =
+        [ptr = args->external_texture_frame_callback, user_data](
+            int64_t texture_identifier, size_t width, size_t height,
+            FlutterExternalTextureFrame* frame_out) -> bool {
+      return ptr(user_data, texture_identifier, width, height, frame_out);
+    };
+    external_texture_resolver =
+        std::make_unique<ExternalTextureResolver>(frame_callback);
+  } else if (SAFE_ACCESS(args, custom_external_texture_callback, nullptr) !=
+             nullptr) {
     auto custom_callback =
         [ptr = args->custom_external_texture_callback, user_data](
             int64_t texture_identifier) -> std::shared_ptr<flutter::Texture> {
@@ -4077,8 +4087,10 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
                               "Invalid spawn_info specified.");
   }
 
-  if (SAFE_ACCESS(spawn_info, struct_size, 0) !=
-      sizeof(FlutterEngineSpawnInfo)) {
+  size_t spawn_info_struct_size = SAFE_ACCESS(spawn_info, struct_size, 0);
+  if (spawn_info_struct_size != sizeof(FlutterEngineSpawnInfo) &&
+      spawn_info_struct_size !=
+          offsetof(FlutterEngineSpawnInfo, external_texture_frame_callback)) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Invalid struct_size specified in spawn_info.");
   }
@@ -4175,8 +4187,24 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
     initial_route = route_cstr;
   }
 
+  std::unique_ptr<flutter::EmbedderExternalTextureResolver>
+      custom_texture_resolver;
+  if (SAFE_ACCESS(spawn_info, external_texture_frame_callback, nullptr) !=
+      nullptr) {
+    auto frame_callback = [ptr = spawn_info->external_texture_frame_callback](
+                              int64_t texture_identifier, size_t width,
+                              size_t height,
+                              FlutterExternalTextureFrame* frame_out) -> bool {
+      return ptr(nullptr, texture_identifier, width, height, frame_out);
+    };
+    custom_texture_resolver =
+        std::make_unique<flutter::EmbedderExternalTextureResolver>(
+            frame_callback);
+  }
+
   auto spawned_engine =
-      parent_engine->Spawn(std::move(run_configuration), initial_route);
+      parent_engine->Spawn(std::move(run_configuration), initial_route,
+                           std::move(custom_texture_resolver));
   if (!spawned_engine) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                               "Could not spawn engine.");

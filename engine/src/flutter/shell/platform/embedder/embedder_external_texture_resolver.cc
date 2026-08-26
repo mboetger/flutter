@@ -10,6 +10,10 @@
 namespace flutter {
 
 EmbedderExternalTextureResolver::EmbedderExternalTextureResolver(
+    ExternalTextureFrameCallback frame_callback)
+    : frame_callback_(std::move(frame_callback)) {}
+
+EmbedderExternalTextureResolver::EmbedderExternalTextureResolver(
     CustomExternalTextureCallback custom_callback)
     : custom_callback_(std::move(custom_callback)) {}
 
@@ -27,6 +31,11 @@ EmbedderExternalTextureResolver::EmbedderExternalTextureResolver(
 
 std::shared_ptr<Texture>
 EmbedderExternalTextureResolver::ResolveExternalTexture(int64_t texture_id) {
+  if (frame_callback_) {
+    return std::make_shared<EmbedderExternalTexture>(texture_id,
+                                                     frame_callback_);
+  }
+
   if (custom_callback_) {
     return custom_callback_(texture_id);
   }
@@ -49,6 +58,10 @@ EmbedderExternalTextureResolver::ResolveExternalTexture(int64_t texture_id) {
 }
 
 bool EmbedderExternalTextureResolver::SupportsExternalTextures() const {
+  if (frame_callback_) {
+    return true;
+  }
+
   if (custom_callback_) {
     return true;
   }

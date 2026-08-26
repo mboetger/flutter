@@ -2779,6 +2779,79 @@ typedef struct {
   bool (*is_valid_after_asset_manager_change)(void* user_data);
 } FlutterAssetResolverConfig;
 
+/// Types of external texture frames supported by the engine.
+typedef enum {
+  /// No texture frame available.
+  kFlutterExternalTextureFrameTypeNone = 0,
+  /// An OpenGL texture frame (e.g. GL_TEXTURE_2D or GL_TEXTURE_EXTERNAL_OES).
+  kFlutterExternalTextureFrameTypeOpenGL = 1,
+  /// A Vulkan image frame.
+  kFlutterExternalTextureFrameTypeVulkan = 2,
+  /// An Android AHardwareBuffer native handle (zero-copy hardware buffer).
+  kFlutterExternalTextureFrameTypeHardwareBuffer = 3,
+} FlutterExternalTextureFrameType;
+
+/// A structure representing a raw hardware buffer (e.g. Android
+/// AHardwareBuffer).
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterHardwareBufferTexture).
+  size_t struct_size;
+
+  /// Pointer to the native hardware buffer (e.g. AHardwareBuffer* on Android).
+  void* hardware_buffer;
+
+  /// User data to be returned on the invocation of the destruction callback.
+  void* user_data;
+
+  /// Callback invoked (on an engine managed thread) when the engine is done
+  /// using the hardware buffer frame.
+  VoidCallback destruction_callback;
+
+  /// Width of the texture buffer in physical pixels.
+  size_t width;
+
+  /// Height of the texture buffer in physical pixels.
+  size_t height;
+
+  /// Optional file descriptor for an acquire sync fence. If < 0, no fence is
+  /// waited on.
+  int acquire_fence_fd;
+
+  /// Optional 4x4 UV transformation matrix (row-major). If null, identity is
+  /// assumed.
+  const float* transformation_matrix;
+} FlutterHardwareBufferTexture;
+
+/// A structure representing an external texture frame of any supported type.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterExternalTextureFrame).
+  size_t struct_size;
+
+  /// The type of texture frame contained in this structure.
+  FlutterExternalTextureFrameType type;
+
+  /// Union of texture frame representations.
+  union {
+    /// Populated when `type == kFlutterExternalTextureFrameTypeOpenGL`.
+    FlutterOpenGLTexture open_gl;
+
+    /// Populated when `type == kFlutterExternalTextureFrameTypeVulkan`.
+    FlutterVulkanImage vulkan;
+
+    /// Populated when `type == kFlutterExternalTextureFrameTypeHardwareBuffer`.
+    FlutterHardwareBufferTexture hardware_buffer;
+  };
+} FlutterExternalTextureFrame;
+
+/// Callback invoked on the render/raster thread to obtain an external texture
+/// frame.
+typedef bool (*FlutterExternalTextureFrameCallback)(
+    void* user_data,
+    int64_t texture_identifier,
+    size_t width,
+    size_t height,
+    FlutterExternalTextureFrame* frame_out);
+
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
@@ -3116,6 +3189,10 @@ typedef struct {
 
   /// Optional initial route. If null or empty, defaults to "/".
   const char* initial_route;
+
+  /// The callback invoked by the engine on the render/raster thread to obtain
+  /// an external texture frame.
+  FlutterExternalTextureFrameCallback external_texture_frame_callback;
 } FlutterProjectArgs;
 
 /// Information used to spawn a new engine from an existing running engine.
@@ -3147,6 +3224,10 @@ typedef struct {
   /// Optional engine identifier for the spawned engine. If 0, an internal
   /// engine ID is assigned.
   int64_t engine_id;
+
+  /// The callback invoked by the spawned engine on the render/raster thread to
+  /// obtain an external texture frame.
+  FlutterExternalTextureFrameCallback external_texture_frame_callback;
 } FlutterEngineSpawnInfo;
 
 typedef struct {
