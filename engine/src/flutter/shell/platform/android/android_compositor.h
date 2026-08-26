@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/macros.h"
 #include "flutter/shell/platform/android/android_surface_manager.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -19,7 +20,8 @@ namespace flutter {
 
 //------------------------------------------------------------------------------
 /// @brief Coordinates backing store management, layer composition, and platform
-///        view presentation between the Flutter engine and the Android platform.
+///        view presentation between the Flutter engine and the Android
+///        platform.
 ///
 class AndroidCompositor {
  public:
@@ -29,17 +31,30 @@ class AndroidCompositor {
     size_t backing_store_count = 0;
     size_t platform_view_count = 0;
     std::vector<FlutterPlatformViewIdentifier> platform_view_ids;
+    std::vector<MutatorsStack> platform_view_mutators;
     uint64_t presentation_time = 0;
   };
 
-  AndroidCompositor(
-      std::shared_ptr<AndroidSurfaceManager> surface_manager,
-      std::shared_ptr<PlatformViewAndroidJNI> jni_facade);
+  AndroidCompositor(std::shared_ptr<AndroidSurfaceManager> surface_manager,
+                    std::shared_ptr<PlatformViewAndroidJNI> jni_facade);
 
   virtual ~AndroidCompositor();
 
   //----------------------------------------------------------------------------
-  /// @brief Returns the initialized FlutterCompositor struct for FlutterProjectArgs.
+  /// @brief Converts a FlutterPlatformView's mutations into a MutatorsStack.
+  ///
+  static MutatorsStack ConvertMutators(
+      const FlutterPlatformView* platform_view);
+
+  //----------------------------------------------------------------------------
+  /// @brief Dispatches the presentation of a platform view layer to JNI.
+  ///
+  virtual void PresentPlatformView(const FlutterLayer* layer,
+                                   MutatorsStack mutators_stack);
+
+  //----------------------------------------------------------------------------
+  /// @brief Returns the initialized FlutterCompositor struct for
+  /// FlutterProjectArgs.
   ///
   FlutterCompositor GetCompositor();
 
@@ -72,7 +87,8 @@ class AndroidCompositor {
   virtual void RemoveView(FlutterViewId view_id);
 
   //----------------------------------------------------------------------------
-  /// @brief Returns the last presented frame metadata (useful for verification).
+  /// @brief Returns the last presented frame metadata (useful for
+  /// verification).
   ///
   PresentedFrame GetLastPresentedFrame() const;
 
