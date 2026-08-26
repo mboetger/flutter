@@ -4,6 +4,7 @@
 
 #include "flutter/shell/platform/android/android_compositor.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "flutter/fml/logging.h"
@@ -27,10 +28,15 @@ AndroidCompositor::AndroidCompositor(
       surface_factory_(std::move(surface_factory)),
       task_runners_(task_runners),
       surface_pool_(
-          std::make_unique<SurfacePool>(/*use_new_surface_methods=*/true)) {}
+          std::make_unique<SurfacePool>(/*use_new_surface_methods=*/true)),
+      weak_factory_(this) {}
 
 AndroidCompositor::~AndroidCompositor() {
   Teardown();
+}
+
+fml::WeakPtr<AndroidCompositor> AndroidCompositor::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 FlutterCompositor AndroidCompositor::GetFlutterCompositor() {
@@ -49,7 +55,8 @@ bool AndroidCompositor::CreateBackingStore(
     FlutterBackingStore* backing_store_out) {
   TRACE_EVENT0("flutter", "AndroidCompositor::CreateBackingStore");
 
-  if (config == nullptr || backing_store_out == nullptr) {
+  if (config == nullptr || backing_store_out == nullptr ||
+      config->size.width <= 0 || config->size.height <= 0) {
     return false;
   }
 
@@ -140,6 +147,21 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
   TRACE_EVENT0("flutter", "AndroidCompositor::Present");
 
   if (layers_count == 0) {
+    if (jni_facade_) {
+      task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
+          [weak_this = GetWeakPtr(), jni_facade = jni_facade_,
+           views_visible_last_frame = views_visible_last_frame_]() {
+            if (weak_this) {
+              weak_this->HideOverlayLayerIfNeeded();
+            }
+            for (int64_t id : views_visible_last_frame) {
+              jni_facade->hidePlatformView2(id);
+            }
+            jni_facade->swapTransaction();
+            jni_facade->onEndFrame2();
+          }));
+    }
+    views_visible_last_frame_.clear();
     return true;
   }
 
@@ -160,12 +182,13 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
   }
 
   if (!has_platform_views) {
-    HideOverlayLayerIfNeeded();
-
     if (jni_facade_) {
       task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
-          [jni_facade = jni_facade_,
+          [weak_this = GetWeakPtr(), jni_facade = jni_facade_,
            views_visible_last_frame = views_visible_last_frame_]() {
+            if (weak_this) {
+              weak_this->HideOverlayLayerIfNeeded();
+            }
             for (int64_t id : views_visible_last_frame) {
               jni_facade->hidePlatformView2(id);
             }
@@ -197,12 +220,6 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
     }
   }
 
-  if (has_overlay_backing_store) {
-    ShowOverlayLayerIfNeeded();
-  } else {
-    HideOverlayLayerIfNeeded();
-  }
-
   if (jni_facade_) {
     struct DisplayPlatformViewInfo {
       int32_t view_id;
@@ -227,18 +244,27 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
         info.y = static_cast<int32_t>(std::round(layer->offset.y));
         info.width = static_cast<int32_t>(std::round(layer->size.width));
         info.height = static_cast<int32_t>(std::round(layer->size.height));
-        info.view_width = static_cast<int32_t>(
-            std::round(layer->size.width * device_pixel_ratio_));
-        info.view_height = static_cast<int32_t>(
-            std::round(layer->size.height * device_pixel_ratio_));
+        info.view_width = static_cast<int32_t>(std::round(layer->size.width));
+        info.view_height = static_cast<int32_t>(std::round(layer->size.height));
+        info.mutators_stack = ToMutatorsStack(layer->platform_view);
         display_infos.push_back(std::move(info));
       }
     }
 
-    task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
-        [jni_facade = jni_facade_, display_infos = std::move(display_infos),
-         views_visible_last_frame = views_visible_last_frame_,
-         current_views = current_visible_views]() mutable {
+    task_runners_.GetPlatformTaskRunner()->PostTask(
+        fml::MakeCopyable([weak_this = GetWeakPtr(), jni_facade = jni_facade_,
+                           display_infos = std::move(display_infos),
+                           views_visible_last_frame = views_visible_last_frame_,
+                           current_views = current_visible_views,
+                           has_overlay_backing_store]() mutable {
+          if (weak_this) {
+            if (has_overlay_backing_store) {
+              weak_this->ShowOverlayLayerIfNeeded();
+            } else {
+              weak_this->HideOverlayLayerIfNeeded();
+            }
+          }
+
           absl::flat_hash_set<int64_t> current_set(current_views.begin(),
                                                    current_views.end());
 
@@ -269,7 +295,9 @@ bool AndroidCompositor::OnCreateBackingStore(
     const FlutterBackingStoreConfig* config,
     FlutterBackingStore* backing_store_out,
     void* user_data) {
-  FML_DCHECK(user_data != nullptr);
+  if (user_data == nullptr) {
+    return false;
+  }
   auto* compositor = static_cast<AndroidCompositor*>(user_data);
   return compositor->CreateBackingStore(config, backing_store_out);
 }
@@ -277,15 +305,18 @@ bool AndroidCompositor::OnCreateBackingStore(
 bool AndroidCompositor::OnCollectBackingStore(
     const FlutterBackingStore* backing_store,
     void* user_data) {
-  FML_DCHECK(user_data != nullptr);
+  if (user_data == nullptr) {
+    return false;
+  }
   auto* compositor = static_cast<AndroidCompositor*>(user_data);
   return compositor->CollectBackingStore(backing_store);
 }
 
 bool AndroidCompositor::OnPresentView(
     const FlutterPresentViewInfo* present_info) {
-  FML_DCHECK(present_info != nullptr);
-  FML_DCHECK(present_info->user_data != nullptr);
+  if (present_info == nullptr || present_info->user_data == nullptr) {
+    return false;
+  }
   auto* compositor = static_cast<AndroidCompositor*>(present_info->user_data);
   return compositor->PresentView(present_info);
 }
@@ -402,6 +433,90 @@ void AndroidCompositor::SetDevicePixelRatio(double device_pixel_ratio) {
 
 double AndroidCompositor::GetDevicePixelRatio() const {
   return device_pixel_ratio_;
+}
+
+MutatorsStack AndroidCompositor::ToMutatorsStack(
+    const FlutterPlatformView* platform_view) {
+  MutatorsStack stack;
+  if (platform_view == nullptr || platform_view->mutations == nullptr) {
+    return stack;
+  }
+  for (size_t i = 0; i < platform_view->mutations_count; ++i) {
+    const FlutterPlatformViewMutation* mutation = platform_view->mutations[i];
+    if (mutation == nullptr) {
+      continue;
+    }
+    switch (mutation->type) {
+      case kFlutterPlatformViewMutationTypeOpacity: {
+        double raw_opacity = mutation->opacity;
+        if (std::isnan(raw_opacity)) {
+          raw_opacity = 1.0;
+        }
+        double clamped_opacity = std::clamp(raw_opacity, 0.0, 1.0);
+        auto alpha = static_cast<uint8_t>(std::round(clamped_opacity * 255.0));
+        stack.PushOpacity(alpha);
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeClipRect: {
+        stack.PushClipRect(ToDlRect(mutation->clip_rect));
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeClipRoundedRect: {
+        stack.PushClipRRect(ToDlRoundRect(mutation->clip_rounded_rect));
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeTransformation: {
+        stack.PushTransform(ToDlMatrix(mutation->transformation));
+        break;
+      }
+    }
+  }
+  return stack;
+}
+
+DlMatrix AndroidCompositor::ToDlMatrix(
+    const FlutterTransformation& transformation) {
+  return DlMatrix(static_cast<DlScalar>(transformation.scaleX),
+                  static_cast<DlScalar>(transformation.skewY), 0.0f,
+                  static_cast<DlScalar>(transformation.pers0),
+
+                  static_cast<DlScalar>(transformation.skewX),
+                  static_cast<DlScalar>(transformation.scaleY), 0.0f,
+                  static_cast<DlScalar>(transformation.pers1),
+
+                  0.0f, 0.0f, 1.0f, 0.0f,
+
+                  static_cast<DlScalar>(transformation.transX),
+                  static_cast<DlScalar>(transformation.transY), 0.0f,
+                  static_cast<DlScalar>(transformation.pers2));
+}
+
+DlRoundRect AndroidCompositor::ToDlRoundRect(const FlutterRoundedRect& rrect) {
+  DlRect rect = DlRect::MakeLTRB(static_cast<DlScalar>(rrect.rect.left),
+                                 static_cast<DlScalar>(rrect.rect.top),
+                                 static_cast<DlScalar>(rrect.rect.right),
+                                 static_cast<DlScalar>(rrect.rect.bottom));
+  DlRoundingRadii radii = {
+      .top_left =
+          DlSize(static_cast<DlScalar>(rrect.upper_left_corner_radius.width),
+                 static_cast<DlScalar>(rrect.upper_left_corner_radius.height)),
+      .top_right =
+          DlSize(static_cast<DlScalar>(rrect.upper_right_corner_radius.width),
+                 static_cast<DlScalar>(rrect.upper_right_corner_radius.height)),
+      .bottom_left =
+          DlSize(static_cast<DlScalar>(rrect.lower_left_corner_radius.width),
+                 static_cast<DlScalar>(rrect.lower_left_corner_radius.height)),
+      .bottom_right =
+          DlSize(static_cast<DlScalar>(rrect.lower_right_corner_radius.width),
+                 static_cast<DlScalar>(rrect.lower_right_corner_radius.height)),
+  };
+  return DlRoundRect::MakeRectRadii(rect, radii);
+}
+
+DlRect AndroidCompositor::ToDlRect(const FlutterRect& rect) {
+  return DlRect::MakeLTRB(
+      static_cast<DlScalar>(rect.left), static_cast<DlScalar>(rect.top),
+      static_cast<DlScalar>(rect.right), static_cast<DlScalar>(rect.bottom));
 }
 
 }  // namespace flutter

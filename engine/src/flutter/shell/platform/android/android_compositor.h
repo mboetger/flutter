@@ -11,7 +11,9 @@
 
 #include "flutter/common/task_runners.h"
 #include "flutter/display_list/geometry/dl_geometry_types.h"
+#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/macros.h"
+#include "flutter/fml/memory/weak_ptr.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/surface_pool.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -39,6 +41,11 @@ class AndroidCompositor {
                     const TaskRunners& task_runners);
 
   ~AndroidCompositor();
+
+  //----------------------------------------------------------------------------
+  /// @brief Returns a weak pointer to this compositor instance.
+  ///
+  fml::WeakPtr<AndroidCompositor> GetWeakPtr();
 
   //----------------------------------------------------------------------------
   /// @brief Returns a FlutterCompositor struct configured with callbacks
@@ -157,6 +164,27 @@ class AndroidCompositor {
   ///
   double GetDevicePixelRatio() const;
 
+  //----------------------------------------------------------------------------
+  /// @brief Converts a FlutterPlatformView's mutations into a MutatorsStack.
+  ///
+  static MutatorsStack ToMutatorsStack(
+      const FlutterPlatformView* platform_view);
+
+  //----------------------------------------------------------------------------
+  /// @brief Converts a FlutterTransformation to a DlMatrix.
+  ///
+  static DlMatrix ToDlMatrix(const FlutterTransformation& transformation);
+
+  //----------------------------------------------------------------------------
+  /// @brief Converts a FlutterRoundedRect to a DlRoundRect.
+  ///
+  static DlRoundRect ToDlRoundRect(const FlutterRoundedRect& rrect);
+
+  //----------------------------------------------------------------------------
+  /// @brief Converts a FlutterRect to a DlRect.
+  ///
+  static DlRect ToDlRect(const FlutterRect& rect);
+
  private:
   static bool OnCreateBackingStore(const FlutterBackingStoreConfig* config,
                                    FlutterBackingStore* backing_store_out,
@@ -180,6 +208,8 @@ class AndroidCompositor {
 
   DlISize frame_size_{0, 0};
   double device_pixel_ratio_ = 1.0;
+
+  fml::WeakPtrFactory<AndroidCompositor> weak_factory_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidCompositor);
 };
