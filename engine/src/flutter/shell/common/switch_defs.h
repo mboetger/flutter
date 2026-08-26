@@ -269,10 +269,16 @@ DEF_SWITCH(LeakVM,
            "this value to false.")
 DEF_SWITCH(EnableEmbedderAPI,
            "enable-embedder-api",
-           "Enable the embedder api. Defaults to false.")
+           "Enable the embedder api. Defaults to true.")
 DEF_SWITCH(EnableAndroidEmbedderAPI,
            "enable-android-embedder-api",
-           "Enable the embedder api on Android. Defaults to false.")
+           "Enable the embedder api on Android. Defaults to true.")
+DEF_SWITCH(NoEnableEmbedderAPI,
+           "no-enable-embedder-api",
+           "Disable the embedder api.")
+DEF_SWITCH(NoEnableAndroidEmbedderAPI,
+           "no-enable-android-embedder-api",
+           "Disable the embedder api on Android.")
 DEF_SWITCH(EnablePlatformIsolates,
            "enable-platform-isolates",
            "Enable support for isolates that run on the platform thread.")

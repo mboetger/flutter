@@ -281,6 +281,12 @@ TEST(FlutterMainSelectedRenderingAPI, SelectsSoftwareRenderingWhenRequested) {
 TEST(FlutterMainTest, IsEmbedderAPIEnabledReflectsSettings) {
   {
     Settings settings;
+    EXPECT_TRUE(settings.enable_embedder_api);
+    FlutterMain flutter_main(settings, AndroidRenderingAPI::kSoftware);
+    EXPECT_TRUE(flutter_main.IsEmbedderAPIEnabled());
+  }
+  {
+    Settings settings;
     settings.enable_embedder_api = true;
     FlutterMain flutter_main(settings, AndroidRenderingAPI::kSoftware);
     EXPECT_TRUE(flutter_main.IsEmbedderAPIEnabled());
