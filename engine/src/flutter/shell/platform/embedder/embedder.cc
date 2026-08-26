@@ -544,6 +544,13 @@ InferOpenGLPlatformViewCreationCallback(
 #endif  // FML_OS_LINUX || FML_OS_WIN
   }
 
+  std::function<bool()> gl_setup_callback = nullptr;
+  if (SAFE_ACCESS(open_gl_config, setup_callback, nullptr) != nullptr) {
+    gl_setup_callback = [ptr = config->open_gl.setup_callback, user_data]() {
+      return ptr(user_data);
+    };
+  }
+
   bool fbo_reset_after_present =
       SAFE_ACCESS(open_gl_config, fbo_reset_after_present, false);
 
@@ -556,6 +563,7 @@ InferOpenGLPlatformViewCreationCallback(
       gl_surface_transformation_callback,  // gl_surface_transformation_callback
       gl_proc_resolver,                    // gl_proc_resolver
       gl_populate_existing_damage,         // gl_populate_existing_damage
+      gl_setup_callback,                   // gl_setup_callback
   };
 
   return fml::MakeCopyable(
@@ -740,6 +748,14 @@ InferVulkanPlatformViewCreationCallback(
   auto proc_addr =
       vulkan_get_instance_proc_address(vk_instance, "vkGetInstanceProcAddr");
 
+  const FlutterVulkanRendererConfig* vulkan_config = &config->vulkan;
+  std::function<bool()> vulkan_setup_callback = nullptr;
+  if (SAFE_ACCESS(vulkan_config, setup_callback, nullptr) != nullptr) {
+    vulkan_setup_callback = [ptr = config->vulkan.setup_callback, user_data]() {
+      return ptr(user_data);
+    };
+  }
+
   std::shared_ptr<flutter::EmbedderExternalViewEmbedder> view_embedder =
       std::move(external_view_embedder);
 
@@ -751,6 +767,7 @@ InferVulkanPlatformViewCreationCallback(
                 reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
             .get_next_image = vulkan_get_next_image,
             .present_image = vulkan_present_image_callback,
+            .setup_callback = vulkan_setup_callback,
         };
 
     std::unique_ptr<flutter::EmbedderSurfaceVulkanImpeller> embedder_surface =
@@ -786,6 +803,7 @@ InferVulkanPlatformViewCreationCallback(
                 reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
             .get_next_image = vulkan_get_next_image,
             .present_image = vulkan_present_image_callback,
+            .setup_callback = vulkan_setup_callback,
         };
 
     std::unique_ptr<flutter::EmbedderSurfaceVulkan> embedder_surface =
@@ -821,6 +839,7 @@ InferVulkanPlatformViewCreationCallback(
           reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
       .get_next_image = vulkan_get_next_image,
       .present_image = vulkan_present_image_callback,
+      .setup_callback = vulkan_setup_callback,
   };
 
   std::unique_ptr<flutter::EmbedderSurfaceVulkan> embedder_surface =

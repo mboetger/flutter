@@ -383,6 +383,43 @@ TEST_F(EmbedderTest, RenderTextureWithImpellerVulkanDestructCallback) {
   ASSERT_TRUE(destruction_callback_called);
 }
 
+TEST_F(EmbedderTest, VulkanSetupCallbackInvoked) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  static bool setup_called = false;
+  setup_called = false;
+  context.GetRendererConfig().vulkan.setup_callback =
+      [](void* user_data) -> bool {
+    setup_called = true;
+    return true;
+  };
+  EmbedderConfigBuilder builder(context);
+  // Default test surface dimensions: 800 width x 600 height.
+  constexpr int kSurfaceWidth = 800;
+  constexpr int kSurfaceHeight = 600;
+  builder.SetSurface(DlISize(kSurfaceWidth, kSurfaceHeight));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ASSERT_TRUE(setup_called);
+}
+
+TEST_F(EmbedderTest, VulkanSetupCallbackFailureAbortsSurface) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  static bool setup_called = false;
+  setup_called = false;
+  context.GetRendererConfig().vulkan.setup_callback =
+      [](void* user_data) -> bool {
+    setup_called = true;
+    return false;
+  };
+  EmbedderConfigBuilder builder(context);
+  // Default test surface dimensions: 800 width x 600 height.
+  constexpr int kSurfaceWidth = 800;
+  constexpr int kSurfaceHeight = 600;
+  builder.SetSurface(DlISize(kSurfaceWidth, kSurfaceHeight));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(setup_called);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

@@ -93,6 +93,12 @@ EmbedderSurfaceGLImpeller::EmbedderSurfaceGLImpeller(
       !gl_dispatch_table_.gl_proc_resolver) {
     return;
   }
+
+  if (gl_dispatch_table_.gl_setup_callback &&
+      !gl_dispatch_table_.gl_setup_callback()) {
+    return;
+  }
+
   // Certain GL backends need to made current before any GL
   // state can be accessed.
   gl_dispatch_table_.gl_make_current_callback();
@@ -201,6 +207,9 @@ EmbedderSurfaceGLImpeller::GLContextFramebufferInfo() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceGLImpeller::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
   // Ensure that the GL context is current before creating the GPU surface.
   // GPUSurfaceGLImpeller initialization will set up shader pipelines, and the
   // current thread needs to be able to execute reactor operations.

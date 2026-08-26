@@ -42,6 +42,11 @@ EmbedderSurfaceVulkanImpeller::EmbedderSurfaceVulkanImpeller(
     return;
   }
 
+  if (vulkan_dispatch_table_.setup_callback &&
+      !vulkan_dispatch_table_.setup_callback()) {
+    return;
+  }
+
   std::vector<std::shared_ptr<fml::Mapping>> shader_mappings = {
       std::make_shared<fml::NonOwnedMapping>(impeller_entity_shaders_vk_data,
                                              impeller_entity_shaders_vk_length),
@@ -118,6 +123,9 @@ bool EmbedderSurfaceVulkanImpeller::IsValid() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceVulkanImpeller::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
   return std::make_unique<GPUSurfaceVulkanImpeller>(this, context_);
 }
 

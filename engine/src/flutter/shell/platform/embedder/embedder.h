@@ -811,6 +811,10 @@ typedef struct {
   /// ID. Not specifying populate_existing_damage will result in full
   /// repaint (i.e. rendering all the pixels on the screen at every frame).
   FlutterFrameBufferWithDamageCallback populate_existing_damage;
+  /// An optional callback that is invoked when the engine sets up the rendering
+  /// context on the raster thread. If provided, returning false will indicate
+  /// that setup failed and abort surface creation.
+  BoolCallback setup_callback;
 } FlutterOpenGLRendererConfig;
 
 /// Alias for id<MTLDevice>.
@@ -1054,6 +1058,10 @@ typedef struct {
   /// that external texture details can be supplied to the engine for subsequent
   /// composition.
   FlutterVulkanImageFrameCallback external_texture_frame_callback;
+  /// An optional callback that is invoked when the engine sets up the rendering
+  /// context on the raster thread. If provided, returning false will indicate
+  /// that setup failed and abort surface creation.
+  BoolCallback setup_callback;
 } FlutterVulkanRendererConfig;
 
 typedef struct {

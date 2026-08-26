@@ -25,6 +25,7 @@ class EmbedderSurfaceGLSkia final : public EmbedderSurface,
         gl_surface_transformation_callback;                          // optional
     std::function<void*(const char*)> gl_proc_resolver;              // optional
     std::function<GLFBOInfo(intptr_t)> gl_populate_existing_damage;  // required
+    std::function<bool(void)> gl_setup_callback;                     // optional
   };
 
   EmbedderSurfaceGLSkia(

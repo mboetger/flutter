@@ -47,6 +47,11 @@ EmbedderSurfaceVulkan::EmbedderSurfaceVulkan(
     return;
   }
 
+  if (vulkan_dispatch_table_.setup_callback &&
+      !vulkan_dispatch_table_.setup_callback()) {
+    return;
+  }
+
   bool success = vk_->SetupInstanceProcAddresses(
       vulkan::VulkanHandle<VkInstance>{instance});
   if (!success) {
@@ -110,6 +115,9 @@ bool EmbedderSurfaceVulkan::IsValid() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceVulkan::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
   const bool render_to_surface = !external_view_embedder_;
   return std::make_unique<GPUSurfaceVulkan>(this, main_context_,
                                             render_to_surface);

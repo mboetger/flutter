@@ -26,7 +26,8 @@ class EmbedderSurfaceVulkanImpeller final : public EmbedderSurface,
     std::function<FlutterVulkanImage(const DlISize& frame_size)>
         get_next_image;  // required
     std::function<bool(VkImage image, VkFormat format)>
-        present_image;  // required
+        present_image;                         // required
+    std::function<bool(void)> setup_callback;  // optional
   };
 
   EmbedderSurfaceVulkanImpeller(

@@ -5344,6 +5344,43 @@ TEST_F(EmbedderTest, CompositorMustBeAbleToRenderKnownSceneToOpenGLSurfaces) {
   ASSERT_EQ(context.GetSurfacePresentCount(), 0u);
 }
 
+TEST_F(EmbedderTest, OpenGLSetupCallbackInvoked) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  static bool setup_called = false;
+  setup_called = false;
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    setup_called = true;
+    return true;
+  };
+  EmbedderConfigBuilder builder(context);
+  // Default test surface dimensions: 800 width x 600 height.
+  constexpr int kSurfaceWidth = 800;
+  constexpr int kSurfaceHeight = 600;
+  builder.SetSurface(DlISize(kSurfaceWidth, kSurfaceHeight));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ASSERT_TRUE(setup_called);
+}
+
+TEST_F(EmbedderTest, OpenGLSetupCallbackFailureAbortsSurface) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  static bool setup_called = false;
+  setup_called = false;
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    setup_called = true;
+    return false;
+  };
+  EmbedderConfigBuilder builder(context);
+  // Default test surface dimensions: 800 width x 600 height.
+  constexpr int kSurfaceWidth = 800;
+  constexpr int kSurfaceHeight = 600;
+  builder.SetSurface(DlISize(kSurfaceWidth, kSurfaceHeight));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(setup_called);
+}
+
 INSTANTIATE_TEST_SUITE_P(
     EmbedderTestGlVk,
     EmbedderTestMultiBackend,
