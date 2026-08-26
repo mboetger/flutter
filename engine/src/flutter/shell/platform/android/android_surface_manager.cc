@@ -125,8 +125,8 @@ bool AndroidSurfaceManager::CreateVulkanBackingStore(
     record->id = next_allocation_id_++;
     record->vulkan_image = std::make_unique<FlutterVulkanImage>();
     record->vulkan_image->struct_size = sizeof(FlutterVulkanImage);
-    record->vulkan_image->image =
-        reinterpret_cast<FlutterVulkanImageHandle>(static_cast<uintptr_t>(record->id));
+    record->vulkan_image->image = reinterpret_cast<FlutterVulkanImageHandle>(
+        static_cast<uintptr_t>(record->id));
     record->vulkan_image->format = kVulkanFormatR8G8B8A8Unorm;
     pool_.push_back(record);
   }
@@ -189,7 +189,8 @@ bool AndroidSurfaceManager::CreateSoftwareBackingStore(
   backing_store_out->software2.allocation = record->software_buffer.data();
   backing_store_out->software2.row_bytes =
       static_cast<size_t>(config->size.width) * kBytesPerPixelRGBA;
-  backing_store_out->software2.height = static_cast<size_t>(config->size.height);
+  backing_store_out->software2.height =
+      static_cast<size_t>(config->size.height);
   backing_store_out->software2.pixel_format =
       kFlutterSoftwarePixelFormatRGBA8888;
   backing_store_out->software2.user_data = record.get();

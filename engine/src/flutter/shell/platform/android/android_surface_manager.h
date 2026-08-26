@@ -24,7 +24,8 @@ namespace flutter {
 ///
 class AndroidSurfaceManager {
  public:
-  /// @brief Describes an allocated backing store managed within the surface pool.
+  /// @brief Describes an allocated backing store managed within the surface
+  /// pool.
   struct AllocationRecord {
     FlutterBackingStoreType type = kFlutterBackingStoreTypeOpenGL;
     DlISize size = {0, 0};
@@ -97,13 +98,11 @@ class AndroidSurfaceManager {
   size_t GetInUseCount() const;
 
  protected:
-  virtual bool CreateOpenGLBackingStore(
-      const FlutterBackingStoreConfig* config,
-      FlutterBackingStore* backing_store_out);
+  virtual bool CreateOpenGLBackingStore(const FlutterBackingStoreConfig* config,
+                                        FlutterBackingStore* backing_store_out);
 
-  virtual bool CreateVulkanBackingStore(
-      const FlutterBackingStoreConfig* config,
-      FlutterBackingStore* backing_store_out);
+  virtual bool CreateVulkanBackingStore(const FlutterBackingStoreConfig* config,
+                                        FlutterBackingStore* backing_store_out);
 
   virtual bool CreateSoftwareBackingStore(
       const FlutterBackingStoreConfig* config,

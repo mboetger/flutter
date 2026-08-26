@@ -22,8 +22,8 @@ class MockAndroidContext : public AndroidContext {
 };
 
 TEST(AndroidSurfaceManagerTest, NullAndInvalidArgs) {
-  auto context =
-      std::make_shared<MockAndroidContext>(AndroidRenderingAPI::kImpellerOpenGLES);
+  auto context = std::make_shared<MockAndroidContext>(
+      AndroidRenderingAPI::kImpellerOpenGLES);
   AndroidSurfaceManager manager(context);
 
   FlutterBackingStore backing_store = {};
@@ -44,8 +44,8 @@ TEST(AndroidSurfaceManagerTest, NullAndInvalidArgs) {
 }
 
 TEST(AndroidSurfaceManagerTest, CreateOpenGLBackingStoreAndRecycle) {
-  auto context =
-      std::make_shared<MockAndroidContext>(AndroidRenderingAPI::kImpellerOpenGLES);
+  auto context = std::make_shared<MockAndroidContext>(
+      AndroidRenderingAPI::kImpellerOpenGLES);
   AndroidSurfaceManager manager(context);
 
   FlutterBackingStoreConfig config = {};
@@ -59,8 +59,7 @@ TEST(AndroidSurfaceManagerTest, CreateOpenGLBackingStoreAndRecycle) {
 
   EXPECT_EQ(backing_store1.struct_size, sizeof(FlutterBackingStore));
   EXPECT_EQ(backing_store1.type, kFlutterBackingStoreTypeOpenGL);
-  EXPECT_EQ(backing_store1.open_gl.type,
-            kFlutterOpenGLTargetTypeFramebuffer);
+  EXPECT_EQ(backing_store1.open_gl.type, kFlutterOpenGLTargetTypeFramebuffer);
   // Sized format 0x8058 (GL_RGBA8)
   EXPECT_EQ(backing_store1.open_gl.framebuffer.target, 0x8058u);
   EXPECT_NE(backing_store1.open_gl.framebuffer.user_data, nullptr);
@@ -94,8 +93,8 @@ TEST(AndroidSurfaceManagerTest, CreateOpenGLBackingStoreAndRecycle) {
 }
 
 TEST(AndroidSurfaceManagerTest, CreateVulkanBackingStore) {
-  auto context =
-      std::make_shared<MockAndroidContext>(AndroidRenderingAPI::kImpellerVulkan);
+  auto context = std::make_shared<MockAndroidContext>(
+      AndroidRenderingAPI::kImpellerVulkan);
   AndroidSurfaceManager manager(context);
 
   FlutterBackingStoreConfig config = {};
@@ -158,8 +157,8 @@ TEST(AndroidSurfaceManagerTest, CreateSoftwareBackingStore) {
 #endif  // !SLIMPELLER
 
 TEST(AndroidSurfaceManagerTest, TrimAndClearBackingStores) {
-  auto context =
-      std::make_shared<MockAndroidContext>(AndroidRenderingAPI::kImpellerOpenGLES);
+  auto context = std::make_shared<MockAndroidContext>(
+      AndroidRenderingAPI::kImpellerOpenGLES);
   AndroidSurfaceManager manager(context);
 
   FlutterBackingStoreConfig config1 = {};
@@ -197,8 +196,8 @@ TEST(AndroidSurfaceManagerTest, TrimAndClearBackingStores) {
 }
 
 TEST(AndroidSurfaceManagerTest, SurfaceLifecycleAndTeardown) {
-  auto context =
-      std::make_shared<MockAndroidContext>(AndroidRenderingAPI::kImpellerOpenGLES);
+  auto context = std::make_shared<MockAndroidContext>(
+      AndroidRenderingAPI::kImpellerOpenGLES);
   AndroidSurfaceManager manager(context);
 
   // Surface resize to 1080x1920
