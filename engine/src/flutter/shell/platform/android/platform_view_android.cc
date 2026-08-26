@@ -185,86 +185,20 @@ PlatformViewAndroid::~PlatformViewAndroid() = default;
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
   InstallFirstFrameCallback();
-  if (!delegate_.OnPlatformViewGetSettings().enable_embedder_api) {
-    if (android_surface_) {
-      fml::AutoResetWaitableEvent latch;
-      fml::TaskRunner::RunNowOrPostTask(
-          task_runners_.GetRasterTaskRunner(),
-          [&latch, surface = android_surface_.get(),
-           native_window = std::move(native_window),
-           jni_facade = jni_facade_]() {
-            surface->SetNativeWindow(native_window, jni_facade);
-            latch.Signal();
-          });
-      latch.Wait();
-    }
-
-    std::unique_ptr<Surface> surface;
-    fml::ManualResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(task_runners_.GetRasterTaskRunner(),
-                                      [this, &surface, &latch]() {
-                                        surface = CreateRenderingSurface();
-                                        if (surface && !surface->IsValid()) {
-                                          surface.reset();
-                                        }
-                                        latch.Signal();
-                                      });
-    latch.Wait();
-    if (!surface) {
-      FML_LOG(ERROR) << "Failed to create platform view rendering surface";
-      return;
-    }
-    delegate_.OnPlatformViewCreated(std::move(surface));
-  } else {
-    delegate_.OnPlatformViewScheduleFrame();
-  }
+  delegate_.OnPlatformViewScheduleFrame();
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
     fml::RefPtr<AndroidNativeWindow> native_window) {
-  if (android_surface_) {
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->TeardownOnScreenContext();
-          surface->SetNativeWindow(native_window, jni_facade);
-          latch.Signal();
-        });
-    latch.Wait();
-  }
-
   delegate_.OnPlatformViewScheduleFrame();
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
   delegate_.OnPlatformViewDestroyed();
-
-  if (android_surface_) {
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get()]() {
-          surface->TeardownOnScreenContext();
-          latch.Signal();
-        });
-    latch.Wait();
-  }
 }
 
 void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
-  if (!android_surface_) {
-    return;
-  }
-  fml::AutoResetWaitableEvent latch;
-  fml::TaskRunner::RunNowOrPostTask(
-      task_runners_.GetRasterTaskRunner(),  //
-      [&latch, surface = android_surface_.get(), size]() {
-        surface->OnScreenSurfaceResize(size);
-        latch.Signal();
-      });
-  latch.Wait();
+  delegate_.OnPlatformViewScheduleFrame();
 }
 
 void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
@@ -278,9 +212,10 @@ void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
                                                   jint java_message_position,
                                                   jint response_id) {
   uint8_t* message_data =
-      static_cast<uint8_t*>(env->GetDirectBufferAddress(java_message_data));
-  fml::MallocMapping message =
-      fml::MallocMapping::Copy(message_data, java_message_position);
+      (env && java_message_data)
+          ? static_cast<uint8_t*>(
+                env->GetDirectBufferAddress(java_message_data))
+          : nullptr;
 
   fml::RefPtr<flutter::PlatformMessageResponse> response;
   if (response_id) {
@@ -288,9 +223,19 @@ void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
         response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
   }
 
-  delegate_.OnPlatformViewDispatchPlatformMessage(
-      std::make_unique<flutter::PlatformMessage>(
-          std::move(name), std::move(message), std::move(response)));
+  if (java_message_data != nullptr) {
+    fml::MallocMapping message =
+        (message_data != nullptr && java_message_position > 0)
+            ? fml::MallocMapping::Copy(message_data, java_message_position)
+            : fml::MallocMapping();
+    delegate_.OnPlatformViewDispatchPlatformMessage(
+        std::make_unique<flutter::PlatformMessage>(
+            std::move(name), std::move(message), std::move(response)));
+  } else {
+    delegate_.OnPlatformViewDispatchPlatformMessage(
+        std::make_unique<flutter::PlatformMessage>(std::move(name),
+                                                   std::move(response)));
+  }
 }
 
 void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
