@@ -2933,6 +2933,41 @@ typedef struct {
   size_t data_length;
 } FlutterSendSemanticsActionInfo;
 
+/// Structure for specifying information when spawning a new Flutter engine.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineSpawnInfo).
+  size_t struct_size;
+
+  /// The entrypoint in the Dart code to execute. If NULL, defaults to "main".
+  const char* entrypoint;
+
+  /// The URI of the Dart library containing the entrypoint. If NULL,
+  /// defaults to the root library.
+  const char* library_uri;
+
+  /// The initial route for the spawned engine. If NULL, defaults to "/".
+  const char* initial_route;
+
+  /// Number of entrypoint arguments.
+  int64_t entrypoint_argc;
+
+  /// Array of entrypoint arguments (null-terminated strings).
+  const char* const* entrypoint_argv;
+
+  /// The user data passed back to embedders in callbacks for the spawned
+  /// engine.
+  void* user_data;
+
+  /// Optional project arguments for the spawned engine.
+  /// If NULL or if individual fields within are NULL, appropriate defaults
+  /// will be used.
+  const FlutterProjectArgs* project_args;
+
+  /// Optional renderer configuration for the spawned engine.
+  /// If NULL, renderer callbacks must be configured via |project_args|.
+  const FlutterRendererConfig* renderer_config;
+} FlutterEngineSpawnInfo;
+
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 // NOLINTBEGIN(google-objc-function-naming)
@@ -3018,6 +3053,27 @@ FlutterEngineResult FlutterEngineRun(size_t version,
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineShutdown(FLUTTER_API_SYMBOL(FlutterEngine)
                                               engine);
+
+//------------------------------------------------------------------------------
+/// @brief      Spawns a new Flutter engine instance that shares the Dart VM,
+///             isolate group, and thread host with the parent engine.
+///
+///             The spawned engine is returned in a running state. It has a
+///             smaller memory footprint and faster startup time than an engine
+///             created from scratch with `FlutterEngineInitialize` or
+///             `FlutterEngineRun`.
+///
+/// @param[in]  engine     The parent running Flutter engine instance.
+/// @param[in]  info       Information describing how to spawn the new engine.
+/// @param[out] engine_out The spawned engine handle on successful creation.
+///
+/// @return     The result of the call to spawn the Flutter engine.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                       const FlutterEngineSpawnInfo* info,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Initialize a Flutter engine instance. This does not run the
@@ -3728,6 +3784,10 @@ typedef FlutterEngineResult (*FlutterEngineRunFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 typedef FlutterEngineResult (*FlutterEngineShutdownFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
+typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineSpawnInfo* info,
+    FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 typedef FlutterEngineResult (*FlutterEngineInitializeFnPtr)(
     size_t version,
     const FlutterRendererConfig* config,
@@ -3856,6 +3916,7 @@ typedef struct {
   FlutterEngineCollectAOTDataFnPtr CollectAOTData;
   FlutterEngineRunFnPtr Run;
   FlutterEngineShutdownFnPtr Shutdown;
+  FlutterEngineSpawnFnPtr Spawn;
   FlutterEngineInitializeFnPtr Initialize;
   FlutterEngineDeinitializeFnPtr Deinitialize;
   FlutterEngineRunInitializedFnPtr RunInitialized;

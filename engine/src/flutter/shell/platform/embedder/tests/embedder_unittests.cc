@@ -1499,6 +1499,148 @@ TEST_F(EmbedderTest, CanDeinitializeAnEngine) {
 }
 
 //------------------------------------------------------------------------------
+/// Test that a running engine can spawn a child engine.
+///
+TEST_F(EmbedderTest, CanSpawnEngine) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  FlutterEngine spawned_raw_engine = nullptr;
+  FlutterEngineSpawnInfo spawn_info = {};
+  spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo);
+  spawn_info.user_data = &context;
+  spawn_info.renderer_config = &context.GetRendererConfig();
+
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_info, &spawned_raw_engine),
+      kSuccess);
+  UniqueEngine spawned_engine(spawned_raw_engine);
+  ASSERT_TRUE(spawned_engine.is_valid());
+
+  spawned_engine.reset();
+  parent_engine.reset();
+}
+
+//------------------------------------------------------------------------------
+/// Test that a spawned engine can run a custom Dart entrypoint.
+///
+TEST_F(EmbedderTest, CanSpawnEngineWithCustomEntrypoint) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  static fml::AutoResetWaitableEvent latch;
+  auto entrypoint = []() { latch.Signal(); };
+  context.AddFfiNativeCallback("SayHiFromCustomEntrypoint",
+                               reinterpret_cast<void*>(+entrypoint));
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  FlutterEngine spawned_raw_engine = nullptr;
+  FlutterEngineSpawnInfo spawn_info = {};
+  spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo);
+  spawn_info.entrypoint = "customEntrypoint";
+  spawn_info.user_data = &context;
+  spawn_info.renderer_config = &context.GetRendererConfig();
+
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_info, &spawned_raw_engine),
+      kSuccess);
+  UniqueEngine spawned_engine(spawned_raw_engine);
+  ASSERT_TRUE(spawned_engine.is_valid());
+
+  latch.Wait();
+
+  spawned_engine.reset();
+  parent_engine.reset();
+}
+
+//------------------------------------------------------------------------------
+/// Test that FlutterEngineSpawn validates arguments correctly.
+///
+TEST_F(EmbedderTest, SpawnEngineInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  FlutterEngine spawned_raw_engine = nullptr;
+  FlutterEngineSpawnInfo spawn_info = {};
+  spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo);
+  spawn_info.user_data = &context;
+  spawn_info.renderer_config = &context.GetRendererConfig();
+
+  // Null parent engine.
+  EXPECT_EQ(FlutterEngineSpawn(nullptr, &spawn_info, &spawned_raw_engine),
+            kInvalidArguments);
+
+  // Null spawn info.
+  EXPECT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), nullptr, &spawned_raw_engine),
+      kInvalidArguments);
+
+  // Invalid struct size.
+  spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo) - 1;
+  EXPECT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_info, &spawned_raw_engine),
+      kInvalidArguments);
+  spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo);
+
+  // Null engine_out.
+  EXPECT_EQ(FlutterEngineSpawn(parent_engine.get(), &spawn_info, nullptr),
+            kInvalidArguments);
+
+  // Null renderer config.
+  spawn_info.renderer_config = nullptr;
+  EXPECT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_info, &spawned_raw_engine),
+      kInvalidArguments);
+  spawn_info.renderer_config = &context.GetRendererConfig();
+
+  // Non-running (uninitialized) parent engine.
+  EmbedderConfigBuilder uninit_builder(context);
+  uninit_builder.SetSurface(DlISize(1, 1));
+  auto uninit_engine = uninit_builder.InitializeEngine();
+  ASSERT_TRUE(uninit_engine.is_valid());
+  EXPECT_EQ(
+      FlutterEngineSpawn(uninit_engine.get(), &spawn_info, &spawned_raw_engine),
+      kInvalidArguments);
+}
+
+//------------------------------------------------------------------------------
+/// Test that a parent engine can be shut down before a spawned child engine.
+///
+TEST_F(EmbedderTest, CanShutdownParentEngineBeforeSpawnedEngine) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  FlutterEngine spawned_raw_engine = nullptr;
+  FlutterEngineSpawnInfo spawn_info = {};
+  spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo);
+  spawn_info.user_data = &context;
+  spawn_info.renderer_config = &context.GetRendererConfig();
+
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_info, &spawned_raw_engine),
+      kSuccess);
+  UniqueEngine spawned_engine(spawned_raw_engine);
+  ASSERT_TRUE(spawned_engine.is_valid());
+
+  // Parent engine shut down first.
+  parent_engine.reset();
+
+  // Child engine shut down after parent.
+  spawned_engine.reset();
+}
+
+//------------------------------------------------------------------------------
 /// Test that a view can be added to a running engine.
 ///
 TEST_F(EmbedderTest, CanAddView) {
