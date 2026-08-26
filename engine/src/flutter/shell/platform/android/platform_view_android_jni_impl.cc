@@ -23,7 +23,6 @@
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
 #include "flutter/lib/ui/plugins/callback_cache.h"
-#include "flutter/runtime/dart_snapshot.h"
 #include "flutter/shell/common/display.h"
 #include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
@@ -789,11 +788,11 @@ static void LoadDartDeferredLibrary(JNIEnv* env,
 
   // Resolve symbols.
   std::unique_ptr<const fml::SymbolMapping> data_mapping =
-      std::make_unique<const fml::SymbolMapping>(
-          native_lib, DartSnapshot::kIsolateDataSymbol);
+      std::make_unique<const fml::SymbolMapping>(native_lib,
+                                                 "kDartSnapshotData");
   std::unique_ptr<const fml::SymbolMapping> instructions_mapping =
-      std::make_unique<const fml::SymbolMapping>(
-          native_lib, DartSnapshot::kIsolateInstructionsSymbol);
+      std::make_unique<const fml::SymbolMapping>(native_lib,
+                                                 "kDartSnapshotInstructions");
 
   auto platform_view = GetPlatformView(shell_holder);
   if (platform_view) {
@@ -808,16 +807,14 @@ static void UpdateJavaAssetManager(JNIEnv* env,
                                    jlong shell_holder,
                                    jobject jAssetManager,
                                    jstring jAssetBundlePath) {
-  auto asset_resolver = std::make_unique<flutter::APKAssetProvider>(
+  auto asset_provider = std::make_unique<flutter::APKAssetProvider>(
       env,                                                   // jni environment
       jAssetManager,                                         // asset manager
       fml::jni::JavaStringToString(env, jAssetBundlePath));  // apk asset dir
 
   auto platform_view = GetPlatformView(shell_holder);
   if (platform_view) {
-    platform_view->UpdateAssetResolverByType(
-        std::move(asset_resolver),
-        AssetResolver::AssetResolverType::kApkAssetProvider);
+    platform_view->UpdateAssetResolver(std::move(asset_provider));
   }
 }
 

@@ -10,7 +10,6 @@
 #include <vector>
 
 #include <android/hardware_buffer_jni.h>
-#include "flutter/assets/asset_resolver.h"
 #include "flutter/common/settings.h"
 #include "flutter/flow/surface.h"
 #include "flutter/fml/macros.h"
@@ -30,6 +29,8 @@
 #include "shell/platform/android/image_external_texture.h"
 
 namespace flutter {
+
+class APKAssetProvider;
 
 class AndroidSurfaceFactoryImpl : public AndroidSurfaceFactory {
  public:
@@ -86,9 +87,8 @@ class PlatformViewAndroid final {
     virtual void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
                                               const std::string error_message,
                                               bool transient) = 0;
-    virtual void UpdateAssetResolverByType(
-        std::unique_ptr<AssetResolver> updated_asset_resolver,
-        AssetResolver::AssetResolverType type) = 0;
+    virtual void UpdateAssetResolver(
+        std::unique_ptr<APKAssetProvider> updated_asset_provider) = 0;
   };
 
   static bool Register(JNIEnv* env);
@@ -183,9 +183,8 @@ class PlatformViewAndroid final {
                                     const std::string error_message,
                                     bool transient);
 
-  void UpdateAssetResolverByType(
-      std::unique_ptr<AssetResolver> updated_asset_resolver,
-      AssetResolver::AssetResolverType type);
+  void UpdateAssetResolver(
+      std::unique_ptr<APKAssetProvider> updated_asset_provider);
 
   const std::shared_ptr<AndroidContext>& GetAndroidContext() {
     return android_context_;

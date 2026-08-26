@@ -19,12 +19,10 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
 #include "flutter/lib/ui/plugins/callback_cache.h"
-#include "flutter/runtime/dart_vm.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/switches.h"
-#include "flutter/shell/platform/android/android_context_vk_impeller.h"
-#include "flutter/shell/platform/android/android_rendering_selector.h"
-#include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/flutter_main.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 #include "impeller/base/validation.h"
 #include "impeller/toolkit/android/proc_table.h"
 #include "txt/platform.h"
@@ -169,7 +167,7 @@ void FlutterMain::Init(JNIEnv* env,
 
   flutter::DartCallbackCache::LoadCacheFromDisk();
 
-  if (!flutter::DartVM::IsRunningPrecompiledCode() && kernelPath) {
+  if (!FlutterEngineRunsAOTCompiledDartCode() && kernelPath) {
     // Check to see if the appropriate kernel files are present and configure
     // settings accordingly.
     auto application_kernel_path =

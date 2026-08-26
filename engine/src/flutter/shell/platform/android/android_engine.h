@@ -114,9 +114,8 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
   void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
                                     const std::string error_message,
                                     bool transient) override;
-  void UpdateAssetResolverByType(
-      std::unique_ptr<AssetResolver> updated_asset_resolver,
-      AssetResolver::AssetResolverType type) override;
+  void UpdateAssetResolver(
+      std::unique_ptr<APKAssetProvider> updated_asset_provider) override;
 
   struct TaskRunnerContext {
     fml::RefPtr<fml::TaskRunner> platform_runner;

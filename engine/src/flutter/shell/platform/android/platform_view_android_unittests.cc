@@ -85,9 +85,8 @@ class MockPlatformViewAndroidDelegate : public PlatformViewAndroid::Delegate {
                bool transient),
               (override));
   MOCK_METHOD(void,
-              UpdateAssetResolverByType,
-              (std::unique_ptr<AssetResolver> updated_asset_resolver,
-               AssetResolver::AssetResolverType type),
+              UpdateAssetResolver,
+              (std::unique_ptr<APKAssetProvider> updated_asset_provider),
               (override));
 };
 
@@ -184,12 +183,8 @@ TEST(PlatformViewAndroidTest, DispatchesEventsToDelegate) {
   EXPECT_CALL(delegate, LoadDartDeferredLibraryError(5, "failed", false));
   platform_view->LoadDartDeferredLibraryError(5, "failed", false);
 
-  EXPECT_CALL(
-      delegate,
-      UpdateAssetResolverByType(
-          ::testing::_, AssetResolver::AssetResolverType::kApkAssetProvider));
-  platform_view->UpdateAssetResolverByType(
-      nullptr, AssetResolver::AssetResolverType::kApkAssetProvider);
+  EXPECT_CALL(delegate, UpdateAssetResolver(::testing::_));
+  platform_view->UpdateAssetResolver(nullptr);
 }
 
 #if !SLIMPELLER

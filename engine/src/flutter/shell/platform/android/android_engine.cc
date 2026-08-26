@@ -901,12 +901,12 @@ void AndroidEngine::LoadDartDeferredLibraryError(
   embedder_api_.LoadDartDeferredLibraryError(engine_, &error_info);
 }
 
-void AndroidEngine::UpdateAssetResolverByType(
-    std::unique_ptr<AssetResolver> updated_asset_resolver,
-    AssetResolver::AssetResolverType type) {
-  if (!IsValid() || !engine_ || !apk_asset_provider_) {
+void AndroidEngine::UpdateAssetResolver(
+    std::unique_ptr<APKAssetProvider> updated_asset_provider) {
+  if (!IsValid() || !engine_ || !updated_asset_provider) {
     return;
   }
+  apk_asset_provider_ = std::move(updated_asset_provider);
   FlutterAssetResolverConfig config =
       apk_asset_provider_->GetAssetResolverConfig();
   embedder_api_.UpdateAssetResolver(engine_, &config);

@@ -20,6 +20,7 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_surface_dynamic_impeller.h"
 #include "flutter/shell/platform/android/android_surface_gl_impeller.h"
+#include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/image_external_texture_gl_impeller.h"
 #include "flutter/shell/platform/android/surface_texture_external_texture_gl_impeller.h"
 #include "flutter/shell/platform/android/surface_texture_external_texture_vk_impeller.h"
@@ -513,10 +514,9 @@ void PlatformViewAndroid::LoadDartDeferredLibraryError(
                                          transient);
 }
 
-void PlatformViewAndroid::UpdateAssetResolverByType(
-    std::unique_ptr<AssetResolver> updated_asset_resolver,
-    AssetResolver::AssetResolverType type) {
-  delegate_.UpdateAssetResolverByType(std::move(updated_asset_resolver), type);
+void PlatformViewAndroid::UpdateAssetResolver(
+    std::unique_ptr<APKAssetProvider> updated_asset_provider) {
+  delegate_.UpdateAssetResolver(std::move(updated_asset_provider));
 }
 
 void PlatformViewAndroid::InstallFirstFrameCallback() {
