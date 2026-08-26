@@ -88,6 +88,13 @@ TEST(SwitchesTest, RouteParsedFlag) {
 
 TEST(SwitchesTest, EnableEmbedderAPI) {
   {
+    // default
+    fml::CommandLine command_line =
+        fml::CommandLineFromInitializerList({"command"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, true);
+  }
+  {
     // enable via --enable-embedder-api
     fml::CommandLine command_line = fml::CommandLineFromInitializerList(
         {"command", "--enable-embedder-api"});
@@ -102,9 +109,30 @@ TEST(SwitchesTest, EnableEmbedderAPI) {
     EXPECT_EQ(settings.enable_embedder_api, true);
   }
   {
-    // default
-    fml::CommandLine command_line =
-        fml::CommandLineFromInitializerList({"command"});
+    // disable via --no-enable-embedder-api
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--no-enable-embedder-api"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, false);
+  }
+  {
+    // disable via --no-enable-android-embedder-api
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--no-enable-android-embedder-api"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, false);
+  }
+  {
+    // disable via --enable-embedder-api=false
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-embedder-api=false"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, false);
+  }
+  {
+    // disable via --enable-android-embedder-api=false
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api=false"});
     Settings settings = SettingsFromCommandLine(command_line);
     EXPECT_EQ(settings.enable_embedder_api, false);
   }

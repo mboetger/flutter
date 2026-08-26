@@ -359,7 +359,7 @@ struct Settings {
   /// Enable embedder api on the embedder.
   ///
   /// Used by iOS and Android.
-  bool enable_embedder_api = false;
+  bool enable_embedder_api = true;
 
   /// Enable support for isolates that run on the platform thread.
   ///
