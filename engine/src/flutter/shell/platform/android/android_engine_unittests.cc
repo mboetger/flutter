@@ -211,5 +211,42 @@ TEST(AndroidEngineTest, SpawnEngine) {
   }
 }
 
+TEST(AndroidEngineTest, MultiBackendValidation) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+
+  Settings settings;
+  settings.enable_embedder_api = true;
+  auto jni = std::make_shared<JNIMock>();
+
+  // 1. Software backend
+  {
+    settings.enable_software_rendering = true;
+    AndroidEngine engine_sw(settings, jni, AndroidRenderingAPI::kSoftware);
+    EXPECT_EQ(engine_sw.GetSettings().enable_software_rendering, true);
+    EXPECT_NE(engine_sw.GetAndroidCompositor(), nullptr);
+    EXPECT_TRUE(engine_sw.GetPlatformView());
+  }
+
+  // 2. Impeller Vulkan backend
+  {
+    settings.enable_software_rendering = false;
+    AndroidEngine engine_vk(settings, jni,
+                            AndroidRenderingAPI::kImpellerVulkan);
+    EXPECT_EQ(engine_vk.GetSettings().enable_software_rendering, false);
+    EXPECT_NE(engine_vk.GetAndroidCompositor(), nullptr);
+    EXPECT_TRUE(engine_vk.GetPlatformView());
+  }
+
+  // 3. Impeller OpenGLES backend
+  {
+    settings.enable_software_rendering = false;
+    AndroidEngine engine_gl(settings, jni,
+                            AndroidRenderingAPI::kImpellerOpenGLES);
+    EXPECT_EQ(engine_gl.GetSettings().enable_software_rendering, false);
+    EXPECT_NE(engine_gl.GetAndroidCompositor(), nullptr);
+    EXPECT_TRUE(engine_gl.GetPlatformView());
+  }
+}
+
 }  // namespace testing
 }  // namespace flutter

@@ -8,7 +8,9 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
@@ -27,6 +29,34 @@ class PlatformViewAndroidJNIImplTest : public ::testing::Test {
   static void SetUpTestSuite() {
     static std::once_flag jvm_init_flag;
     std::call_once(jvm_init_flag, SetUpJVM);
+  }
+
+  void SetUp() override { FlutterMain::InitForTesting(); }
+
+  void TearDown() override { FlutterMain::ResetForTesting(); }
+
+  static void SetupMockJNIForRegistration(MockJNIEnv& mock_env) {
+    const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
+    const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
+    const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
+
+    EXPECT_CALL(mock_env, GetObjectRefType(_))
+        .WillRepeatedly(Return(JNILocalRefType));
+    EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
+    EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
+    EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+    EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+    EXPECT_CALL(mock_env, FindClass(_))
+        .WillRepeatedly(Return(kPlaceholderClass));
+    EXPECT_CALL(mock_env, GetFieldID(_, _, _))
+        .WillRepeatedly(Return(kPlaceholderFieldID));
+    EXPECT_CALL(mock_env, GetMethodID(_, _, _))
+        .WillRepeatedly(Return(kPlaceholderMethodID));
+    EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
+        .WillRepeatedly(Return(kPlaceholderFieldID));
+    EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
+        .WillRepeatedly(Return(kPlaceholderMethodID));
+    EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
   }
 
  private:
@@ -57,26 +87,7 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
   MockJNIEnvProvider env_provider;
   MockJNIEnv& mock_env = env_provider.env();
 
-  const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
-  const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
-  const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
-
-  EXPECT_CALL(mock_env, GetObjectRefType(_))
-      .WillRepeatedly(Return(JNILocalRefType));
-  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
-  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
-  EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
-  EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
-  EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
-  EXPECT_CALL(mock_env, GetFieldID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderFieldID));
-  EXPECT_CALL(mock_env, GetMethodID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderMethodID));
-  EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderFieldID));
-  EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderMethodID));
-  EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
+  SetupMockJNIForRegistration(mock_env);
   EXPECT_CALL(mock_env, RegisterNatives(_, _, _)).WillRepeatedly(Return(0));
 
   PlatformViewAndroid::Register(&mock_env);
@@ -117,26 +128,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
 
   SetViewportMetricsFn set_viewport_metrics = nullptr;
 
-  const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
-  const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
-  const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
-
-  EXPECT_CALL(mock_env, GetObjectRefType(_))
-      .WillRepeatedly(Return(JNILocalRefType));
-  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
-  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
-  EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
-  EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
-  EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
-  EXPECT_CALL(mock_env, GetFieldID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderFieldID));
-  EXPECT_CALL(mock_env, GetMethodID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderMethodID));
-  EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderFieldID));
-  EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderMethodID));
-  EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
+  SetupMockJNIForRegistration(mock_env);
 
   EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
       .WillRepeatedly(
@@ -206,6 +198,124 @@ TEST(FindFirstLoadableLibraryTest, EmptyReturnsNull) {
   EXPECT_EQ(FindFirstLoadableLibrary(
                 {}, [](const std::string&) -> void* { return nullptr; }),
             nullptr);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmbedderAPI) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  typedef void (*SetViewportMetricsFn)(
+      JNIEnv*, jobject, jlong, jfloat, jint, jint, jint, jint, jint, jint, jint,
+      jint, jint, jint, jint, jint, jint, jint, jint, jintArray, jintArray,
+      jintArray, jint, jint, jint, jint, jint, jint, jint, jint);
+
+  SetViewportMetricsFn set_viewport_metrics = nullptr;
+
+  SetupMockJNIForRegistration(mock_env);
+
+  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
+      .WillRepeatedly(
+          [&](jclass clazz, const JNINativeMethod* methods, jint nMethods) {
+            for (jint i = 0; i < nMethods; ++i) {
+              if (strcmp(methods[i].name, "nativeSetViewportMetrics") == 0) {
+                set_viewport_metrics =
+                    reinterpret_cast<SetViewportMetricsFn>(methods[i].fnPtr);
+              }
+            }
+            return 0;
+          });
+
+  PlatformViewAndroid::Register(&mock_env);
+  ASSERT_NE(set_viewport_metrics, nullptr);
+
+  EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
+  EXPECT_CALL(mock_env, GetIntArrayRegion(_, _, _, _)).Times(0);
+
+  Settings settings;
+  settings.enable_embedder_api = true;
+  settings.enable_software_rendering = true;
+  FlutterMain::InitForTesting(settings, AndroidRenderingAPI::kSoftware);
+
+  auto jni = std::make_shared<JNIMock>();
+  auto engine = std::make_unique<AndroidEngine>(settings, jni,
+                                                AndroidRenderingAPI::kSoftware);
+  ASSERT_NE(engine, nullptr);
+  EXPECT_TRUE(engine->GetPlatformView());
+
+  jobject jcaller = reinterpret_cast<jobject>(123);
+  jintArray bounds = reinterpret_cast<jintArray>(456);
+  jintArray type = reinterpret_cast<jintArray>(789);
+  jintArray state = reinterpret_cast<jintArray>(1011);
+
+  set_viewport_metrics(&mock_env, jcaller,
+                       reinterpret_cast<jlong>(engine.get()), 2.0f, 1080, 1920,
+                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type,
+                       state, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       DispatchMessagesAndScheduleFrameEmbedderAPI) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  typedef void (*DispatchEmptyPlatformMessageFn)(JNIEnv*, jobject, jlong,
+                                                 jstring, jint);
+  typedef void (*ScheduleFrameFn)(JNIEnv*, jobject, jlong);
+  typedef void (*InvokePlatformMessageEmptyResponseCallbackFn)(JNIEnv*, jobject,
+                                                               jlong, jint);
+
+  DispatchEmptyPlatformMessageFn dispatch_empty = nullptr;
+  ScheduleFrameFn schedule_frame = nullptr;
+  InvokePlatformMessageEmptyResponseCallbackFn invoke_empty_response = nullptr;
+
+  SetupMockJNIForRegistration(mock_env);
+
+  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
+      .WillRepeatedly([&](jclass clazz, const JNINativeMethod* methods,
+                          jint nMethods) {
+        for (jint i = 0; i < nMethods; ++i) {
+          if (strcmp(methods[i].name, "nativeDispatchEmptyPlatformMessage") ==
+              0) {
+            dispatch_empty = reinterpret_cast<DispatchEmptyPlatformMessageFn>(
+                methods[i].fnPtr);
+          }
+          if (strcmp(methods[i].name, "nativeScheduleFrame") == 0) {
+            schedule_frame =
+                reinterpret_cast<ScheduleFrameFn>(methods[i].fnPtr);
+          }
+          if (strcmp(methods[i].name,
+                     "nativeInvokePlatformMessageEmptyResponseCallback") == 0) {
+            invoke_empty_response =
+                reinterpret_cast<InvokePlatformMessageEmptyResponseCallbackFn>(
+                    methods[i].fnPtr);
+          }
+        }
+        return 0;
+      });
+
+  PlatformViewAndroid::Register(&mock_env);
+  ASSERT_NE(dispatch_empty, nullptr);
+  ASSERT_NE(schedule_frame, nullptr);
+  ASSERT_NE(invoke_empty_response, nullptr);
+
+  Settings settings;
+  settings.enable_embedder_api = true;
+  settings.enable_software_rendering = true;
+  FlutterMain::InitForTesting(settings, AndroidRenderingAPI::kSoftware);
+
+  auto jni = std::make_shared<JNIMock>();
+  auto engine = std::make_unique<AndroidEngine>(settings, jni,
+                                                AndroidRenderingAPI::kSoftware);
+  ASSERT_NE(engine, nullptr);
+  EXPECT_TRUE(engine->GetPlatformView());
+
+  jobject jcaller = reinterpret_cast<jobject>(123);
+
+  dispatch_empty(&mock_env, jcaller, reinterpret_cast<jlong>(engine.get()),
+                 nullptr, 0);
+  schedule_frame(&mock_env, jcaller, reinterpret_cast<jlong>(engine.get()));
+  invoke_empty_response(&mock_env, jcaller,
+                        reinterpret_cast<jlong>(engine.get()), 1);
 }
 
 }  // namespace testing

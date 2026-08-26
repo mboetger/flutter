@@ -26,6 +26,12 @@ class FlutterMain {
   flutter::AndroidRenderingAPI GetAndroidRenderingAPI();
   bool IsEmbedderAPIEnabled() const { return settings_.enable_embedder_api; }
 
+  static void InitForTesting(
+      const flutter::Settings& settings = flutter::Settings(),
+      flutter::AndroidRenderingAPI android_rendering_api =
+          flutter::AndroidRenderingAPI::kSoftware);
+  static void ResetForTesting();
+
   explicit FlutterMain(const flutter::Settings& settings,
                        flutter::AndroidRenderingAPI android_rendering_api);
 

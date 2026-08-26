@@ -78,6 +78,16 @@ FlutterMain& FlutterMain::Get() {
   return *g_flutter_main;
 }
 
+void FlutterMain::InitForTesting(
+    const flutter::Settings& settings,
+    flutter::AndroidRenderingAPI android_rendering_api) {
+  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api));
+}
+
+void FlutterMain::ResetForTesting() {
+  g_flutter_main.reset();
+}
+
 const flutter::Settings& FlutterMain::GetSettings() const {
   return settings_;
 }
