@@ -80,7 +80,8 @@ EmbedderSurfaceAndroid::EmbedderSurfaceAndroid(
     : EmbedderSurfaceAndroid(
           android_context,
           delegate.OnPlatformViewGetSettings().enable_impeller,
-          delegate.OnPlatformViewGetSettings().impeller_enable_lazy_shader_mode) {}
+          delegate.OnPlatformViewGetSettings()
+              .impeller_enable_lazy_shader_mode) {}
 
 EmbedderSurfaceAndroid::~EmbedderSurfaceAndroid() = default;
 

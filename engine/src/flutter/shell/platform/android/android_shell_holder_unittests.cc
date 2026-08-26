@@ -4,7 +4,9 @@
 
 #include <memory>
 
+#include "flutter/shell/common/shell.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/platform_view_android.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "shell/platform/android/jni/platform_view_android_jni.h"
@@ -226,6 +228,78 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
   EXPECT_NE(
       holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
       holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+}
+
+class MockAndroidEngineBridge : public AndroidEngineBridge {
+ public:
+  MOCK_METHOD(bool, IsValid, (), (const, override));
+  MOCK_METHOD(std::unique_ptr<AndroidEngineBridge>,
+              Spawn,
+              (std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+               const std::string& entrypoint,
+               const std::string& libraryUrl,
+               const std::string& initial_route,
+               const std::vector<std::string>& entrypoint_args,
+               int64_t engine_id),
+              (const, override));
+  MOCK_METHOD(void,
+              Launch,
+              (std::unique_ptr<APKAssetProvider> apk_asset_provider,
+               const std::string& entrypoint,
+               const std::string& libraryUrl,
+               const std::vector<std::string>& entrypoint_args,
+               int64_t engine_id),
+              (override));
+  MOCK_METHOD(const flutter::Settings&, GetSettings, (), (const, override));
+  MOCK_METHOD(fml::WeakPtr<PlatformViewAndroid>,
+              GetPlatformView,
+              (),
+              (override));
+  MOCK_METHOD(PlatformViewAndroid*, GetPlatformViewAndroid, (), (override));
+  MOCK_METHOD(EmbedderSurfaceAndroid*,
+              GetEmbedderSurfaceAndroid,
+              (),
+              (override));
+  MOCK_METHOD(bool, IsSurfaceControlEnabled, (), (override));
+  MOCK_METHOD(Rasterizer::Screenshot,
+              Screenshot,
+              (Rasterizer::ScreenshotType type, bool base64_encode),
+              (override));
+  MOCK_METHOD(void, NotifyLowMemoryWarning, (), (override));
+  MOCK_METHOD(const std::shared_ptr<PlatformMessageHandler>&,
+              GetPlatformMessageHandler,
+              (),
+              (const, override));
+  MOCK_METHOD(void, UpdateDisplayMetrics, (), (override));
+};
+
+TEST(AndroidShellHolder, DelegatesToEngineBridge) {
+  auto mock_bridge = std::make_unique<MockAndroidEngineBridge>();
+  MockAndroidEngineBridge* bridge_ptr = mock_bridge.get();
+
+  EXPECT_CALL(*bridge_ptr, IsValid()).WillOnce(::testing::Return(true));
+  EXPECT_CALL(*bridge_ptr, NotifyLowMemoryWarning()).Times(1);
+  EXPECT_CALL(*bridge_ptr, UpdateDisplayMetrics()).Times(1);
+  EXPECT_CALL(*bridge_ptr, IsSurfaceControlEnabled())
+      .WillOnce(::testing::Return(true));
+
+  AndroidShellHolder holder(std::move(mock_bridge));
+  EXPECT_TRUE(holder.IsValid());
+  EXPECT_EQ(holder.GetBridgeForTesting(), bridge_ptr);
+  holder.NotifyLowMemoryWarning();
+  holder.UpdateDisplayMetrics();
+  EXPECT_TRUE(holder.IsSurfaceControlEnabled());
+}
+
+TEST(AndroidEngineBridge, CreateReturnsValidLegacyBridge) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto bridge = AndroidEngineBridge::Create(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(bridge.get(), nullptr);
+  EXPECT_TRUE(bridge->IsValid());
+  EXPECT_NE(bridge->GetShellForTesting().get(), nullptr);
 }
 
 }  // namespace testing
