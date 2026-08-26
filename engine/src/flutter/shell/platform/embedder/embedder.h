@@ -1936,6 +1936,11 @@ typedef void (*FlutterViewFocusChangeRequestCallback)(
     const FlutterViewFocusChangeRequest* /* request */,
     void* /* user data */);
 
+/// Callback invoked when the Dart VM requests loading a deferred library.
+typedef void (*FlutterEngineDartDeferredLibraryRequestCallback)(
+    intptr_t /* loading_unit_id */,
+    void* /* user data */);
+
 typedef struct _FlutterTaskRunner* FlutterTaskRunner;
 
 typedef struct {
@@ -2910,6 +2915,11 @@ typedef struct {
   /// The pointers and `FlutterAssetResolver` structs can be collected after the
   /// call to `FlutterEngineInitialize` or `FlutterEngineRun` returns.
   const FlutterAssetResolver** asset_resolvers;
+
+  /// The callback invoked by the engine when the Dart VM requests loading
+  /// of a deferred library with the specified loading unit id.
+  FlutterEngineDartDeferredLibraryRequestCallback
+      dart_deferred_library_request_callback;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3768,9 +3778,67 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Notify the engine that a requested Dart deferred library has
+///             been loaded.
+///
+///             The Dart VM requires the snapshot data and snapshot instructions
+///             mappings to complete the deferred library loading unit.
+///
+/// @param[in]  engine                 The running engine instance.
+/// @param[in]  loading_unit_id        The loading unit identifier.
+/// @param[in]  snapshot_data          The Dart snapshot data for the loading
+/// unit.
+/// @param[in]  snapshot_instructions  The Dart snapshot instructions for the
+///                                    loading unit.
+///
+/// @return     The result of the operation. Returns `kSuccess` if the engine
+/// was
+///             notified successfully.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoaded(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const uint8_t* snapshot_data,
+    const uint8_t* snapshot_instructions);
+
+//------------------------------------------------------------------------------
+/// @brief      Notify the engine that a requested Dart deferred library failed
+///             to load.
+///
+/// @param[in]  engine           The running engine instance.
+/// @param[in]  loading_unit_id  The loading unit identifier.
+/// @param[in]  error_message    The human-readable error message.
+/// @param[in]  transient        Whether the failure is transient (allowing
+/// retry).
+///
+/// @return     The result of the operation. Returns `kSuccess` if the engine
+/// was
+///             notified successfully.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const char* error_message,
+    bool transient);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
+typedef FlutterEngineResult (
+    *FlutterEngineNotifyDartDeferredLibraryLoadedFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const uint8_t* snapshot_data,
+    const uint8_t* snapshot_instructions);
+typedef FlutterEngineResult (
+    *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const char* error_message,
+    bool transient);
 typedef FlutterEngineResult (*FlutterEngineCreateAOTDataFnPtr)(
     const FlutterEngineAOTDataSource* source,
     FlutterEngineAOTData* data_out);
@@ -3957,6 +4025,10 @@ typedef struct {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineNotifyDartDeferredLibraryLoadedFnPtr
+      NotifyDartDeferredLibraryLoaded;
+  FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
+      NotifyDartDeferredLibraryLoadError;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

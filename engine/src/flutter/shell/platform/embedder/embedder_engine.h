@@ -95,6 +95,15 @@ class EmbedderEngine {
 
   bool ScheduleFrame();
 
+  bool NotifyDartDeferredLibraryLoaded(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions);
+
+  bool NotifyDartDeferredLibraryLoadError(intptr_t loading_unit_id,
+                                          const std::string& error_message,
+                                          bool transient);
+
   Shell& GetShell();
 
   std::shared_ptr<EmbedderThreadHost> GetThreadHost() const;

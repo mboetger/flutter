@@ -4540,6 +4540,73 @@ TEST_F(EmbedderTest, CustomAssetResolverLoadsAssetAndInvokesReleaseCallback) {
   engine.reset();
 }
 
+TEST_F(EmbedderTest, DartDeferredLibraryCallbacks) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  static intptr_t last_loading_unit_id = -1;
+  static void* last_user_data = nullptr;
+  static bool callback_called = false;
+  last_loading_unit_id = -1;
+  last_user_data = nullptr;
+  callback_called = false;
+
+  builder.GetProjectArgs().dart_deferred_library_request_callback =
+      [](intptr_t loading_unit_id, void* user_data) {
+        last_loading_unit_id = loading_unit_id;
+        last_user_data = user_data;
+        callback_called = true;
+      };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  auto* embedder_engine = reinterpret_cast<EmbedderEngine*>(engine.get());
+
+  // 1. Verify invalid argument handling for NotifyDartDeferredLibraryLoaded
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoaded(nullptr, 1, nullptr,
+                                                         nullptr),
+            kInvalidArguments);
+  const uint8_t dummy_data[] = {0x00};
+  const uint8_t dummy_instructions[] = {0x00};
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoaded(
+                engine.get(), 1, nullptr, dummy_instructions),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoaded(engine.get(), 1,
+                                                         dummy_data, nullptr),
+            kInvalidArguments);
+
+  // 2. Verify invalid argument handling for NotifyDartDeferredLibraryLoadError
+  EXPECT_EQ(
+      FlutterEngineNotifyDartDeferredLibraryLoadError(nullptr, 1, "err", true),
+      kInvalidArguments);
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(engine.get(), 1,
+                                                            nullptr, true),
+            kInvalidArguments);
+
+  // 3. Trigger RequestDartDeferredLibrary on platform view
+  auto weak_platform_view = embedder_engine->GetShell().GetPlatformView();
+  ASSERT_TRUE(weak_platform_view);
+  weak_platform_view->RequestDartDeferredLibrary(42);
+
+  EXPECT_TRUE(callback_called);
+  EXPECT_EQ(last_loading_unit_id, 42);
+  EXPECT_EQ(last_user_data, &context);
+
+  // 4. Notify error on valid engine
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(
+                engine.get(), 42, "Simulated load error", true),
+            kSuccess);
+
+  // 5. Notify loaded on valid engine
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoaded(
+                engine.get(), 42, dummy_data, dummy_instructions),
+            kSuccess);
+
+  engine.reset();
+}
+
 }  // namespace testing
 }  // namespace flutter
 
