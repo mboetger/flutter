@@ -18,8 +18,6 @@
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/fml/task_runner.h"
 #include "flutter/lib/ui/window/platform_message.h"
-#include "flutter/lib/ui/window/pointer_data_packet.h"
-#include "flutter/lib/ui/window/viewport_metrics.h"
 #include "flutter/shell/common/snapshot_surface_producer.h"
 #include "flutter/shell/common/vsync_waiter.h"
 #include "flutter/shell/platform/android/context/android_context.h"
@@ -28,6 +26,7 @@
 #include "flutter/shell/platform/android/platform_view_android_delegate/platform_view_android_delegate.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 #include "shell/platform/android/image_external_texture.h"
 
 namespace flutter {
@@ -63,16 +62,15 @@ class PlatformViewAndroid final {
     virtual void OnPlatformViewSetNextFrameCallback(
         const fml::closure& closure) = 0;
     virtual void OnPlatformViewSetViewportMetrics(
-        int64_t view_id,
-        const ViewportMetrics& metrics) = 0;
+        const FlutterWindowMetricsEvent& metrics) = 0;
     virtual void OnPlatformViewDispatchPlatformMessage(
         std::unique_ptr<flutter::PlatformMessage> message) = 0;
-    virtual void OnPlatformViewDispatchPointerDataPacket(
-        std::unique_ptr<flutter::PointerDataPacket> packet) = 0;
+    virtual void OnPlatformViewDispatchPointerDataPacket(const uint8_t* data,
+                                                         size_t size) = 0;
     virtual void OnPlatformViewDispatchSemanticsAction(
         int64_t view_id,
         int32_t node_id,
-        flutter::SemanticsAction action,
+        FlutterSemanticsAction action,
         fml::MallocMapping args) = 0;
     virtual void OnPlatformViewSetSemanticsEnabled(bool enabled) = 0;
     virtual void OnPlatformViewSetAccessibilityFeatures(int32_t flags) = 0;
@@ -128,7 +126,7 @@ class PlatformViewAndroid final {
 
   void NotifyDestroyed();
 
-  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
+  void SetViewportMetrics(const FlutterWindowMetricsEvent& metrics);
 
   void DispatchPlatformMessage(JNIEnv* env,
                                std::string name,
@@ -140,8 +138,7 @@ class PlatformViewAndroid final {
                                     std::string name,
                                     jint response_id);
 
-  void DispatchPointerDataPacket(
-      std::unique_ptr<flutter::PointerDataPacket> packet);
+  void DispatchPointerDataPacket(const uint8_t* data, size_t size);
 
   void DispatchSemanticsAction(JNIEnv* env,
                                jint id,
@@ -209,9 +206,7 @@ class PlatformViewAndroid final {
 
   void SetupImpellerContext();
 
-  void UpdateSemantics(int64_t view_id,
-                       flutter::SemanticsNodeUpdates update,
-                       flutter::CustomAccessibilityActionUpdates actions);
+  void UpdateSemantics(const FlutterSemanticsUpdate2* update);
 
   void SetApplicationLocale(std::string locale);
 

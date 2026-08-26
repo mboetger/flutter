@@ -18,11 +18,11 @@ namespace flutter {
 
 class EmbedderExternalTexture : public flutter::Texture {
  public:
-  using ExternalTextureFrameCallback = std::function<bool(
-      int64_t /* texture_id */,
-      size_t /* width */,
-      size_t /* height */,
-      FlutterExternalTextureFrame* /* frame_out */)>;
+  using ExternalTextureFrameCallback =
+      std::function<bool(int64_t /* texture_id */,
+                         size_t /* width */,
+                         size_t /* height */,
+                         FlutterExternalTextureFrame* /* frame_out */)>;
 
   EmbedderExternalTexture(int64_t texture_identifier,
                           ExternalTextureFrameCallback callback);

@@ -92,15 +92,14 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
   void OnPlatformViewScheduleFrame() override;
   void OnPlatformViewSetNextFrameCallback(const fml::closure& closure) override;
   void OnPlatformViewSetViewportMetrics(
-      int64_t view_id,
-      const ViewportMetrics& metrics) override;
+      const FlutterWindowMetricsEvent& metrics) override;
   void OnPlatformViewDispatchPlatformMessage(
       std::unique_ptr<flutter::PlatformMessage> message) override;
-  void OnPlatformViewDispatchPointerDataPacket(
-      std::unique_ptr<flutter::PointerDataPacket> packet) override;
+  void OnPlatformViewDispatchPointerDataPacket(const uint8_t* data,
+                                               size_t size) override;
   void OnPlatformViewDispatchSemanticsAction(int64_t view_id,
                                              int32_t node_id,
-                                             flutter::SemanticsAction action,
+                                             FlutterSemanticsAction action,
                                              fml::MallocMapping args) override;
   void OnPlatformViewSetSemanticsEnabled(bool enabled) override;
   void OnPlatformViewSetAccessibilityFeatures(int32_t flags) override;
@@ -176,7 +175,13 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
       external_textures_;
   std::vector<std::unique_ptr<flutter::PlatformMessage>>
       pending_platform_messages_;
-  std::unordered_map<int64_t, ViewportMetrics> last_viewport_metrics_;
+  struct SavedViewportMetrics {
+    FlutterWindowMetricsEvent event;
+    std::vector<double> display_features_bounds;
+    std::vector<int32_t> display_features_type;
+    std::vector<int32_t> display_features_state;
+  };
+  std::unordered_map<int64_t, SavedViewportMetrics> last_viewport_metrics_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidEngine);
 };

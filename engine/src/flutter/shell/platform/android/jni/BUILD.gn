@@ -13,7 +13,7 @@ source_set("jni") {
 
   public_configs = [ "//flutter:config" ]
 
-  deps = [
+  public_deps = [
     "//flutter/flow",
     "//flutter/fml",
     "//flutter/lib/ui",

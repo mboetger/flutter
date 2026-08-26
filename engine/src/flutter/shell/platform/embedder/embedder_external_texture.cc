@@ -96,7 +96,8 @@ sk_sp<DlImage> EmbedderExternalTexture::ResolveTexture(
     return nullptr;
   }
 
-  // Ensure destruction callback is invoked if frame resolution fails or is unsupported.
+  // Ensure destruction callback is invoked if frame resolution fails or is
+  // unsupported.
   fml::ScopedCleanupClosure frame_cleanup([&frame]() { CleanupFrame(frame); });
 
   sk_sp<DlImage> resolved_image;
@@ -135,11 +136,10 @@ sk_sp<DlImage> EmbedderExternalTexture::ResolveTextureSkia(
     auto gr_backend_texture = GrBackendTextures::MakeGL(
         width, height, skgpu::Mipmapped::kNo, gr_texture_info);
     SkImages::TextureReleaseProc release_proc = texture.destruction_callback;
-    auto image =
-        SkImages::BorrowTextureFrom(context, gr_backend_texture,
-                                    kTopLeft_GrSurfaceOrigin,
-                                    kRGBA_8888_SkColorType, kPremul_SkAlphaType,
-                                    nullptr, release_proc, texture.user_data);
+    auto image = SkImages::BorrowTextureFrom(
+        context, gr_backend_texture, kTopLeft_GrSurfaceOrigin,
+        kRGBA_8888_SkColorType, kPremul_SkAlphaType, nullptr, release_proc,
+        texture.user_data);
     if (!image) {
       FML_LOG(ERROR) << "Could not create external OpenGL texture with Skia.";
       return nullptr;
@@ -181,7 +181,8 @@ sk_sp<DlImage> EmbedderExternalTexture::ResolveTextureImpeller(
         impeller::TextureGLES::WrapTexture(context.GetReactor(), desc, handle);
 
     if (!image) {
-      FML_LOG(ERROR) << "Could not create external OpenGL texture with Impeller";
+      FML_LOG(ERROR)
+          << "Could not create external OpenGL texture with Impeller";
       return nullptr;
     }
 

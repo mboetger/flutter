@@ -71,37 +71,9 @@ TEST(AndroidEngineTest, PointerEventDispatching) {
 
   AndroidEngine engine(settings, jni, AndroidRenderingAPI::kSoftware);
 
-  auto packet = std::make_unique<flutter::PointerDataPacket>(2);
-  flutter::PointerData p1 = {};
-  p1.Clear();
-  p1.time_stamp = 1000;
-  p1.change = PointerData::Change::kDown;
-  p1.kind = PointerData::DeviceKind::kTouch;
-  p1.physical_x = 50.0;
-  p1.physical_y = 100.0;
-  p1.device = 1;
-  p1.pan_x = 10.0;
-  p1.pan_y = 20.0;
-  p1.scale = 1.5;
-  p1.rotation = 0.5;
-  p1.view_id = 0;
-  p1.pressure = 0.8;
-  p1.pressure_min = 0.0;
-  p1.pressure_max = 1.0;
-  packet->SetPointerData(0, p1);
-
-  flutter::PointerData p2 = {};
-  p2.Clear();
-  p2.time_stamp = 2000;
-  p2.change = PointerData::Change::kUp;
-  p2.kind = PointerData::DeviceKind::kTouch;
-  p2.physical_x = 60.0;
-  p2.physical_y = 110.0;
-  p2.device = 1;
-  packet->SetPointerData(1, p2);
-
-  // Dispatch pointer data packet.
-  engine.OnPlatformViewDispatchPointerDataPacket(std::move(packet));
+  const uint8_t dummy_data[] = {0, 1, 2, 3};
+  engine.OnPlatformViewDispatchPointerDataPacket(dummy_data,
+                                                 sizeof(dummy_data));
 }
 
 TEST(AndroidEngineTest, PlatformMessageDispatching) {
@@ -137,8 +109,8 @@ TEST(AndroidEngineTest, SemanticsAndAccessibility) {
   engine.OnPlatformViewSetAccessibilityFeatures(3);
 
   fml::MallocMapping empty_args;
-  engine.OnPlatformViewDispatchSemanticsAction(0, 42, SemanticsAction::kTap,
-                                               std::move(empty_args));
+  engine.OnPlatformViewDispatchSemanticsAction(
+      0, 42, kFlutterSemanticsActionTap, std::move(empty_args));
 }
 
 TEST(AndroidEngineTest, ExternalTextures) {
@@ -176,18 +148,30 @@ TEST(AndroidEngineTest, ViewportMetricsAndFrameScheduling) {
 
   AndroidEngine engine(settings, jni, AndroidRenderingAPI::kSoftware);
 
-  ViewportMetrics metrics;
-  metrics.physical_width = 1080;
-  metrics.physical_height = 1920;
-  metrics.device_pixel_ratio = 2.5;
+  double bounds[] = {0, 0, 1080, 50};
+  int32_t types[] = {1};
+  int32_t states[] = {2};
+
+  FlutterWindowMetricsEvent metrics = {};
+  metrics.struct_size = sizeof(FlutterWindowMetricsEvent);
+  metrics.width = 1080;
+  metrics.height = 1920;
+  metrics.pixel_ratio = 2.5;
   metrics.physical_view_inset_top = 48.0;
   metrics.physical_view_inset_bottom = 96.0;
   metrics.display_id = 1;
-  metrics.physical_min_width_constraint = 500;
-  metrics.physical_max_width_constraint = 1080;
-  metrics.physical_min_height_constraint = 500;
-  metrics.physical_max_height_constraint = 1920;
-  engine.OnPlatformViewSetViewportMetrics(0, metrics);
+  metrics.has_constraints = true;
+  metrics.min_width_constraint = 500;
+  metrics.max_width_constraint = 1080;
+  metrics.min_height_constraint = 500;
+  metrics.max_height_constraint = 1920;
+  metrics.display_features_count = 1;
+  metrics.display_features_bounds = bounds;
+  metrics.display_features_type = types;
+  metrics.display_features_state = states;
+
+  // Viewport metrics caching with display features deep-copy.
+  engine.OnPlatformViewSetViewportMetrics(metrics);
 
   engine.OnPlatformViewScheduleFrame();
   engine.OnPlatformViewSetNextFrameCallback([]() {});

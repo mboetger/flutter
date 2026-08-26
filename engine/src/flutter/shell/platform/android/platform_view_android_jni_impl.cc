@@ -391,8 +391,6 @@ static void SetViewportMetrics(JNIEnv* env,
                                jint physicalDisplayCornerRadiusTopRight,
                                jint physicalDisplayCornerRadiusBottomRight,
                                jint physicalDisplayCornerRadiusBottomLeft) {
-  // Convert java->c++. javaDisplayFeaturesBounds, javaDisplayFeaturesType and
-  // javaDisplayFeaturesState cannot be null
   jsize rectSize = env->GetArrayLength(javaDisplayFeaturesBounds);
   std::vector<int> boundsIntVector(rectSize);
   if (rectSize > 0) {
@@ -415,52 +413,56 @@ static void SetViewportMetrics(JNIEnv* env,
                            &displayFeaturesState[0]);
   }
 
-  const flutter::ViewportMetrics metrics{
-      static_cast<double>(devicePixelRatio),  // p_device_pixel_ratio
-      static_cast<double>(physicalWidth),     // p_physical_width
-      static_cast<double>(physicalHeight),    // p_physical_height
-      static_cast<double>(physicalMinWidth),  // p_physical_min_width_constraint
-      static_cast<double>(physicalMaxWidth),  // p_physical_max_width_constraint
-      static_cast<double>(
-          physicalMinHeight),  // p_physical_min_height_constraint
-      static_cast<double>(
-          physicalMaxHeight),  // p_physical_max_height_constraint
-      static_cast<double>(physicalPaddingTop),     // p_physical_padding_top
-      static_cast<double>(physicalPaddingRight),   // p_physical_padding_right
-      static_cast<double>(physicalPaddingBottom),  // p_physical_padding_bottom
-      static_cast<double>(physicalPaddingLeft),    // p_physical_padding_left
-      static_cast<double>(physicalViewInsetTop),   // p_physical_view_inset_top
-      static_cast<double>(
-          physicalViewInsetRight),  // p_physical_view_inset_right
-      static_cast<double>(
-          physicalViewInsetBottom),  // p_physical_view_inset_bottom
-      static_cast<double>(physicalViewInsetLeft),  // p_physical_view_inset_left
-      static_cast<double>(
-          systemGestureInsetTop),  // p_physical_system_gesture_inset_top
-      static_cast<double>(
-          systemGestureInsetRight),  // p_physical_system_gesture_inset_right
-      static_cast<double>(
-          systemGestureInsetBottom),  // p_physical_system_gesture_inset_bottom
-      static_cast<double>(
-          systemGestureInsetLeft),  // p_physical_system_gesture_inset_left
-      static_cast<double>(physicalTouchSlop),  // p_physical_touch_slop
-      displayFeaturesBounds,  // p_physical_display_features_bounds
-      displayFeaturesType,    // p_physical_display_features_type
-      displayFeaturesState,   // p_physical_display_features_state
-      0,                      // p_display_id,
-      static_cast<double>(
-          physicalDisplayCornerRadiusTopLeft),  // p_physical_display_corner_radius_top_left
-      static_cast<double>(
-          physicalDisplayCornerRadiusTopRight),  // p_physical_display_corner_radius_top_right
-      static_cast<double>(
-          physicalDisplayCornerRadiusBottomRight),  // p_physical_display_corner_radius_bottom_right
-      static_cast<double>(
-          physicalDisplayCornerRadiusBottomLeft),  // p_physical_display_corner_radius_bottom_left
-  };
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.width = static_cast<size_t>(physicalWidth);
+  event.height = static_cast<size_t>(physicalHeight);
+  event.pixel_ratio = static_cast<double>(devicePixelRatio);
+  event.left = 0;
+  event.top = 0;
+  event.physical_view_inset_top = static_cast<double>(physicalViewInsetTop);
+  event.physical_view_inset_right = static_cast<double>(physicalViewInsetRight);
+  event.physical_view_inset_bottom =
+      static_cast<double>(physicalViewInsetBottom);
+  event.physical_view_inset_left = static_cast<double>(physicalViewInsetLeft);
+  event.display_id = 0;
+  event.view_id = kFlutterImplicitViewId;
+  if (physicalMaxWidth > 0 || physicalMaxHeight > 0) {
+    event.has_constraints = true;
+    event.min_width_constraint = static_cast<size_t>(physicalMinWidth);
+    event.max_width_constraint = static_cast<size_t>(physicalMaxWidth);
+    event.min_height_constraint = static_cast<size_t>(physicalMinHeight);
+    event.max_height_constraint = static_cast<size_t>(physicalMaxHeight);
+  }
+  event.physical_padding_top = static_cast<double>(physicalPaddingTop);
+  event.physical_padding_right = static_cast<double>(physicalPaddingRight);
+  event.physical_padding_bottom = static_cast<double>(physicalPaddingBottom);
+  event.physical_padding_left = static_cast<double>(physicalPaddingLeft);
+  event.physical_system_gesture_inset_top =
+      static_cast<double>(systemGestureInsetTop);
+  event.physical_system_gesture_inset_right =
+      static_cast<double>(systemGestureInsetRight);
+  event.physical_system_gesture_inset_bottom =
+      static_cast<double>(systemGestureInsetBottom);
+  event.physical_system_gesture_inset_left =
+      static_cast<double>(systemGestureInsetLeft);
+  event.physical_touch_slop = static_cast<double>(physicalTouchSlop);
+  event.display_features_count = displayFeaturesBounds.size();
+  event.display_features_bounds = displayFeaturesBounds.data();
+  event.display_features_type = displayFeaturesType.data();
+  event.display_features_state = displayFeaturesState.data();
+  event.physical_display_corner_radius_top_left =
+      static_cast<double>(physicalDisplayCornerRadiusTopLeft);
+  event.physical_display_corner_radius_top_right =
+      static_cast<double>(physicalDisplayCornerRadiusTopRight);
+  event.physical_display_corner_radius_bottom_right =
+      static_cast<double>(physicalDisplayCornerRadiusBottomRight);
+  event.physical_display_corner_radius_bottom_left =
+      static_cast<double>(physicalDisplayCornerRadiusBottomLeft);
 
   auto platform_view = GetPlatformView(shell_holder);
   if (platform_view) {
-    platform_view->SetViewportMetrics(kFlutterImplicitViewId, metrics);
+    platform_view->SetViewportMetrics(event);
   }
 }
 
@@ -532,10 +534,10 @@ static void DispatchPointerDataPacket(JNIEnv* env,
                                       jobject buffer,
                                       jint position) {
   uint8_t* data = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
-  auto packet = std::make_unique<flutter::PointerDataPacket>(data, position);
   auto platform_view = GetPlatformView(shell_holder);
-  if (platform_view) {
-    platform_view->DispatchPointerDataPacket(std::move(packet));
+  if (platform_view && data && position > 0) {
+    platform_view->DispatchPointerDataPacket(data,
+                                             static_cast<size_t>(position));
   }
 }
 

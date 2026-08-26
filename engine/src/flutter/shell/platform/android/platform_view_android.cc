@@ -201,9 +201,9 @@ void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
   delegate_.OnPlatformViewScheduleFrame();
 }
 
-void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
-                                             const ViewportMetrics& metrics) {
-  delegate_.OnPlatformViewSetViewportMetrics(view_id, metrics);
+void PlatformViewAndroid::SetViewportMetrics(
+    const FlutterWindowMetricsEvent& metrics) {
+  delegate_.OnPlatformViewSetViewportMetrics(metrics);
 }
 
 void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
@@ -252,9 +252,9 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
                                                  std::move(response)));
 }
 
-void PlatformViewAndroid::DispatchPointerDataPacket(
-    std::unique_ptr<flutter::PointerDataPacket> packet) {
-  delegate_.OnPlatformViewDispatchPointerDataPacket(std::move(packet));
+void PlatformViewAndroid::DispatchPointerDataPacket(const uint8_t* data,
+                                                    size_t size) {
+  delegate_.OnPlatformViewDispatchPointerDataPacket(data, size);
 }
 
 void PlatformViewAndroid::HandlePlatformMessage(
@@ -276,7 +276,7 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
   // https://github.com/flutter/flutter/issues/142845
   if (!env || !args || env->IsSameObject(args, nullptr)) {
     delegate_.OnPlatformViewDispatchSemanticsAction(
-        kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
+        kImplicitViewId, node_id, static_cast<FlutterSemanticsAction>(action),
         fml::MallocMapping());
     return;
   }
@@ -285,7 +285,7 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
   auto args_vector = fml::MallocMapping::Copy(args_data, args_position);
 
   delegate_.OnPlatformViewDispatchSemanticsAction(
-      kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
+      kImplicitViewId, node_id, static_cast<FlutterSemanticsAction>(action),
       std::move(args_vector));
 }
 
@@ -298,10 +298,8 @@ void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
 }
 
 void PlatformViewAndroid::UpdateSemantics(
-    int64_t view_id,
-    flutter::SemanticsNodeUpdates update,
-    flutter::CustomAccessibilityActionUpdates actions) {
-  platform_view_android_delegate_.UpdateSemantics(update, actions);
+    const FlutterSemanticsUpdate2* update) {
+  platform_view_android_delegate_.UpdateSemantics(update);
 }
 
 void PlatformViewAndroid::SetApplicationLocale(std::string locale) {

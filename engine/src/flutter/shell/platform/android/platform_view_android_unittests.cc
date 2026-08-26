@@ -35,7 +35,7 @@ class MockPlatformViewAndroidDelegate : public PlatformViewAndroid::Delegate {
               (override));
   MOCK_METHOD(void,
               OnPlatformViewSetViewportMetrics,
-              (int64_t view_id, const ViewportMetrics& metrics),
+              (const FlutterWindowMetricsEvent& metrics),
               (override));
   MOCK_METHOD(void,
               OnPlatformViewDispatchPlatformMessage,
@@ -43,13 +43,13 @@ class MockPlatformViewAndroidDelegate : public PlatformViewAndroid::Delegate {
               (override));
   MOCK_METHOD(void,
               OnPlatformViewDispatchPointerDataPacket,
-              (std::unique_ptr<flutter::PointerDataPacket> packet),
+              (const uint8_t* data, size_t size),
               (override));
   MOCK_METHOD(void,
               OnPlatformViewDispatchSemanticsAction,
               (int64_t view_id,
                int32_t node_id,
-               flutter::SemanticsAction action,
+               FlutterSemanticsAction action,
                fml::MallocMapping args),
               (override));
   MOCK_METHOD(void,
@@ -150,16 +150,18 @@ TEST(PlatformViewAndroidTest, DispatchesEventsToDelegate) {
   auto platform_view = std::make_unique<PlatformViewAndroid>(
       delegate, task_runners, jni, AndroidRenderingAPI::kImpellerOpenGLES);
 
-  EXPECT_CALL(delegate, OnPlatformViewSetViewportMetrics(0, ::testing::_));
-  ViewportMetrics metrics;
-  platform_view->SetViewportMetrics(0, metrics);
+  EXPECT_CALL(delegate, OnPlatformViewSetViewportMetrics(::testing::_));
+  FlutterWindowMetricsEvent metrics = {};
+  metrics.struct_size = sizeof(FlutterWindowMetricsEvent);
+  platform_view->SetViewportMetrics(metrics);
 
   EXPECT_CALL(delegate, OnPlatformViewDispatchPlatformMessage(::testing::_));
   platform_view->DispatchEmptyPlatformMessage(nullptr, "test_channel", 0);
 
-  EXPECT_CALL(delegate, OnPlatformViewDispatchPointerDataPacket(::testing::_));
-  platform_view->DispatchPointerDataPacket(
-      std::make_unique<flutter::PointerDataPacket>(nullptr, 0));
+  EXPECT_CALL(delegate, OnPlatformViewDispatchPointerDataPacket(::testing::_,
+                                                                ::testing::_));
+  const uint8_t dummy_packet[] = {1, 2, 3};
+  platform_view->DispatchPointerDataPacket(dummy_packet, sizeof(dummy_packet));
 
   EXPECT_CALL(delegate, OnPlatformViewSetSemanticsEnabled(true));
   platform_view->SetSemanticsEnabled(true);
