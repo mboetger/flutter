@@ -28,17 +28,19 @@ TEST(AndroidEngineBridgeTest, CreateDefaultEmbedderBridge) {
   EXPECT_NE(bridge->GetEmbedderSurfaceAndroid(), nullptr);
 }
 
-TEST(AndroidEngineBridgeTest, CreateLegacyBridgeWhenFlagDisabled) {
+TEST(AndroidEngineBridgeTest, CreateEmbedderBridgeWithImpeller) {
   auto jni_mock = std::make_shared<JNIMock>();
   Settings settings;
-  settings.enable_embedder_api = false;
+  settings.enable_embedder_api = true;
   settings.enable_software_rendering = false;
 
   auto bridge = AndroidEngineBridge::Create(
       settings, jni_mock, AndroidRenderingAPI::kImpellerOpenGLES);
   ASSERT_NE(bridge, nullptr);
   EXPECT_TRUE(bridge->IsValid());
-  EXPECT_EQ(bridge->GetSettings().enable_embedder_api, false);
+  EXPECT_EQ(bridge->GetSettings().enable_embedder_api, true);
+  EXPECT_NE(bridge->GetPlatformViewAndroid(), nullptr);
+  EXPECT_NE(bridge->GetEmbedderSurfaceAndroid(), nullptr);
 }
 
 TEST(AndroidEngineBridgeTest, ShellForTestingReturnsNullOnBaseClass) {

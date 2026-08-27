@@ -9,7 +9,6 @@
 
 #include "flutter/shell/common/shell.h"
 #include "flutter/shell/platform/android/embedder_engine_bridge.h"
-#include "flutter/shell/platform/android/legacy_engine_bridge.h"
 
 namespace flutter {
 
@@ -17,12 +16,8 @@ std::unique_ptr<AndroidEngineBridge> AndroidEngineBridge::Create(
     const flutter::Settings& settings,
     std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
     AndroidRenderingAPI android_rendering_api) {
-  if (settings.enable_embedder_api) {
-    return std::make_unique<EmbedderEngineBridge>(
-        settings, std::move(jni_facade), android_rendering_api);
-  }
-  return std::make_unique<LegacyEngineBridge>(settings, std::move(jni_facade),
-                                              android_rendering_api);
+  return std::make_unique<EmbedderEngineBridge>(settings, std::move(jni_facade),
+                                                android_rendering_api);
 }
 
 const std::unique_ptr<Shell>& AndroidEngineBridge::GetShellForTesting() const {
