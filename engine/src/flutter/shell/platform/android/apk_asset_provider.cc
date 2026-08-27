@@ -104,6 +104,41 @@ std::unique_ptr<APKAssetProvider> APKAssetProvider::Clone() const {
   return std::make_unique<APKAssetProvider>(impl_);
 }
 
+FlutterAssetResolver APKAssetProvider::GetAssetResolver() const {
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  if (!impl_) {
+    return resolver;
+  }
+  resolver.user_data = impl_.get();
+  resolver.get_asset = [](const char* name, FlutterMapping* mapping_out,
+                          void* user_data) -> bool {
+    if (name == nullptr || mapping_out == nullptr || user_data == nullptr) {
+      return false;
+    }
+    if (mapping_out->struct_size != sizeof(FlutterMapping)) {
+      return false;
+    }
+    auto* impl = static_cast<APKAssetProviderInternal*>(user_data);
+    auto mapping = impl->GetAsMapping(name);
+    if (!mapping) {
+      return false;
+    }
+    if (mapping->GetMapping() == nullptr && mapping->GetSize() > 0) {
+      return false;
+    }
+    mapping_out->mapping = mapping->GetMapping();
+    mapping_out->size = mapping->GetSize();
+    mapping_out->user_data = mapping.release();
+    mapping_out->release_callback = [](const uint8_t* mapping, size_t size,
+                                       void* user_data) {
+      delete static_cast<fml::Mapping*>(user_data);
+    };
+    return true;
+  };
+  return resolver;
+}
+
 bool APKAssetProvider::operator==(const AssetResolver& other) const {
   auto other_provider = other.as_apk_asset_provider();
   if (!other_provider) {
