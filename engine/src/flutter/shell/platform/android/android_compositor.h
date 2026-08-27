@@ -22,14 +22,87 @@
 
 namespace flutter {
 
+/// Types of mutators applied to platform views.
+enum class AndroidMutatorType {
+  kTransform,
+  kClipRect,
+  kClipRRect,
+  kClipRSE,
+  kOpacity,
+  kClipPath,
+};
+
+/// 2D path segment data for platform view clip path mutations.
+struct AndroidPathSegment {
+  FlutterPathVerb verb = kFlutterPathVerbMove;
+  FlutterPoint points[3] = {};
+  double conic_weight = 0.0;
+};
+
+/// Complete vector path data for clipping platform views.
+struct AndroidPathData {
+  FlutterPathFillType fill_type = kFlutterPathFillTypeNonZero;
+  std::vector<AndroidPathSegment> segments;
+};
+
+/// Individual mutator applied to an Android platform view.
+struct AndroidPlatformViewMutator {
+  AndroidMutatorType type = AndroidMutatorType::kTransform;
+  float opacity = 1.0f;
+  FlutterRect rect = {};
+  float radii[8] = {};  // [tl_w, tl_h, tr_w, tr_h, br_w, br_h, bl_w, bl_h]
+  float transform_matrix[9] = {};  // 3x3 matrix in row-major order (matching android.graphics.Matrix)
+  AndroidPathData path;
+};
+
+/// Container representing the ordered stack of mutations for a platform view.
+class AndroidPlatformViewMutatorsStack {
+ public:
+  AndroidPlatformViewMutatorsStack() = default;
+  ~AndroidPlatformViewMutatorsStack() = default;
+
+  void PushTransform(const float matrix[9]);
+  void PushClipRect(float left, float top, float right, float bottom);
+  void PushClipRRect(float left,
+                     float top,
+                     float right,
+                     float bottom,
+                     const float radii[8]);
+  void PushClipRSE(float left,
+                   float top,
+                   float right,
+                   float bottom,
+                   const float radii[8]);
+  void PushOpacity(float opacity);
+  void PushClipPath(const AndroidPathData& path);
+
+  const std::vector<AndroidPlatformViewMutator>& GetMutators() const {
+    return mutators_;
+  }
+  bool IsEmpty() const { return mutators_.empty(); }
+  size_t Size() const { return mutators_.size(); }
+  void Clear() { mutators_.clear(); }
+
+ private:
+  std::vector<AndroidPlatformViewMutator> mutators_;
+};
+
 /// Callback for platform view layer presentation handling.
 using PlatformViewRendererCallback =
     std::function<bool(const FlutterPlatformView* platform_view,
                        const FlutterLayer& layer,
                        size_t layer_index)>;
 
-/// Manages backing store creation, collection, layer presentation, and
-/// synchronous surface detachment barrier for the Android Embedder API backend.
+/// Callback for platform view layer presentation with mapped mutators stack.
+using PlatformViewMutatorsRendererCallback =
+    std::function<bool(const FlutterPlatformView* platform_view,
+                       const FlutterLayer& layer,
+                       const AndroidPlatformViewMutatorsStack& mutators_stack,
+                       size_t layer_index)>;
+
+/// Manages backing store creation, collection, layer presentation, direct JNI
+/// mutator mapping, and synchronous surface detachment barrier for the Android
+/// Embedder API backend.
 class AndroidCompositor {
  public:
   AndroidCompositor(
@@ -60,6 +133,28 @@ class AndroidCompositor {
                size_t layers_count);
 
   //----------------------------------------------------------------------------
+  /// Platform View Mutator Mapping & DPR Normalization
+  //----------------------------------------------------------------------------
+
+  /// Sets the device pixel ratio for coordinate and root transform normalization.
+  void SetDevicePixelRatio(double dpr);
+
+  /// Returns the current device pixel ratio.
+  double GetDevicePixelRatio() const;
+
+  /// Populates `stack_out` with direct JNI-compatible mutators translated from
+  /// `platform_view->mutations`, with optional root DPR transform normalization.
+  bool PopulateMutatorsStack(
+      const FlutterPlatformView* platform_view,
+      AndroidPlatformViewMutatorsStack* stack_out,
+      double dpr = 1.0) const;
+
+  /// Normalizes a 3x3 root transformation matrix with device pixel ratio `dpr`.
+  static void NormalizeRootTransform(const FlutterTransformation& in_transform,
+                                     double dpr,
+                                     float out_matrix[9]);
+
+  //----------------------------------------------------------------------------
   /// Surface Lifecycle & Synchronous Detach Barrier
   //----------------------------------------------------------------------------
 
@@ -84,6 +179,10 @@ class AndroidCompositor {
 
   /// Sets an optional platform view renderer callback (for testing/interception).
   void SetPlatformViewRendererCallback(PlatformViewRendererCallback callback);
+
+  /// Sets an optional platform view mutators renderer callback.
+  void SetPlatformViewMutatorsRendererCallback(
+      PlatformViewMutatorsRendererCallback callback);
 
   /// Returns the number of successfully presented frames.
   size_t GetPresentCount() const;
@@ -120,7 +219,9 @@ class AndroidCompositor {
 
   mutable std::mutex callback_mutex_;
   PlatformViewRendererCallback platform_view_renderer_;
+  PlatformViewMutatorsRendererCallback platform_view_mutators_renderer_;
   std::atomic<size_t> present_count_{0};
+  std::atomic<double> device_pixel_ratio_{1.0};
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidCompositor);
 };
