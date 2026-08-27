@@ -105,16 +105,59 @@ TEST(SwitchesTest, EnableEmbedderAPI) {
 
 TEST(SwitchesTest, EnableAndroidEmbedderAPI) {
   {
-    // enable
+    // default (true in Phase 5.1)
+    fml::CommandLine command_line =
+        fml::CommandLineFromInitializerList({"command"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, true);
+  }
+  {
+    // explicit enable
     fml::CommandLine command_line = fml::CommandLineFromInitializerList(
         {"command", "--enable-android-embedder-api"});
     Settings settings = SettingsFromCommandLine(command_line);
     EXPECT_EQ(settings.enable_android_embedder_api, true);
   }
   {
-    // default
-    fml::CommandLine command_line =
-        fml::CommandLineFromInitializerList({"command"});
+    // explicit enable with value true
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api=true"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, true);
+  }
+  {
+    // explicit disable with value false
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api=false"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, false);
+  }
+  {
+    // explicit disable with value 0
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api=0"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, false);
+  }
+  {
+    // explicit enable with value 1
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api=1"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, true);
+  }
+  {
+    // explicit disable with no-enable flag
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--no-enable-android-embedder-api"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, false);
+  }
+  {
+    // negative flag takes precedence over enable flag
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api",
+         "--no-enable-android-embedder-api"});
     Settings settings = SettingsFromCommandLine(command_line);
     EXPECT_EQ(settings.enable_android_embedder_api, false);
   }

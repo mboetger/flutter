@@ -250,6 +250,15 @@ public final class FlutterEngineFlags {
       new Flag("--enable-android-embedder-api", "EnableAndroidEmbedderAPI", true);
 
   /**
+   * Disables the Android Embedder API runtime backend and falls back to legacy shell.
+   *
+   * <p>Allowed in release for canary rollback. Settable via the command line (via
+   * --no-enable-android-embedder-api) and the manifest.
+   */
+  public static final Flag NO_ENABLE_ANDROID_EMBEDDER_API =
+      new Flag("--no-enable-android-embedder-api", "NoEnableAndroidEmbedderAPI", true);
+
+  /**
    * Fake flag used for integration testing of the Android embedding processing engine flags.
    *
    * <p>Settable via the command line and the manifest.
@@ -478,7 +487,8 @@ public final class FlutterEngineFlags {
               IMPELLER_OPENGL_GPU_TRACING,
               IMPELLER_VULKAN_GPU_TRACING,
               ENABLE_HCPP,
-              ENABLE_ANDROID_EMBEDDER_API));
+              ENABLE_ANDROID_EMBEDDER_API,
+              NO_ENABLE_ANDROID_EMBEDDER_API));
 
   // Flags that have been turned off.
   private static final List<Flag> DISABLED_FLAGS =

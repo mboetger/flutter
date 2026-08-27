@@ -273,7 +273,12 @@ DEF_SWITCH(EnableEmbedderAPI,
 DEF_SWITCH(
     EnableAndroidEmbedderAPI,
     "enable-android-embedder-api",
-    "Enable the new Android Embedder API runtime backend. Defaults to false.")
+    "Enable the new Android Embedder API runtime backend. Defaults to true.")
+DEF_SWITCH(
+    NoEnableAndroidEmbedderAPI,
+    "no-enable-android-embedder-api",
+    "Disable the Android Embedder API runtime backend and fallback to legacy "
+    "shell.")
 DEF_SWITCH(EnablePlatformIsolates,
            "enable-platform-isolates",
            "Enable support for isolates that run on the platform thread.")

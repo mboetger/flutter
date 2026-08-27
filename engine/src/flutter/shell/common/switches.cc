@@ -465,8 +465,21 @@ Settings SettingsFromCommandLine(const fml::CommandLine& command_line,
 
   settings.enable_embedder_api =
       command_line.HasOption(FlagForSwitch(Switch::EnableEmbedderAPI));
-  settings.enable_android_embedder_api =
-      command_line.HasOption(FlagForSwitch(Switch::EnableAndroidEmbedderAPI));
+  settings.enable_android_embedder_api = true;
+  if (command_line.HasOption(
+          FlagForSwitch(Switch::NoEnableAndroidEmbedderAPI))) {
+    settings.enable_android_embedder_api = false;
+  } else if (command_line.HasOption(
+                 FlagForSwitch(Switch::EnableAndroidEmbedderAPI))) {
+    std::string value;
+    command_line.GetOptionValue(FlagForSwitch(Switch::EnableAndroidEmbedderAPI),
+                                &value);
+    if (value == "false" || value == "0") {
+      settings.enable_android_embedder_api = false;
+    } else {
+      settings.enable_android_embedder_api = true;
+    }
+  }
 
   settings.prefetched_default_font_manager = command_line.HasOption(
       FlagForSwitch(Switch::PrefetchedDefaultFontManager));

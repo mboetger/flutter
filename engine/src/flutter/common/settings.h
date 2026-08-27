@@ -361,8 +361,8 @@ struct Settings {
   /// This is currently only used by iOS.
   bool enable_embedder_api = false;
 
-  /// Enable the Android Embedder API runtime backend.
-  bool enable_android_embedder_api = false;
+  /// Enable the Android Embedder API runtime backend. Defaults to true.
+  bool enable_android_embedder_api = true;
 
   /// Enable support for isolates that run on the platform thread.
   ///

@@ -64,13 +64,13 @@ TEST(AndroidSurfaceManagerTest, FeatureFlagGating) {
   AndroidSurfaceManager manager(AndroidRenderingAPI::kImpellerVulkan);
 
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
-  EXPECT_FALSE(manager.IsEmbedderAPIEnabled());
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
   EXPECT_TRUE(manager.IsEmbedderAPIEnabled());
 
   FlutterMain::SetEmbedderAPIEnabledForTesting(false);
   EXPECT_FALSE(manager.IsEmbedderAPIEnabled());
+
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  EXPECT_TRUE(manager.IsEmbedderAPIEnabled());
 
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
 }

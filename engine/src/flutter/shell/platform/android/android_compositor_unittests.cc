@@ -40,13 +40,13 @@ TEST(AndroidCompositorTest, FeatureFlagGating) {
   AndroidCompositor compositor(surface_manager);
 
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
-  EXPECT_FALSE(compositor.IsEmbedderAPIEnabled());
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
   EXPECT_TRUE(compositor.IsEmbedderAPIEnabled());
 
   FlutterMain::SetEmbedderAPIEnabledForTesting(false);
   EXPECT_FALSE(compositor.IsEmbedderAPIEnabled());
+
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  EXPECT_TRUE(compositor.IsEmbedderAPIEnabled());
 
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
 }
@@ -324,13 +324,13 @@ TEST(AndroidCompositorTest, PlatformViewLayerPresentation) {
 
   int rendered_view_id = -1;
   size_t rendered_layer_index = 999;
-  compositor.SetPlatformViewRendererCallback(
-      [&](const FlutterPlatformView* pv, const FlutterLayer& layer,
-          size_t index) -> bool {
-        rendered_view_id = pv->identifier;
-        rendered_layer_index = index;
-        return true;
-      });
+  compositor.SetPlatformViewRendererCallback([&](const FlutterPlatformView* pv,
+                                                 const FlutterLayer& layer,
+                                                 size_t index) -> bool {
+    rendered_view_id = pv->identifier;
+    rendered_layer_index = index;
+    return true;
+  });
 
   EXPECT_TRUE(callbacks.present_view_callback(&present_info));
   EXPECT_EQ(rendered_view_id, 42);
@@ -407,13 +407,13 @@ TEST(AndroidCompositorTest, InterleavedLayerPresentation) {
 
   std::vector<int> rendered_views;
   std::vector<size_t> rendered_indices;
-  compositor.SetPlatformViewRendererCallback(
-      [&](const FlutterPlatformView* pv, const FlutterLayer& layer,
-          size_t index) -> bool {
-        rendered_views.push_back(pv->identifier);
-        rendered_indices.push_back(index);
-        return true;
-      });
+  compositor.SetPlatformViewRendererCallback([&](const FlutterPlatformView* pv,
+                                                 const FlutterLayer& layer,
+                                                 size_t index) -> bool {
+    rendered_views.push_back(pv->identifier);
+    rendered_indices.push_back(index);
+    return true;
+  });
 
   EXPECT_TRUE(callbacks.present_view_callback(&present_info));
   ASSERT_EQ(rendered_views.size(), 1U);
@@ -589,8 +589,7 @@ TEST(AndroidCompositorTest, InvalidLayerGeometryAndResizeBounds) {
   inf_layer.struct_size = sizeof(FlutterLayer);
   inf_layer.type = kFlutterLayerContentTypeBackingStore;
   inf_layer.backing_store = &store;
-  inf_layer.offset =
-      FlutterPoint{std::numeric_limits<double>::infinity(), 0};
+  inf_layer.offset = FlutterPoint{std::numeric_limits<double>::infinity(), 0};
   inf_layer.size = FlutterSize{200, 200};
 
   const FlutterLayer* inf_layer_array[] = {&inf_layer};
@@ -673,13 +672,13 @@ TEST(AndroidCompositorTest, InvalidArgumentsAndStructSizes) {
 
   // Backing store creation with invalid config.
   FlutterBackingStore store = {};
-  EXPECT_FALSE(
-      callbacks.create_backing_store_callback(nullptr, &store, callbacks.user_data));
+  EXPECT_FALSE(callbacks.create_backing_store_callback(nullptr, &store,
+                                                       callbacks.user_data));
 
   FlutterBackingStoreConfig bad_config = {};
   bad_config.struct_size = 0;
   EXPECT_FALSE(callbacks.create_backing_store_callback(&bad_config, &store,
-                                                      callbacks.user_data));
+                                                       callbacks.user_data));
 
   // Backing store collection with null.
   EXPECT_FALSE(
@@ -688,7 +687,7 @@ TEST(AndroidCompositorTest, InvalidArgumentsAndStructSizes) {
   FlutterBackingStore bad_store = {};
   bad_store.struct_size = 0;
   EXPECT_FALSE(callbacks.collect_backing_store_callback(&bad_store,
-                                                       callbacks.user_data));
+                                                        callbacks.user_data));
 }
 
 TEST(AndroidCompositorTest, MultithreadedPresentationAndLifecycle) {
@@ -715,8 +714,8 @@ TEST(AndroidCompositorTest, MultithreadedPresentationAndLifecycle) {
         config.view_id = 0;
 
         FlutterBackingStore store = {};
-        EXPECT_TRUE(callbacks.create_backing_store_callback(&config, &store,
-                                                            callbacks.user_data));
+        EXPECT_TRUE(callbacks.create_backing_store_callback(
+            &config, &store, callbacks.user_data));
 
         FlutterLayer layer = {};
         layer.struct_size = sizeof(FlutterLayer);
@@ -735,8 +734,8 @@ TEST(AndroidCompositorTest, MultithreadedPresentationAndLifecycle) {
         present_info.user_data = callbacks.user_data;
 
         EXPECT_TRUE(callbacks.present_view_callback(&present_info));
-        EXPECT_TRUE(
-            callbacks.collect_backing_store_callback(&store, callbacks.user_data));
+        EXPECT_TRUE(callbacks.collect_backing_store_callback(
+            &store, callbacks.user_data));
       }
     });
   }
@@ -838,7 +837,8 @@ TEST(AndroidCompositorMutationTest, MutatorMappingClipRRect) {
   EXPECT_FLOAT_EQ(stack.GetMutators()[0].rect.right, 200.0f);
   EXPECT_FLOAT_EQ(stack.GetMutators()[0].rect.bottom, 100.0f);
 
-  const float expected_radii[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+  const float expected_radii[8] = {1.0f, 2.0f, 3.0f, 4.0f,
+                                   5.0f, 6.0f, 7.0f, 8.0f};
   for (int i = 0; i < 8; ++i) {
     EXPECT_FLOAT_EQ(stack.GetMutators()[0].radii[i], expected_radii[i]);
   }
@@ -851,7 +851,8 @@ TEST(AndroidCompositorMutationTest, MutatorMappingClipRSE) {
 
   FlutterPlatformViewMutation mutation = {};
   mutation.type = kFlutterPlatformViewMutationTypeClipRoundedSuperellipse;
-  mutation.clip_rounded_superellipse.rect = FlutterRect{5.0, 10.0, 250.0, 150.0};
+  mutation.clip_rounded_superellipse.rect =
+      FlutterRect{5.0, 10.0, 250.0, 150.0};
   mutation.clip_rounded_superellipse.upper_left_corner_radius =
       FlutterSize{10.0, 12.0};
   mutation.clip_rounded_superellipse.upper_right_corner_radius =
@@ -884,7 +885,8 @@ TEST(AndroidCompositorMutationTest, MutatorMappingClipRSE) {
   }
 }
 
-TEST(AndroidCompositorMutationTest, MutatorMappingTransformationAndDPRNormalization) {
+TEST(AndroidCompositorMutationTest,
+     MutatorMappingTransformationAndDPRNormalization) {
   auto surface_manager =
       std::make_shared<AndroidSurfaceManager>(AndroidRenderingAPI::kSoftware);
   AndroidCompositor compositor(surface_manager);
@@ -917,12 +919,14 @@ TEST(AndroidCompositorMutationTest, MutatorMappingTransformationAndDPRNormalizat
   EXPECT_TRUE(compositor.PopulateMutatorsStack(&pv, &stack));
   ASSERT_EQ(stack.Size(), 1U);
   EXPECT_EQ(stack.GetMutators()[0].type, AndroidMutatorType::kTransform);
-  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[0], 4.0f);   // scaleX
-  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[1], 1.0f);   // skewX
-  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[2], 100.0f); // transX
-  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[3], 2.0f);   // skewY
-  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[4], 4.0f);   // scaleY
-  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[5], 200.0f); // transY
+  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[0], 4.0f);  // scaleX
+  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[1], 1.0f);  // skewX
+  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[2],
+                  100.0f);                                            // transX
+  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[3], 2.0f);  // skewY
+  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[4], 4.0f);  // scaleY
+  EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[5],
+                  200.0f);                                             // transY
   EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[6], 0.01f);  // pers0
   EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[7], 0.02f);  // pers1
   EXPECT_FLOAT_EQ(stack.GetMutators()[0].transform_matrix[8], 1.0f);   // pers2
@@ -930,15 +934,15 @@ TEST(AndroidCompositorMutationTest, MutatorMappingTransformationAndDPRNormalizat
   // Test explicit NormalizeRootTransform helper across DPR scales.
   float normalized_dpr2[9] = {};
   AndroidCompositor::NormalizeRootTransform(transform, 2.0, normalized_dpr2);
-  EXPECT_FLOAT_EQ(normalized_dpr2[0], 2.0f);   // 4.0 / 2.0
-  EXPECT_FLOAT_EQ(normalized_dpr2[1], 0.5f);   // 1.0 / 2.0
-  EXPECT_FLOAT_EQ(normalized_dpr2[2], 50.0f);  // 100.0 / 2.0
-  EXPECT_FLOAT_EQ(normalized_dpr2[3], 1.0f);   // 2.0 / 2.0
-  EXPECT_FLOAT_EQ(normalized_dpr2[4], 2.0f);   // 4.0 / 2.0
-  EXPECT_FLOAT_EQ(normalized_dpr2[5], 100.0f); // 200.0 / 2.0
-  EXPECT_FLOAT_EQ(normalized_dpr2[6], 0.01f);  // pers0 unscaled
-  EXPECT_FLOAT_EQ(normalized_dpr2[7], 0.02f);  // pers1 unscaled
-  EXPECT_FLOAT_EQ(normalized_dpr2[8], 1.0f);   // pers2 unscaled
+  EXPECT_FLOAT_EQ(normalized_dpr2[0], 2.0f);    // 4.0 / 2.0
+  EXPECT_FLOAT_EQ(normalized_dpr2[1], 0.5f);    // 1.0 / 2.0
+  EXPECT_FLOAT_EQ(normalized_dpr2[2], 50.0f);   // 100.0 / 2.0
+  EXPECT_FLOAT_EQ(normalized_dpr2[3], 1.0f);    // 2.0 / 2.0
+  EXPECT_FLOAT_EQ(normalized_dpr2[4], 2.0f);    // 4.0 / 2.0
+  EXPECT_FLOAT_EQ(normalized_dpr2[5], 100.0f);  // 200.0 / 2.0
+  EXPECT_FLOAT_EQ(normalized_dpr2[6], 0.01f);   // pers0 unscaled
+  EXPECT_FLOAT_EQ(normalized_dpr2[7], 0.02f);   // pers1 unscaled
+  EXPECT_FLOAT_EQ(normalized_dpr2[8], 1.0f);    // pers2 unscaled
 
   float normalized_dpr4[9] = {};
   AndroidCompositor::NormalizeRootTransform(transform, 4.0, normalized_dpr4);
@@ -1019,10 +1023,13 @@ TEST(AndroidCompositorMutationTest, MutatorMappingClipPath) {
   EXPECT_EQ(stack.GetMutators()[0].path.segments[0].verb, kFlutterPathVerbMove);
   EXPECT_EQ(stack.GetMutators()[0].path.segments[1].verb, kFlutterPathVerbLine);
   EXPECT_EQ(stack.GetMutators()[0].path.segments[2].verb, kFlutterPathVerbQuad);
-  EXPECT_EQ(stack.GetMutators()[0].path.segments[3].verb, kFlutterPathVerbConic);
+  EXPECT_EQ(stack.GetMutators()[0].path.segments[3].verb,
+            kFlutterPathVerbConic);
   EXPECT_DOUBLE_EQ(stack.GetMutators()[0].path.segments[3].conic_weight, 0.707);
-  EXPECT_EQ(stack.GetMutators()[0].path.segments[4].verb, kFlutterPathVerbCubic);
-  EXPECT_EQ(stack.GetMutators()[0].path.segments[5].verb, kFlutterPathVerbClose);
+  EXPECT_EQ(stack.GetMutators()[0].path.segments[4].verb,
+            kFlutterPathVerbCubic);
+  EXPECT_EQ(stack.GetMutators()[0].path.segments[5].verb,
+            kFlutterPathVerbClose);
 }
 
 TEST(AndroidCompositorMutationTest, MixedMutatorsStackSequence) {
@@ -1033,7 +1040,9 @@ TEST(AndroidCompositorMutationTest, MixedMutatorsStackSequence) {
   FlutterPlatformViewMutation mut_transform = {};
   mut_transform.type = kFlutterPlatformViewMutationTypeTransformation;
   mut_transform.transformation = FlutterTransformation{
-      .scaleX = 1.0, .scaleY = 1.0, .pers2 = 1.0,
+      .scaleX = 1.0,
+      .scaleY = 1.0,
+      .pers2 = 1.0,
   };
 
   FlutterPlatformViewMutation mut_clip_rect = {};
@@ -1053,7 +1062,8 @@ TEST(AndroidCompositorMutationTest, MixedMutatorsStackSequence) {
   mut_clip_rse.clip_rounded_superellipse.rect = FlutterRect{15, 15, 75, 75};
 
   const FlutterPlatformViewMutation* mutations[] = {
-      &mut_transform, &mut_clip_rect, &mut_opacity, &mut_clip_rrect, &mut_clip_rse};
+      &mut_transform, &mut_clip_rect, &mut_opacity, &mut_clip_rrect,
+      &mut_clip_rse};
 
   FlutterPlatformView pv = {};
   pv.struct_size = sizeof(FlutterPlatformView);
@@ -1108,7 +1118,8 @@ TEST(AndroidCompositorMutationTest, MutatorMappingInvalidInputs) {
   // NaN clip rect bounds.
   FlutterPlatformViewMutation bad_rect = {};
   bad_rect.type = kFlutterPlatformViewMutationTypeClipRect;
-  bad_rect.clip_rect = FlutterRect{0, std::numeric_limits<double>::infinity(), 10, 10};
+  bad_rect.clip_rect =
+      FlutterRect{0, std::numeric_limits<double>::infinity(), 10, 10};
   const FlutterPlatformViewMutation* bad_rect_array[] = {&bad_rect};
   pv.mutations = bad_rect_array;
   EXPECT_FALSE(compositor.PopulateMutatorsStack(&pv, &stack));
