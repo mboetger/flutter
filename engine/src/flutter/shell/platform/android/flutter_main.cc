@@ -26,6 +26,7 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/flutter_main.h"
+#include "flutter/shell/platform/common/engine_switches.h"
 #include "impeller/base/validation.h"
 #include "impeller/toolkit/android/proc_table.h"
 #include "txt/platform.h"
@@ -66,10 +67,28 @@ bool IsVivante() {
 }  // anonymous namespace
 
 FlutterMain::FlutterMain(const flutter::Settings& settings,
-                         flutter::AndroidRenderingAPI android_rendering_api)
-    : settings_(settings), android_rendering_api_(android_rendering_api) {}
+                         flutter::AndroidRenderingAPI android_rendering_api,
+                         std::vector<std::string> command_line_args,
+                         std::string app_storage_path,
+                         std::string engine_caches_path,
+                         std::string kernel_path,
+                         int64_t init_time_millis,
+                         int api_level)
+    : settings_(settings),
+      android_rendering_api_(android_rendering_api),
+      command_line_args_(std::move(command_line_args)),
+      app_storage_path_(std::move(app_storage_path)),
+      engine_caches_path_(std::move(engine_caches_path)),
+      kernel_path_(std::move(kernel_path)),
+      init_time_millis_(init_time_millis),
+      api_level_(api_level) {}
 
-FlutterMain::~FlutterMain() = default;
+FlutterMain::~FlutterMain() {
+  if (vm_service_uri_callback_ != 0) {
+    DartServiceIsolate::RemoveServerStatusCallback(vm_service_uri_callback_);
+    vm_service_uri_callback_ = 0;
+  }
+}
 
 static std::unique_ptr<FlutterMain> g_flutter_main;
 
@@ -81,6 +100,34 @@ FlutterMain& FlutterMain::Get() {
 
 const flutter::Settings& FlutterMain::GetSettings() const {
   return settings_;
+}
+
+flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() const {
+  return android_rendering_api_;
+}
+
+const std::vector<std::string>& FlutterMain::GetCommandLineArgs() const {
+  return command_line_args_;
+}
+
+const std::string& FlutterMain::GetAppStoragePath() const {
+  return app_storage_path_;
+}
+
+const std::string& FlutterMain::GetEngineCachesPath() const {
+  return engine_caches_path_;
+}
+
+const std::string& FlutterMain::GetKernelPath() const {
+  return kernel_path_;
+}
+
+int64_t FlutterMain::GetInitTimeMillis() const {
+  return init_time_millis_;
+}
+
+int FlutterMain::GetApiLevel() const {
+  return api_level_;
 }
 
 // -1 = unset (use Settings), 0 = false, 1 = true.
@@ -109,8 +156,23 @@ void FlutterMain::ResetEmbedderAPIEnabledForTesting() {
   g_embedder_api_enabled_override.store(-1);
 }
 
-flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() {
-  return android_rendering_api_;
+void FlutterMain::InitForTesting(const flutter::Settings& settings,
+                                 flutter::AndroidRenderingAPI api,
+                                 std::vector<std::string> args,
+                                 std::string app_storage_path,
+                                 std::string engine_caches_path,
+                                 std::string kernel_path,
+                                 int64_t init_time_millis,
+                                 int api_level) {
+  g_flutter_main.reset(new FlutterMain(
+      settings, api, std::move(args), std::move(app_storage_path),
+      std::move(engine_caches_path), std::move(kernel_path), init_time_millis,
+      api_level));
+}
+
+void FlutterMain::ResetForTesting() {
+  g_flutter_main.reset();
+  ResetEmbedderAPIEnabledForTesting();
 }
 
 void FlutterMain::Init(JNIEnv* env,
@@ -126,6 +188,9 @@ void FlutterMain::Init(JNIEnv* env,
   args.push_back("flutter");
   for (auto& arg : fml::jni::StringArrayToVector(env, jargs)) {
     args.push_back(std::move(arg));
+  }
+  for (const auto& env_switch : flutter::GetSwitchesFromEnvironment()) {
+    args.push_back(env_switch);
   }
   auto command_line = fml::CommandLineFromIterators(args.begin(), args.end());
 
@@ -172,25 +237,27 @@ void FlutterMain::Init(JNIEnv* env,
   settings.enable_timeline_event_handler = settings.trace_systrace;
 #endif  // FLUTTER_RELEASE
 
+  std::string app_storage_path =
+      fml::jni::JavaStringToString(env, appStoragePath);
+  std::string engine_caches_path =
+      fml::jni::JavaStringToString(env, engineCachesPath);
+  std::string kernel_path =
+      kernelPath ? fml::jni::JavaStringToString(env, kernelPath) : "";
+
   // Restore the callback cache.
   // TODO(chinmaygarde): Route all cache file access through FML and remove this
   // setter.
-  flutter::DartCallbackCache::SetCachePath(
-      fml::jni::JavaStringToString(env, appStoragePath));
+  flutter::DartCallbackCache::SetCachePath(app_storage_path);
 
-  fml::paths::InitializeAndroidCachesPath(
-      fml::jni::JavaStringToString(env, engineCachesPath));
+  fml::paths::InitializeAndroidCachesPath(engine_caches_path);
 
   flutter::DartCallbackCache::LoadCacheFromDisk();
 
-  if (!flutter::DartVM::IsRunningPrecompiledCode() && kernelPath) {
+  if (!flutter::DartVM::IsRunningPrecompiledCode() && !kernel_path.empty()) {
     // Check to see if the appropriate kernel files are present and configure
     // settings accordingly.
-    auto application_kernel_path =
-        fml::jni::JavaStringToString(env, kernelPath);
-
-    if (fml::IsFile(application_kernel_path)) {
-      settings.application_kernel_asset = application_kernel_path;
+    if (fml::IsFile(kernel_path)) {
+      settings.application_kernel_asset = kernel_path;
     }
   }
 
@@ -229,7 +296,9 @@ void FlutterMain::Init(JNIEnv* env,
 
   // Not thread safe. Will be removed when FlutterMain is refactored to no
   // longer be a singleton.
-  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api));
+  g_flutter_main.reset(new FlutterMain(
+      settings, android_rendering_api, std::move(args), app_storage_path,
+      engine_caches_path, kernel_path, initTimeMillis, api_level));
   g_flutter_main->SetupDartVMServiceUriCallback(env);
 }
 

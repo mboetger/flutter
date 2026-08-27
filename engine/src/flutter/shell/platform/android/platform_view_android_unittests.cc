@@ -311,5 +311,64 @@ TEST(FlutterMainTest, EmbedderAPIEnabledOverride) {
   EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
 }
 
+TEST(FlutterMainTest, InitForTestingAndGetters) {
+  FlutterMain::ResetForTesting();
+
+  Settings settings;
+  settings.enable_software_rendering = false;
+  settings.enable_android_embedder_api = true;
+
+  std::vector<std::string> args = {"flutter", "--enable-android-embedder-api",
+                                   "--enable-impeller=true"};
+  std::string app_storage = "/data/user/0/io.flutter.test/app_flutter";
+  std::string engine_caches = "/data/user/0/io.flutter.test/code_cache";
+  std::string kernel = "/data/app/io.flutter.test/kernel_blob.bin";
+  int64_t init_time = 1234567890;
+  int api_level = 34;
+
+  FlutterMain::InitForTesting(settings, AndroidRenderingAPI::kImpellerVulkan,
+                              args, app_storage, engine_caches, kernel,
+                              init_time, api_level);
+
+  EXPECT_EQ(FlutterMain::Get().GetAndroidRenderingAPI(),
+            AndroidRenderingAPI::kImpellerVulkan);
+  EXPECT_EQ(FlutterMain::Get().GetCommandLineArgs().size(), 3U);
+  EXPECT_EQ(FlutterMain::Get().GetCommandLineArgs()[0], "flutter");
+  EXPECT_EQ(FlutterMain::Get().GetCommandLineArgs()[1],
+            "--enable-android-embedder-api");
+  EXPECT_EQ(FlutterMain::Get().GetCommandLineArgs()[2],
+            "--enable-impeller=true");
+  EXPECT_EQ(FlutterMain::Get().GetAppStoragePath(), app_storage);
+  EXPECT_EQ(FlutterMain::Get().GetEngineCachesPath(), engine_caches);
+  EXPECT_EQ(FlutterMain::Get().GetKernelPath(), kernel);
+  EXPECT_EQ(FlutterMain::Get().GetInitTimeMillis(), init_time);
+  EXPECT_EQ(FlutterMain::Get().GetApiLevel(), api_level);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+}
+
+TEST(FlutterMainTest, InitForTestingDefaults) {
+  FlutterMain::ResetForTesting();
+
+  Settings settings;
+  settings.enable_software_rendering = true;
+
+  FlutterMain::InitForTesting(settings);
+
+  EXPECT_EQ(FlutterMain::Get().GetAndroidRenderingAPI(),
+            AndroidRenderingAPI::kSoftware);
+  EXPECT_TRUE(FlutterMain::Get().GetCommandLineArgs().empty());
+  EXPECT_TRUE(FlutterMain::Get().GetAppStoragePath().empty());
+  EXPECT_TRUE(FlutterMain::Get().GetEngineCachesPath().empty());
+  EXPECT_TRUE(FlutterMain::Get().GetKernelPath().empty());
+  EXPECT_EQ(FlutterMain::Get().GetInitTimeMillis(), 0);
+  EXPECT_EQ(FlutterMain::Get().GetApiLevel(), 0);
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetForTesting();
+}
+
 }  // namespace testing
 }  // namespace flutter
