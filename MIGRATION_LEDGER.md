@@ -1,12 +1,12 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 1.10 (Platform View Extended Mutation Types)
-- **Active Branch**: `android-migration-2/phase-1.10-platform-view-mutations`
+- **Active Phase**: Phase 2.1 (Break PlatformViewAndroid Inheritance & Establish GN Quarantine Target)
+- **Active Branch**: `android-migration-2/phase-2.1-quarantine-gn`
 - **Base Commit SHA**: `08d2a471fd10152bb7dbfbb9636cf8fa53e94b8b`
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]
-- **Latest Commit SHA**: `825ee3df6c7` (Phase 1.9)
-- **Adversarial Review Loop Status**: Phase 1.9 Approved by reidbaker-agent
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11]
+- **Latest Commit SHA**: `e50ab75127c` (Phase 1.11)
+- **Adversarial Review Loop Status**: Phase 1.11 Approved by reidbaker-agent
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -23,8 +23,8 @@
 - [x] Phase 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
 - [x] Phase 1.8: Embedder Screenshot / Raster Bitmap API (`FlutterEngineScreenshot`)
 - [x] Phase 1.9: Dart Callback Information Lookup API (`FlutterEngineGetCallbackInformation`)
-- [ ] Phase 1.10: Platform View Extended Mutation Types (`ClipPath`, `ClipRSE`)
-- [ ] Phase 1.11: Platform Image Decoder / Generator Registration C API
+- [x] Phase 1.10: Platform View Extended Mutation Types (`ClipPath`, `ClipRSE`)
+- [x] Phase 1.11: Platform Image Decoder / Generator Registration C API
 - [ ] Phase 2.1: Break PlatformViewAndroid Inheritance & Establish GN Quarantine Target
 - [ ] Phase 2.2: Adapt APKAssetProvider
 - [ ] Phase 2.3: Custom Task Runners & Thread Priorities
