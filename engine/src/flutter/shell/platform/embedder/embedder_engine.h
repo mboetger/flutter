@@ -31,7 +31,8 @@ class EmbedderEngine {
       const Shell::CreateCallback<PlatformView>& on_create_platform_view,
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
-          external_texture_resolver);
+          external_texture_resolver,
+      std::vector<FlutterImageDecoder> initial_image_decoders = {});
 
   EmbedderEngine(
       std::shared_ptr<EmbedderThreadHost> thread_host,
@@ -40,12 +41,15 @@ class EmbedderEngine {
       const Shell::CreateCallback<PlatformView>& on_create_platform_view,
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
-          external_texture_resolver);
+          external_texture_resolver,
+      std::vector<FlutterImageDecoder> initial_image_decoders = {});
 
   ~EmbedderEngine();
 
-  std::unique_ptr<EmbedderEngine> Spawn(RunConfiguration run_configuration,
-                                        const std::string& initial_route);
+  std::unique_ptr<EmbedderEngine> Spawn(
+      RunConfiguration run_configuration,
+      const std::string& initial_route,
+      std::vector<FlutterImageDecoder> image_decoders = {});
 
   bool LaunchShell();
 
@@ -115,6 +119,9 @@ class EmbedderEngine {
 
   Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
                                     bool base64_encode);
+
+  bool RegisterImageDecoder(const FlutterImageDecoder* decoder,
+                            int32_t priority);
 
   Shell& GetShell();
 

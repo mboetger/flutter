@@ -7,6 +7,7 @@
 #include "flutter/fml/make_copyable.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/shell/platform/embedder/embedder_asset_resolver.h"
+#include "flutter/shell/platform/embedder/embedder_image_generator.h"
 #include "flutter/shell/platform/embedder/vsync_waiter_embedder.h"
 
 namespace flutter {
@@ -15,12 +16,15 @@ struct ShellArgs {
   Settings settings;
   Shell::CreateCallback<PlatformView> on_create_platform_view;
   Shell::CreateCallback<Rasterizer> on_create_rasterizer;
+  std::vector<FlutterImageDecoder> image_decoders;
   ShellArgs(const Settings& p_settings,
             Shell::CreateCallback<PlatformView> p_on_create_platform_view,
-            Shell::CreateCallback<Rasterizer> p_on_create_rasterizer)
+            Shell::CreateCallback<Rasterizer> p_on_create_rasterizer,
+            std::vector<FlutterImageDecoder> p_image_decoders)
       : settings(p_settings),
         on_create_platform_view(std::move(p_on_create_platform_view)),
-        on_create_rasterizer(std::move(p_on_create_rasterizer)) {}
+        on_create_rasterizer(std::move(p_on_create_rasterizer)),
+        image_decoders(std::move(p_image_decoders)) {}
 };
 
 EmbedderEngine::EmbedderEngine(
@@ -30,13 +34,16 @@ EmbedderEngine::EmbedderEngine(
     RunConfiguration run_configuration,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
-    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver)
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    std::vector<FlutterImageDecoder> initial_image_decoders)
     : thread_host_(std::move(thread_host)),
       task_runners_(task_runners),
       run_configuration_(std::move(run_configuration)),
-      shell_args_(std::make_unique<ShellArgs>(settings,
-                                              on_create_platform_view,
-                                              on_create_rasterizer)),
+      shell_args_(
+          std::make_unique<ShellArgs>(settings,
+                                      on_create_platform_view,
+                                      on_create_rasterizer,
+                                      std::move(initial_image_decoders))),
       on_create_platform_view_(on_create_platform_view),
       on_create_rasterizer_(on_create_rasterizer),
       external_texture_resolver_(std::move(external_texture_resolver)) {}
@@ -47,19 +54,31 @@ EmbedderEngine::EmbedderEngine(
     std::unique_ptr<Shell> shell,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
-    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver)
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    std::vector<FlutterImageDecoder> initial_image_decoders)
     : thread_host_(std::move(thread_host)),
       task_runners_(task_runners),
       on_create_platform_view_(on_create_platform_view),
       on_create_rasterizer_(on_create_rasterizer),
       shell_(std::move(shell)),
-      external_texture_resolver_(std::move(external_texture_resolver)) {}
+      external_texture_resolver_(std::move(external_texture_resolver)) {
+  if (shell_) {
+    for (const auto& decoder : initial_image_decoders) {
+      shell_->RegisterImageDecoder(
+          [decoder](sk_sp<SkData> buffer) -> std::shared_ptr<ImageGenerator> {
+            return EmbedderImageGenerator::Make(decoder, std::move(buffer));
+          },
+          1);
+    }
+  }
+}
 
 EmbedderEngine::~EmbedderEngine() = default;
 
 std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
     RunConfiguration run_configuration,
-    const std::string& initial_route) {
+    const std::string& initial_route,
+    std::vector<FlutterImageDecoder> image_decoders) {
   if (!IsValid()) {
     return nullptr;
   }
@@ -71,6 +90,14 @@ std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
                     on_create_platform_view_, on_create_rasterizer_);
   if (!spawned_shell) {
     return nullptr;
+  }
+
+  for (const auto& decoder : image_decoders) {
+    spawned_shell->RegisterImageDecoder(
+        [decoder](sk_sp<SkData> buffer) -> std::shared_ptr<ImageGenerator> {
+          return EmbedderImageGenerator::Make(decoder, std::move(buffer));
+        },
+        1);
   }
 
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver;
@@ -99,6 +126,7 @@ bool EmbedderEngine::LaunchShell() {
     FML_DLOG(ERROR) << "Shell already initialized";
   }
 
+  auto image_decoders = std::move(shell_args_->image_decoders);
   shell_ = Shell::Create(
       flutter::PlatformData(), task_runners_, shell_args_->settings,
       shell_args_->on_create_platform_view, shell_args_->on_create_rasterizer);
@@ -106,6 +134,16 @@ bool EmbedderEngine::LaunchShell() {
   // Reset the args no matter what. They will never be used to initialize a
   // shell again.
   shell_args_.reset();
+
+  if (shell_) {
+    for (const auto& decoder : image_decoders) {
+      shell_->RegisterImageDecoder(
+          [decoder](sk_sp<SkData> buffer) -> std::shared_ptr<ImageGenerator> {
+            return EmbedderImageGenerator::Make(decoder, std::move(buffer));
+          },
+          1);
+    }
+  }
 
   return IsValid();
 }
@@ -501,6 +539,42 @@ Rasterizer::Screenshot EmbedderEngine::Screenshot(
 Shell& EmbedderEngine::GetShell() {
   FML_DCHECK(shell_);
   return *shell_.get();
+}
+
+bool EmbedderEngine::RegisterImageDecoder(const FlutterImageDecoder* decoder,
+                                          int32_t priority) {
+  if (!IsValid() || !decoder) {
+    return false;
+  }
+
+  if (decoder->struct_size != sizeof(FlutterImageDecoder) ||
+      !decoder->create_generator ||
+      decoder->generator.struct_size != sizeof(FlutterImageGenerator) ||
+      !decoder->generator.get_image_info || !decoder->generator.get_pixels) {
+    return false;
+  }
+
+  FlutterImageDecoder decoder_copy = *decoder;
+
+  auto task = [shell = shell_.get(), decoder_copy, priority]() {
+    if (shell) {
+      shell->RegisterImageDecoder(
+          [decoder_copy](
+              sk_sp<SkData> buffer) -> std::shared_ptr<ImageGenerator> {
+            return EmbedderImageGenerator::Make(decoder_copy,
+                                                std::move(buffer));
+          },
+          priority);
+    }
+  };
+
+  if (task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread()) {
+    task();
+  } else {
+    task_runners_.GetPlatformTaskRunner()->PostTask(task);
+  }
+
+  return true;
 }
 
 }  // namespace flutter

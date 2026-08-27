@@ -2704,6 +2704,60 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   }
 
+  std::vector<FlutterImageDecoder> initial_image_decoders;
+  const size_t custom_image_decoders_count =
+      SAFE_ACCESS(args, image_decoders_count, 0);
+  const FlutterImageDecoder* const* custom_image_decoders =
+      SAFE_ACCESS(args, image_decoders, nullptr);
+  if (custom_image_decoders_count > 0 && custom_image_decoders == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Custom image decoders count was > 0 but the array was null.");
+  }
+  for (size_t i = 0; i < custom_image_decoders_count; ++i) {
+    if (custom_image_decoders[i] == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image decoder at index " + std::to_string(i) + " was null.")
+              .c_str());
+    }
+    if (custom_image_decoders[i]->struct_size != sizeof(FlutterImageDecoder)) {
+      return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                                ("Custom image decoder at index " +
+                                 std::to_string(i) + " struct size mismatch.")
+                                    .c_str());
+    }
+    if (custom_image_decoders[i]->create_generator == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image decoder at index " + std::to_string(i) +
+           " create_generator callback was null.")
+              .c_str());
+    }
+    if (custom_image_decoders[i]->generator.struct_size !=
+        sizeof(FlutterImageGenerator)) {
+      return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                                ("Custom image generator at index " +
+                                 std::to_string(i) + " struct size mismatch.")
+                                    .c_str());
+    }
+    if (custom_image_decoders[i]->generator.get_image_info == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image generator at index " + std::to_string(i) +
+           " get_image_info callback was null.")
+              .c_str());
+    }
+    if (custom_image_decoders[i]->generator.get_pixels == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image generator at index " + std::to_string(i) +
+           " get_pixels callback was null.")
+              .c_str());
+    }
+    initial_image_decoders.push_back(*custom_image_decoders[i]);
+  }
+
   auto isolate_configuration = flutter::IsolateConfiguration::InferFromSettings(
       settings, asset_manager, nullptr, flutter::IsolateLaunchType::kNewGroup);
 
@@ -2743,13 +2797,14 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   // Create the engine but don't launch the shell or run the root isolate.
   auto embedder_engine = std::make_unique<flutter::EmbedderEngine>(
-      std::move(thread_host),               //
-      std::move(task_runners),              //
-      std::move(settings),                  //
-      std::move(run_configuration),         //
-      on_create_platform_view,              //
-      on_create_rasterizer,                 //
-      std::move(external_texture_resolver)  //
+      std::move(thread_host),                //
+      std::move(task_runners),               //
+      std::move(settings),                   //
+      std::move(run_configuration),          //
+      on_create_platform_view,               //
+      on_create_rasterizer,                  //
+      std::move(external_texture_resolver),  //
+      std::move(initial_image_decoders)      //
   );
 
   // Release the ownership of the embedder engine to the caller.
@@ -4157,8 +4212,63 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
     initial_route = route_cstr;
   }
 
+  std::vector<FlutterImageDecoder> custom_image_decoders_vec;
+  const size_t custom_image_decoders_count =
+      SAFE_ACCESS(spawn_info, image_decoders_count, 0);
+  const FlutterImageDecoder* const* custom_image_decoders =
+      SAFE_ACCESS(spawn_info, image_decoders, nullptr);
+  if (custom_image_decoders_count > 0 && custom_image_decoders == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Custom image decoders count was > 0 but the array was null.");
+  }
+  for (size_t i = 0; i < custom_image_decoders_count; ++i) {
+    if (custom_image_decoders[i] == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image decoder at index " + std::to_string(i) + " was null.")
+              .c_str());
+    }
+    if (custom_image_decoders[i]->struct_size != sizeof(FlutterImageDecoder)) {
+      return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                                ("Custom image decoder at index " +
+                                 std::to_string(i) + " struct size mismatch.")
+                                    .c_str());
+    }
+    if (custom_image_decoders[i]->create_generator == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image decoder at index " + std::to_string(i) +
+           " create_generator callback was null.")
+              .c_str());
+    }
+    if (custom_image_decoders[i]->generator.struct_size !=
+        sizeof(FlutterImageGenerator)) {
+      return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                                ("Custom image generator at index " +
+                                 std::to_string(i) + " struct size mismatch.")
+                                    .c_str());
+    }
+    if (custom_image_decoders[i]->generator.get_image_info == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image generator at index " + std::to_string(i) +
+           " get_image_info callback was null.")
+              .c_str());
+    }
+    if (custom_image_decoders[i]->generator.get_pixels == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom image generator at index " + std::to_string(i) +
+           " get_pixels callback was null.")
+              .c_str());
+    }
+    custom_image_decoders_vec.push_back(*custom_image_decoders[i]);
+  }
+
   auto spawned_engine =
-      parent_engine->Spawn(std::move(run_configuration), initial_route);
+      parent_engine->Spawn(std::move(run_configuration), initial_route,
+                           std::move(custom_image_decoders_vec));
   if (!spawned_engine) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                               "Could not spawn engine.");
@@ -4446,6 +4556,46 @@ FlutterEngineResult FlutterEngineGetCallbackInformation(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineRegisterImageDecoder(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterImageDecoder* decoder,
+    int32_t priority) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (decoder == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Image decoder was null.");
+  }
+  if (decoder->struct_size != sizeof(FlutterImageDecoder)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Image decoder struct size mismatch.");
+  }
+  if (decoder->create_generator == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments, "Image decoder create_generator callback was null.");
+  }
+  if (decoder->generator.struct_size != sizeof(FlutterImageGenerator)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Image generator struct size mismatch.");
+  }
+  if (decoder->generator.get_image_info == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments, "Image generator get_image_info callback was null.");
+  }
+  if (decoder->generator.get_pixels == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Image generator get_pixels callback was null.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->RegisterImageDecoder(decoder, priority)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments, "Could not register image decoder with the engine.");
+  }
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4509,6 +4659,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
            FlutterEngineLoadDartDeferredLibraryError);
   SET_PROC(Screenshot, FlutterEngineScreenshot);
   SET_PROC(GetCallbackInformation, FlutterEngineGetCallbackInformation);
+  SET_PROC(RegisterImageDecoder, FlutterEngineRegisterImageDecoder);
 #undef SET_PROC
 
   return kSuccess;
