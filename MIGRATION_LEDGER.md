@@ -1,11 +1,11 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 2.2 (Adapt APKAssetProvider)
-- **Active Branch**: `android-embedder-v3/phase-2.2-adapt-apk-asset-provider`
-- **Base Commit SHA**: `48f5842ba2b` (Phase 2.1 commit)
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1]
-- **Adversarial Review Loop Status**: Complete (Phase 2.1 Approved with 0 findings)
+- **Active Phase**: Phase 2.3 (Standardize Thread Priority Setters on Custom Task Runners)
+- **Active Branch**: `android-embedder-v3/phase-2.3-custom-task-runners`
+- **Base Commit SHA**: `f7d7a1900e2` (Phase 2.2 commit)
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2]
+- **Adversarial Review Loop Status**: Complete (Phase 2.2 Approved with 0 findings)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -25,7 +25,7 @@
 - [x] Phase 1.10: Platform View Extended Mutation Types (`ClipPath`, `ClipRSE`)
 - [x] Phase 1.11: Platform Image Decoder / Generator Registration C API
 - [x] Phase 2.1: Break PlatformViewAndroid Inheritance & Establish GN Quarantine Target
-- [ ] Phase 2.2: Adapt APKAssetProvider
+- [x] Phase 2.2: Adapt APKAssetProvider
 - [ ] Phase 2.3: Custom Task Runners & Thread Priorities
 - [ ] Phase 2.4: Runtime Feature Flag Switch & Test Harness Overrides
 - [ ] Phase 2.5: Decouple `flutter_main.cc` using `//flutter/shell/platform/common`
