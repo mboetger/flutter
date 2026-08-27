@@ -558,6 +558,13 @@ bool DartIsolate::LoadLoadingUnit(
   fml::RefPtr<DartSnapshot> dart_snapshot =
       DartSnapshot::IsolateSnapshotFromMappings(
           std::move(snapshot_data), std::move(snapshot_instructions));
+  if (!dart_snapshot) {
+    LoadLoadingUnitError(
+        loading_unit_id,
+        "Could not create Dart snapshot from provided mappings.",
+        /*transient*/ false);
+    return false;
+  }
 
   Dart_Handle result = Dart_DeferredLoadComplete(
       loading_unit_id, dart_snapshot->GetDataMapping(),

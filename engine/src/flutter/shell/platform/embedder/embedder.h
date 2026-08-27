@@ -2597,6 +2597,17 @@ typedef struct {
   FlutterAssetResolverGetAssetCallback get_asset;
 } FlutterAssetResolver;
 
+/// Callback invoked when Dart requests a deferred library (loading unit) to be
+/// loaded. The callback will be invoked on the platform thread.
+///
+/// @param[in] loading_unit_id  The unique ID of the loading unit requested by
+///                             Dart.
+/// @param[in] user_data        The user data pointer passed to
+///                             `FlutterEngineRun` or `FlutterEngineInitialize`.
+typedef void (*FlutterRequestDartDeferredLibraryCallback)(
+    intptr_t loading_unit_id,
+    void* user_data);
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
@@ -2918,6 +2929,11 @@ typedef struct {
 
   /// Number of asset resolvers in `asset_resolvers`.
   size_t asset_resolvers_count;
+
+  /// Optional callback invoked when the engine requests a Dart deferred library
+  /// to be loaded.
+  FlutterRequestDartDeferredLibraryCallback
+      request_dart_deferred_library_callback;
 } FlutterProjectArgs;
 
 /// Information used to spawn a new engine from an existing running engine.
@@ -3783,6 +3799,53 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                                        FLUTTER_API_SYMBOL(FlutterEngine) *
                                            engine_out);
 
+//------------------------------------------------------------------------------
+/// @brief      Notifies the engine that a requested Dart deferred library
+/// loading
+///             unit has been loaded and provides the snapshot data and/or
+///             instructions mapping buffers.
+///
+/// @param[in]  engine                     The engine handle.
+/// @param[in]  loading_unit_id            The loading unit ID that was
+/// requested.
+/// @param[in]  snapshot_data              Pointer to the snapshot data bytes
+/// (or null).
+/// @param[in]  snapshot_data_size         Size in bytes of snapshot data.
+/// @param[in]  snapshot_instructions      Pointer to the snapshot instructions
+/// bytes (or null).
+/// @param[in]  snapshot_instructions_size Size in bytes of snapshot
+/// instructions.
+///
+/// @return     The result of providing the deferred library to the engine.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const uint8_t* snapshot_data,
+    size_t snapshot_data_size,
+    const uint8_t* snapshot_instructions,
+    size_t snapshot_instructions_size);
+
+//------------------------------------------------------------------------------
+/// @brief      Notifies the engine of a failure to load a requested Dart
+/// deferred
+///             library loading unit.
+///
+/// @param[in]  engine          The engine handle.
+/// @param[in]  loading_unit_id The loading unit ID that failed to load.
+/// @param[in]  error_message   A null-terminated error message describing the
+/// failure.
+/// @param[in]  transient       Whether the error is transient (can be retried)
+/// or permanent.
+///
+/// @return     The result of notifying the engine of the failure.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const char* error_message,
+    bool transient);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3925,6 +3988,18 @@ typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterEngineSpawnInfo* spawn_info,
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const uint8_t* snapshot_data,
+    size_t snapshot_data_size,
+    const uint8_t* snapshot_instructions,
+    size_t snapshot_instructions_size);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const char* error_message,
+    bool transient);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3977,6 +4052,8 @@ typedef struct {
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
   FlutterEngineUpdateAssetResolversFnPtr UpdateAssetResolvers;
   FlutterEngineSpawnFnPtr Spawn;
+  FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
+  FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

@@ -2458,6 +2458,15 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
         };
   }
 
+  flutter::PlatformViewEmbedder::RequestDartDeferredLibraryCallback
+      request_dart_deferred_library_callback = nullptr;
+  if (SAFE_ACCESS(args, request_dart_deferred_library_callback, nullptr) !=
+      nullptr) {
+    request_dart_deferred_library_callback =
+        [ptr = args->request_dart_deferred_library_callback, user_data](
+            intptr_t loading_unit_id) { ptr(loading_unit_id, user_data); };
+  }
+
   auto external_view_embedder_result = InferExternalViewEmbedderFromArgs(
       SAFE_ACCESS(args, compositor, nullptr), settings.enable_impeller);
   if (!external_view_embedder_result.ok()) {
@@ -2475,6 +2484,7 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
           on_pre_engine_restart_callback,             //
           channel_update_callback,                    //
           view_focus_change_request_callback,         //
+          request_dart_deferred_library_callback,     //
       };
 
   impeller::Flags impeller_flags;
@@ -4128,6 +4138,119 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const uint8_t* snapshot_data,
+    size_t snapshot_data_size,
+    const uint8_t* snapshot_instructions,
+    size_t snapshot_instructions_size) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (loading_unit_id <= 0) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid loading unit ID specified.");
+  }
+
+  if ((snapshot_data == nullptr || snapshot_data_size == 0) &&
+      (snapshot_instructions == nullptr || snapshot_instructions_size == 0)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "At least one valid snapshot buffer (data or instructions) must be "
+        "provided.");
+  }
+
+  if (snapshot_data != nullptr && snapshot_data_size == 0) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Snapshot data pointer was provided with zero size.");
+  }
+
+  if (snapshot_data == nullptr && snapshot_data_size > 0) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Snapshot data size was non-zero but pointer was null.");
+  }
+
+  if (snapshot_instructions != nullptr && snapshot_instructions_size == 0) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Snapshot instructions pointer was provided with zero size.");
+  }
+
+  if (snapshot_instructions == nullptr && snapshot_instructions_size > 0) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Snapshot instructions size was non-zero but pointer was null.");
+  }
+
+  std::unique_ptr<fml::Mapping> data_mapping;
+  if (snapshot_data != nullptr && snapshot_data_size > 0) {
+    data_mapping = std::make_unique<fml::MallocMapping>(
+        fml::MallocMapping::Copy(snapshot_data, snapshot_data_size));
+    if (!data_mapping || data_mapping->GetMapping() == nullptr) {
+      return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                                "Could not allocate copy of snapshot data.");
+    }
+  }
+
+  std::unique_ptr<fml::Mapping> instructions_mapping;
+  if (snapshot_instructions != nullptr && snapshot_instructions_size > 0) {
+    instructions_mapping =
+        std::make_unique<fml::MallocMapping>(fml::MallocMapping::Copy(
+            snapshot_instructions, snapshot_instructions_size));
+    if (!instructions_mapping ||
+        instructions_mapping->GetMapping() == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInternalInconsistency,
+          "Could not allocate copy of snapshot instructions.");
+    }
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->LoadDartDeferredLibrary(
+          loading_unit_id, std::move(data_mapping),
+          std::move(instructions_mapping))) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Could not load Dart deferred library into the engine.");
+  }
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    intptr_t loading_unit_id,
+    const char* error_message,
+    bool transient) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (loading_unit_id <= 0) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid loading unit ID specified.");
+  }
+
+  if (error_message == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Error message cannot be null.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->LoadDartDeferredLibraryError(
+          loading_unit_id, std::string(error_message), transient)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Could not report Dart deferred library error to the engine.");
+  }
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4186,6 +4309,9 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
   SET_PROC(UpdateAssetResolvers, FlutterEngineUpdateAssetResolvers);
   SET_PROC(Spawn, FlutterEngineSpawn);
+  SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
+  SET_PROC(LoadDartDeferredLibraryError,
+           FlutterEngineLoadDartDeferredLibraryError);
 #undef SET_PROC
 
   return kSuccess;

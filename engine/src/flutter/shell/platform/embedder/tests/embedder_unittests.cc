@@ -5271,6 +5271,147 @@ TEST_F(EmbedderTest, SpawnEngineInvalidArguments) {
       kInvalidArguments);
 }
 
+TEST_F(EmbedderTest, DartDeferredLoadingInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  uint8_t dummy_data[] = {1, 2, 3, 4};
+  uint8_t dummy_instructions[] = {5, 6, 7, 8};
+
+  // Null engine
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
+                nullptr, 2, dummy_data, sizeof(dummy_data), nullptr, 0),
+            kInvalidArguments);
+
+  // loading_unit_id <= 0
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
+                engine.get(), 0, dummy_data, sizeof(dummy_data), nullptr, 0),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
+                engine.get(), -1, dummy_data, sizeof(dummy_data), nullptr, 0),
+            kInvalidArguments);
+
+  // Both data and instructions empty
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 0,
+                                                 nullptr, 0),
+            kInvalidArguments);
+
+  // Non-null pointer with zero size
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, dummy_data, 0,
+                                                 nullptr, 0),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 0,
+                                                 dummy_instructions, 0),
+            kInvalidArguments);
+
+  // Null pointer with non-zero size
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 10,
+                                                 nullptr, 0),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 0,
+                                                 nullptr, 10),
+            kInvalidArguments);
+
+  // Load error invalid arguments
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibraryError(nullptr, 2, "error", false),
+      kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), 0, "error",
+                                                      false),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), -1, "error",
+                                                      false),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), 2, nullptr,
+                                                      false),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, DartDeferredLoadingSuccess) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  uint8_t dummy_data[] = {1, 2, 3, 4};
+  uint8_t dummy_instructions[] = {5, 6, 7, 8};
+
+  // Both data and instructions
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
+                engine.get(), 2, dummy_data, sizeof(dummy_data),
+                dummy_instructions, sizeof(dummy_instructions)),
+            kSuccess);
+
+  // Data only
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
+                engine.get(), 3, dummy_data, sizeof(dummy_data), nullptr, 0),
+            kSuccess);
+
+  // Instructions only
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 4, nullptr, 0,
+                                                 dummy_instructions,
+                                                 sizeof(dummy_instructions)),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, DartDeferredLoadingError) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(
+                engine.get(), 2, "Download failed", /*transient=*/true),
+            kSuccess);
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(
+                engine.get(), 3, "Permanent load failure", /*transient=*/false),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, DartDeferredLoadingViaProcTable) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+
+  ASSERT_NE(table.LoadDartDeferredLibrary, nullptr);
+  ASSERT_NE(table.LoadDartDeferredLibraryError, nullptr);
+
+  uint8_t dummy_data[] = {1, 2, 3, 4};
+  EXPECT_EQ(table.LoadDartDeferredLibrary(engine.get(), 2, dummy_data,
+                                          sizeof(dummy_data), nullptr, 0),
+            kSuccess);
+
+  EXPECT_EQ(table.LoadDartDeferredLibraryError(engine.get(), 2,
+                                               "Proc table error", false),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, DartDeferredLoadingCallbackSetup) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  builder.GetProjectArgs().request_dart_deferred_library_callback =
+      [](intptr_t loading_unit_id, void* user_data) {
+        // Callback invoked by Dart deferred library load request.
+      };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
 }  // namespace testing
 }  // namespace flutter
 
