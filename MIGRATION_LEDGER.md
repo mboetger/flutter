@@ -2,9 +2,9 @@
 
 ## Current Status
 - **Active Phase**: Phase 0.1 (Baseline Verification)
-- **Active Branch**: `android-embedder-migration/phase-0.1-baseline-tests`
-- **Base Commit SHA**: `08d2a471fd10152bb7dbfbb9636cf8fa53e94b8b`
-- **Completed PRs**: []
+- **Active Branch**: `android-embedder-v3/phase-0.1-baseline-tests`
+- **Base Commit SHA**: `0c041cb5252`
+- **Completed PRs**: [0.1]
 - **Adversarial Review Loop Status**: Approved (0 remaining findings across Round 1 & Round 2 by reidbaker-agent)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
@@ -12,7 +12,7 @@
   - Prohibited: `//flutter/assets`, `common`, `flow`, `impeller`, `lib/ui`, `runtime`, `shell/common`, `skia`, `txt`, `vulkan`
 
 ## Quick PR Index & Checkpoints
-- [ ] Phase 0.1: Baseline & Thread-Safety Tests
+- [x] Phase 0.1: Baseline & Thread-Safety Tests
 - [ ] Phase 1.1: Custom Asset Resolvers (`FlutterAssetResolver`)
 - [ ] Phase 1.2: Vulkan Impeller Render Target Backing Store
 - [ ] Phase 1.3: AHardwareBuffer & Vulkan External Textures

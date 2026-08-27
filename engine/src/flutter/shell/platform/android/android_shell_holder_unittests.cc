@@ -3,7 +3,11 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
 
+#include "flutter/display_list/geometry/dl_geometry_types.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -226,6 +230,135 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
   EXPECT_NE(
       holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
       holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+}
+
+TEST(AndroidShellHolder, RapidSurfaceRecreationLifecycle) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_NE(holder.get(), nullptr);
+  ASSERT_TRUE(holder->IsValid());
+  ASSERT_NE(holder->GetPlatformView().get(), nullptr);
+
+  // Standard 1080x1920 viewport dimensions (Full HD portrait).
+  constexpr int32_t kViewportWidth = 1080;
+  constexpr int32_t kViewportHeight = 1920;
+  const DlISize kViewportSize(kViewportWidth, kViewportHeight);
+
+  // Simulate 5 rapid Android lifecycle cycles: onResume -> onPause ->
+  // onResume...
+  constexpr int kLifecycleCycles = 5;
+  for (int i = 0; i < kLifecycleCycles; ++i) {
+    auto window_a = fml::MakeRefCounted<AndroidNativeWindow>(
+        nullptr, /*is_fake_window=*/true);
+    holder->GetPlatformView()->NotifyCreated(window_a);
+    holder->GetPlatformView()->NotifyChanged(kViewportSize);
+
+    // Simulate surface replacement / recreation while active (e.g. orientation
+    // change).
+    auto window_b = fml::MakeRefCounted<AndroidNativeWindow>(
+        nullptr, /*is_fake_window=*/true);
+    holder->GetPlatformView()->NotifySurfaceWindowChanged(window_b);
+
+    // Simulate activity pausing and surface destruction.
+    holder->GetPlatformView()->NotifyDestroyed();
+  }
+
+  // Ensure the shell holder and its platform view remain valid and stable after
+  // multiple lifecycle cycles.
+  EXPECT_TRUE(holder->IsValid());
+  EXPECT_NE(holder->GetPlatformView().get(), nullptr);
+}
+
+TEST(AndroidShellHolder, ConcurrentBackgroundThreadMessageHandling) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_NE(holder.get(), nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window);
+  ASSERT_TRUE(holder->GetPlatformMessageHandler());
+
+  // Number of concurrent messages to dispatch from background threads.
+  constexpr int kMessageCount = 10;
+  std::mutex response_mutex;
+  std::vector<int> captured_response_ids;
+  std::vector<fml::RefPtr<MockPlatformMessageResponse>> mock_responses;
+  mock_responses.reserve(kMessageCount);
+
+  for (int i = 0; i < kMessageCount; ++i) {
+    auto response = MockPlatformMessageResponse::Create();
+    EXPECT_CALL(*response, Complete(::testing::_)).Times(1);
+    mock_responses.push_back(response);
+  }
+
+  EXPECT_CALL(*jni,
+              FlutterViewHandlePlatformMessage(::testing::_, ::testing::_))
+      .Times(kMessageCount)
+      .WillRepeatedly(
+          [&](std::unique_ptr<PlatformMessage> msg, int response_id) {
+            std::lock_guard<std::mutex> lock(response_mutex);
+            captured_response_ids.push_back(response_id);
+          });
+
+  // Concurrently dispatch platform messages from multiple background worker
+  // threads.
+  std::vector<std::thread> workers;
+  workers.reserve(kMessageCount);
+  for (int i = 0; i < kMessageCount; ++i) {
+    // 8-byte test payload per message.
+    constexpr size_t kDataSize = 8;
+    std::vector<uint8_t> payload(kDataSize, static_cast<uint8_t>(i));
+    fml::MallocMapping bytes =
+        fml::MallocMapping::Copy(payload.data(), payload.size());
+    auto message = std::make_unique<PlatformMessage>(
+        /*channel=*/"concurrent_background_channel", /*data=*/std::move(bytes),
+        /*response=*/mock_responses[i]);
+
+    workers.emplace_back([&holder, msg = std::move(message)]() mutable {
+      holder->GetPlatformMessageHandler()->HandlePlatformMessage(
+          std::move(msg));
+    });
+  }
+
+  for (auto& worker : workers) {
+    worker.join();
+  }
+
+  // Verify all responses were registered and captured.
+  {
+    std::lock_guard<std::mutex> lock(response_mutex);
+    EXPECT_EQ(static_cast<int>(captured_response_ids.size()), kMessageCount);
+  }
+
+  // Concurrently invoke responses from multiple responder threads.
+  std::vector<std::thread> responders;
+  responders.reserve(kMessageCount);
+  for (int i = 0; i < kMessageCount; ++i) {
+    int response_id = captured_response_ids[i];
+    responders.emplace_back([&holder, response_id]() {
+      // 16-byte response payload.
+      constexpr size_t kResponseDataSize = 16;
+      std::vector<uint8_t> response_payload(kResponseDataSize, 0xAA);
+      auto response_data =
+          std::make_unique<fml::MallocMapping>(fml::MallocMapping::Copy(
+              response_payload.data(), response_payload.size()));
+      holder->GetPlatformMessageHandler()
+          ->InvokePlatformMessageResponseCallback(response_id,
+                                                  std::move(response_data));
+    });
+  }
+
+  for (auto& responder : responders) {
+    responder.join();
+  }
 }
 
 }  // namespace testing
