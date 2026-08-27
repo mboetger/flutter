@@ -39,6 +39,18 @@ source_set("image_generator") {
   ]
 }
 
+source_set("android_thread_config") {
+  visibility = [ ":*" ]
+  sources = [
+    "android_thread_config.cc",
+    "android_thread_config.h",
+  ]
+  deps = [
+    "//flutter/fml",
+    "//flutter/shell/platform/embedder:embedder_as_internal_library",
+  ]
+}
+
 executable("flutter_shell_native_unittests") {
   visibility = [ "*" ]
   testonly = true
@@ -46,6 +58,7 @@ executable("flutter_shell_native_unittests") {
     "android_context_gl_impeller_unittests.cc",
     "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
+    "android_thread_config_unittests.cc",
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
     "image_lru_unittests.cc",
@@ -58,6 +71,7 @@ executable("flutter_shell_native_unittests") {
   public_configs = [ "//flutter:config" ]
   deps = [
     ":android_legacy_engine_holder",
+    ":android_thread_config",
     ":flutter_shell_native_src",
     "//flutter/fml",
     "//flutter/shell/platform/android/jni:jni_mock",
@@ -157,6 +171,7 @@ source_set("android_legacy_engine_holder") {
 
   public_deps = [
     ":android_gpu_configuration",
+    ":android_thread_config",
     ":image_generator",
     "//flutter/assets",
     "//flutter/common",
@@ -220,6 +235,7 @@ source_set("flutter_shell_native_src") {
 
   deps = [
     ":android_legacy_engine_holder",
+    ":android_thread_config",
   ]
 
   public_configs = [ "//flutter:config" ]
