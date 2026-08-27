@@ -2938,6 +2938,36 @@ typedef struct {
   size_t data_length;
 } FlutterSendSemanticsActionInfo;
 
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineSpawnInfo).
+  size_t struct_size;
+
+  /// Dart entrypoint function name. If null, defaults to "main".
+  const char* entrypoint;
+
+  /// Dart library URI for entrypoint. If null, defaults to root library.
+  const char* library_path;
+
+  /// Initial route for Flutter navigation. If null, defaults to "/".
+  const char* initial_route;
+
+  /// Number of entrypoint arguments.
+  int entrypoint_argc;
+
+  /// Array of entrypoint argument strings.
+  const char* const* entrypoint_argv;
+
+  /// User data passed back to callbacks on the spawned engine.
+  void* user_data;
+
+  /// The renderer configuration for the spawned engine. Must be provided.
+  const FlutterRendererConfig* renderer_config;
+
+  /// Optional project arguments containing callbacks, custom asset resolvers,
+  /// etc.
+  const FlutterProjectArgs* project_args;
+} FlutterEngineSpawnInfo;
+
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 // NOLINTBEGIN(google-objc-function-naming)
@@ -3082,6 +3112,30 @@ FlutterEngineResult FlutterEngineDeinitialize(FLUTTER_API_SYMBOL(FlutterEngine)
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineRunInitialized(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
+//------------------------------------------------------------------------------
+/// @brief      Spawns a new Flutter engine instance that shares the Dart VM,
+///             isolate snapshot, thread host, and IO manager with an existing
+///             running engine instance.
+///
+///             The spawned engine runs with lower memory footprint and fast
+///             startup time because it shares the Dart VM, isolate snapshot,
+///             thread host, and IO manager with the parent engine.
+///
+/// @param[in]  engine     A running engine instance to spawn from.
+/// @param[in]  info       Spawn configuration options.
+/// @param[out] engine_out The spawned engine handle on successful creation.
+///
+/// @return     The result of the call to spawn the Flutter engine.
+///
+/// @note       This function must be called from the thread that created the
+///             parent engine (the platform thread).
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                       const FlutterEngineSpawnInfo* info,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Adds a view.
@@ -3872,6 +3926,10 @@ typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineUpdateAssetResolverFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterAssetResolver* resolver);
+typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineSpawnInfo* info,
+    FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3923,6 +3981,7 @@ typedef struct {
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
   FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
+  FlutterEngineSpawnFnPtr Spawn;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

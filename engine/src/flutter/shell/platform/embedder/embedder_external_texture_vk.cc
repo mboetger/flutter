@@ -197,19 +197,19 @@ sk_sp<DlImage> EmbedderExternalTextureVK::ResolveTextureSkia(
       .fLevelCount = 1,
   };
 
-  auto backend_texture =
-      GrBackendTextures::MakeVk(width, height, image_info);
+  auto backend_texture = GrBackendTextures::MakeVk(width, height, image_info);
 
   SkImages::TextureReleaseProc release_proc = image->destruction_callback;
   auto sk_image = SkImages::BorrowTextureFrom(
-      context,                                                           // context
-      backend_texture,                                                   // texture handle
-      kTopLeft_GrSurfaceOrigin,                                          // origin
-      flutter::GPUSurfaceVulkan::ColorTypeFromFormat(image_info.fFormat), // color type
-      kPremul_SkAlphaType,                                               // alpha type
-      nullptr,                                                           // colorspace
-      release_proc,                                                      // texture release proc
-      image->user_data                                                   // texture release context
+      context,                   // context
+      backend_texture,           // texture handle
+      kTopLeft_GrSurfaceOrigin,  // origin
+      flutter::GPUSurfaceVulkan::ColorTypeFromFormat(
+          image_info.fFormat),  // color type
+      kPremul_SkAlphaType,      // alpha type
+      nullptr,                  // colorspace
+      release_proc,             // texture release proc
+      image->user_data          // texture release context
   );
 
   if (!sk_image) {
@@ -309,8 +309,9 @@ sk_sp<DlImage> EmbedderExternalTextureVK::ResolveTextureImpeller(
   auto [result, image_view] =
       context_vk.GetDevice().createImageViewUnique(view_info);
   if (result != impeller::vk::Result::eSuccess) {
-    FML_LOG(ERROR) << "Failed to create Vulkan image view for external texture: "
-                   << impeller::vk::to_string(result);
+    FML_LOG(ERROR)
+        << "Failed to create Vulkan image view for external texture: "
+        << impeller::vk::to_string(result);
     return nullptr;
   }
 
