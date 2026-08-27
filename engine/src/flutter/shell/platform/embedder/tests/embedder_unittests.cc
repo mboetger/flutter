@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "embedder.h"
+#include "embedder_asset_resolver.h"
 #include "embedder_engine.h"
 #include "flutter/common/constants.h"
 #include "flutter/flow/raster_cache.h"
@@ -4314,6 +4315,592 @@ TEST_F(EmbedderTest, PlatformThreadIsolatesWithCustomPlatformTaskRunner) {
 
   // Check that the FFI call was executed on the platform thread.
   ASSERT_EQ(platform_thread_id, ffi_call_thread_id);
+}
+
+TEST(EmbedderAssetResolverTest, DirectResolverValidation) {
+  // Test invalid resolvers.
+  {
+    EmbedderAssetResolver null_resolver(nullptr);
+    EXPECT_FALSE(null_resolver.IsValid());
+    EXPECT_EQ(null_resolver.GetAsMapping("test"), nullptr);
+  }
+
+  {
+    FlutterAssetResolver bad_size_resolver = {};
+    bad_size_resolver.struct_size = sizeof(FlutterAssetResolver) - 1;
+    bad_size_resolver.get_asset = [](const char*, FlutterMapping*, void*) {
+      return true;
+    };
+    EmbedderAssetResolver resolver(&bad_size_resolver);
+    EXPECT_FALSE(resolver.IsValid());
+  }
+
+  {
+    FlutterAssetResolver null_cb_resolver = {};
+    null_cb_resolver.struct_size = sizeof(FlutterAssetResolver);
+    null_cb_resolver.get_asset = nullptr;
+    EmbedderAssetResolver resolver(&null_cb_resolver);
+    EXPECT_FALSE(resolver.IsValid());
+  }
+
+  // Test valid resolver.
+  {
+    std::string test_content = "custom asset payload";
+
+    FlutterAssetResolver resolver_struct = {};
+    resolver_struct.struct_size = sizeof(FlutterAssetResolver);
+    resolver_struct.user_data = &test_content;
+    resolver_struct.get_asset = [](const char* name,
+                                   FlutterMapping* mapping_out,
+                                   void* user_data) -> bool {
+      if (std::string(name) == "found.txt") {
+        auto content = reinterpret_cast<std::string*>(user_data);
+        mapping_out->struct_size = sizeof(FlutterMapping);
+        mapping_out->mapping =
+            reinterpret_cast<const uint8_t*>(content->data());
+        mapping_out->size = content->size();
+        mapping_out->user_data = nullptr;
+        mapping_out->release_callback = nullptr;
+        return true;
+      }
+      return false;
+    };
+
+    EmbedderAssetResolver resolver(&resolver_struct);
+    EXPECT_TRUE(resolver.IsValid());
+    EXPECT_TRUE(resolver.IsValidAfterAssetManagerChange());
+    EXPECT_EQ(resolver.GetType(),
+              AssetResolver::AssetResolverType::kCustomResolver);
+
+    // Asset not found.
+    EXPECT_EQ(resolver.GetAsMapping("missing.txt"), nullptr);
+
+    // Asset found.
+    auto mapping = resolver.GetAsMapping("found.txt");
+    ASSERT_NE(mapping, nullptr);
+    EXPECT_EQ(mapping->GetSize(), test_content.size());
+    EXPECT_EQ(
+        memcmp(mapping->GetMapping(), test_content.data(), test_content.size()),
+        0);
+
+    // Equality operator.
+    EmbedderAssetResolver same_resolver(&resolver_struct);
+    EXPECT_TRUE(resolver == same_resolver);
+
+    FlutterAssetResolver diff_struct = resolver_struct;
+    diff_struct.user_data = nullptr;
+    EmbedderAssetResolver diff_resolver(&diff_struct);
+    EXPECT_FALSE(resolver == diff_resolver);
+  }
+
+  // Test zero-byte asset resolution and release_callback.
+  {
+    std::atomic<bool> release_called{false};
+    FlutterAssetResolver zero_byte_resolver_struct = {};
+    zero_byte_resolver_struct.struct_size = sizeof(FlutterAssetResolver);
+    zero_byte_resolver_struct.user_data = &release_called;
+    zero_byte_resolver_struct.get_asset = [](const char* name,
+                                             FlutterMapping* mapping_out,
+                                             void* user_data) -> bool {
+      if (std::string(name) == "empty.keep") {
+        mapping_out->struct_size = sizeof(FlutterMapping);
+        mapping_out->mapping = reinterpret_cast<const uint8_t*>("");
+        mapping_out->size = 0;
+        mapping_out->user_data = user_data;
+        mapping_out->release_callback = [](const uint8_t*, size_t,
+                                           void* udata) {
+          auto flag = reinterpret_cast<std::atomic<bool>*>(udata);
+          if (flag) {
+            flag->store(true);
+          }
+        };
+        return true;
+      }
+      return false;
+    };
+
+    EmbedderAssetResolver resolver(&zero_byte_resolver_struct);
+    EXPECT_TRUE(resolver.IsValid());
+
+    {
+      auto mapping = resolver.GetAsMapping("empty.keep");
+      ASSERT_NE(mapping, nullptr);
+      EXPECT_EQ(mapping->GetSize(), 0u);
+      EXPECT_FALSE(release_called.load());
+    }
+    // Destructor of mapping should invoke release_callback.
+    EXPECT_TRUE(release_called.load());
+  }
+
+  // Test release_callback invocation when mapping validation fails.
+  {
+    std::atomic<bool> release_called{false};
+    FlutterAssetResolver bad_mapping_struct = {};
+    bad_mapping_struct.struct_size = sizeof(FlutterAssetResolver);
+    bad_mapping_struct.user_data = &release_called;
+    bad_mapping_struct.get_asset = [](const char* name,
+                                      FlutterMapping* mapping_out,
+                                      void* user_data) -> bool {
+      // Returns true but sets bad struct size.
+      mapping_out->struct_size = sizeof(FlutterMapping) - 1;
+      mapping_out->mapping = reinterpret_cast<const uint8_t*>("data");
+      mapping_out->size = 4;
+      mapping_out->user_data = user_data;
+      mapping_out->release_callback = [](const uint8_t*, size_t, void* udata) {
+        auto flag = reinterpret_cast<std::atomic<bool>*>(udata);
+        if (flag) {
+          flag->store(true);
+        }
+      };
+      return true;
+    };
+
+    EmbedderAssetResolver resolver(&bad_mapping_struct);
+    EXPECT_TRUE(resolver.IsValid());
+    EXPECT_EQ(resolver.GetAsMapping("any"), nullptr);
+    EXPECT_TRUE(release_called.load());
+  }
+}
+
+TEST_F(EmbedderTest, CustomAssetResolverCanResolveAsset) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  fml::AutoResetWaitableEvent ready;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&ready]() { ready.Signal(); }));
+
+  static std::string kAssetData = "{\"asset_key\": \"custom_asset_value\"}";
+  std::atomic<bool> release_callback_invoked{false};
+
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = &release_callback_invoked;
+  resolver.get_asset = [](const char* name, FlutterMapping* mapping_out,
+                          void* user_data) -> bool {
+    if (std::string(name) == "custom_asset.json") {
+      mapping_out->struct_size = sizeof(FlutterMapping);
+      mapping_out->mapping =
+          reinterpret_cast<const uint8_t*>(kAssetData.data());
+      mapping_out->size = kAssetData.size();
+      mapping_out->user_data = user_data;
+      mapping_out->release_callback = [](const uint8_t* data, size_t size,
+                                         void* udata) {
+        auto flag = reinterpret_cast<std::atomic<bool>*>(udata);
+        if (flag) {
+          flag->store(true);
+        }
+      };
+      return true;
+    }
+    return false;
+  };
+
+  const FlutterAssetResolver* resolvers[] = {&resolver};
+
+  struct Captures {
+    fml::AutoResetWaitableEvent latch;
+    std::string response_data;
+    bool response_received = false;
+  };
+  Captures captures;
+
+  UniqueEngine engine;
+  auto thread = CreateNewThread();
+  thread->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetDartEntrypoint("custom_asset_resolver_test");
+    builder.GetProjectArgs().asset_resolvers = resolvers;
+    builder.GetProjectArgs().asset_resolvers_count = 1;
+
+    engine = builder.LaunchEngine();
+    ASSERT_TRUE(engine.is_valid());
+
+    ready.Wait();
+
+    FlutterPlatformMessageResponseHandle* response_handle = nullptr;
+    auto callback = [](const uint8_t* data, size_t size,
+                       void* user_data) -> void {
+      auto captures = reinterpret_cast<Captures*>(user_data);
+      captures->response_received = true;
+      if (data != nullptr && size > 0) {
+        captures->response_data =
+            std::string(reinterpret_cast<const char*>(data), size);
+      }
+      captures->latch.Signal();
+    };
+    auto result = FlutterPlatformMessageCreateResponseHandle(
+        engine.get(), callback, &captures, &response_handle);
+    ASSERT_EQ(result, kSuccess);
+
+    std::string requested_asset = "custom_asset.json";
+    FlutterPlatformMessage message = {};
+    message.struct_size = sizeof(FlutterPlatformMessage);
+    message.channel = "query_asset";
+    message.message = reinterpret_cast<const uint8_t*>(requested_asset.data());
+    message.message_size = requested_asset.size();
+    message.response_handle = response_handle;
+
+    result = FlutterEngineSendPlatformMessage(engine.get(), &message);
+    ASSERT_EQ(result, kSuccess);
+
+    result = FlutterPlatformMessageReleaseResponseHandle(engine.get(),
+                                                         response_handle);
+    ASSERT_EQ(result, kSuccess);
+  });
+
+  captures.latch.Wait();
+  EXPECT_TRUE(captures.response_received);
+  EXPECT_EQ(captures.response_data, "{\"asset_key\": \"custom_asset_value\"}");
+  EXPECT_TRUE(release_callback_invoked.load());
+
+  fml::AutoResetWaitableEvent kill_latch;
+  thread->PostTask([&]() {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, CustomAssetResolverUpdateAtRuntime) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  fml::AutoResetWaitableEvent ready;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&ready]() { ready.Signal(); }));
+
+  static std::string kAssetV1 = "version_1_data";
+  static std::string kAssetV2 = "version_2_data";
+
+  FlutterAssetResolver resolver_v1 = {};
+  resolver_v1.struct_size = sizeof(FlutterAssetResolver);
+  resolver_v1.get_asset = [](const char* name, FlutterMapping* mapping_out,
+                             void* user_data) -> bool {
+    if (std::string(name) == "versioned_asset.txt") {
+      mapping_out->struct_size = sizeof(FlutterMapping);
+      mapping_out->mapping = reinterpret_cast<const uint8_t*>(kAssetV1.data());
+      mapping_out->size = kAssetV1.size();
+      mapping_out->user_data = nullptr;
+      mapping_out->release_callback = nullptr;
+      return true;
+    }
+    return false;
+  };
+
+  const FlutterAssetResolver* resolvers_v1[] = {&resolver_v1};
+
+  FlutterAssetResolver resolver_v2 = {};
+  resolver_v2.struct_size = sizeof(FlutterAssetResolver);
+  resolver_v2.get_asset = [](const char* name, FlutterMapping* mapping_out,
+                             void* user_data) -> bool {
+    if (std::string(name) == "versioned_asset.txt") {
+      mapping_out->struct_size = sizeof(FlutterMapping);
+      mapping_out->mapping = reinterpret_cast<const uint8_t*>(kAssetV2.data());
+      mapping_out->size = kAssetV2.size();
+      mapping_out->user_data = nullptr;
+      mapping_out->release_callback = nullptr;
+      return true;
+    }
+    return false;
+  };
+
+  const FlutterAssetResolver* resolvers_v2[] = {&resolver_v2};
+
+  struct Captures {
+    fml::AutoResetWaitableEvent latch_v1;
+    fml::AutoResetWaitableEvent latch_v2;
+    std::string response_v1;
+    std::string response_v2;
+  };
+  Captures captures;
+
+  UniqueEngine engine;
+  auto thread = CreateNewThread();
+  thread->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetDartEntrypoint("custom_asset_resolver_test");
+    builder.GetProjectArgs().asset_resolvers = resolvers_v1;
+    builder.GetProjectArgs().asset_resolvers_count = 1;
+
+    engine = builder.LaunchEngine();
+    ASSERT_TRUE(engine.is_valid());
+
+    ready.Wait();
+
+    // Query V1 asset.
+    FlutterPlatformMessageResponseHandle* handle_v1 = nullptr;
+    auto callback_v1 = [](const uint8_t* data, size_t size,
+                          void* user_data) -> void {
+      auto captures = reinterpret_cast<Captures*>(user_data);
+      if (data && size > 0) {
+        captures->response_v1 =
+            std::string(reinterpret_cast<const char*>(data), size);
+      }
+      captures->latch_v1.Signal();
+    };
+    ASSERT_EQ(FlutterPlatformMessageCreateResponseHandle(
+                  engine.get(), callback_v1, &captures, &handle_v1),
+              kSuccess);
+
+    std::string asset_name = "versioned_asset.txt";
+    FlutterPlatformMessage message_v1 = {};
+    message_v1.struct_size = sizeof(FlutterPlatformMessage);
+    message_v1.channel = "query_asset";
+    message_v1.message = reinterpret_cast<const uint8_t*>(asset_name.data());
+    message_v1.message_size = asset_name.size();
+    message_v1.response_handle = handle_v1;
+
+    ASSERT_EQ(FlutterEngineSendPlatformMessage(engine.get(), &message_v1),
+              kSuccess);
+    ASSERT_EQ(
+        FlutterPlatformMessageReleaseResponseHandle(engine.get(), handle_v1),
+        kSuccess);
+  });
+
+  captures.latch_v1.Wait();
+  EXPECT_EQ(captures.response_v1, "version_1_data");
+
+  // Update to V2 resolver at runtime on platform thread.
+  thread->PostTask([&]() {
+    auto update_result =
+        FlutterEngineUpdateAssetResolvers(engine.get(), resolvers_v2, 1);
+    ASSERT_EQ(update_result, kSuccess);
+
+    // Query V2 asset.
+    FlutterPlatformMessageResponseHandle* handle_v2 = nullptr;
+    auto callback_v2 = [](const uint8_t* data, size_t size,
+                          void* user_data) -> void {
+      auto captures = reinterpret_cast<Captures*>(user_data);
+      if (data && size > 0) {
+        captures->response_v2 =
+            std::string(reinterpret_cast<const char*>(data), size);
+      }
+      captures->latch_v2.Signal();
+    };
+    ASSERT_EQ(FlutterPlatformMessageCreateResponseHandle(
+                  engine.get(), callback_v2, &captures, &handle_v2),
+              kSuccess);
+
+    std::string asset_name = "versioned_asset.txt";
+    FlutterPlatformMessage message_v2 = {};
+    message_v2.struct_size = sizeof(FlutterPlatformMessage);
+    message_v2.channel = "query_asset";
+    message_v2.message = reinterpret_cast<const uint8_t*>(asset_name.data());
+    message_v2.message_size = asset_name.size();
+    message_v2.response_handle = handle_v2;
+
+    ASSERT_EQ(FlutterEngineSendPlatformMessage(engine.get(), &message_v2),
+              kSuccess);
+    ASSERT_EQ(
+        FlutterPlatformMessageReleaseResponseHandle(engine.get(), handle_v2),
+        kSuccess);
+  });
+
+  captures.latch_v2.Wait();
+  EXPECT_EQ(captures.response_v2, "version_2_data");
+
+  fml::AutoResetWaitableEvent kill_latch;
+  thread->PostTask([&]() {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, MultipleCustomAssetResolversPrecedence) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  fml::AutoResetWaitableEvent ready;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&ready]() { ready.Signal(); }));
+
+  static std::string kPrimaryShared = "primary_shared_payload";
+  static std::string kSecondaryShared = "secondary_shared_payload";
+  static std::string kSecondaryUnique = "secondary_unique_payload";
+
+  FlutterAssetResolver resolver_primary = {};
+  resolver_primary.struct_size = sizeof(FlutterAssetResolver);
+  resolver_primary.get_asset = [](const char* name, FlutterMapping* mapping_out,
+                                  void* user_data) -> bool {
+    if (std::string(name) == "shared_asset.txt") {
+      mapping_out->struct_size = sizeof(FlutterMapping);
+      mapping_out->mapping =
+          reinterpret_cast<const uint8_t*>(kPrimaryShared.data());
+      mapping_out->size = kPrimaryShared.size();
+      mapping_out->user_data = nullptr;
+      mapping_out->release_callback = nullptr;
+      return true;
+    }
+    return false;
+  };
+
+  FlutterAssetResolver resolver_secondary = {};
+  resolver_secondary.struct_size = sizeof(FlutterAssetResolver);
+  resolver_secondary.get_asset = [](const char* name,
+                                    FlutterMapping* mapping_out,
+                                    void* user_data) -> bool {
+    if (std::string(name) == "shared_asset.txt") {
+      mapping_out->struct_size = sizeof(FlutterMapping);
+      mapping_out->mapping =
+          reinterpret_cast<const uint8_t*>(kSecondaryShared.data());
+      mapping_out->size = kSecondaryShared.size();
+      mapping_out->user_data = nullptr;
+      mapping_out->release_callback = nullptr;
+      return true;
+    }
+    if (std::string(name) == "secondary_only.txt") {
+      mapping_out->struct_size = sizeof(FlutterMapping);
+      mapping_out->mapping =
+          reinterpret_cast<const uint8_t*>(kSecondaryUnique.data());
+      mapping_out->size = kSecondaryUnique.size();
+      mapping_out->user_data = nullptr;
+      mapping_out->release_callback = nullptr;
+      return true;
+    }
+    return false;
+  };
+
+  const FlutterAssetResolver* resolvers[] = {&resolver_primary,
+                                             &resolver_secondary};
+
+  struct Captures {
+    fml::AutoResetWaitableEvent latch_shared;
+    fml::AutoResetWaitableEvent latch_secondary;
+    std::string response_shared;
+    std::string response_secondary;
+  };
+  Captures captures;
+
+  UniqueEngine engine;
+  auto thread = CreateNewThread();
+  thread->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetDartEntrypoint("custom_asset_resolver_test");
+    builder.GetProjectArgs().asset_resolvers = resolvers;
+    builder.GetProjectArgs().asset_resolvers_count = 2;
+
+    engine = builder.LaunchEngine();
+    ASSERT_TRUE(engine.is_valid());
+
+    ready.Wait();
+
+    // Query shared asset (should be resolved by primary resolver due to order).
+    FlutterPlatformMessageResponseHandle* handle_shared = nullptr;
+    auto callback_shared = [](const uint8_t* data, size_t size,
+                              void* user_data) -> void {
+      auto captures = reinterpret_cast<Captures*>(user_data);
+      if (data && size > 0) {
+        captures->response_shared =
+            std::string(reinterpret_cast<const char*>(data), size);
+      }
+      captures->latch_shared.Signal();
+    };
+    ASSERT_EQ(FlutterPlatformMessageCreateResponseHandle(
+                  engine.get(), callback_shared, &captures, &handle_shared),
+              kSuccess);
+
+    std::string shared_name = "shared_asset.txt";
+    FlutterPlatformMessage message_shared = {};
+    message_shared.struct_size = sizeof(FlutterPlatformMessage);
+    message_shared.channel = "query_asset";
+    message_shared.message =
+        reinterpret_cast<const uint8_t*>(shared_name.data());
+    message_shared.message_size = shared_name.size();
+    message_shared.response_handle = handle_shared;
+
+    ASSERT_EQ(FlutterEngineSendPlatformMessage(engine.get(), &message_shared),
+              kSuccess);
+    ASSERT_EQ(FlutterPlatformMessageReleaseResponseHandle(engine.get(),
+                                                          handle_shared),
+              kSuccess);
+  });
+
+  captures.latch_shared.Wait();
+  EXPECT_EQ(captures.response_shared, "primary_shared_payload");
+
+  thread->PostTask([&]() {
+    // Query secondary-only asset.
+    FlutterPlatformMessageResponseHandle* handle_secondary = nullptr;
+    auto callback_secondary = [](const uint8_t* data, size_t size,
+                                 void* user_data) -> void {
+      auto captures = reinterpret_cast<Captures*>(user_data);
+      if (data && size > 0) {
+        captures->response_secondary =
+            std::string(reinterpret_cast<const char*>(data), size);
+      }
+      captures->latch_secondary.Signal();
+    };
+    ASSERT_EQ(
+        FlutterPlatformMessageCreateResponseHandle(
+            engine.get(), callback_secondary, &captures, &handle_secondary),
+        kSuccess);
+
+    std::string secondary_name = "secondary_only.txt";
+    FlutterPlatformMessage message_secondary = {};
+    message_secondary.struct_size = sizeof(FlutterPlatformMessage);
+    message_secondary.channel = "query_asset";
+    message_secondary.message =
+        reinterpret_cast<const uint8_t*>(secondary_name.data());
+    message_secondary.message_size = secondary_name.size();
+    message_secondary.response_handle = handle_secondary;
+
+    ASSERT_EQ(
+        FlutterEngineSendPlatformMessage(engine.get(), &message_secondary),
+        kSuccess);
+    ASSERT_EQ(FlutterPlatformMessageReleaseResponseHandle(engine.get(),
+                                                          handle_secondary),
+              kSuccess);
+  });
+
+  captures.latch_secondary.Wait();
+  EXPECT_EQ(captures.response_secondary, "secondary_unique_payload");
+
+  fml::AutoResetWaitableEvent kill_latch;
+  thread->PostTask([&]() {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, CustomAssetResolverInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Null engine
+  EXPECT_EQ(FlutterEngineUpdateAssetResolvers(nullptr, nullptr, 0),
+            kInvalidArguments);
+
+  // Null resolvers array with count > 0
+  EXPECT_EQ(FlutterEngineUpdateAssetResolvers(engine.get(), nullptr, 1),
+            kInvalidArguments);
+
+  // Array with null resolver pointer
+  const FlutterAssetResolver* null_entries[] = {nullptr};
+  EXPECT_EQ(FlutterEngineUpdateAssetResolvers(engine.get(), null_entries, 1),
+            kInvalidArguments);
+
+  // Resolver with bad struct size
+  FlutterAssetResolver bad_size = {};
+  bad_size.struct_size = sizeof(FlutterAssetResolver) - 1;
+  bad_size.get_asset = [](const char*, FlutterMapping*, void*) { return true; };
+  const FlutterAssetResolver* bad_size_entries[] = {&bad_size};
+  EXPECT_EQ(
+      FlutterEngineUpdateAssetResolvers(engine.get(), bad_size_entries, 1),
+      kInvalidArguments);
+
+  // Resolver with null get_asset callback
+  FlutterAssetResolver null_cb = {};
+  null_cb.struct_size = sizeof(FlutterAssetResolver);
+  null_cb.get_asset = nullptr;
+  const FlutterAssetResolver* null_cb_entries[] = {&null_cb};
+  EXPECT_EQ(FlutterEngineUpdateAssetResolvers(engine.get(), null_cb_entries, 1),
+            kInvalidArguments);
 }
 
 }  // namespace testing

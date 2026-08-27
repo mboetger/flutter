@@ -88,6 +88,9 @@ class EmbedderEngine {
 
   bool ScheduleFrame();
 
+  bool UpdateAssetResolvers(const FlutterAssetResolver* const* asset_resolvers,
+                            size_t asset_resolvers_count);
+
   Shell& GetShell();
 
  private:

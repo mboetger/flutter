@@ -55,6 +55,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_asset_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_platform_message_response.h"
@@ -2044,7 +2045,12 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
                               "The Flutter project arguments were missing.");
   }
 
-  if (SAFE_ACCESS(args, assets_path, nullptr) == nullptr) {
+  const auto has_asset_resolvers =
+      SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0;
+
+  if (SAFE_ACCESS(args, assets_path, nullptr) == nullptr &&
+      !has_asset_resolvers) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "The assets path in the Flutter project arguments was missing.");
@@ -2111,17 +2117,47 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   }
 
   settings.icu_data_path = icu_data_path;
-  settings.assets_path = args->assets_path;
+  if (SAFE_ACCESS(args, assets_path, nullptr) != nullptr) {
+    settings.assets_path = args->assets_path;
+  }
   settings.leak_vm = !SAFE_ACCESS(args, shutdown_dart_vm_when_done, false);
   settings.old_gen_heap_size = SAFE_ACCESS(args, dart_old_gen_heap_size, -1);
   settings.enable_wide_gamut = SAFE_ACCESS(args, enable_wide_gamut, false);
 
   if (!flutter::DartVM::IsRunningPrecompiledCode()) {
-    // Verify the assets path contains Dart 2 kernel assets.
+    // Verify the assets path or custom resolvers contain Dart 2 kernel assets.
     const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
-    std::string application_kernel_path = fml::paths::JoinPaths(
-        {settings.assets_path, kApplicationKernelSnapshotFileName});
-    if (!fml::IsFile(application_kernel_path)) {
+    bool kernel_found = false;
+    if (!settings.assets_path.empty()) {
+      std::string application_kernel_path = fml::paths::JoinPaths(
+          {settings.assets_path, kApplicationKernelSnapshotFileName});
+      if (fml::IsFile(application_kernel_path)) {
+        kernel_found = true;
+      }
+    }
+    if (!kernel_found && has_asset_resolvers) {
+      const auto custom_resolvers = SAFE_ACCESS(args, asset_resolvers, nullptr);
+      const auto custom_resolvers_count =
+          SAFE_ACCESS(args, asset_resolvers_count, 0);
+      for (size_t i = 0; i < custom_resolvers_count; ++i) {
+        const FlutterAssetResolver* resolver = custom_resolvers[i];
+        if (resolver != nullptr &&
+            SAFE_ACCESS(resolver, get_asset, nullptr) != nullptr) {
+          FlutterMapping mapping = {};
+          mapping.struct_size = sizeof(FlutterMapping);
+          if (resolver->get_asset(kApplicationKernelSnapshotFileName.c_str(),
+                                  &mapping, resolver->user_data)) {
+            if (mapping.release_callback != nullptr) {
+              mapping.release_callback(mapping.mapping, mapping.size,
+                                       mapping.user_data);
+            }
+            kernel_found = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!kernel_found) {
       return LOG_EMBEDDER_ERROR(
           kInvalidArguments,
           "Not running in AOT mode but could not resolve the kernel binary.");
@@ -2447,8 +2483,38 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   };
 
-  auto run_configuration =
-      flutter::RunConfiguration::InferFromSettings(settings);
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+
+  if (fml::UniqueFD::traits_type::IsValid(settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(settings.assets_dir), true));
+  }
+
+  if (!settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
+
+  if (SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
+    for (size_t i = 0; i < args->asset_resolvers_count; ++i) {
+      if (args->asset_resolvers[i] != nullptr) {
+        auto resolver = std::make_unique<flutter::EmbedderAssetResolver>(
+            args->asset_resolvers[i]);
+        if (resolver->IsValid()) {
+          asset_manager->PushBack(std::move(resolver));
+        }
+      }
+    }
+  }
+
+  auto isolate_configuration = flutter::IsolateConfiguration::InferFromSettings(
+      settings, asset_manager, nullptr, flutter::IsolateLaunchType::kNewGroup);
+
+  flutter::RunConfiguration run_configuration(std::move(isolate_configuration),
+                                              asset_manager);
 
   if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
@@ -3738,6 +3804,45 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineUpdateAssetResolvers(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolver* const* asset_resolvers,
+    size_t asset_resolvers_count) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (asset_resolvers_count > 0 && asset_resolvers == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Asset resolvers array was null.");
+  }
+  for (size_t i = 0; i < asset_resolvers_count; ++i) {
+    if (asset_resolvers[i] == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Asset resolver at index " + std::to_string(i) + " was null.")
+              .c_str());
+    }
+    if (asset_resolvers[i]->struct_size != sizeof(FlutterAssetResolver)) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments, ("Asset resolver at index " + std::to_string(i) +
+                              " struct size mismatch.")
+                                 .c_str());
+    }
+    if (asset_resolvers[i]->get_asset == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments, ("Asset resolver at index " + std::to_string(i) +
+                              " get_asset callback was null.")
+                                 .c_str());
+    }
+  }
+  if (reinterpret_cast<flutter::EmbedderEngine*>(engine)->UpdateAssetResolvers(
+          asset_resolvers, asset_resolvers_count)) {
+    return kSuccess;
+  }
+  return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                            "Failed to update asset resolvers.");
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -3794,6 +3899,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(AddView, FlutterEngineAddView);
   SET_PROC(RemoveView, FlutterEngineRemoveView);
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
+  SET_PROC(UpdateAssetResolvers, FlutterEngineUpdateAssetResolvers);
 #undef SET_PROC
 
   return kSuccess;

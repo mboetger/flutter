@@ -1803,3 +1803,26 @@ Future<void> a11y_main_multi_view() async {
   await semanticsChanged;
   notifySemanticsEnabled(PlatformDispatcher.instance.semanticsEnabled);
 }
+
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
+void custom_asset_resolver_test() {
+  PlatformDispatcher.instance.onPlatformMessage =
+      (String name, ByteData? data, PlatformMessageResponseCallback? callback) {
+        if (name == 'query_asset') {
+          final String assetName = utf8.decode(
+            data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          );
+          PlatformDispatcher.instance.sendPlatformMessage(
+            'flutter/assets',
+            ByteData.sublistView(utf8.encode(assetName)),
+            (ByteData? assetData) {
+              if (callback != null) {
+                callback(assetData);
+              }
+            },
+          );
+        }
+      };
+  signalNativeTest();
+}

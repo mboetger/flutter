@@ -5,6 +5,8 @@
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 
 #include "flutter/fml/make_copyable.h"
+#include "flutter/fml/synchronization/waitable_event.h"
+#include "flutter/shell/platform/embedder/embedder_asset_resolver.h"
 #include "flutter/shell/platform/embedder/vsync_waiter_embedder.h"
 
 namespace flutter {
@@ -342,6 +344,60 @@ bool EmbedderEngine::ScheduleFrame() {
   }
   platform_view->ScheduleFrame();
   return true;
+}
+
+bool EmbedderEngine::UpdateAssetResolvers(
+    const FlutterAssetResolver* const* asset_resolvers,
+    size_t asset_resolvers_count) {
+  if (!IsValid()) {
+    return false;
+  }
+
+  // Copy resolver structs so we can safely pass them to the UI thread.
+  std::vector<FlutterAssetResolver> resolvers_copy;
+  resolvers_copy.reserve(asset_resolvers_count);
+  for (size_t i = 0; i < asset_resolvers_count; ++i) {
+    if (asset_resolvers != nullptr && asset_resolvers[i] != nullptr) {
+      resolvers_copy.push_back(*asset_resolvers[i]);
+    }
+  }
+
+  fml::AutoResetWaitableEvent latch;
+  bool success = false;
+  fml::TaskRunner::RunNowOrPostTask(
+      task_runners_.GetUITaskRunner(),
+      [&latch, &success, engine = shell_->GetEngine(),
+       resolvers_copy = std::move(resolvers_copy)]() mutable {
+        if (engine) {
+          auto old_asset_manager = engine->GetAssetManager();
+          auto new_asset_manager = std::make_shared<AssetManager>();
+
+          for (const auto& resolver_struct : resolvers_copy) {
+            auto resolver =
+                std::make_unique<EmbedderAssetResolver>(&resolver_struct);
+            if (resolver->IsValid()) {
+              new_asset_manager->PushBack(std::move(resolver));
+            }
+          }
+
+          if (old_asset_manager) {
+            auto old_resolvers = old_asset_manager->TakeResolvers();
+            for (auto& old_resolver : old_resolvers) {
+              if (old_resolver &&
+                  old_resolver->GetType() !=
+                      AssetResolver::AssetResolverType::kCustomResolver) {
+                new_asset_manager->PushBack(std::move(old_resolver));
+              }
+            }
+          }
+
+          engine->UpdateAssetManager(new_asset_manager);
+          success = true;
+        }
+        latch.Signal();
+      });
+  latch.Wait();
+  return success;
 }
 
 Shell& EmbedderEngine::GetShell() {

@@ -8,9 +8,11 @@
 #include <type_traits>
 
 // Checks if the given struct contains a member, whether set or not.
-#define STRUCT_HAS_MEMBER(pointer, member)                           \
-  ((offsetof(std::remove_pointer<decltype(pointer)>::type, member) + \
-        sizeof(pointer->member) <=                                   \
+#define STRUCT_HAS_MEMBER(pointer, member)                            \
+  ((offsetof(std::remove_pointer<                                     \
+                 typename std::decay<decltype(pointer)>::type>::type, \
+             member) +                                                \
+        sizeof(pointer->member) <=                                    \
     pointer->struct_size))
 
 #define SAFE_ACCESS(pointer, member, default_value)                 \
