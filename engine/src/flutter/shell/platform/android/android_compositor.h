@@ -219,7 +219,6 @@ class AndroidCompositor
   std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
       legacy_overlay_metadata_;
   std::unique_ptr<AndroidSurface> legacy_overlay_surface_;
-  std::unique_ptr<Surface> legacy_overlay_gpu_surface_;
 
   std::optional<bool> surface_control_enabled_for_testing_;
 

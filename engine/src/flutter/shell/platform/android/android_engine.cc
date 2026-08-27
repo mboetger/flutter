@@ -654,14 +654,6 @@ AndroidEngine::OnPlatformViewGetShutdownSafeIOTaskRunner() const {
   return nullptr;
 }
 
-void AndroidEngine::OnPlatformViewCreated(std::unique_ptr<Surface> surface) {
-  if (surface && task_runners_.has_value()) {
-    Surface* surface_ptr = surface.release();
-    task_runners_->GetRasterTaskRunner()->PostTask(
-        [surface_ptr]() { delete surface_ptr; });
-  }
-}
-
 void AndroidEngine::OnPlatformViewDestroyed() {
   if (compositor_) {
     compositor_->DestroySurfaces();

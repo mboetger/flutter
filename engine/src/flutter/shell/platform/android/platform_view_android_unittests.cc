@@ -23,10 +23,6 @@ class MockPlatformViewAndroidDelegate : public PlatformViewAndroid::Delegate {
               OnPlatformViewGetShutdownSafeIOTaskRunner,
               (),
               (const, override));
-  MOCK_METHOD(void,
-              OnPlatformViewCreated,
-              (std::unique_ptr<Surface> surface),
-              (override));
   MOCK_METHOD(void, OnPlatformViewDestroyed, (), (override));
   MOCK_METHOD(void, OnPlatformViewScheduleFrame, (), (override));
   MOCK_METHOD(void,

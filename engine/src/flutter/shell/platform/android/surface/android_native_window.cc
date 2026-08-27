@@ -22,7 +22,7 @@ AndroidNativeWindow::~AndroidNativeWindow() {
 }
 
 bool AndroidNativeWindow::IsValid() const {
-  return window_ != nullptr;
+  return window_ != nullptr || is_fake_window_;
 }
 
 AndroidNativeWindow::Handle AndroidNativeWindow::handle() const {

@@ -87,7 +87,6 @@ class AndroidEngine : public PlatformViewAndroid::Delegate {
   const Settings& OnPlatformViewGetSettings() const override;
   std::shared_ptr<fml::BasicTaskRunner>
   OnPlatformViewGetShutdownSafeIOTaskRunner() const override;
-  void OnPlatformViewCreated(std::unique_ptr<Surface> surface) override;
   void OnPlatformViewDestroyed() override;
   void OnPlatformViewScheduleFrame() override;
   void OnPlatformViewSetNextFrameCallback(const fml::closure& closure) override;

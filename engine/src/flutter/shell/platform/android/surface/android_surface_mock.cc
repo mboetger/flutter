@@ -6,22 +6,6 @@
 
 namespace flutter {
 
-std::unique_ptr<GLContextResult> AndroidSurfaceMock::GLContextMakeCurrent() {
-  return std::make_unique<GLContextDefaultResult>(/*static_result=*/true);
-}
-
-bool AndroidSurfaceMock::GLContextClearCurrent() {
-  return true;
-}
-
-bool AndroidSurfaceMock::GLContextPresent(const GLPresentInfo& present_info) {
-  return true;
-}
-
-GLFBOInfo AndroidSurfaceMock::GLContextFBO(GLFrameInfo frame_info) const {
-  return GLFBOInfo{
-      .fbo_id = 0,
-  };
-}
+// Empty - all mock methods defined in header via MOCK_METHOD.
 
 }  // namespace flutter

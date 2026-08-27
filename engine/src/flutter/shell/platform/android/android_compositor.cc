@@ -166,7 +166,6 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
       } else {
         if (!views_visible_last_frame_.empty()) {
           if (legacy_overlay_created_) {
-            legacy_overlay_gpu_surface_.reset();
             legacy_overlay_surface_.reset();
             legacy_overlay_metadata_.reset();
             legacy_overlay_created_ = false;
@@ -218,7 +217,6 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
       } else {
         if (!views_visible_last_frame_.empty()) {
           if (legacy_overlay_created_) {
-            legacy_overlay_gpu_surface_.reset();
             legacy_overlay_surface_.reset();
             legacy_overlay_metadata_.reset();
             legacy_overlay_created_ = false;
@@ -379,26 +377,14 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
                   legacy_overlay_metadata_->window, jni_facade_);
               legacy_overlay_surface_->OnScreenSurfaceResize(target_size);
               legacy_overlay_surface_->SetupImpellerSurface();
-              legacy_overlay_gpu_surface_ =
-                  legacy_overlay_surface_->CreateGPUSurface();
+              // legacy overlay surface created
             }
           }
         }
-        if (legacy_overlay_gpu_surface_) {
-          auto frame = legacy_overlay_gpu_surface_->AcquireFrame(target_size);
-          if (frame) {
-            auto* canvas = frame->Canvas();
-            if (canvas) {
-              canvas->Clear(DlColor::kTransparent());
-            }
-            frame->Submit();
-          }
-          if (android_surface_) {
-            android_surface_->OnGLContextMakeCurrent();
-          }
+        if (android_surface_) {
+          android_surface_->OnGLContextMakeCurrent();
         }
       } else if (legacy_overlay_created_) {
-        legacy_overlay_gpu_surface_.reset();
         legacy_overlay_surface_.reset();
         legacy_overlay_metadata_.reset();
         legacy_overlay_created_ = false;
@@ -539,7 +525,6 @@ void AndroidCompositor::DestroySurfaces() {
     latch.Wait();
   }
   if (legacy_overlay_created_) {
-    legacy_overlay_gpu_surface_.reset();
     legacy_overlay_surface_.reset();
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(

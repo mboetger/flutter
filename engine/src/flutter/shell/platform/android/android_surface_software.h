@@ -6,18 +6,12 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_SURFACE_SOFTWARE_H_
 
 #include "flutter/fml/macros.h"
-#include "flutter/fml/platform/android/jni_weak_ref.h"
-#include "flutter/fml/platform/android/scoped_java_ref.h"
-#include "flutter/shell/gpu/gpu_surface_software.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
 
-#include "third_party/skia/include/core/SkSurface.h"
-
 namespace flutter {
 
-class AndroidSurfaceSoftware final : public AndroidSurface,
-                                     public GPUSurfaceSoftwareDelegate {
+class AndroidSurfaceSoftware final : public AndroidSurface {
  public:
   AndroidSurfaceSoftware();
 
@@ -33,10 +27,6 @@ class AndroidSurfaceSoftware final : public AndroidSurface,
   bool ResourceContextClearCurrent() override;
 
   // |AndroidSurface|
-  std::unique_ptr<Surface> CreateGPUSurface(
-      GrDirectContext* gr_context) override;
-
-  // |AndroidSurface|
   void TeardownOnScreenContext() override;
 
   // |AndroidSurface|
@@ -47,17 +37,8 @@ class AndroidSurfaceSoftware final : public AndroidSurface,
       fml::RefPtr<AndroidNativeWindow> window,
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) override;
 
-  // |GPUSurfaceSoftwareDelegate|
-  sk_sp<SkSurface> AcquireBackingStore(const DlISize& size) override;
-
-  // |GPUSurfaceSoftwareDelegate|
-  bool PresentBackingStore(sk_sp<SkSurface> backing_store) override;
-
  private:
-  sk_sp<SkSurface> sk_surface_;
   fml::RefPtr<AndroidNativeWindow> native_window_;
-  SkColorType target_color_type_;
-  SkAlphaType target_alpha_type_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidSurfaceSoftware);
 };

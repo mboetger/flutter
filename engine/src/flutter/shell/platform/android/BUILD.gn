@@ -10,16 +10,7 @@ import("//flutter/common/config.gni")
 import("//flutter/impeller/tools/impeller.gni")
 import("//flutter/lib/snapshot/gen_snapshot.gni")
 import("//flutter/shell/config.gni")
-import("//flutter/shell/gpu/gpu.gni")
 import("//flutter/shell/version/version.gni")
-import("//flutter/vulkan/config.gni")
-
-shell_gpu_configuration("android_gpu_configuration") {
-  enable_software = true
-  enable_gl = true
-  enable_vulkan = true
-  enable_metal = false
-}
 
 source_set("image_generator") {
   sources = [
@@ -162,7 +153,6 @@ source_set("flutter_shell_native_src") {
   }
 
   public_deps = [
-    ":android_gpu_configuration",
     ":image_generator",
     "//flutter/common",
     "//flutter/common/graphics",
@@ -187,7 +177,6 @@ source_set("flutter_shell_native_src") {
     "//flutter/skia",
     "//flutter/third_party/rapidjson",
     "//flutter/txt",
-    "//flutter/vulkan",
   ]
 
   public_configs = [ "//flutter:config" ]

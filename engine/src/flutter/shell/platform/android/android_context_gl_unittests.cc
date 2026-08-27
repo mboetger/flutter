@@ -5,6 +5,7 @@
 #define FML_USED_ON_EMBEDDER
 
 #include <memory>
+#include "flutter/fml/message_loop.h"
 #include "flutter/shell/common/thread_host.h"
 #include "flutter/shell/platform/android/android_context_gl_skia.h"
 #include "flutter/shell/platform/android/android_egl_surface.h"
@@ -161,10 +162,7 @@ TEST(AndroidContextGl, CreateSingleThread) {
   EXPECT_TRUE(main_context->abandoned());
 }
 
-TEST(AndroidSurfaceGL, CreateSnapshopSurfaceWhenOnscreenSurfaceIsNotNull) {
-  GrMockOptions main_context_options;
-  sk_sp<GrDirectContext> main_context =
-      GrDirectContext::MakeMock(&main_context_options);
+TEST(AndroidSurfaceGL, OnGLContextMakeCurrentWhenOnscreenSurfaceIsNotNull) {
   auto environment = fml::MakeRefCounted<AndroidEnvironmentGL>();
   std::string thread_label =
       ::testing::UnitTest::GetInstance()->current_test_info()->name();
@@ -178,17 +176,15 @@ TEST(AndroidSurfaceGL, CreateSnapshopSurfaceWhenOnscreenSurfaceIsNotNull) {
       std::make_unique<AndroidSurfaceGLSkia>(android_context);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
-  android_surface->SetNativeWindow(window, nullptr);
+  EXPECT_TRUE(android_surface->SetNativeWindow(window, nullptr));
   auto onscreen_surface = android_surface->GetOnscreenSurface();
   EXPECT_NE(onscreen_surface, nullptr);
-  android_surface->CreateSnapshotSurface();
-  EXPECT_EQ(onscreen_surface, android_surface->GetOnscreenSurface());
+  EXPECT_TRUE(android_surface->IsValid());
+  EXPECT_TRUE(android_surface->OnGLContextMakeCurrent());
+  EXPECT_TRUE(android_surface->GLContextClearCurrent());
 }
 
-TEST(AndroidSurfaceGL, CreateSnapshopSurfaceWhenOnscreenSurfaceIsNull) {
-  GrMockOptions main_context_options;
-  sk_sp<GrDirectContext> main_context =
-      GrDirectContext::MakeMock(&main_context_options);
+TEST(AndroidSurfaceGL, SetNativeWindowWhenNull) {
   auto environment = fml::MakeRefCounted<AndroidEnvironmentGL>();
   std::string thread_label =
       ::testing::UnitTest::GetInstance()->current_test_info()->name();
@@ -203,9 +199,9 @@ TEST(AndroidSurfaceGL, CreateSnapshopSurfaceWhenOnscreenSurfaceIsNull) {
       std::make_shared<AndroidContextGLSkia>(environment, task_runners);
   auto android_surface =
       std::make_unique<AndroidSurfaceGLSkia>(android_context);
+  EXPECT_FALSE(android_surface->SetNativeWindow(nullptr, nullptr));
   EXPECT_EQ(android_surface->GetOnscreenSurface(), nullptr);
-  android_surface->CreateSnapshotSurface();
-  EXPECT_NE(android_surface->GetOnscreenSurface(), nullptr);
+  EXPECT_TRUE(android_surface->IsValid());
 }
 
 TEST(AndroidContextGl, EnsureMakeCurrentChecksCurrentContextStatus) {

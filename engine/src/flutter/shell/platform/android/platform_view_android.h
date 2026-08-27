@@ -10,15 +10,14 @@
 #include <vector>
 
 #include <android/hardware_buffer_jni.h>
+#include "flutter/common/graphics/texture.h"
 #include "flutter/common/settings.h"
-#include "flutter/flow/surface.h"
+#include "flutter/common/task_runners.h"
 #include "flutter/fml/macros.h"
 #include "flutter/fml/memory/weak_ptr.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/fml/task_runner.h"
 #include "flutter/lib/ui/window/platform_message.h"
-#include "flutter/shell/common/snapshot_surface_producer.h"
-#include "flutter/shell/common/vsync_waiter.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_message_handler_android.h"
@@ -57,7 +56,6 @@ class PlatformViewAndroid final {
     virtual const Settings& OnPlatformViewGetSettings() const = 0;
     virtual std::shared_ptr<fml::BasicTaskRunner>
     OnPlatformViewGetShutdownSafeIOTaskRunner() const = 0;
-    virtual void OnPlatformViewCreated(std::unique_ptr<Surface> surface) = 0;
     virtual void OnPlatformViewDestroyed() = 0;
     virtual void OnPlatformViewScheduleFrame() = 0;
     virtual void OnPlatformViewSetNextFrameCallback(
@@ -98,11 +96,6 @@ class PlatformViewAndroid final {
                       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
                       AndroidRenderingAPI rendering_api);
 
-  //----------------------------------------------------------------------------
-  /// @brief      Creates a new PlatformViewAndroid but using an existing
-  ///             Android GPU context to create new surfaces. This maximizes
-  ///             resource sharing between 2 PlatformViewAndroids of 2 Shells.
-  ///
   PlatformViewAndroid(
       PlatformViewAndroid::Delegate& delegate,
       const flutter::TaskRunners& task_runners,
@@ -111,27 +104,21 @@ class PlatformViewAndroid final {
 
   ~PlatformViewAndroid();
 
-  fml::WeakPtr<PlatformViewAndroid> GetWeakPtr() {
-    return weak_factory_.GetWeakPtr();
-  }
-
-  const flutter::TaskRunners& GetTaskRunners() const { return task_runners_; }
-
   void NotifyCreated(fml::RefPtr<AndroidNativeWindow> native_window);
 
   void NotifySurfaceWindowChanged(
       fml::RefPtr<AndroidNativeWindow> native_window);
 
-  void NotifyChanged(const DlISize& size);
-
   void NotifyDestroyed();
+
+  void NotifyChanged(const DlISize& size);
 
   void SetViewportMetrics(const FlutterWindowMetricsEvent& metrics);
 
   void DispatchPlatformMessage(JNIEnv* env,
                                std::string name,
-                               jobject message_data,
-                               jint message_position,
+                               jobject java_message_data,
+                               jint java_message_position,
                                jint response_id);
 
   void DispatchEmptyPlatformMessage(JNIEnv* env,
@@ -186,26 +173,32 @@ class PlatformViewAndroid final {
   void UpdateAssetResolver(
       std::unique_ptr<APKAssetProvider> updated_asset_provider);
 
+  const flutter::TaskRunners& GetTaskRunners() const { return task_runners_; }
+
   const std::shared_ptr<AndroidContext>& GetAndroidContext() {
     return android_context_;
   }
 
   AndroidSurface* GetAndroidSurface() const { return android_surface_.get(); }
 
-  std::shared_ptr<AndroidSurfaceFactoryImpl> GetSurfaceFactory() const {
+  std::shared_ptr<AndroidSurfaceFactory> GetSurfaceFactory() const {
     return surface_factory_;
   }
 
-  std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler() const {
+  std::shared_ptr<PlatformMessageHandlerAndroid> GetPlatformMessageHandler()
+      const {
     return platform_message_handler_;
   }
 
-  /// @brief Whether the SurfaceControl based swapchain is enabled and active.
   bool IsSurfaceControlEnabled() const;
+
+  void UpdateSemantics(const FlutterSemanticsUpdate2* update);
 
   void SetupImpellerContext();
 
-  void UpdateSemantics(const FlutterSemanticsUpdate2* update);
+  fml::WeakPtr<PlatformViewAndroid> GetWeakPtr() {
+    return weak_factory_.GetWeakPtr();
+  }
 
   void SetApplicationLocale(std::string locale);
 
@@ -214,18 +207,6 @@ class PlatformViewAndroid final {
   void HandlePlatformMessage(std::unique_ptr<flutter::PlatformMessage> message);
 
   void OnPreEngineRestart() const;
-
-  std::unique_ptr<VsyncWaiter> CreateVSyncWaiter();
-
-  std::unique_ptr<Surface> CreateRenderingSurface();
-
-  std::shared_ptr<ExternalViewEmbedder> CreateExternalViewEmbedder();
-
-  std::unique_ptr<SnapshotSurfaceProducer> CreateSnapshotSurfaceProducer();
-
-  sk_sp<GrDirectContext> CreateResourceContext() const;
-
-  void ReleaseResourceContext() const;
 
   std::shared_ptr<impeller::Context> GetImpellerContext() const;
 
@@ -243,19 +224,16 @@ class PlatformViewAndroid final {
   void FireFirstFrameCallback();
 
   Delegate& delegate_;
-  const TaskRunners task_runners_;
+  const flutter::TaskRunners task_runners_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::shared_ptr<AndroidContext> android_context_;
-  std::shared_ptr<AndroidSurfaceFactoryImpl> surface_factory_;
-
-  PlatformViewAndroidDelegate platform_view_android_delegate_;
-
+  std::shared_ptr<AndroidSurfaceFactory> surface_factory_;
   std::unique_ptr<AndroidSurface> android_surface_;
+  PlatformViewAndroidDelegate platform_view_android_delegate_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
 
-  fml::WeakPtrFactory<PlatformViewAndroid>
-      weak_factory_;  // Must be the last member.
+  fml::WeakPtrFactory<PlatformViewAndroid> weak_factory_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewAndroid);
 };

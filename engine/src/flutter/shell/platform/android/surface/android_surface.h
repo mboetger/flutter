@@ -6,8 +6,7 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_SURFACE_ANDROID_SURFACE_H_
 
 #include <memory>
-#include "flutter/flow/embedded_views.h"
-#include "flutter/flow/surface.h"
+#include "flutter/display_list/geometry/dl_geometry_types.h"
 #include "flutter/fml/macros.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -19,8 +18,6 @@ class Context;
 
 namespace flutter {
 
-class AndroidExternalViewEmbedder;
-
 class AndroidSurface {
  public:
   virtual ~AndroidSurface();
@@ -28,9 +25,6 @@ class AndroidSurface {
   virtual bool IsValid() const = 0;
 
   virtual void TeardownOnScreenContext() = 0;
-
-  virtual std::unique_ptr<Surface> CreateGPUSurface(
-      GrDirectContext* gr_context = nullptr) = 0;
 
   virtual bool OnScreenSurfaceResize(const DlISize& size) = 0;
 
@@ -47,8 +41,6 @@ class AndroidSurface {
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) = 0;
 
   virtual bool PresentOnscreenSurface() { return false; }
-
-  virtual std::unique_ptr<Surface> CreateSnapshotSurface();
 
   virtual std::shared_ptr<impeller::Context> GetImpellerContext();
 

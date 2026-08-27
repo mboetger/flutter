@@ -4,76 +4,11 @@
 
 #include "flutter/shell/platform/android/android_surface_gl_impeller.h"
 
-#if defined(__ANDROID__)
-#include <sys/system_properties.h>
-#endif
+#include <utility>
 
-#include "flutter/common/graphics/gl_context_switch.h"
 #include "flutter/fml/logging.h"
-#include "flutter/impeller/toolkit/egl/surface.h"
-#include "flutter/shell/gpu/gpu_surface_gl_impeller.h"
 
 namespace flutter {
-
-namespace {
-
-// On some older MediaTek devices running Android 10 or below (specifically
-// MT6762/Helio P22 and MT6765/Helio P35 with PowerVR Rogue GE8320 GPUs),
-// keeping the EGL context current on the raster thread while the thread is idle
-// triggers a driver-level race condition/crash inside the system RenderThread's
-// eglMakeCurrent call during activity transitions or platform view rendering.
-// Clearing the current context at the end of every frame resolves the conflict
-// and avoids the driver crashes.
-bool ShouldClearContextBetweenFrames() {
-#if defined(__ANDROID__)
-  char sdk_value[PROP_VALUE_MAX];
-  int sdk_version = 0;
-  if (__system_property_get("ro.build.version.sdk", sdk_value) > 0) {
-    sdk_version = atoi(sdk_value);
-  }
-  if (sdk_version == 0 || sdk_version > 29) {
-    return false;
-  }
-
-  auto is_bad_platform = [](const char* name) -> bool {
-    char value[PROP_VALUE_MAX];
-    if (__system_property_get(name, value) > 0) {
-      std::string_view platform(value);
-      if (platform.starts_with("mt6762") || platform.starts_with("mt6765") ||
-          platform.starts_with("MT6762") || platform.starts_with("MT6765")) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  return is_bad_platform("ro.board.platform") ||
-         is_bad_platform("ro.vendor.mediatek.platform");
-#else
-  return false;
-#endif
-}
-
-class AndroidSwitchableGLContextImpeller : public SwitchableGLContext {
- public:
-  explicit AndroidSwitchableGLContextImpeller(
-      const std::shared_ptr<AndroidContextGLImpeller>& android_context)
-      : android_context_(android_context) {}
-
-  bool SetCurrent() override { return true; }
-
-  bool RemoveCurrent() override {
-    if (auto context = android_context_.lock()) {
-      return context->OnscreenContextClearCurrent();
-    }
-    return false;
-  }
-
- private:
-  std::weak_ptr<AndroidContextGLImpeller> android_context_;
-};
-
-}  // namespace
 
 AndroidSurfaceGLImpeller::AndroidSurfaceGLImpeller(
     const std::shared_ptr<AndroidContextGLImpeller>& android_context)
@@ -86,42 +21,20 @@ AndroidSurfaceGLImpeller::AndroidSurfaceGLImpeller(
     return;
   }
 
-  // The onscreen surface will be acquired once the native window is set.
-
   is_valid_ = true;
 }
 
 AndroidSurfaceGLImpeller::~AndroidSurfaceGLImpeller() = default;
 
-// |AndroidSurface|
 bool AndroidSurfaceGLImpeller::IsValid() const {
   return is_valid_;
 }
 
-// |AndroidSurface|
-std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
-    GrDirectContext* gr_context) {
-  GLContextMakeCurrent();
-  auto surface = std::make_unique<GPUSurfaceGLImpeller>(
-      this,                                    // delegate
-      android_context_->GetImpellerContext(),  // context
-      true                                     // render to surface
-  );
-  if (!surface->IsValid()) {
-    FML_LOG(ERROR) << "AndroidSurfaceGLImpeller::CreateGPUSurface failed: "
-                      "GPUSurfaceGLImpeller is invalid.";
-    return nullptr;
-  }
-  return surface;
-}
-
-// |AndroidSurface|
 void AndroidSurfaceGLImpeller::TeardownOnScreenContext() {
   GLContextClearCurrent();
   onscreen_surface_.reset();
 }
 
-// |AndroidSurface|
 bool AndroidSurfaceGLImpeller::OnScreenSurfaceResize(const DlISize& size) {
   if (!native_window_) {
     return false;
@@ -136,7 +49,6 @@ bool AndroidSurfaceGLImpeller::OnScreenSurfaceResize(const DlISize& size) {
   return true;
 }
 
-// |AndroidSurface|
 bool AndroidSurfaceGLImpeller::ResourceContextMakeCurrent() {
   if (!offscreen_surface_) {
     FML_LOG(ERROR) << "AndroidSurfaceGLImpeller::ResourceContextMakeCurrent: "
@@ -152,12 +64,10 @@ bool AndroidSurfaceGLImpeller::ResourceContextMakeCurrent() {
   return success;
 }
 
-// |AndroidSurface|
 bool AndroidSurfaceGLImpeller::ResourceContextClearCurrent() {
   return android_context_->ResourceContextClearCurrent();
 }
 
-// |AndroidSurface|
 bool AndroidSurfaceGLImpeller::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
@@ -176,7 +86,6 @@ bool AndroidSurfaceGLImpeller::SetNativeWindow(
   return true;
 }
 
-// |AndroidSurface|
 bool AndroidSurfaceGLImpeller::PresentOnscreenSurface() {
   if (!onscreen_surface_) {
     return false;
@@ -184,49 +93,9 @@ bool AndroidSurfaceGLImpeller::PresentOnscreenSurface() {
   return onscreen_surface_->Present();
 }
 
-// |AndroidSurface|
-std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateSnapshotSurface() {
-  if (!onscreen_surface_ || !onscreen_surface_->IsValid()) {
-    onscreen_surface_ = android_context_->CreateOffscreenSurface();
-    if (!onscreen_surface_) {
-      FML_DLOG(ERROR) << "Could not create offscreen surface for snapshot.";
-      return nullptr;
-    }
-  }
-  // Make the snapshot surface current because constucting a
-  // GPUSurfaceGLImpeller and its AiksContext may invoke graphics APIs.
-  if (!android_context_->OnscreenContextMakeCurrent(onscreen_surface_.get())) {
-    FML_DLOG(ERROR) << "Could not make snapshot surface current.";
-    return nullptr;
-  }
-  return std::make_unique<GPUSurfaceGLImpeller>(
-      this,                                    // delegate
-      android_context_->GetImpellerContext(),  // context
-      true                                     // render to surface
-  );
-}
-
-// |AndroidSurface|
 std::shared_ptr<impeller::Context>
 AndroidSurfaceGLImpeller::GetImpellerContext() {
   return android_context_->GetImpellerContext();
-}
-
-// |GPUSurfaceGLDelegate|
-std::unique_ptr<GLContextResult>
-AndroidSurfaceGLImpeller::GLContextMakeCurrent() {
-  bool success = OnGLContextMakeCurrent();
-  if (!success) {
-    return std::make_unique<GLContextDefaultResult>(false);
-  }
-  if (!should_clear_context_between_frames_.has_value()) {
-    should_clear_context_between_frames_ = ShouldClearContextBetweenFrames();
-  }
-  if (should_clear_context_between_frames_.value()) {
-    return std::make_unique<GLContextSwitch>(
-        std::make_unique<AndroidSwitchableGLContextImpeller>(android_context_));
-  }
-  return std::make_unique<GLContextDefaultResult>(true);
 }
 
 bool AndroidSurfaceGLImpeller::OnGLContextMakeCurrent() {
@@ -241,7 +110,6 @@ bool AndroidSurfaceGLImpeller::OnGLContextMakeCurrent() {
   return false;
 }
 
-// |GPUSurfaceGLDelegate|
 bool AndroidSurfaceGLImpeller::GLContextClearCurrent() {
   if (onscreen_surface_ && onscreen_surface_->IsValid()) {
     return android_context_->OnscreenContextClearCurrent();
@@ -250,45 +118,6 @@ bool AndroidSurfaceGLImpeller::GLContextClearCurrent() {
     return android_context_->RasterPbufferContextClearCurrent();
   }
   return false;
-}
-
-// |GPUSurfaceGLDelegate|
-SurfaceFrame::FramebufferInfo
-AndroidSurfaceGLImpeller::GLContextFramebufferInfo() const {
-  auto info = SurfaceFrame::FramebufferInfo{};
-  info.supports_readback = true;
-  info.supports_partial_repaint = false;
-  return info;
-}
-
-// |GPUSurfaceGLDelegate|
-void AndroidSurfaceGLImpeller::GLContextSetDamageRegion(
-    const std::optional<DlIRect>& region) {
-  // Not supported.
-}
-
-// |GPUSurfaceGLDelegate|
-bool AndroidSurfaceGLImpeller::GLContextPresent(
-    const GLPresentInfo& present_info) {
-  // The FBO ID is superfluous and was introduced for iOS where the default
-  // framebuffer was not FBO0.
-  if (!onscreen_surface_) {
-    return false;
-  }
-  return onscreen_surface_->Present();
-}
-
-// |GPUSurfaceGLDelegate|
-GLFBOInfo AndroidSurfaceGLImpeller::GLContextFBO(GLFrameInfo frame_info) const {
-  // FBO0 is the default window bound framebuffer in EGL environments.
-  return GLFBOInfo{
-      .fbo_id = 0,
-  };
-}
-
-// |GPUSurfaceGLDelegate|
-sk_sp<const GrGLInterface> AndroidSurfaceGLImpeller::GetGLInterface() const {
-  return nullptr;
 }
 
 }  // namespace flutter

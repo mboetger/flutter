@@ -7,15 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "flutter/fml/concurrent_message_loop.h"
 #include "flutter/fml/logging.h"
-#include "flutter/fml/memory/ref_ptr.h"
 #include "flutter/impeller/renderer/backend/vulkan/context_vk.h"
+#include "flutter/impeller/renderer/backend/vulkan/swapchain/ahb/ahb_swapchain_vk.h"
 #include "flutter/impeller/renderer/backend/vulkan/swapchain/swapchain_vk.h"
-#include "flutter/shell/gpu/gpu_surface_vulkan_impeller.h"
-#include "flutter/vulkan/vulkan_native_surface_android.h"
-#include "impeller/renderer/backend/vulkan/swapchain/ahb/ahb_swapchain_vk.h"
-#include "impeller/toolkit/android/surface_transaction.h"
+#include "flutter/impeller/toolkit/android/surface_transaction.h"
 
 namespace flutter {
 
@@ -36,26 +32,6 @@ bool AndroidSurfaceVKImpeller::IsValid() const {
 
 void AndroidSurfaceVKImpeller::TeardownOnScreenContext() {
   surface_context_vk_->TeardownSwapchain();
-}
-
-std::unique_ptr<Surface> AndroidSurfaceVKImpeller::CreateGPUSurface(
-    GrDirectContext* gr_context) {
-  if (!IsValid()) {
-    return nullptr;
-  }
-
-  if (!native_window_ || !native_window_->IsValid()) {
-    return nullptr;
-  }
-
-  std::unique_ptr<GPUSurfaceVulkanImpeller> gpu_surface =
-      std::make_unique<GPUSurfaceVulkanImpeller>(nullptr, surface_context_vk_);
-
-  if (!gpu_surface->IsValid()) {
-    return nullptr;
-  }
-
-  return gpu_surface;
 }
 
 bool AndroidSurfaceVKImpeller::OnScreenSurfaceResize(const DlISize& size) {
@@ -99,17 +75,22 @@ bool AndroidSurfaceVKImpeller::SetNativeWindow(
           surface_context_vk_->GetParent()),
       window->handle(), cb);
 
-  if (surface_context_vk_->SetSwapchain(std::move(swapchain))) {
-    native_window_ = std::move(window);
-    return true;
+  if (!swapchain) {
+    FML_LOG(ERROR) << "Failed to create Vulkan swapchain.";
+    return false;
   }
 
-  return false;
+  if (!surface_context_vk_->SetSwapchain(swapchain)) {
+    return false;
+  }
+  native_window_ = window;
+  return true;
 }
 
 std::shared_ptr<impeller::Context>
 AndroidSurfaceVKImpeller::GetImpellerContext() {
-  return surface_context_vk_;
+  return std::reinterpret_pointer_cast<impeller::Context>(
+      surface_context_vk_->GetParent());
 }
 
 }  // namespace flutter
