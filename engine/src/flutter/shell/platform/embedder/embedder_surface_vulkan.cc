@@ -80,6 +80,9 @@ EmbedderSurfaceVulkan::EmbedderSurfaceVulkan(
 }
 
 EmbedderSurfaceVulkan::~EmbedderSurfaceVulkan() {
+  if (setup_called_ && vulkan_dispatch_table_.teardown_callback) {
+    vulkan_dispatch_table_.teardown_callback();
+  }
   if (main_context_) {
     main_context_->releaseResourcesAndAbandonContext();
   }
@@ -110,6 +113,14 @@ bool EmbedderSurfaceVulkan::IsValid() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceVulkan::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
+  if (vulkan_dispatch_table_.setup_callback &&
+      !vulkan_dispatch_table_.setup_callback()) {
+    return nullptr;
+  }
+  setup_called_ = true;
   const bool render_to_surface = !external_view_embedder_;
   return std::make_unique<GPUSurfaceVulkan>(this, main_context_,
                                             render_to_surface);

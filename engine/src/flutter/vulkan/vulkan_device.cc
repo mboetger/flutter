@@ -175,7 +175,9 @@ bool VulkanDevice::InitializeCommandPool() {
 }
 
 VulkanDevice::~VulkanDevice() {
-  [[maybe_unused]] auto result = WaitIdle();
+  if (valid_) {
+    [[maybe_unused]] auto result = WaitIdle();
+  }
 }
 
 bool VulkanDevice::IsValid() const {
@@ -183,6 +185,9 @@ bool VulkanDevice::IsValid() const {
 }
 
 bool VulkanDevice::WaitIdle() const {
+  if (!valid_ || !vk_.AreDeviceProcsSetup()) {
+    return false;
+  }
   return VK_CALL_LOG_ERROR(vk_.DeviceWaitIdle(device_)) == VK_SUCCESS;
 }
 

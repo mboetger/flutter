@@ -25,6 +25,8 @@ class EmbedderSurfaceGLSkia final : public EmbedderSurface,
         gl_surface_transformation_callback;                          // optional
     std::function<void*(const char*)> gl_proc_resolver;              // optional
     std::function<GLFBOInfo(intptr_t)> gl_populate_existing_damage;  // required
+    std::function<bool(void)> gl_setup_callback;                     // optional
+    std::function<void(void)> gl_teardown_callback;                  // optional
   };
 
   EmbedderSurfaceGLSkia(
@@ -36,6 +38,7 @@ class EmbedderSurfaceGLSkia final : public EmbedderSurface,
 
  private:
   bool valid_ = false;
+  bool setup_called_ = false;
   GLDispatchTable gl_dispatch_table_;
   bool fbo_reset_after_present_;
 

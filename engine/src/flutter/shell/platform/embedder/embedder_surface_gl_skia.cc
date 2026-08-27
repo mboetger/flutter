@@ -29,7 +29,11 @@ EmbedderSurfaceGLSkia::EmbedderSurfaceGLSkia(
   valid_ = true;
 }
 
-EmbedderSurfaceGLSkia::~EmbedderSurfaceGLSkia() = default;
+EmbedderSurfaceGLSkia::~EmbedderSurfaceGLSkia() {
+  if (setup_called_ && gl_dispatch_table_.gl_teardown_callback) {
+    gl_dispatch_table_.gl_teardown_callback();
+  }
+}
 
 // |EmbedderSurface|
 bool EmbedderSurfaceGLSkia::IsValid() const {
@@ -95,6 +99,14 @@ SurfaceFrame::FramebufferInfo EmbedderSurfaceGLSkia::GLContextFramebufferInfo()
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceGLSkia::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
+  if (gl_dispatch_table_.gl_setup_callback &&
+      !gl_dispatch_table_.gl_setup_callback()) {
+    return nullptr;
+  }
+  setup_called_ = true;
   const bool render_to_surface = !external_view_embedder_;
   return std::make_unique<GPUSurfaceGLSkia>(
       this,              // GPU surface GL delegate

@@ -93,6 +93,7 @@ EmbedderSurfaceGLImpeller::EmbedderSurfaceGLImpeller(
       !gl_dispatch_table_.gl_proc_resolver) {
     return;
   }
+
   // Certain GL backends need to made current before any GL
   // state can be accessed.
   gl_dispatch_table_.gl_make_current_callback();
@@ -100,6 +101,7 @@ EmbedderSurfaceGLImpeller::EmbedderSurfaceGLImpeller(
   auto gl = std::make_unique<impeller::ProcTableGLES>(
       gl_dispatch_table_.gl_proc_resolver);
   if (!gl->IsValid()) {
+    gl_dispatch_table_.gl_clear_current_callback();
     return;
   }
 
@@ -113,12 +115,14 @@ EmbedderSurfaceGLImpeller::EmbedderSurfaceGLImpeller(
 
   if (!impeller_context_) {
     FML_LOG(ERROR) << "Could not create Impeller context.";
+    gl_dispatch_table_.gl_clear_current_callback();
     return;
   }
 
   auto worker_id = impeller_context_->AddReactorWorker(worker_);
   if (!worker_id.has_value()) {
     FML_LOG(ERROR) << "Could not add reactor worker.";
+    gl_dispatch_table_.gl_clear_current_callback();
     return;
   }
 
@@ -131,7 +135,11 @@ EmbedderSurfaceGLImpeller::EmbedderSurfaceGLImpeller(
   valid_ = true;
 }
 
-EmbedderSurfaceGLImpeller::~EmbedderSurfaceGLImpeller() = default;
+EmbedderSurfaceGLImpeller::~EmbedderSurfaceGLImpeller() {
+  if (setup_called_ && gl_dispatch_table_.gl_teardown_callback) {
+    gl_dispatch_table_.gl_teardown_callback();
+  }
+}
 
 // |EmbedderSurface|
 bool EmbedderSurfaceGLImpeller::IsValid() const {
@@ -201,6 +209,14 @@ EmbedderSurfaceGLImpeller::GLContextFramebufferInfo() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceGLImpeller::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
+  if (gl_dispatch_table_.gl_setup_callback &&
+      !gl_dispatch_table_.gl_setup_callback()) {
+    return nullptr;
+  }
+  setup_called_ = true;
   // Ensure that the GL context is current before creating the GPU surface.
   // GPUSurfaceGLImpeller initialization will set up shader pipelines, and the
   // current thread needs to be able to execute reactor operations.

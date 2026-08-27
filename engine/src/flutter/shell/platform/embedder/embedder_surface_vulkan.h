@@ -24,7 +24,9 @@ class EmbedderSurfaceVulkan final : public EmbedderSurface,
     std::function<FlutterVulkanImage(const DlISize& frame_size)>
         get_next_image;  // required
     std::function<bool(VkImage image, VkFormat format)>
-        present_image;  // required
+        present_image;                            // required
+    std::function<bool(void)> setup_callback;     // optional
+    std::function<void(void)> teardown_callback;  // optional
   };
 
   EmbedderSurfaceVulkan(
@@ -54,6 +56,7 @@ class EmbedderSurfaceVulkan final : public EmbedderSurface,
 
  private:
   bool valid_ = false;
+  bool setup_called_ = false;
   fml::RefPtr<vulkan::VulkanProcTable> vk_;
   vulkan::VulkanDevice device_;
   VulkanDispatchTable vulkan_dispatch_table_;

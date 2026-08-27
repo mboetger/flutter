@@ -87,7 +87,11 @@ EmbedderSurfaceVulkanImpeller::EmbedderSurfaceVulkanImpeller(
   valid_ = true;
 }
 
-EmbedderSurfaceVulkanImpeller::~EmbedderSurfaceVulkanImpeller() {}
+EmbedderSurfaceVulkanImpeller::~EmbedderSurfaceVulkanImpeller() {
+  if (setup_called_ && vulkan_dispatch_table_.teardown_callback) {
+    vulkan_dispatch_table_.teardown_callback();
+  }
+}
 
 std::shared_ptr<impeller::Context>
 EmbedderSurfaceVulkanImpeller::CreateImpellerContext() const {
@@ -118,6 +122,14 @@ bool EmbedderSurfaceVulkanImpeller::IsValid() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceVulkanImpeller::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
+  if (vulkan_dispatch_table_.setup_callback &&
+      !vulkan_dispatch_table_.setup_callback()) {
+    return nullptr;
+  }
+  setup_called_ = true;
   return std::make_unique<GPUSurfaceVulkanImpeller>(this, context_);
 }
 

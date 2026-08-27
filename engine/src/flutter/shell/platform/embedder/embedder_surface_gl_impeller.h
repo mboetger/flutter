@@ -44,6 +44,7 @@ class EmbedderSurfaceGLImpeller final : public EmbedderSurface,
   FML_FRIEND_TEST(testing::EmbedderSurfaceGLImpellerTest,
                   GLES2ContextDoesNotHaveGLES3Shaders);
   bool valid_ = false;
+  bool setup_called_ = false;
   EmbedderSurfaceGLSkia::GLDispatchTable gl_dispatch_table_;
   bool fbo_reset_after_present_;
   std::shared_ptr<impeller::ContextGLES> impeller_context_;

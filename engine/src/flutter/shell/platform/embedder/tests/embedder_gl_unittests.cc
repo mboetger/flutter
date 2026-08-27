@@ -5344,6 +5344,206 @@ TEST_F(EmbedderTest, CompositorMustBeAbleToRenderKnownSceneToOpenGLSurfaces) {
   ASSERT_EQ(context.GetSurfacePresentCount(), 0u);
 }
 
+TEST_F(EmbedderTest, OpenGLSetupCallbackInvoked) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+
+  static std::atomic<int> s_setup_callback_count{0};
+  static std::atomic<int> s_teardown_callback_count{0};
+  static std::atomic<void*> s_setup_user_data{nullptr};
+  static std::atomic<void*> s_teardown_user_data{nullptr};
+  static std::thread::id s_setup_thread_id;
+  s_setup_callback_count = 0;
+  s_teardown_callback_count = 0;
+  s_setup_user_data = nullptr;
+  s_teardown_user_data = nullptr;
+
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    s_setup_user_data.store(user_data);
+    s_setup_thread_id = std::this_thread::get_id();
+    s_setup_callback_count.fetch_add(1);
+    return true;
+  };
+  context.GetRendererConfig().open_gl.teardown_callback = [](void* user_data) {
+    s_teardown_user_data.store(user_data);
+    s_teardown_callback_count.fetch_add(1);
+  };
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_GE(s_setup_callback_count.load(), 1);
+  EXPECT_EQ(s_setup_user_data.load(), &context);
+  EXPECT_EQ(s_teardown_callback_count.load(), 0);
+
+  fml::AutoResetWaitableEvent latch;
+  ToEmbedderEngine(engine.get())
+      ->GetShell()
+      .GetTaskRunners()
+      .GetRasterTaskRunner()
+      ->PostTask([&]() {
+        EXPECT_EQ(s_setup_thread_id, std::this_thread::get_id());
+        latch.Signal();
+      });
+  latch.Wait();
+
+  engine.reset();
+  EXPECT_GE(s_teardown_callback_count.load(), 1);
+  EXPECT_EQ(s_teardown_user_data.load(), &context);
+}
+
+TEST_F(EmbedderTest, OpenGLSetupCallbackFailureAbortsSurface) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+
+  static std::atomic<int> s_setup_callback_count{0};
+  static std::atomic<int> s_teardown_callback_count{0};
+  static std::atomic<void*> s_setup_user_data{nullptr};
+  s_setup_callback_count = 0;
+  s_teardown_callback_count = 0;
+  s_setup_user_data = nullptr;
+
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    s_setup_user_data.store(user_data);
+    s_setup_callback_count.fetch_add(1);
+    return false;
+  };
+  context.GetRendererConfig().open_gl.teardown_callback = [](void* user_data) {
+    s_teardown_callback_count.fetch_add(1);
+  };
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  EXPECT_GE(s_setup_callback_count.load(), 1);
+  EXPECT_EQ(s_setup_user_data.load(), &context);
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 1;
+  event.height = 1;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  fml::AutoResetWaitableEvent latch;
+  ToEmbedderEngine(engine.get())
+      ->GetShell()
+      .GetTaskRunners()
+      .GetRasterTaskRunner()
+      ->PostTask([&]() { latch.Signal(); });
+  latch.Wait();
+
+  EXPECT_EQ(context.GetSurfacePresentCount(), 0u);
+
+  engine.reset();
+  EXPECT_EQ(s_teardown_callback_count.load(), 0);
+}
+
+TEST_F(EmbedderTest, OpenGLImpellerSetupCallbackInvoked) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+
+  static std::atomic<int> s_setup_callback_count{0};
+  static std::atomic<int> s_teardown_callback_count{0};
+  static std::atomic<void*> s_setup_user_data{nullptr};
+  static std::atomic<void*> s_teardown_user_data{nullptr};
+  static std::thread::id s_setup_thread_id;
+  s_setup_callback_count = 0;
+  s_teardown_callback_count = 0;
+  s_setup_user_data = nullptr;
+  s_teardown_user_data = nullptr;
+
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    s_setup_user_data.store(user_data);
+    s_setup_thread_id = std::this_thread::get_id();
+    s_setup_callback_count.fetch_add(1);
+    return true;
+  };
+  context.GetRendererConfig().open_gl.teardown_callback = [](void* user_data) {
+    s_teardown_user_data.store(user_data);
+    s_teardown_callback_count.fetch_add(1);
+  };
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_GE(s_setup_callback_count.load(), 1);
+  EXPECT_EQ(s_setup_user_data.load(), &context);
+  EXPECT_EQ(s_teardown_callback_count.load(), 0);
+
+  fml::AutoResetWaitableEvent latch;
+  ToEmbedderEngine(engine.get())
+      ->GetShell()
+      .GetTaskRunners()
+      .GetRasterTaskRunner()
+      ->PostTask([&]() {
+        EXPECT_EQ(s_setup_thread_id, std::this_thread::get_id());
+        latch.Signal();
+      });
+  latch.Wait();
+
+  engine.reset();
+  EXPECT_GE(s_teardown_callback_count.load(), 1);
+  EXPECT_EQ(s_teardown_user_data.load(), &context);
+}
+
+TEST_F(EmbedderTest, OpenGLImpellerSetupCallbackFailureAbortsSurface) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+
+  static std::atomic<int> s_setup_callback_count{0};
+  static std::atomic<int> s_teardown_callback_count{0};
+  static std::atomic<void*> s_setup_user_data{nullptr};
+  s_setup_callback_count = 0;
+  s_teardown_callback_count = 0;
+  s_setup_user_data = nullptr;
+
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    s_setup_user_data.store(user_data);
+    s_setup_callback_count.fetch_add(1);
+    return false;
+  };
+  context.GetRendererConfig().open_gl.teardown_callback = [](void* user_data) {
+    s_teardown_callback_count.fetch_add(1);
+  };
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  EXPECT_GE(s_setup_callback_count.load(), 1);
+  EXPECT_EQ(s_setup_user_data.load(), &context);
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 1;
+  event.height = 1;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  fml::AutoResetWaitableEvent latch;
+  ToEmbedderEngine(engine.get())
+      ->GetShell()
+      .GetTaskRunners()
+      .GetRasterTaskRunner()
+      ->PostTask([&]() { latch.Signal(); });
+  latch.Wait();
+
+  EXPECT_EQ(context.GetSurfacePresentCount(), 0u);
+
+  engine.reset();
+  EXPECT_EQ(s_teardown_callback_count.load(), 0);
+}
+
 INSTANTIATE_TEST_SUITE_P(
     EmbedderTestGlVk,
     EmbedderTestMultiBackend,
