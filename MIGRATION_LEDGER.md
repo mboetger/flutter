@@ -1,11 +1,12 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 1.3 (AHardwareBuffer & Vulkan External Textures)
-- **Active Branch**: `android-migration-2/phase-1.3-ahb-vulkan-external-textures`
+- **Active Phase**: Phase 1.5 (Dart Deferred Library Loading)
+- **Active Branch**: `android-migration-2/phase-1.5-deferred-components`
 - **Base Commit SHA**: `08d2a471fd10152bb7dbfbb9636cf8fa53e94b8b`
-- **Completed PRs**: [0.1, 1.1, 1.2]
-- **Adversarial Review Loop Status**: Approved (0 remaining findings across Round 1 & Round 2 by reidbaker-agent)
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4]
+- **Latest Commit SHA**: `554b3863440` (Phase 1.4)
+- **Adversarial Review Loop Status**: Phase 1.4 Approved by reidbaker-agent
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -15,8 +16,8 @@
 - [x] Phase 0.1: Baseline & Thread-Safety Tests
 - [x] Phase 1.1: Custom Asset Resolvers (`FlutterAssetResolver`)
 - [x] Phase 1.2: Vulkan Impeller Render Target Backing Store
-- [ ] Phase 1.3: AHardwareBuffer & Vulkan External Textures
-- [ ] Phase 1.4: Multi-Engine Spawning (`FlutterEngineSpawn`)
+- [x] Phase 1.3: AHardwareBuffer & Vulkan External Textures
+- [x] Phase 1.4: Multi-Engine Spawning (`FlutterEngineSpawn`)
 - [ ] Phase 1.5: Dart Deferred Library Loading
 - [ ] Phase 1.6: Raster Context Setup Hooks (`setup_callback`)
 - [ ] Phase 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
