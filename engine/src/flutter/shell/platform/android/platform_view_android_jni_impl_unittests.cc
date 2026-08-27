@@ -35,6 +35,11 @@ class PlatformViewAndroidJNIImplTest : public ::testing::Test {
     std::call_once(jvm_init_flag, SetUpJVM);
   }
 
+ protected:
+  void SetUp() override { FlutterMain::ResetForTesting(); }
+
+  void TearDown() override { FlutterMain::ResetForTesting(); }
+
  private:
   friend class MockJNIEnvProvider;
   static MockJavaVM jvm_;
@@ -448,6 +453,413 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedSetViewportMetrics) {
 
   FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
 }
+
+struct PlatformViewAndroidJNIMatrixParam {
+  bool embedder_api_enabled;
+  AndroidRenderingAPI rendering_api;
+  const char* name;
+};
+
+class PlatformViewAndroidJNIParameterizedTest
+    : public PlatformViewAndroidJNIImplTest,
+      public ::testing::WithParamInterface<PlatformViewAndroidJNIMatrixParam> {
+ protected:
+  void SetUp() override {
+    const auto& param = GetParam();
+    FlutterMain::SetEmbedderAPIEnabledForTesting(param.embedder_api_enabled);
+    Settings settings;
+    settings.enable_software_rendering =
+        (param.rendering_api == AndroidRenderingAPI::kSoftware);
+    FlutterMain::InitForTesting(settings, param.rendering_api);
+  }
+
+  void TearDown() override { FlutterMain::ResetForTesting(); }
+};
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixLifecycle) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  auto nativeSurfaceCreated =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jobject)>(
+          g_registered_methods["nativeSurfaceCreated"]);
+  auto nativeSurfaceWindowChanged =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jobject)>(
+          g_registered_methods["nativeSurfaceWindowChanged"]);
+  auto nativeSurfaceChanged =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jint, jint)>(
+          g_registered_methods["nativeSurfaceChanged"]);
+  auto nativeSurfaceDestroyed =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+          g_registered_methods["nativeSurfaceDestroyed"]);
+
+  ASSERT_NE(nativeAttach, nullptr);
+  ASSERT_NE(nativeDestroy, nullptr);
+  ASSERT_NE(nativeSurfaceCreated, nullptr);
+  ASSERT_NE(nativeSurfaceWindowChanged, nullptr);
+  ASSERT_NE(nativeSurfaceChanged, nullptr);
+  ASSERT_NE(nativeSurfaceDestroyed, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+  jobject surface_obj = reinterpret_cast<jobject>(0x5678);
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeSurfaceCreated(&mock_env, nullptr, handle, surface_obj);
+  nativeSurfaceWindowChanged(&mock_env, nullptr, handle, surface_obj);
+  nativeSurfaceChanged(&mock_env, nullptr, handle, 1080, 1920);
+  nativeSurfaceDestroyed(&mock_env, nullptr, handle);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixPlatformMessages) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  auto nativeDispatchPlatformMessage = reinterpret_cast<void (*)(
+      JNIEnv*, jobject, jlong, jstring, jobject, jint, jint)>(
+      g_registered_methods["nativeDispatchPlatformMessage"]);
+  auto nativeDispatchEmptyPlatformMessage =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jstring, jint)>(
+          g_registered_methods["nativeDispatchEmptyPlatformMessage"]);
+  auto nativeInvokePlatformMessageResponseCallback =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jint, jobject, jint)>(
+          g_registered_methods["nativeInvokePlatformMessageResponseCallback"]);
+  auto nativeInvokePlatformMessageEmptyResponseCallback = reinterpret_cast<
+      void (*)(JNIEnv*, jobject, jlong, jint)>(
+      g_registered_methods["nativeInvokePlatformMessageEmptyResponseCallback"]);
+
+  ASSERT_NE(nativeDispatchPlatformMessage, nullptr);
+  ASSERT_NE(nativeDispatchEmptyPlatformMessage, nullptr);
+  ASSERT_NE(nativeInvokePlatformMessageResponseCallback, nullptr);
+  ASSERT_NE(nativeInvokePlatformMessageEmptyResponseCallback, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+  jstring channel = reinterpret_cast<jstring>(0x5678);
+  std::vector<uint8_t> msg_data = {1, 2, 3, 4};
+  jobject buffer = reinterpret_cast<jobject>(0x9abc);
+
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(buffer))
+      .WillRepeatedly(Return(msg_data.data()));
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeDispatchPlatformMessage(&mock_env, nullptr, handle, channel, buffer, 4,
+                                1);
+  nativeDispatchEmptyPlatformMessage(&mock_env, nullptr, handle, channel, 2);
+  nativeInvokePlatformMessageResponseCallback(&mock_env, nullptr, handle, 1,
+                                              buffer, 4);
+  nativeInvokePlatformMessageEmptyResponseCallback(&mock_env, nullptr, handle,
+                                                   2);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixPointerDataPacket) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  auto nativeDispatchPointerDataPacket =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jobject, jint)>(
+          g_registered_methods["nativeDispatchPointerDataPacket"]);
+
+  ASSERT_NE(nativeDispatchPointerDataPacket, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+  jobject buffer = reinterpret_cast<jobject>(0x5678);
+
+  PointerData data = {};
+  data.embedder_id = 1;
+  data.change = PointerData::Change::kDown;
+  data.physical_x = 100.0;
+  data.physical_y = 200.0;
+
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(buffer))
+      .WillRepeatedly(Return(&data));
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeDispatchPointerDataPacket(&mock_env, nullptr, handle, buffer,
+                                  sizeof(data));
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest,
+       MatrixSemanticsAndAccessibility) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  auto nativeDispatchSemanticsAction = reinterpret_cast<void (*)(
+      JNIEnv*, jobject, jlong, jint, jint, jobject, jint)>(
+      g_registered_methods["nativeDispatchSemanticsAction"]);
+  auto nativeSetSemanticsEnabled =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jboolean)>(
+          g_registered_methods["nativeSetSemanticsEnabled"]);
+  auto nativeSetAccessibilityFeatures =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jint)>(
+          g_registered_methods["nativeSetAccessibilityFeatures"]);
+
+  ASSERT_NE(nativeDispatchSemanticsAction, nullptr);
+  ASSERT_NE(nativeSetSemanticsEnabled, nullptr);
+  ASSERT_NE(nativeSetAccessibilityFeatures, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeSetSemanticsEnabled(&mock_env, nullptr, handle, JNI_TRUE);
+  nativeSetAccessibilityFeatures(&mock_env, nullptr, handle, 0x3);
+  nativeDispatchSemanticsAction(&mock_env, nullptr, handle, 1, 1, nullptr, 0);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixTextures) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  auto nativeRegisterTexture =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jlong, jobject)>(
+          g_registered_methods["nativeRegisterTexture"]);
+  auto nativeRegisterImageTexture = reinterpret_cast<void (*)(
+      JNIEnv*, jobject, jlong, jlong, jobject, jboolean)>(
+      g_registered_methods["nativeRegisterImageTexture"]);
+  auto nativeUnregisterTexture =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jlong)>(
+          g_registered_methods["nativeUnregisterTexture"]);
+  auto nativeMarkTextureFrameAvailable =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong, jlong)>(
+          g_registered_methods["nativeMarkTextureFrameAvailable"]);
+
+  ASSERT_NE(nativeRegisterTexture, nullptr);
+  ASSERT_NE(nativeRegisterImageTexture, nullptr);
+  ASSERT_NE(nativeUnregisterTexture, nullptr);
+  ASSERT_NE(nativeMarkTextureFrameAvailable, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+  jobject texture_obj = reinterpret_cast<jobject>(0x5678);
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeRegisterTexture(&mock_env, nullptr, handle, 42, texture_obj);
+  nativeRegisterImageTexture(&mock_env, nullptr, handle, 43, texture_obj,
+                             JNI_TRUE);
+  nativeMarkTextureFrameAvailable(&mock_env, nullptr, handle, 42);
+  nativeUnregisterTexture(&mock_env, nullptr, handle, 42);
+  nativeUnregisterTexture(&mock_env, nullptr, handle, 43);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixViewportMetrics) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  typedef void (*SetViewportMetricsFn)(
+      JNIEnv*, jobject, jlong, jfloat, jint, jint, jint, jint, jint, jint, jint,
+      jint, jint, jint, jint, jint, jint, jint, jint, jintArray, jintArray,
+      jintArray, jint, jint, jint, jint, jint, jint, jint, jint);
+
+  auto nativeSetViewportMetrics = reinterpret_cast<SetViewportMetricsFn>(
+      g_registered_methods["nativeSetViewportMetrics"]);
+  ASSERT_NE(nativeSetViewportMetrics, nullptr);
+
+  EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+  jintArray bounds = reinterpret_cast<jintArray>(456);
+  jintArray type = reinterpret_cast<jintArray>(789);
+  jintArray state = reinterpret_cast<jintArray>(1011);
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeSetViewportMetrics(&mock_env, nullptr, handle, 2.0f, 1080, 1920, 0, 0,
+                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
+                           0, 0, 0, 0, 0, 0, 0, 0);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest,
+       MatrixLowMemoryAndScheduleFrame) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  auto nativeNotifyLowMemoryWarning =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+          g_registered_methods["nativeNotifyLowMemoryWarning"]);
+  auto nativeScheduleFrame =
+      reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+          g_registered_methods["nativeScheduleFrame"]);
+
+  ASSERT_NE(nativeNotifyLowMemoryWarning, nullptr);
+  ASSERT_NE(nativeScheduleFrame, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeNotifyLowMemoryWarning(&mock_env, nullptr, handle);
+  nativeScheduleFrame(&mock_env, nullptr, handle);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixDeferredLibraryLoading) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  typedef void (*LoadDartDeferredLibraryFn)(JNIEnv*, jobject, jlong, jint,
+                                            jobjectArray);
+  auto nativeLoadDartDeferredLibrary =
+      reinterpret_cast<LoadDartDeferredLibraryFn>(
+          g_registered_methods["nativeLoadDartDeferredLibrary"]);
+
+  ASSERT_NE(nativeAttach, nullptr);
+  ASSERT_NE(nativeDestroy, nullptr);
+  ASSERT_NE(nativeLoadDartDeferredLibrary, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+  jobjectArray search_paths = reinterpret_cast<jobjectArray>(0x5678);
+
+  EXPECT_CALL(mock_env, GetArrayLength(search_paths)).WillRepeatedly(Return(0));
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeLoadDartDeferredLibrary(&mock_env, nullptr, handle, 42, search_paths);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixSpawning) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  typedef jobject (*SpawnFn)(JNIEnv*, jobject, jlong, jstring, jstring, jstring,
+                             jobject, jlong);
+  auto nativeSpawn =
+      reinterpret_cast<SpawnFn>(g_registered_methods["nativeSpawn"]);
+
+  ASSERT_NE(nativeAttach, nullptr);
+  ASSERT_NE(nativeDestroy, nullptr);
+  ASSERT_NE(nativeSpawn, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+  jstring entrypoint = reinterpret_cast<jstring>(0x5678);
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeSpawn(&mock_env, nullptr, handle, entrypoint, nullptr, nullptr, nullptr,
+              0);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixGetBitmap) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  auto nativeAttach = reinterpret_cast<jlong (*)(JNIEnv*, jclass, jobject)>(
+      g_registered_methods["nativeAttach"]);
+  auto nativeDestroy = reinterpret_cast<void (*)(JNIEnv*, jobject, jlong)>(
+      g_registered_methods["nativeDestroy"]);
+  typedef jobject (*GetBitmapFn)(JNIEnv*, jobject, jlong);
+  auto nativeGetBitmap =
+      reinterpret_cast<GetBitmapFn>(g_registered_methods["nativeGetBitmap"]);
+
+  ASSERT_NE(nativeAttach, nullptr);
+  ASSERT_NE(nativeDestroy, nullptr);
+  ASSERT_NE(nativeGetBitmap, nullptr);
+
+  jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
+
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
+
+  nativeGetBitmap(&mock_env, nullptr, handle);
+
+  nativeDestroy(&mock_env, nullptr, handle);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    PlatformViewAndroidJNIMatrix,
+    PlatformViewAndroidJNIParameterizedTest,
+    ::testing::Values(
+        PlatformViewAndroidJNIMatrixParam{
+            true, AndroidRenderingAPI::kImpellerOpenGLES,
+            "Embedder_ImpellerOpenGLES"},
+        PlatformViewAndroidJNIMatrixParam{true,
+                                          AndroidRenderingAPI::kImpellerVulkan,
+                                          "Embedder_ImpellerVulkan"},
+        PlatformViewAndroidJNIMatrixParam{
+            true, AndroidRenderingAPI::kSkiaOpenGLES, "Embedder_SkiaOpenGLES"},
+        PlatformViewAndroidJNIMatrixParam{
+            true, AndroidRenderingAPI::kImpellerAutoselect,
+            "Embedder_ImpellerAutoselect"},
+        PlatformViewAndroidJNIMatrixParam{true, AndroidRenderingAPI::kSoftware,
+                                          "Embedder_Software"},
+        PlatformViewAndroidJNIMatrixParam{
+            false, AndroidRenderingAPI::kImpellerOpenGLES,
+            "Legacy_ImpellerOpenGLES"},
+        PlatformViewAndroidJNIMatrixParam{false,
+                                          AndroidRenderingAPI::kImpellerVulkan,
+                                          "Legacy_ImpellerVulkan"},
+        PlatformViewAndroidJNIMatrixParam{
+            false, AndroidRenderingAPI::kSkiaOpenGLES, "Legacy_SkiaOpenGLES"},
+        PlatformViewAndroidJNIMatrixParam{
+            false, AndroidRenderingAPI::kImpellerAutoselect,
+            "Legacy_ImpellerAutoselect"},
+        PlatformViewAndroidJNIMatrixParam{false, AndroidRenderingAPI::kSoftware,
+                                          "Legacy_Software"}),
+    [](const ::testing::TestParamInfo<PlatformViewAndroidJNIMatrixParam>&
+           info) { return info.param.name; });
 
 // The load order is exercised with an injected loader rather than real
 // dlopen(): the property under test is purely the ordering (first-to-last,

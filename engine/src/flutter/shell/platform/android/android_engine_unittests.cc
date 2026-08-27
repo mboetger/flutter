@@ -26,6 +26,7 @@ using ::testing::SetArgPointee;
 class AndroidEngineTest : public ::testing::Test {
  protected:
   void SetUp() override {
+    FlutterMain::ResetForTesting();
     jni_facade_ = std::make_shared<JNIMock>();
     memset(&mock_proc_table_, 0, sizeof(FlutterEngineProcTable));
     mock_proc_table_.struct_size = sizeof(FlutterEngineProcTable);
@@ -162,7 +163,18 @@ class AndroidEngineTest : public ::testing::Test {
     };
   }
 
-  void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
+  void TearDown() override { FlutterMain::ResetForTesting(); }
+
+  std::unique_ptr<AndroidEngine> CreateEngine(
+      AndroidRenderingAPI rendering_api) {
+    auto surface_manager =
+        std::make_shared<AndroidSurfaceManager>(rendering_api);
+    auto compositor =
+        std::make_unique<AndroidCompositor>(surface_manager, jni_facade_);
+    return std::make_unique<AndroidEngine>(
+        settings_, jni_facade_, surface_manager, std::move(compositor),
+        &mock_proc_table_);
+  }
 
   std::shared_ptr<JNIMock> jni_facade_;
   FlutterEngineProcTable mock_proc_table_;
@@ -1155,11 +1167,227 @@ TEST_F(AndroidEngineTest, CustomTaskRunnersInLaunch) {
                        platform_task_runner, raster_task_runner);
 
   EXPECT_TRUE(engine.Launch(nullptr, "", "", {}, 0));
-  EXPECT_TRUE(s_platform_runs_called || !s_platform_runs_called);
-  EXPECT_TRUE(s_raster_runs_called || !s_raster_runs_called);
+  EXPECT_TRUE(s_platform_runs_called);
+  EXPECT_TRUE(s_raster_runs_called);
   EXPECT_TRUE(s_platform_post_called);
   EXPECT_TRUE(s_raster_post_called);
 }
+
+struct AndroidEngineMatrixParam {
+  AndroidRenderingAPI rendering_api;
+  const char* name;
+};
+
+class AndroidEngineParameterizedTest
+    : public AndroidEngineTest,
+      public ::testing::WithParamInterface<AndroidEngineMatrixParam> {};
+
+TEST_P(AndroidEngineParameterizedTest, MatrixLifecycleAndSurfaceTransitions) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->IsValid());
+
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+  EXPECT_TRUE(engine->IsRunning());
+
+  auto native_window = fml::MakeRefCounted<AndroidNativeWindow>(
+      reinterpret_cast<ANativeWindow*>(0x1234));
+  engine->OnSurfaceCreated(native_window);
+  engine->OnSurfaceWindowChanged(native_window);
+  engine->OnSurfaceResized(1080, 1920);
+  engine->OnSurfaceDestroyed();
+
+  EXPECT_TRUE(engine->IsRunning());
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixPlatformMessages) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  std::vector<uint8_t> data = {1, 2, 3, 4};
+  engine->SendPlatformMessage("test_channel", data.data(), data.size(), 100);
+
+  engine->SendPlatformMessageResponse(100, data.data(), data.size());
+  engine->CompletePlatformMessageEmptyResponse(100);
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixPointerEvents) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  std::vector<uint8_t> buffer(288, 0);
+  int64_t change = 4;  // down
+  memcpy(buffer.data() + 16, &change, sizeof(int64_t));
+
+  engine->DispatchPointerDataPacket(buffer.data(), buffer.size());
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixSemanticsAndAccessibility) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  engine->SetSemanticsEnabled(true);
+  engine->SetAccessibilityFeatures(0x7);
+  engine->DispatchSemanticsAction(1, 1, nullptr, 0);
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixTextures) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  engine->RegisterExternalTexture(10);
+  engine->MarkTextureFrameAvailable(10);
+  engine->UnregisterTexture(10);
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixDeferredLibraryLoading) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  mock_proc_table_.LoadDartDeferredLibrary =
+      [](FLUTTER_API_SYMBOL(FlutterEngine) engine, intptr_t loading_unit_id,
+         const uint8_t* data, size_t data_length, const uint8_t* instructions,
+         size_t instructions_length) -> FlutterEngineResult {
+    return kSuccess;
+  };
+
+  mock_proc_table_.LoadDartDeferredLibraryError =
+      [](FLUTTER_API_SYMBOL(FlutterEngine) engine, intptr_t loading_unit_id,
+         const char* error_message,
+         bool is_transient) -> FlutterEngineResult { return kSuccess; };
+
+  std::vector<uint8_t> dummy_data = {1, 2, 3};
+  auto data_mapping = std::make_unique<fml::NonOwnedMapping>(dummy_data.data(),
+                                                             dummy_data.size());
+  auto inst_mapping = std::make_unique<fml::NonOwnedMapping>(dummy_data.data(),
+                                                             dummy_data.size());
+
+  EXPECT_TRUE(engine->LoadDartDeferredLibrary(1, std::move(data_mapping),
+                                              std::move(inst_mapping)));
+  EXPECT_TRUE(
+      engine->LoadDartDeferredLibraryError(2, "Deferred load error", true));
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixScreenshot) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  mock_proc_table_.Screenshot = [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                   FlutterEngineScreenshotType type,
+                                   bool compressed,
+                                   FlutterEngineScreenshotCallback callback,
+                                   void* user_data) -> FlutterEngineResult {
+    FlutterEngineScreenshotInfo info = {};
+    info.struct_size = sizeof(FlutterEngineScreenshotInfo);
+    info.width = 100;
+    info.height = 100;
+    info.data_size = 40000;
+    std::vector<uint8_t> fake_pixels(40000, 0xFF);
+    info.data = fake_pixels.data();
+    if (callback) {
+      callback(&info, user_data);
+    }
+    return kSuccess;
+  };
+
+  bool callback_invoked = false;
+  EXPECT_TRUE(engine->Screenshot(
+      kFlutterEngineScreenshotTypeUncompressedImage, false,
+      [](const FlutterEngineScreenshotInfo* info, void* user_data) {
+        *static_cast<bool*>(user_data) = true;
+      },
+      &callback_invoked));
+  EXPECT_TRUE(callback_invoked);
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixViewportMetrics) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  static bool s_metrics_called = false;
+  s_metrics_called = false;
+
+  mock_proc_table_.SendWindowMetricsEvent =
+      [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+         const FlutterWindowMetricsEvent* event) -> FlutterEngineResult {
+    s_metrics_called = true;
+    EXPECT_EQ(event->width, 1080u);
+    EXPECT_EQ(event->height, 1920u);
+    EXPECT_EQ(event->pixel_ratio, 2.0);
+    return kSuccess;
+  };
+
+  AndroidViewportMetrics metrics = {};
+  metrics.physical_width = 1080;
+  metrics.physical_height = 1920;
+  metrics.device_pixel_ratio = 2.0;
+
+  engine->SetViewportMetrics(0, metrics);
+  EXPECT_TRUE(s_metrics_called);
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixLowMemoryAndScheduleFrame) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  static bool s_low_memory_called = false;
+  static bool s_schedule_frame_called = false;
+  s_low_memory_called = false;
+  s_schedule_frame_called = false;
+
+  mock_proc_table_.NotifyLowMemoryWarning =
+      [](FLUTTER_API_SYMBOL(FlutterEngine) engine) -> FlutterEngineResult {
+    s_low_memory_called = true;
+    return kSuccess;
+  };
+
+  mock_proc_table_.ScheduleFrame = [](FLUTTER_API_SYMBOL(FlutterEngine)
+                                          engine) -> FlutterEngineResult {
+    s_schedule_frame_called = true;
+    return kSuccess;
+  };
+
+  engine->NotifyLowMemoryWarning();
+  EXPECT_TRUE(s_low_memory_called);
+
+  engine->ScheduleFrame();
+  EXPECT_TRUE(s_schedule_frame_called);
+}
+
+TEST_P(AndroidEngineParameterizedTest, MatrixSpawning) {
+  const auto& param = GetParam();
+  auto engine = CreateEngine(param.rendering_api);
+  EXPECT_TRUE(engine->Launch(nullptr, "", "", {}, 0));
+
+  auto spawned = engine->Spawn(jni_facade_, "", "", "", {}, 0);
+  EXPECT_NE(spawned, nullptr);
+  EXPECT_TRUE(spawned->IsValid());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AndroidEngineMatrix,
+    AndroidEngineParameterizedTest,
+    ::testing::Values(
+        AndroidEngineMatrixParam{AndroidRenderingAPI::kImpellerOpenGLES,
+                                 "ImpellerOpenGLES"},
+        AndroidEngineMatrixParam{AndroidRenderingAPI::kImpellerVulkan,
+                                 "ImpellerVulkan"},
+        AndroidEngineMatrixParam{AndroidRenderingAPI::kSkiaOpenGLES,
+                                 "SkiaOpenGLES"},
+        AndroidEngineMatrixParam{AndroidRenderingAPI::kImpellerAutoselect,
+                                 "ImpellerAutoselect"},
+        AndroidEngineMatrixParam{AndroidRenderingAPI::kSoftware, "Software"}),
+    [](const ::testing::TestParamInfo<AndroidEngineMatrixParam>& info) {
+      return info.param.name;
+    });
 
 }  // namespace testing
 }  // namespace flutter
