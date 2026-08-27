@@ -84,8 +84,10 @@ FlutterCompositor AndroidCompositor::GetCompositorConfig() {
   FlutterCompositor compositor = {};
   compositor.struct_size = sizeof(FlutterCompositor);
   compositor.user_data = this;
-  compositor.create_backing_store_callback = &AndroidCompositor::OnCreateBackingStore;
-  compositor.collect_backing_store_callback = &AndroidCompositor::OnCollectBackingStore;
+  compositor.create_backing_store_callback =
+      &AndroidCompositor::OnCreateBackingStore;
+  compositor.collect_backing_store_callback =
+      &AndroidCompositor::OnCollectBackingStore;
   compositor.present_view_callback = &AndroidCompositor::OnPresentView;
   compositor.avoid_backing_store_cache = false;
   return compositor;
@@ -96,7 +98,8 @@ bool AndroidCompositor::OnCreateBackingStore(
     FlutterBackingStore* backing_store_out,
     void* user_data) {
   if (!user_data) {
-    FML_LOG(ERROR) << "AndroidCompositor user_data was null during CreateBackingStore.";
+    FML_LOG(ERROR)
+        << "AndroidCompositor user_data was null during CreateBackingStore.";
     return false;
   }
   auto* compositor = static_cast<AndroidCompositor*>(user_data);
@@ -107,7 +110,8 @@ bool AndroidCompositor::OnCollectBackingStore(
     const FlutterBackingStore* backing_store,
     void* user_data) {
   if (!user_data) {
-    FML_LOG(ERROR) << "AndroidCompositor user_data was null during CollectBackingStore.";
+    FML_LOG(ERROR)
+        << "AndroidCompositor user_data was null during CollectBackingStore.";
     return false;
   }
   auto* compositor = static_cast<AndroidCompositor*>(user_data);
@@ -117,7 +121,8 @@ bool AndroidCompositor::OnCollectBackingStore(
 bool AndroidCompositor::OnPresentView(
     const FlutterPresentViewInfo* present_info) {
   if (!present_info || !present_info->user_data) {
-    FML_LOG(ERROR) << "AndroidCompositor present_info or user_data was null during PresentView.";
+    FML_LOG(ERROR) << "AndroidCompositor present_info or user_data was null "
+                      "during PresentView.";
     return false;
   }
   auto* compositor = static_cast<AndroidCompositor*>(present_info->user_data);
@@ -307,8 +312,7 @@ bool AndroidCompositor::PopulateMutatorsStack(
         };
         for (int r = 0; r < 8; ++r) {
           if (!std::isfinite(radii[r]) || radii[r] < 0.0f) {
-            FML_LOG(ERROR) << "Invalid superellipse radius at index "
-                           << i;
+            FML_LOG(ERROR) << "Invalid superellipse radius at index " << i;
             return false;
           }
         }
@@ -387,7 +391,8 @@ bool AndroidCompositor::PopulateMutatorsStack(
           for (int p = 0; p < required_points; ++p) {
             if (!std::isfinite(seg.points[p].x) ||
                 !std::isfinite(seg.points[p].y)) {
-              FML_LOG(ERROR) << "Invalid non-finite path point at segment " << s;
+              FML_LOG(ERROR)
+                  << "Invalid non-finite path point at segment " << s;
               return false;
             }
             path_seg.points[p] = seg.points[p];
@@ -442,8 +447,9 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
     }
 
     if (!std::isfinite(layer->offset.x) || !std::isfinite(layer->offset.y) ||
-        !std::isfinite(layer->size.width) || !std::isfinite(layer->size.height) ||
-        layer->size.width < 0.0 || layer->size.height < 0.0) {
+        !std::isfinite(layer->size.width) ||
+        !std::isfinite(layer->size.height) || layer->size.width < 0.0 ||
+        layer->size.height < 0.0) {
       FML_LOG(ERROR) << "Invalid geometry on layer at index " << i;
       return false;
     }
@@ -467,15 +473,16 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
         }
 
         AndroidPlatformViewMutatorsStack mutators_stack;
-        if (!PopulateMutatorsStack(layer->platform_view, &mutators_stack, dpr)) {
+        if (!PopulateMutatorsStack(layer->platform_view, &mutators_stack,
+                                   dpr)) {
           FML_LOG(ERROR) << "Failed to map mutators for platform view "
                          << layer->platform_view->identifier;
           return false;
         }
 
         if (platform_view_mutators_renderer_copy) {
-          if (!platform_view_mutators_renderer_copy(layer->platform_view, *layer,
-                                                   mutators_stack, i)) {
+          if (!platform_view_mutators_renderer_copy(
+                  layer->platform_view, *layer, mutators_stack, i)) {
             FML_LOG(ERROR)
                 << "Platform view mutators presentation failed for view "
                 << layer->platform_view->identifier;
@@ -501,7 +508,10 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
     return false;
   }
 
-  present_count_++;
+  size_t count = ++present_count_;
+  if (count == 1 && jni_facade_) {
+    jni_facade_->FlutterViewOnFirstFrame();
+  }
   return true;
 }
 
@@ -510,9 +520,8 @@ void AndroidCompositor::OnSurfaceCreated(
   if (raster_task_runner_) {
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
-        raster_task_runner_,
-        [&latch, surface_manager = surface_manager_,
-         window = std::move(window)]() mutable {
+        raster_task_runner_, [&latch, surface_manager = surface_manager_,
+                              window = std::move(window)]() mutable {
           if (surface_manager) {
             surface_manager->SetNativeWindow(std::move(window));
           }
@@ -529,9 +538,8 @@ void AndroidCompositor::OnSurfaceWindowChanged(
   if (raster_task_runner_) {
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
-        raster_task_runner_,
-        [&latch, surface_manager = surface_manager_,
-         window = std::move(window)]() mutable {
+        raster_task_runner_, [&latch, surface_manager = surface_manager_,
+                              window = std::move(window)]() mutable {
           if (surface_manager) {
             surface_manager->ClearNativeWindow();
             surface_manager->SetNativeWindow(std::move(window));
@@ -549,8 +557,7 @@ void AndroidCompositor::OnSurfaceDestroyed() {
   if (raster_task_runner_) {
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
-        raster_task_runner_,
-        [&latch, surface_manager = surface_manager_]() {
+        raster_task_runner_, [&latch, surface_manager = surface_manager_]() {
           if (surface_manager) {
             surface_manager->ClearNativeWindow();
           }
@@ -571,8 +578,7 @@ void AndroidCompositor::OnSurfaceResized(const FlutterSize& size) {
   if (raster_task_runner_) {
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
-        raster_task_runner_,
-        [&latch, surface_manager = surface_manager_]() {
+        raster_task_runner_, [&latch, surface_manager = surface_manager_]() {
           if (surface_manager) {
             surface_manager->ClearBackingStoreCache();
           }

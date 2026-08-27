@@ -23,6 +23,14 @@ class JNIMock final : public PlatformViewAndroidJNI {
               (override));
 
   MOCK_METHOD(void,
+              FlutterViewHandlePlatformMessage,
+              (const std::string& channel,
+               const uint8_t* message,
+               size_t message_size,
+               int responseId),
+              (override));
+
+  MOCK_METHOD(void,
               FlutterViewHandlePlatformMessageResponse,
               (int responseId, std::unique_ptr<fml::Mapping> data),
               (override));

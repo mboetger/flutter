@@ -35,6 +35,7 @@ EmbedderEngine::EmbedderEngine(
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
     std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    PlatformViewCreationCallbackFactory platform_view_creation_callback_factory,
     std::vector<FlutterImageDecoder> initial_image_decoders)
     : thread_host_(std::move(thread_host)),
       task_runners_(task_runners),
@@ -46,7 +47,9 @@ EmbedderEngine::EmbedderEngine(
                                       std::move(initial_image_decoders))),
       on_create_platform_view_(on_create_platform_view),
       on_create_rasterizer_(on_create_rasterizer),
-      external_texture_resolver_(std::move(external_texture_resolver)) {}
+      external_texture_resolver_(std::move(external_texture_resolver)),
+      platform_view_creation_callback_factory_(
+          std::move(platform_view_creation_callback_factory)) {}
 
 EmbedderEngine::EmbedderEngine(
     std::shared_ptr<EmbedderThreadHost> thread_host,
@@ -55,13 +58,16 @@ EmbedderEngine::EmbedderEngine(
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
     std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    PlatformViewCreationCallbackFactory platform_view_creation_callback_factory,
     std::vector<FlutterImageDecoder> initial_image_decoders)
     : thread_host_(std::move(thread_host)),
       task_runners_(task_runners),
       on_create_platform_view_(on_create_platform_view),
       on_create_rasterizer_(on_create_rasterizer),
       shell_(std::move(shell)),
-      external_texture_resolver_(std::move(external_texture_resolver)) {
+      external_texture_resolver_(std::move(external_texture_resolver)),
+      platform_view_creation_callback_factory_(
+          std::move(platform_view_creation_callback_factory)) {
   if (shell_) {
     for (const auto& decoder : initial_image_decoders) {
       shell_->RegisterImageDecoder(
@@ -78,16 +84,23 @@ EmbedderEngine::~EmbedderEngine() = default;
 std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
     RunConfiguration run_configuration,
     const std::string& initial_route,
-    std::vector<FlutterImageDecoder> image_decoders) {
+    std::vector<FlutterImageDecoder> image_decoders,
+    void* user_data) {
   if (!IsValid()) {
     return nullptr;
   }
-  if (!on_create_platform_view_ || !on_create_rasterizer_) {
+  Shell::CreateCallback<PlatformView> on_create_platform_view =
+      on_create_platform_view_;
+  if (platform_view_creation_callback_factory_ && user_data != nullptr) {
+    on_create_platform_view =
+        platform_view_creation_callback_factory_(user_data);
+  }
+  if (!on_create_platform_view || !on_create_rasterizer_) {
     return nullptr;
   }
   std::unique_ptr<Shell> spawned_shell =
       shell_->Spawn(std::move(run_configuration), initial_route,
-                    on_create_platform_view_, on_create_rasterizer_);
+                    on_create_platform_view, on_create_rasterizer_);
   if (!spawned_shell) {
     return nullptr;
   }
@@ -112,8 +125,9 @@ std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
 
   return std::make_unique<EmbedderEngine>(
       thread_host_, task_runners_, std::move(spawned_shell),
-      on_create_platform_view_, on_create_rasterizer_,
-      std::move(external_texture_resolver));
+      on_create_platform_view, on_create_rasterizer_,
+      std::move(external_texture_resolver),
+      platform_view_creation_callback_factory_, image_decoders);
 }
 
 bool EmbedderEngine::LaunchShell() {

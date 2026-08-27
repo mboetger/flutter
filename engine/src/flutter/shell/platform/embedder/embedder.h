@@ -3239,6 +3239,11 @@ typedef struct {
 
   /// Number of custom image decoders in `image_decoders`.
   size_t image_decoders_count;
+
+  /// Optional user data pointer to associate with callbacks for the spawned
+  /// engine (e.g. `platform_message_callback`, `update_semantics_callback2`).
+  /// If null, defaults to the parent engine's user data pointer.
+  void* user_data;
 } FlutterEngineSpawnInfo;
 
 /// Information passed to `FlutterEngineLoadDartDeferredLibrary` when a

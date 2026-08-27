@@ -45,6 +45,11 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
       std::unique_ptr<flutter::PlatformMessage> message,
       int responseId) override;
 
+  void FlutterViewHandlePlatformMessage(const std::string& channel,
+                                        const uint8_t* message,
+                                        size_t message_size,
+                                        int responseId) override;
+
   void FlutterViewHandlePlatformMessageResponse(
       int responseId,
       std::unique_ptr<fml::Mapping> data) override;

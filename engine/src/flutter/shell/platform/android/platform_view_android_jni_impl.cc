@@ -1401,6 +1401,42 @@ void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
   FML_CHECK(fml::jni::CheckException(env));
 }
 
+void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
+    const std::string& channel,
+    const uint8_t* message,
+    size_t message_size,
+    int responseId) {
+  // Called from any thread.
+  JNIEnv* env = fml::jni::AttachCurrentThread();
+
+  auto java_object = java_object_.get(env);
+  if (java_object.is_null()) {
+    return;
+  }
+
+  fml::jni::ScopedJavaLocalRef<jstring> java_channel =
+      fml::jni::StringToJavaString(env, channel);
+
+  if (message != nullptr && message_size > 0) {
+    fml::MallocMapping mapping =
+        fml::MallocMapping::Copy(message, message_size);
+    fml::jni::ScopedJavaLocalRef<jobject> message_array(
+        env,
+        env->NewDirectByteBuffer(const_cast<uint8_t*>(mapping.GetMapping()),
+                                 mapping.GetSize()));
+    // Message data is deleted in CleanupMessageData.
+    env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
+                        java_channel.obj(), message_array.obj(), responseId,
+                        reinterpret_cast<jlong>(mapping.Release()));
+  } else {
+    env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
+                        java_channel.obj(), nullptr, responseId,
+                        static_cast<jlong>(0));
+  }
+
+  FML_CHECK(fml::jni::CheckException(env));
+}
+
 void PlatformViewAndroidJNIImpl::FlutterViewSetApplicationLocale(
     std::string locale) {
   JNIEnv* env = fml::jni::AttachCurrentThread();

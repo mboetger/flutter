@@ -46,6 +46,11 @@ class PlatformViewAndroidJNI {
       std::unique_ptr<flutter::PlatformMessage> message,
       int responseId) = 0;
 
+  virtual void FlutterViewHandlePlatformMessage(const std::string& channel,
+                                                const uint8_t* message,
+                                                size_t message_size,
+                                                int responseId) {}
+
   //----------------------------------------------------------------------------
   /// @brief      Responds to a platform message. The data may be a `nullptr`.
   ///

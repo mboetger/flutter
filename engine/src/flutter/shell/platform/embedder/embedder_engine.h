@@ -23,6 +23,9 @@ struct ShellArgs;
 // instance of the Flutter engine.
 class EmbedderEngine {
  public:
+  using PlatformViewCreationCallbackFactory =
+      std::function<Shell::CreateCallback<PlatformView>(void* user_data)>;
+
   EmbedderEngine(
       std::shared_ptr<EmbedderThreadHost> thread_host,
       const TaskRunners& task_runners,
@@ -32,6 +35,8 @@ class EmbedderEngine {
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
           external_texture_resolver,
+      PlatformViewCreationCallbackFactory
+          platform_view_creation_callback_factory = nullptr,
       std::vector<FlutterImageDecoder> initial_image_decoders = {});
 
   EmbedderEngine(
@@ -42,6 +47,8 @@ class EmbedderEngine {
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
           external_texture_resolver,
+      PlatformViewCreationCallbackFactory
+          platform_view_creation_callback_factory = nullptr,
       std::vector<FlutterImageDecoder> initial_image_decoders = {});
 
   ~EmbedderEngine();
@@ -49,7 +56,8 @@ class EmbedderEngine {
   std::unique_ptr<EmbedderEngine> Spawn(
       RunConfiguration run_configuration,
       const std::string& initial_route,
-      std::vector<FlutterImageDecoder> image_decoders = {});
+      std::vector<FlutterImageDecoder> image_decoders = {},
+      void* user_data = nullptr);
 
   bool LaunchShell();
 
@@ -134,6 +142,7 @@ class EmbedderEngine {
   Shell::CreateCallback<Rasterizer> on_create_rasterizer_;
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
+  PlatformViewCreationCallbackFactory platform_view_creation_callback_factory_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderEngine);
 };
