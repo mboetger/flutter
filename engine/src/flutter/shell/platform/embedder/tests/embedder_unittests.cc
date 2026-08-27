@@ -24,6 +24,7 @@
 #include "flutter/fml/thread.h"
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
+#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/runtime/dart_vm.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
@@ -5906,6 +5907,103 @@ TEST_F(EmbedderTest, ScreenshotViaProcTable) {
                              /*base64_encode=*/false, callback, &called),
             kSuccess);
   EXPECT_TRUE(called);
+}
+
+TEST_F(EmbedderTest, CallbackInfoInvalidArguments) {
+  // Null info_out pointer.
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(12345, nullptr),
+            kInvalidArguments);
+
+  // Invalid struct_size.
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation) - 1;
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(12345, &info),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, CallbackInfoHandleNotFound) {
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  // Looking up an unregistered callback handle must return
+  // kInternalInconsistency.
+  constexpr int64_t kUnregisteredHandle = INT64_C(-9999999);
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(kUnregisteredHandle, &info),
+            kInternalInconsistency);
+}
+
+TEST_F(EmbedderTest, CallbackInfoLookupValid) {
+  // 1. Top-level function callback (empty class_name).
+  const std::string kTopLevelName = "testTopLevelCallback";
+  const std::string kTopLevelClass = "";
+  const std::string kTopLevelLib = "package:test_app/main.dart";
+
+  int64_t top_level_handle = DartCallbackCache::GetCallbackHandle(
+      kTopLevelName, kTopLevelClass, kTopLevelLib);
+  EXPECT_NE(top_level_handle, 0);
+
+  FlutterCallbackInformation top_level_info = {};
+  top_level_info.struct_size = sizeof(FlutterCallbackInformation);
+
+  EXPECT_EQ(
+      FlutterEngineGetCallbackInformation(top_level_handle, &top_level_info),
+      kSuccess);
+  EXPECT_EQ(top_level_info.struct_size, sizeof(FlutterCallbackInformation));
+  ASSERT_NE(top_level_info.name, nullptr);
+  EXPECT_STREQ(top_level_info.name, kTopLevelName.c_str());
+  ASSERT_NE(top_level_info.class_name, nullptr);
+  EXPECT_STREQ(top_level_info.class_name, "");
+  ASSERT_NE(top_level_info.library_path, nullptr);
+  EXPECT_STREQ(top_level_info.library_path, kTopLevelLib.c_str());
+
+  // 2. Class method callback (non-empty class_name).
+  const std::string kMethodName = "onBackgroundMessage";
+  const std::string kMethodClass = "BackgroundHandler";
+  const std::string kMethodLib = "package:test_app/handler.dart";
+
+  int64_t method_handle = DartCallbackCache::GetCallbackHandle(
+      kMethodName, kMethodClass, kMethodLib);
+  EXPECT_NE(method_handle, 0);
+
+  FlutterCallbackInformation method_info = {};
+  method_info.struct_size = sizeof(FlutterCallbackInformation);
+
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(method_handle, &method_info),
+            kSuccess);
+  EXPECT_EQ(method_info.struct_size, sizeof(FlutterCallbackInformation));
+  ASSERT_NE(method_info.name, nullptr);
+  EXPECT_STREQ(method_info.name, kMethodName.c_str());
+  ASSERT_NE(method_info.class_name, nullptr);
+  EXPECT_STREQ(method_info.class_name, kMethodClass.c_str());
+  ASSERT_NE(method_info.library_path, nullptr);
+  EXPECT_STREQ(method_info.library_path, kMethodLib.c_str());
+}
+
+TEST_F(EmbedderTest, CallbackInfoViaProcTable) {
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  ASSERT_NE(table.GetCallbackInformation, nullptr);
+
+  const std::string kCallbackName = "procTableCallback";
+  const std::string kCallbackClass = "ProcClass";
+  const std::string kCallbackLib = "package:test_app/proc.dart";
+
+  int64_t handle = DartCallbackCache::GetCallbackHandle(
+      kCallbackName, kCallbackClass, kCallbackLib);
+  EXPECT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  EXPECT_EQ(table.GetCallbackInformation(handle, &info), kSuccess);
+  EXPECT_EQ(info.struct_size, sizeof(FlutterCallbackInformation));
+  ASSERT_NE(info.name, nullptr);
+  EXPECT_STREQ(info.name, kCallbackName.c_str());
+  ASSERT_NE(info.class_name, nullptr);
+  EXPECT_STREQ(info.class_name, kCallbackClass.c_str());
+  ASSERT_NE(info.library_path, nullptr);
+  EXPECT_STREQ(info.library_path, kCallbackLib.c_str());
 }
 
 }  // namespace testing
