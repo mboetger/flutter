@@ -11,11 +11,9 @@
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 
 #include "flutter/shell/platform/android/android_engine.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
-#include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 
 namespace flutter {
@@ -97,7 +95,7 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
             return 0;
           });
 
-  PlatformViewAndroid::Register(&mock_env);
+  PlatformViewAndroidJNIImpl::Register(&mock_env);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, ImageGetHardwareBufferException) {
@@ -124,7 +122,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, ImageGetHardwareBufferException) {
   android_jni.ImageGetHardwareBuffer(image);
 }
 
-TEST_F(PlatformViewAndroidJNIImplTest, GatedAttachAndDestroy) {
+TEST_F(PlatformViewAndroidJNIImplTest, AttachAndDestroy) {
   MockJNIEnvProvider env_provider;
   MockJNIEnv& mock_env = env_provider.env();
 
@@ -138,23 +136,11 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedAttachAndDestroy) {
 
   jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
 
-  // Test Embedder API mode (flag = true)
-  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
   jlong engine_handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
   EXPECT_NE(engine_handle, 0);
   auto* engine = reinterpret_cast<AndroidEngine*>(engine_handle);
   EXPECT_TRUE(engine->IsValid());
   nativeDestroy(&mock_env, nullptr, engine_handle);
-
-  // Test Legacy Shell mode (flag = false)
-  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
-  jlong shell_handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-  EXPECT_NE(shell_handle, 0);
-  auto* holder = reinterpret_cast<AndroidShellHolder*>(shell_handle);
-  EXPECT_TRUE(holder->IsValid());
-  nativeDestroy(&mock_env, nullptr, shell_handle);
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, GatedSurfaceLifecycle) {
@@ -186,20 +172,15 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedSurfaceLifecycle) {
   jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
   jobject surface_obj = reinterpret_cast<jobject>(0x5678);
 
-  for (bool embedder_enabled : {true, false}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_enabled);
-    jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-    ASSERT_NE(handle, 0);
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
 
-    nativeSurfaceCreated(&mock_env, nullptr, handle, surface_obj);
-    nativeSurfaceWindowChanged(&mock_env, nullptr, handle, surface_obj);
-    nativeSurfaceChanged(&mock_env, nullptr, handle, 800, 600);
-    nativeSurfaceDestroyed(&mock_env, nullptr, handle);
+  nativeSurfaceCreated(&mock_env, nullptr, handle, surface_obj);
+  nativeSurfaceWindowChanged(&mock_env, nullptr, handle, surface_obj);
+  nativeSurfaceChanged(&mock_env, nullptr, handle, 800, 600);
+  nativeSurfaceDestroyed(&mock_env, nullptr, handle);
 
-    nativeDestroy(&mock_env, nullptr, handle);
-  }
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
+  nativeDestroy(&mock_env, nullptr, handle);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, GatedPlatformMessages) {
@@ -236,23 +217,18 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedPlatformMessages) {
   EXPECT_CALL(mock_env, GetDirectBufferAddress(buffer))
       .WillRepeatedly(Return(msg_data.data()));
 
-  for (bool embedder_enabled : {true, false}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_enabled);
-    jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-    ASSERT_NE(handle, 0);
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
 
-    nativeDispatchPlatformMessage(&mock_env, nullptr, handle, channel, buffer,
-                                  4, 1);
-    nativeDispatchEmptyPlatformMessage(&mock_env, nullptr, handle, channel, 2);
-    nativeInvokePlatformMessageResponseCallback(&mock_env, nullptr, handle, 1,
-                                                buffer, 4);
-    nativeInvokePlatformMessageEmptyResponseCallback(&mock_env, nullptr, handle,
-                                                     2);
+  nativeDispatchPlatformMessage(&mock_env, nullptr, handle, channel, buffer, 4,
+                                1);
+  nativeDispatchEmptyPlatformMessage(&mock_env, nullptr, handle, channel, 2);
+  nativeInvokePlatformMessageResponseCallback(&mock_env, nullptr, handle, 1,
+                                              buffer, 4);
+  nativeInvokePlatformMessageEmptyResponseCallback(&mock_env, nullptr, handle,
+                                                   2);
 
-    nativeDestroy(&mock_env, nullptr, handle);
-  }
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
+  nativeDestroy(&mock_env, nullptr, handle);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, GatedPointerDataPacket) {
@@ -272,27 +248,24 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedPointerDataPacket) {
   jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
   jobject buffer = reinterpret_cast<jobject>(0x5678);
 
-  PointerData data = {};
-  data.embedder_id = 1;
-  data.change = PointerData::Change::kDown;
-  data.physical_x = 100.0;
-  data.physical_y = 200.0;
+  uint8_t data[288] = {};
+  int64_t change = 4;  // kDown
+  double physical_x = 100.0;
+  double physical_y = 200.0;
+  memcpy(data + 16, &change, sizeof(int64_t));
+  memcpy(data + 56, &physical_x, sizeof(double));
+  memcpy(data + 64, &physical_y, sizeof(double));
 
   EXPECT_CALL(mock_env, GetDirectBufferAddress(buffer))
-      .WillRepeatedly(Return(&data));
+      .WillRepeatedly(Return(data));
 
-  for (bool embedder_enabled : {true, false}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_enabled);
-    jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-    ASSERT_NE(handle, 0);
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
 
-    nativeDispatchPointerDataPacket(&mock_env, nullptr, handle, buffer,
-                                    sizeof(data));
+  nativeDispatchPointerDataPacket(&mock_env, nullptr, handle, buffer,
+                                  sizeof(data));
 
-    nativeDestroy(&mock_env, nullptr, handle);
-  }
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
+  nativeDestroy(&mock_env, nullptr, handle);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, GatedSemanticsAndAccessibility) {
@@ -319,19 +292,14 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedSemanticsAndAccessibility) {
 
   jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
 
-  for (bool embedder_enabled : {true, false}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_enabled);
-    jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-    ASSERT_NE(handle, 0);
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
 
-    nativeSetSemanticsEnabled(&mock_env, nullptr, handle, JNI_TRUE);
-    nativeSetAccessibilityFeatures(&mock_env, nullptr, handle, 0x3);
-    nativeDispatchSemanticsAction(&mock_env, nullptr, handle, 1, 1, nullptr, 0);
+  nativeSetSemanticsEnabled(&mock_env, nullptr, handle, JNI_TRUE);
+  nativeSetAccessibilityFeatures(&mock_env, nullptr, handle, 0x3);
+  nativeDispatchSemanticsAction(&mock_env, nullptr, handle, 1, 1, nullptr, 0);
 
-    nativeDestroy(&mock_env, nullptr, handle);
-  }
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
+  nativeDestroy(&mock_env, nullptr, handle);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, GatedTextures) {
@@ -363,22 +331,17 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedTextures) {
   jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
   jobject texture_obj = reinterpret_cast<jobject>(0x5678);
 
-  for (bool embedder_enabled : {true, false}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_enabled);
-    jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-    ASSERT_NE(handle, 0);
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
 
-    nativeRegisterTexture(&mock_env, nullptr, handle, 42, texture_obj);
-    nativeRegisterImageTexture(&mock_env, nullptr, handle, 43, texture_obj,
-                               JNI_TRUE);
-    nativeMarkTextureFrameAvailable(&mock_env, nullptr, handle, 42);
-    nativeUnregisterTexture(&mock_env, nullptr, handle, 42);
-    nativeUnregisterTexture(&mock_env, nullptr, handle, 43);
+  nativeRegisterTexture(&mock_env, nullptr, handle, 42, texture_obj);
+  nativeRegisterImageTexture(&mock_env, nullptr, handle, 43, texture_obj,
+                             JNI_TRUE);
+  nativeMarkTextureFrameAvailable(&mock_env, nullptr, handle, 42);
+  nativeUnregisterTexture(&mock_env, nullptr, handle, 42);
+  nativeUnregisterTexture(&mock_env, nullptr, handle, 43);
 
-    nativeDestroy(&mock_env, nullptr, handle);
-  }
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
+  nativeDestroy(&mock_env, nullptr, handle);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, GatedLowMemoryAndScheduleFrame) {
@@ -401,18 +364,13 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedLowMemoryAndScheduleFrame) {
 
   jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
 
-  for (bool embedder_enabled : {true, false}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_enabled);
-    jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-    ASSERT_NE(handle, 0);
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
 
-    nativeNotifyLowMemoryWarning(&mock_env, nullptr, handle);
-    nativeScheduleFrame(&mock_env, nullptr, handle);
+  nativeNotifyLowMemoryWarning(&mock_env, nullptr, handle);
+  nativeScheduleFrame(&mock_env, nullptr, handle);
 
-    nativeDestroy(&mock_env, nullptr, handle);
-  }
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
+  nativeDestroy(&mock_env, nullptr, handle);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, GatedSetViewportMetrics) {
@@ -439,23 +397,17 @@ TEST_F(PlatformViewAndroidJNIImplTest, GatedSetViewportMetrics) {
   jintArray type = reinterpret_cast<jintArray>(789);
   jintArray state = reinterpret_cast<jintArray>(1011);
 
-  for (bool embedder_enabled : {true, false}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_enabled);
-    jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
-    ASSERT_NE(handle, 0);
+  jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
+  ASSERT_NE(handle, 0);
 
-    nativeSetViewportMetrics(&mock_env, nullptr, handle, 2.0f, 1080, 1920, 0, 0,
-                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type,
-                             state, 0, 0, 0, 0, 0, 0, 0, 0);
+  nativeSetViewportMetrics(&mock_env, nullptr, handle, 2.0f, 1080, 1920, 0, 0,
+                           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
+                           0, 0, 0, 0, 0, 0, 0, 0);
 
-    nativeDestroy(&mock_env, nullptr, handle);
-  }
-
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
+  nativeDestroy(&mock_env, nullptr, handle);
 }
 
 struct PlatformViewAndroidJNIMatrixParam {
-  bool embedder_api_enabled;
   AndroidRenderingAPI rendering_api;
   const char* name;
 };
@@ -466,7 +418,6 @@ class PlatformViewAndroidJNIParameterizedTest
  protected:
   void SetUp() override {
     const auto& param = GetParam();
-    FlutterMain::SetEmbedderAPIEnabledForTesting(param.embedder_api_enabled);
     Settings settings;
     settings.enable_software_rendering =
         (param.rendering_api == AndroidRenderingAPI::kSoftware);
@@ -583,14 +534,16 @@ TEST_P(PlatformViewAndroidJNIParameterizedTest, MatrixPointerDataPacket) {
   jobject flutter_jni_obj = reinterpret_cast<jobject>(0x1234);
   jobject buffer = reinterpret_cast<jobject>(0x5678);
 
-  PointerData data = {};
-  data.embedder_id = 1;
-  data.change = PointerData::Change::kDown;
-  data.physical_x = 100.0;
-  data.physical_y = 200.0;
+  uint8_t data[288] = {};
+  int64_t change = 4;  // kDown
+  double physical_x = 100.0;
+  double physical_y = 200.0;
+  memcpy(data + 16, &change, sizeof(int64_t));
+  memcpy(data + 56, &physical_x, sizeof(double));
+  memcpy(data + 64, &physical_y, sizeof(double));
 
   EXPECT_CALL(mock_env, GetDirectBufferAddress(buffer))
-      .WillRepeatedly(Return(&data));
+      .WillRepeatedly(Return(data));
 
   jlong handle = nativeAttach(&mock_env, nullptr, flutter_jni_obj);
   ASSERT_NE(handle, 0);
@@ -833,31 +786,17 @@ INSTANTIATE_TEST_SUITE_P(
     PlatformViewAndroidJNIParameterizedTest,
     ::testing::Values(
         PlatformViewAndroidJNIMatrixParam{
-            true, AndroidRenderingAPI::kImpellerOpenGLES,
+            AndroidRenderingAPI::kImpellerOpenGLES,
             "Embedder_ImpellerOpenGLES"},
-        PlatformViewAndroidJNIMatrixParam{true,
-                                          AndroidRenderingAPI::kImpellerVulkan,
+        PlatformViewAndroidJNIMatrixParam{AndroidRenderingAPI::kImpellerVulkan,
                                           "Embedder_ImpellerVulkan"},
+        PlatformViewAndroidJNIMatrixParam{AndroidRenderingAPI::kSkiaOpenGLES,
+                                          "Embedder_SkiaOpenGLES"},
         PlatformViewAndroidJNIMatrixParam{
-            true, AndroidRenderingAPI::kSkiaOpenGLES, "Embedder_SkiaOpenGLES"},
-        PlatformViewAndroidJNIMatrixParam{
-            true, AndroidRenderingAPI::kImpellerAutoselect,
+            AndroidRenderingAPI::kImpellerAutoselect,
             "Embedder_ImpellerAutoselect"},
-        PlatformViewAndroidJNIMatrixParam{true, AndroidRenderingAPI::kSoftware,
-                                          "Embedder_Software"},
-        PlatformViewAndroidJNIMatrixParam{
-            false, AndroidRenderingAPI::kImpellerOpenGLES,
-            "Legacy_ImpellerOpenGLES"},
-        PlatformViewAndroidJNIMatrixParam{false,
-                                          AndroidRenderingAPI::kImpellerVulkan,
-                                          "Legacy_ImpellerVulkan"},
-        PlatformViewAndroidJNIMatrixParam{
-            false, AndroidRenderingAPI::kSkiaOpenGLES, "Legacy_SkiaOpenGLES"},
-        PlatformViewAndroidJNIMatrixParam{
-            false, AndroidRenderingAPI::kImpellerAutoselect,
-            "Legacy_ImpellerAutoselect"},
-        PlatformViewAndroidJNIMatrixParam{false, AndroidRenderingAPI::kSoftware,
-                                          "Legacy_Software"}),
+        PlatformViewAndroidJNIMatrixParam{AndroidRenderingAPI::kSoftware,
+                                          "Embedder_Software"}),
     [](const ::testing::TestParamInfo<PlatformViewAndroidJNIMatrixParam>&
            info) { return info.param.name; });
 

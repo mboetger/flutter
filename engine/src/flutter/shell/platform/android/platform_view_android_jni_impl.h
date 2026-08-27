@@ -37,14 +37,12 @@ void* FindFirstLoadableLibrary(
 ///
 class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
  public:
+  static bool Register(JNIEnv* env);
+
   explicit PlatformViewAndroidJNIImpl(
       const fml::jni::JavaObjectWeakGlobalRef& java_object);
 
   ~PlatformViewAndroidJNIImpl() override;
-
-  void FlutterViewHandlePlatformMessage(
-      std::unique_ptr<flutter::PlatformMessage> message,
-      int responseId) override;
 
   void FlutterViewHandlePlatformMessage(const std::string& channel,
                                         const uint8_t* message,
@@ -79,7 +77,8 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) override;
 
-  SkM44 SurfaceTextureGetTransformMatrix(JavaLocalRef surface_texture) override;
+  DlMatrix SurfaceTextureGetTransformMatrix(
+      JavaLocalRef surface_texture) override;
 
   void SurfaceTextureDetachFromGLContext(JavaLocalRef surface_texture) override;
 
@@ -91,15 +90,6 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
   void ImageClose(JavaLocalRef image) override;
 
   void HardwareBufferClose(JavaLocalRef hardware_buffer) override;
-
-  void FlutterViewOnDisplayPlatformView(int view_id,
-                                        int x,
-                                        int y,
-                                        int width,
-                                        int height,
-                                        int viewWidth,
-                                        int viewHeight,
-                                        MutatorsStack mutators_stack) override;
 
   void FlutterViewDisplayOverlaySurface(int surface_id,
                                         int x,
@@ -132,35 +122,6 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   double FlutterViewGetScaledFontSize(double unscaled_font_size,
                                       int configuration_id) const override;
-
-  // New Platform View Support.
-  ASurfaceTransaction* createTransaction() override;
-
-  void swapTransaction() override;
-
-  void applyTransaction() override;
-
-  std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
-  createOverlaySurface2() override;
-
-  void destroyOverlaySurface2() override;
-
-  void onDisplayPlatformView2(int32_t view_id,
-                              int32_t x,
-                              int32_t y,
-                              int32_t width,
-                              int32_t height,
-                              int32_t viewWidth,
-                              int32_t viewHeight,
-                              MutatorsStack mutators_stack) override;
-
-  void hidePlatformView2(int32_t view_id) override;
-
-  void showOverlaySurface2() override;
-
-  void hideOverlaySurface2() override;
-
-  void onEndFrame2() override;
 
   void MaybeResizeSurfaceView(int32_t width, int32_t height) const override;
 

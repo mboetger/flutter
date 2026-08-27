@@ -10,7 +10,6 @@
 #include <sstream>
 #include <utility>
 
-#include "flutter/assets/asset_resolver.h"
 #include "flutter/fml/logging.h"
 
 namespace flutter {
@@ -79,24 +78,11 @@ APKAssetProvider::APKAssetProvider(
     std::shared_ptr<APKAssetProviderInternal> impl)
     : impl_(std::move(impl)) {}
 
-// |AssetResolver|
-bool APKAssetProvider::IsValid() const {
-  return true;
-}
-
-// |AssetResolver|
-bool APKAssetProvider::IsValidAfterAssetManagerChange() const {
-  return true;
-}
-
-// |AssetResolver|
-AssetResolver::AssetResolverType APKAssetProvider::GetType() const {
-  return AssetResolver::AssetResolverType::kApkAssetProvider;
-}
-
-// |AssetResolver|
 std::unique_ptr<fml::Mapping> APKAssetProvider::GetAsMapping(
     const std::string& asset_name) const {
+  if (!impl_) {
+    return nullptr;
+  }
   return impl_->GetAsMapping(asset_name);
 }
 
@@ -137,14 +123,6 @@ FlutterAssetResolver APKAssetProvider::GetAssetResolver() const {
     return true;
   };
   return resolver;
-}
-
-bool APKAssetProvider::operator==(const AssetResolver& other) const {
-  auto other_provider = other.as_apk_asset_provider();
-  if (!other_provider) {
-    return false;
-  }
-  return impl_ == other_provider->impl_;
 }
 
 }  // namespace flutter

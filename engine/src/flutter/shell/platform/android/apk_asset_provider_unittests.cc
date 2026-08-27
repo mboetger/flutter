@@ -35,8 +35,6 @@ TEST(APKAssetProvider, CloneAndEquals) {
 
   ASSERT_NE(first_provider->GetImpl(), second_provider->GetImpl());
   ASSERT_EQ(first_provider->GetImpl(), third_provider->GetImpl());
-  ASSERT_FALSE(*first_provider == *second_provider);
-  ASSERT_TRUE(*first_provider == *third_provider);
 }
 
 TEST(APKAssetProvider, GetAssetResolverProperties) {

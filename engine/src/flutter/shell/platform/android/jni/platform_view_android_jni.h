@@ -5,12 +5,13 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
+#include "flutter/display_list/geometry/dl_geometry_types.h"
 #include "flutter/fml/mapping.h"
-
-#include "flutter/flow/embedded_views.h"
-#include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 
 #if FML_OS_ANDROID
@@ -42,14 +43,10 @@ class PlatformViewAndroidJNI {
   //----------------------------------------------------------------------------
   /// @brief      Sends a platform message. The message may be empty.
   ///
-  virtual void FlutterViewHandlePlatformMessage(
-      std::unique_ptr<flutter::PlatformMessage> message,
-      int responseId) = 0;
-
   virtual void FlutterViewHandlePlatformMessage(const std::string& channel,
                                                 const uint8_t* message,
                                                 size_t message_size,
-                                                int responseId) {}
+                                                int responseId) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Responds to a platform message. The data may be a `nullptr`.
@@ -126,7 +123,7 @@ class PlatformViewAndroidJNI {
   ///             Then, it updates the `transform` matrix, so it fill the canvas
   ///             and preserve the aspect ratio.
   ///
-  virtual SkM44 SurfaceTextureGetTransformMatrix(
+  virtual DlMatrix SurfaceTextureGetTransformMatrix(
       JavaLocalRef surface_texture) = 0;
 
   //----------------------------------------------------------------------------
@@ -157,22 +154,6 @@ class PlatformViewAndroidJNI {
   virtual void HardwareBufferClose(JavaLocalRef hardware_buffer) = 0;
 
   //----------------------------------------------------------------------------
-  /// @brief      Positions and sizes a platform view if using hybrid
-  ///             composition.
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual void FlutterViewOnDisplayPlatformView(
-      int view_id,
-      int x,
-      int y,
-      int width,
-      int height,
-      int viewWidth,
-      int viewHeight,
-      MutatorsStack mutators_stack) = 0;
-
-  //----------------------------------------------------------------------------
   /// @brief      Positions and sizes an overlay surface in hybrid composition.
   ///
   /// @note       Must be called from the platform thread.
@@ -200,8 +181,7 @@ class PlatformViewAndroidJNI {
   virtual void FlutterViewEndFrame() = 0;
 
   //------------------------------------------------------------------------------
-  /// The metadata returned from Java which is converted into an |OverlayLayer|
-  /// by |SurfacePool|.
+  /// The metadata returned from Java representing an overlay surface.
   ///
   struct OverlayMetadata {
     OverlayMetadata(int id, fml::RefPtr<AndroidNativeWindow> window)
@@ -232,35 +212,6 @@ class PlatformViewAndroidJNI {
   /// @note       Must be called from the platform thread.
   ///
   virtual void FlutterViewDestroyOverlaySurfaces() = 0;
-
-  // New Platform View Support.
-  virtual ASurfaceTransaction* createTransaction() = 0;
-
-  virtual void swapTransaction() = 0;
-
-  virtual void applyTransaction() = 0;
-
-  virtual std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
-  createOverlaySurface2() = 0;
-
-  virtual void destroyOverlaySurface2() = 0;
-
-  virtual void onEndFrame2() = 0;
-
-  virtual void onDisplayPlatformView2(int32_t view_id,
-                                      int32_t x,
-                                      int32_t y,
-                                      int32_t width,
-                                      int32_t height,
-                                      int32_t viewWidth,
-                                      int32_t viewHeight,
-                                      MutatorsStack mutators_stack) = 0;
-
-  virtual void hidePlatformView2(int32_t view_id) = 0;
-
-  virtual void showOverlaySurface2() = 0;
-
-  virtual void hideOverlaySurface2() = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Computes the locale Android would select.

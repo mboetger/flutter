@@ -13,16 +13,15 @@ namespace testing {
 TEST(JNIMock, FlutterViewHandlePlatformMessage) {
   JNIMock mock;
 
-  auto message = std::make_unique<PlatformMessage>("<channel-name>", nullptr);
+  const std::string channel = "<channel-name>";
+  const uint8_t data[] = {1, 2, 3};
   auto response_id = 1;
 
-  EXPECT_CALL(mock,
-              FlutterViewHandlePlatformMessage(
-                  ::testing::Property(&std::unique_ptr<PlatformMessage>::get,
-                                      message.get()),
-                  response_id));
+  EXPECT_CALL(mock, FlutterViewHandlePlatformMessage(
+                        channel, data, sizeof(data), response_id));
 
-  mock.FlutterViewHandlePlatformMessage(std::move(message), response_id);
+  mock.FlutterViewHandlePlatformMessage(channel, data, sizeof(data),
+                                        response_id);
 }
 
 }  // namespace testing

@@ -56,24 +56,17 @@ executable("flutter_shell_native_unittests") {
   testonly = true
   sources = [
     "android_compositor_unittests.cc",
-    "android_context_gl_impeller_unittests.cc",
     "android_engine_unittests.cc",
     "android_image_generator_unittests.cc",
-    "android_shell_holder_unittests.cc",
     "android_surface_manager_unittests.cc",
     "android_thread_config_unittests.cc",
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
-    "image_lru_unittests.cc",
     "platform_view_android_jni_impl_unittests.cc",
     "platform_view_android_unittests.cc",
   ]
-  if (!slimpeller) {
-    sources += [ "android_context_gl_unittests.cc" ]
-  }
   public_configs = [ "//flutter:config" ]
   deps = [
-    ":android_legacy_engine_holder",
     ":android_thread_config",
     ":flutter_shell_native_src",
     "//flutter/fml",
@@ -100,121 +93,6 @@ bin_to_assembly("icudtl_asm") {
   executable = false
 }
 
-source_set("android_legacy_engine_holder") {
-  visibility = [
-    ":flutter_shell_native_src",
-    ":flutter_shell_native_unittests",
-  ]
-
-  sources = [
-    "android_context_dynamic_impeller.cc",
-    "android_context_dynamic_impeller.h",
-    "android_context_gl_impeller.cc",
-    "android_context_gl_impeller.h",
-    "android_context_vk_impeller.cc",
-    "android_context_vk_impeller.h",
-    "android_display.cc",
-    "android_display.h",
-    "android_egl_surface.cc",
-    "android_egl_surface.h",
-    "android_environment_gl.cc",
-    "android_environment_gl.h",
-    "android_shell_holder.cc",
-    "android_shell_holder.h",
-    "android_surface_dynamic_impeller.cc",
-    "android_surface_dynamic_impeller.h",
-    "android_surface_gl_impeller.cc",
-    "android_surface_gl_impeller.h",
-    "android_surface_vk_impeller.cc",
-    "android_surface_vk_impeller.h",
-    "apk_asset_provider.cc",
-    "apk_asset_provider.h",
-    "image_external_texture.cc",
-    "image_external_texture.h",
-    "image_external_texture_gl.cc",
-    "image_external_texture_gl.h",
-    "image_external_texture_gl_impeller.cc",
-    "image_external_texture_gl_impeller.h",
-    "image_external_texture_vk_impeller.cc",
-    "image_external_texture_vk_impeller.h",
-    "image_lru.cc",
-    "image_lru.h",
-    "platform_message_handler_android.cc",
-    "platform_message_handler_android.h",
-    "platform_message_response_android.cc",
-    "platform_message_response_android.h",
-    "platform_view_android.cc",
-    "platform_view_android.h",
-    "platform_view_android_adapter.cc",
-    "platform_view_android_adapter.h",
-    "surface_texture_external_texture.cc",
-    "surface_texture_external_texture.h",
-    "surface_texture_external_texture_gl_impeller.cc",
-    "surface_texture_external_texture_gl_impeller.h",
-    "surface_texture_external_texture_vk_impeller.cc",
-    "surface_texture_external_texture_vk_impeller.h",
-    "vsync_waiter_android.cc",
-    "vsync_waiter_android.h",
-  ]
-
-  if (!slimpeller) {
-    sources += [
-      "android_context_gl_skia.cc",
-      "android_context_gl_skia.h",
-      "android_surface_gl_skia.cc",
-      "android_surface_gl_skia.h",
-      "android_surface_software.cc",
-      "android_surface_software.h",
-      "image_external_texture_gl_skia.cc",
-      "image_external_texture_gl_skia.h",
-      "surface_texture_external_texture_gl_skia.cc",
-      "surface_texture_external_texture_gl_skia.h",
-    ]
-  }
-
-  public_deps = [
-    ":android_gpu_configuration",
-    ":android_thread_config",
-    ":image_generator",
-    "//flutter/assets",
-    "//flutter/common",
-    "//flutter/common/graphics",
-    "//flutter/flow",
-    "//flutter/fml",
-    "//flutter/impeller",
-    "//flutter/impeller/toolkit/android",
-    "//flutter/impeller/toolkit/egl",
-    "//flutter/impeller/toolkit/gles",
-    "//flutter/impeller/toolkit/glvk",
-    "//flutter/lib/ui",
-    "//flutter/runtime",
-    "//flutter/runtime:libdart",
-    "//flutter/shell/common",
-    "//flutter/shell/gpu:gpu_surface_gl",
-    "//flutter/shell/gpu:gpu_surface_software",
-    "//flutter/shell/gpu:gpu_surface_vulkan",
-    "//flutter/shell/platform/android/context",
-    "//flutter/shell/platform/android/external_view_embedder",
-    "//flutter/shell/platform/android/jni",
-    "//flutter/shell/platform/android/platform_view_android_delegate",
-    "//flutter/shell/platform/android/surface",
-    "//flutter/shell/platform/android/surface:native_window",
-    "//flutter/skia",
-    "//flutter/txt",
-    "//flutter/vulkan",
-  ]
-
-  public_configs = [ "//flutter:config" ]
-
-  defines = []
-
-  libs = [
-    "android",
-    "EGL",
-    "GLESv2",
-  ]
-}
-
 source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
@@ -225,6 +103,8 @@ source_set("flutter_shell_native_src") {
     "android_engine.h",
     "android_surface_manager.cc",
     "android_surface_manager.h",
+    "apk_asset_provider.cc",
+    "apk_asset_provider.h",
     "flutter_main.cc",
     "flutter_main.h",
     "library_loader.cc",
@@ -236,6 +116,8 @@ source_set("flutter_shell_native_src") {
     ":android_gpu_configuration",
     ":image_generator",
     "//flutter/fml",
+    "//flutter/shell/platform/android/jni:jni",
+    "//flutter/shell/platform/android/surface:native_window",
     "//flutter/shell/platform/common:common_cpp_core",
     "//flutter/shell/platform/common:common_cpp_enums",
     "//flutter/shell/platform/common:common_cpp_switches",
@@ -243,7 +125,6 @@ source_set("flutter_shell_native_src") {
   ]
 
   deps = [
-    ":android_legacy_engine_holder",
     ":android_thread_config",
   ]
 
@@ -257,6 +138,8 @@ source_set("flutter_shell_native_src") {
     "GLESv2",
   ]
 }
+
+
 
 action("gen_android_build_config_java") {
   script = "//flutter/tools/gen_android_buildconfig.py"

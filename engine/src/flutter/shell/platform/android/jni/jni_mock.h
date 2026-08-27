@@ -18,12 +18,6 @@ class JNIMock final : public PlatformViewAndroidJNI {
  public:
   MOCK_METHOD(void,
               FlutterViewHandlePlatformMessage,
-              (std::unique_ptr<flutter::PlatformMessage> message,
-               int responseId),
-              (override));
-
-  MOCK_METHOD(void,
-              FlutterViewHandlePlatformMessage,
               (const std::string& channel,
                const uint8_t* message,
                size_t message_size,
@@ -76,7 +70,7 @@ class JNIMock final : public PlatformViewAndroidJNI {
               (JavaLocalRef surface_texture),
               (override));
 
-  MOCK_METHOD(SkM44,
+  MOCK_METHOD(DlMatrix,
               SurfaceTextureGetTransformMatrix,
               (JavaLocalRef surface_texture),
               (override));
@@ -104,18 +98,6 @@ class JNIMock final : public PlatformViewAndroidJNI {
               (override));
 
   MOCK_METHOD(void,
-              FlutterViewOnDisplayPlatformView,
-              (int view_id,
-               int x,
-               int y,
-               int width,
-               int height,
-               int viewWidth,
-               int viewHeight,
-               MutatorsStack mutators_stack),
-              (override));
-
-  MOCK_METHOD(void,
               FlutterViewDisplayOverlaySurface,
               (int surface_id, int x, int y, int width, int height),
               (override));
@@ -130,36 +112,6 @@ class JNIMock final : public PlatformViewAndroidJNI {
               (override));
 
   MOCK_METHOD(void, FlutterViewDestroyOverlaySurfaces, (), (override));
-
-  MOCK_METHOD(ASurfaceTransaction*, createTransaction, (), (override));
-
-  MOCK_METHOD(void, swapTransaction, (), (override));
-
-  MOCK_METHOD(void, applyTransaction, (), (override));
-
-  MOCK_METHOD(void, destroyOverlaySurface2, (), (override));
-
-  MOCK_METHOD(std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>,
-              createOverlaySurface2,
-              (),
-              (override));
-
-  MOCK_METHOD(void,
-              onDisplayPlatformView2,
-              (int32_t view_id,
-               int32_t x,
-               int32_t y,
-               int32_t width,
-               int32_t height,
-               int32_t viewWidth,
-               int32_t viewHeight,
-               MutatorsStack mutators_stack),
-              (override));
-
-  MOCK_METHOD(void, hidePlatformView2, (int32_t view_id), (override));
-  MOCK_METHOD(void, onEndFrame2, (), (override));
-  MOCK_METHOD(void, hideOverlaySurface2, (), (override));
-  MOCK_METHOD(void, showOverlaySurface2, (), (override));
 
   MOCK_METHOD(std::unique_ptr<std::vector<std::string>>,
               FlutterViewComputePlatformResolvedLocale,

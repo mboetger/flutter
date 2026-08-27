@@ -5,6 +5,7 @@
 #define FML_USED_ON_EMBEDDER
 
 #include <android/log.h>
+#include <dlfcn.h>
 #include <sys/system_properties.h>
 #include <atomic>
 #include <cstring>
@@ -19,17 +20,10 @@
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
-#include "flutter/runtime/dart_vm.h"
 #include "flutter/shell/common/switches.h"
-#include "flutter/shell/platform/android/android_context_vk_impeller.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
-#include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/common/engine_switches.h"
-#include "impeller/base/validation.h"
-#include "impeller/toolkit/android/proc_table.h"
-#include "txt/platform.h"
 
 namespace flutter {
 
@@ -83,12 +77,7 @@ FlutterMain::FlutterMain(const flutter::Settings& settings,
       init_time_millis_(init_time_millis),
       api_level_(api_level) {}
 
-FlutterMain::~FlutterMain() {
-  if (vm_service_uri_callback_ != 0) {
-    DartServiceIsolate::RemoveServerStatusCallback(vm_service_uri_callback_);
-    vm_service_uri_callback_ = 0;
-  }
-}
+FlutterMain::~FlutterMain() = default;
 
 static std::unique_ptr<FlutterMain> g_flutter_main;
 
@@ -199,8 +188,18 @@ void FlutterMain::Init(JNIEnv* env,
   // Turn systracing on if ATrace_isEnabled is true and the user did not already
   // request systracing
   if (!settings.trace_systrace) {
-    settings.trace_systrace =
-        impeller::android::GetProcTable().TraceIsEnabled();
+#if FML_OS_ANDROID
+    void* libandroid = ::dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
+    if (libandroid) {
+      using ATraceIsEnabledProc = bool (*)();
+      auto atrace_is_enabled = reinterpret_cast<ATraceIsEnabledProc>(
+          ::dlsym(libandroid, "ATrace_isEnabled"));
+      if (atrace_is_enabled && atrace_is_enabled()) {
+        settings.trace_systrace = true;
+      }
+      ::dlclose(libandroid);
+    }
+#endif
     if (settings.trace_systrace) {
       __android_log_print(
           ANDROID_LOG_INFO, "Flutter",
@@ -245,20 +244,10 @@ void FlutterMain::Init(JNIEnv* env,
       kernelPath ? fml::jni::JavaStringToString(env, kernelPath) : "";
 
   // Restore the callback cache.
-  // TODO(chinmaygarde): Route all cache file access through FML and remove this
-  // setter.
-  flutter::DartCallbackCache::SetCachePath(app_storage_path);
-
   fml::paths::InitializeAndroidCachesPath(engine_caches_path);
 
-  flutter::DartCallbackCache::LoadCacheFromDisk();
-
-  if (!flutter::DartVM::IsRunningPrecompiledCode() && !kernel_path.empty()) {
-    // Check to see if the appropriate kernel files are present and configure
-    // settings accordingly.
-    if (fml::IsFile(kernel_path)) {
-      settings.application_kernel_asset = kernel_path;
-    }
+  if (!kernel_path.empty() && fml::IsFile(kernel_path)) {
+    settings.application_kernel_asset = kernel_path;
   }
 
   settings.task_observer_add = [](intptr_t key, const fml::closure& callback) {
@@ -335,8 +324,8 @@ void FlutterMain::SetupDartVMServiceUriCallback(JNIEnv* env) {
 }
 
 static void PrefetchDefaultFontManager(JNIEnv* env, jclass jcaller) {
-  // Initialize a singleton owned by Skia.
-  txt::GetDefaultFontManager();
+  // In Embedder API mode, font initialization is managed internally by the
+  // embedder engine.
 }
 
 bool FlutterMain::Register(JNIEnv* env) {

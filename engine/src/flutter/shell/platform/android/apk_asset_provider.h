@@ -8,7 +8,11 @@
 #include <android/asset_manager_jni.h>
 #include <jni.h>
 
-#include "flutter/assets/asset_resolver.h"
+#include <memory>
+#include <string>
+
+#include "flutter/fml/macros.h"
+#include "flutter/fml/mapping.h"
 #include "flutter/fml/memory/ref_counted.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -24,7 +28,7 @@ class APKAssetProviderInternal {
   virtual ~APKAssetProviderInternal() = default;
 };
 
-class APKAssetProvider final : public AssetResolver {
+class APKAssetProvider final {
  public:
   explicit APKAssetProvider(JNIEnv* env,
                             jobject assetManager,
@@ -53,28 +57,13 @@ class APKAssetProvider final : public AssetResolver {
     return GetAssetResolver();
   }
 
-  bool operator==(const AssetResolver& other) const override;
+  bool IsValid() const { return impl_ != nullptr; }
+
+  std::unique_ptr<fml::Mapping> GetAsMapping(
+      const std::string& asset_name) const;
 
  private:
   std::shared_ptr<APKAssetProviderInternal> impl_;
-
-  // |flutter::AssetResolver|
-  bool IsValid() const override;
-
-  // |flutter::AssetResolver|
-  bool IsValidAfterAssetManagerChange() const override;
-
-  // |AssetResolver|
-  AssetResolver::AssetResolverType GetType() const override;
-
-  // |flutter::AssetResolver|
-  std::unique_ptr<fml::Mapping> GetAsMapping(
-      const std::string& asset_name) const override;
-
-  // |AssetResolver|
-  const APKAssetProvider* as_apk_asset_provider() const override {
-    return this;
-  }
 
   FML_DISALLOW_COPY_AND_ASSIGN(APKAssetProvider);
 };
