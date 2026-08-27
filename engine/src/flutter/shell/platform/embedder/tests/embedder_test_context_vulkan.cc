@@ -60,6 +60,17 @@ EmbedderTestContextVulkan::EmbedderTestContextVulkan(std::string assets_path)
         return reinterpret_cast<EmbedderTestContextVulkan*>(context)
             ->PresentImage(reinterpret_cast<VkImage>(image->image));
       },
+      .external_texture_frame_callback =
+          [](void* context, int64_t texture_id, size_t width, size_t height,
+             FlutterVulkanImage* image_out) -> bool {
+        auto* vk_context =
+            reinterpret_cast<EmbedderTestContextVulkan*>(context);
+        if (vk_context->external_texture_callback_) {
+          return vk_context->external_texture_callback_(texture_id, width,
+                                                        height, image_out);
+        }
+        return false;
+      },
   };
 }
 
@@ -67,6 +78,11 @@ EmbedderTestContextVulkan::~EmbedderTestContextVulkan() {}
 
 EmbedderTestContextType EmbedderTestContextVulkan::GetContextType() const {
   return EmbedderTestContextType::kVulkanContext;
+}
+
+void EmbedderTestContextVulkan::SetExternalTextureCallback(
+    TestExternalTextureCallback external_texture_frame_callback) {
+  external_texture_callback_ = std::move(external_texture_frame_callback);
 }
 
 void EmbedderTestContextVulkan::SetVulkanInstanceProcAddressCallback(

@@ -17,6 +17,13 @@
 #include "flutter/shell/platform/embedder/tests/embedder_test_context_vulkan.h"
 #include "flutter/shell/platform/embedder/tests/embedder_unittests_util.h"
 #include "flutter/testing/testing.h"
+#include "third_party/skia/include/core/SkColorSpace.h"
+#include "third_party/skia/include/core/SkSurface.h"
+#include "third_party/skia/include/gpu/ganesh/GrBackendSurface.h"
+#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkTypes.h"
 
 // CREATE_FFI_LAMBDA is leaky by design
 // NOLINTBEGIN(clang-analyzer-core.StackAddressEscape)
@@ -332,6 +339,463 @@ TEST_F(EmbedderTest, CreateInvalidBackingStoreVulkanImage) {
   collect_latch.Wait();
   EXPECT_TRUE(collected);
   s_collect_latch = nullptr;
+}
+
+TEST_F(EmbedderTest, CanRenderExternalTextureVulkanSkia) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  DlISize texture_size(800, 600);
+  int64_t texture_id = 1;
+
+  auto test_vk_context = context.GetTestVulkanContext();
+  auto optional_image = test_vk_context->CreateImage(texture_size);
+  ASSERT_TRUE(optional_image.has_value());
+  auto test_image =
+      std::make_shared<TestVulkanImage>(std::move(*optional_image));
+
+  GrVkImageInfo image_info = {
+      .fImage = test_image->GetImage(),
+      .fImageTiling = VK_IMAGE_TILING_OPTIMAL,
+      .fImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .fFormat = VK_FORMAT_R8G8B8A8_UNORM,
+      .fImageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_SAMPLED_BIT,
+      .fSampleCount = 1,
+      .fLevelCount = 1,
+  };
+  auto backend_texture = GrBackendTextures::MakeVk(
+      texture_size.width, texture_size.height, image_info);
+
+  SkSurfaceProps surface_properties(0, kUnknown_SkPixelGeometry);
+  auto gr_context = test_vk_context->GetGrDirectContext();
+  sk_sp<SkSurface> surface = SkSurfaces::WrapBackendTexture(
+      gr_context.get(), backend_texture, kTopLeft_GrSurfaceOrigin, 1,
+      kRGBA_8888_SkColorType, SkColorSpace::MakeSRGB(), &surface_properties);
+  ASSERT_TRUE(surface);
+  surface->getCanvas()->clear(SK_ColorRED);
+  gr_context->flushAndSubmit();
+
+  context.SetExternalTextureCallback(
+      [test_image, texture_size](int64_t id, size_t w, size_t h,
+                                 FlutterVulkanImage* output) -> bool {
+        output->struct_size = sizeof(FlutterVulkanImage);
+        output->image = reinterpret_cast<uint64_t>(test_image->GetImage());
+        output->format = VK_FORMAT_R8G8B8A8_UNORM;
+        output->width = texture_size.width;
+        output->height = texture_size.height;
+        output->user_data = nullptr;
+        output->destruction_callback = nullptr;
+        return true;
+      });
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetDartEntrypoint("render_texture");
+  builder.SetSurface(texture_size);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = texture_size.width;
+  event.height = texture_size.height;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(
+      ImageMatchesFixture("external_texture_vulkan.png", rendered_scene));
+}
+
+TEST_F(EmbedderTest, CanRenderExternalTextureVulkanImpeller) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  DlISize texture_size(800, 600);
+  int64_t texture_id = 1;
+
+  auto test_vk_context = context.GetTestVulkanContext();
+  auto optional_image = test_vk_context->CreateImage(texture_size);
+  ASSERT_TRUE(optional_image.has_value());
+  auto test_image =
+      std::make_shared<TestVulkanImage>(std::move(*optional_image));
+
+  GrVkImageInfo image_info = {
+      .fImage = test_image->GetImage(),
+      .fImageTiling = VK_IMAGE_TILING_OPTIMAL,
+      .fImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .fFormat = VK_FORMAT_R8G8B8A8_UNORM,
+      .fImageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_SAMPLED_BIT,
+      .fSampleCount = 1,
+      .fLevelCount = 1,
+  };
+  auto backend_texture = GrBackendTextures::MakeVk(
+      texture_size.width, texture_size.height, image_info);
+
+  SkSurfaceProps surface_properties(0, kUnknown_SkPixelGeometry);
+  auto gr_context = test_vk_context->GetGrDirectContext();
+  sk_sp<SkSurface> surface = SkSurfaces::WrapBackendTexture(
+      gr_context.get(), backend_texture, kTopLeft_GrSurfaceOrigin, 1,
+      kRGBA_8888_SkColorType, SkColorSpace::MakeSRGB(), &surface_properties);
+  ASSERT_TRUE(surface);
+  surface->getCanvas()->clear(SK_ColorRED);
+  gr_context->flushAndSubmit();
+
+  context.SetExternalTextureCallback(
+      [test_image, texture_size](int64_t id, size_t w, size_t h,
+                                 FlutterVulkanImage* output) -> bool {
+        output->struct_size = sizeof(FlutterVulkanImage);
+        output->image = reinterpret_cast<uint64_t>(test_image->GetImage());
+        output->format = VK_FORMAT_R8G8B8A8_UNORM;
+        output->width = texture_size.width;
+        output->height = texture_size.height;
+        output->user_data = nullptr;
+        output->destruction_callback = nullptr;
+        return true;
+      });
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture");
+  builder.SetSurface(texture_size);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = texture_size.width;
+  event.height = texture_size.height;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(
+      ImageMatchesFixture("external_texture_vulkan.png", rendered_scene));
+}
+
+TEST_F(EmbedderTest, ExternalTextureVulkanDestructionCallbackInvoked) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  DlISize texture_size(800, 600);
+  int64_t texture_id = 1;
+
+  auto test_vk_context = context.GetTestVulkanContext();
+  auto optional_image = test_vk_context->CreateImage(texture_size);
+  ASSERT_TRUE(optional_image.has_value());
+  auto test_image =
+      std::make_shared<TestVulkanImage>(std::move(*optional_image));
+
+  GrVkImageInfo image_info = {
+      .fImage = test_image->GetImage(),
+      .fImageTiling = VK_IMAGE_TILING_OPTIMAL,
+      .fImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .fFormat = VK_FORMAT_R8G8B8A8_UNORM,
+      .fImageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_SAMPLED_BIT,
+      .fSampleCount = 1,
+      .fLevelCount = 1,
+  };
+  auto backend_texture = GrBackendTextures::MakeVk(
+      texture_size.width, texture_size.height, image_info);
+
+  SkSurfaceProps surface_properties(0, kUnknown_SkPixelGeometry);
+  auto gr_context = test_vk_context->GetGrDirectContext();
+  sk_sp<SkSurface> surface = SkSurfaces::WrapBackendTexture(
+      gr_context.get(), backend_texture, kTopLeft_GrSurfaceOrigin, 1,
+      kRGBA_8888_SkColorType, SkColorSpace::MakeSRGB(), &surface_properties);
+  ASSERT_TRUE(surface);
+  surface->getCanvas()->clear(SK_ColorRED);
+  gr_context->flushAndSubmit();
+
+  std::atomic<int> destruction_count{0};
+
+  context.SetExternalTextureCallback(
+      [test_image, texture_size, &destruction_count](
+          int64_t id, size_t w, size_t h, FlutterVulkanImage* output) -> bool {
+        output->struct_size = sizeof(FlutterVulkanImage);
+        output->image = reinterpret_cast<uint64_t>(test_image->GetImage());
+        output->format = VK_FORMAT_R8G8B8A8_UNORM;
+        output->width = texture_size.width;
+        output->height = texture_size.height;
+        output->user_data = &destruction_count;
+        output->destruction_callback = [](void* user_data) {
+          reinterpret_cast<std::atomic<int>*>(user_data)->fetch_add(1);
+        };
+        return true;
+      });
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture");
+  builder.SetSurface(texture_size);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = texture_size.width;
+  event.height = texture_size.height;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(
+      ImageMatchesFixture("external_texture_vulkan.png", rendered_scene));
+
+  ASSERT_EQ(FlutterEngineUnregisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+  engine.reset();
+
+  EXPECT_GE(destruction_count.load(), 1);
+}
+
+TEST_F(EmbedderTest, ExternalTextureVulkanDestructionCallbackInvokedSkia) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  DlISize texture_size(800, 600);
+  int64_t texture_id = 1;
+
+  auto test_vk_context = context.GetTestVulkanContext();
+  auto optional_image = test_vk_context->CreateImage(texture_size);
+  ASSERT_TRUE(optional_image.has_value());
+  auto test_image =
+      std::make_shared<TestVulkanImage>(std::move(*optional_image));
+
+  GrVkImageInfo image_info = {
+      .fImage = test_image->GetImage(),
+      .fImageTiling = VK_IMAGE_TILING_OPTIMAL,
+      .fImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .fFormat = VK_FORMAT_R8G8B8A8_UNORM,
+      .fImageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_SAMPLED_BIT,
+      .fSampleCount = 1,
+      .fLevelCount = 1,
+  };
+  auto backend_texture = GrBackendTextures::MakeVk(
+      texture_size.width, texture_size.height, image_info);
+
+  SkSurfaceProps surface_properties(0, kUnknown_SkPixelGeometry);
+  auto gr_context = test_vk_context->GetGrDirectContext();
+  sk_sp<SkSurface> surface = SkSurfaces::WrapBackendTexture(
+      gr_context.get(), backend_texture, kTopLeft_GrSurfaceOrigin, 1,
+      kRGBA_8888_SkColorType, SkColorSpace::MakeSRGB(), &surface_properties);
+  ASSERT_TRUE(surface);
+  surface->getCanvas()->clear(SK_ColorRED);
+  gr_context->flushAndSubmit();
+
+  std::atomic<int> destruction_count{0};
+
+  context.SetExternalTextureCallback(
+      [test_image, texture_size, &destruction_count](
+          int64_t id, size_t w, size_t h, FlutterVulkanImage* output) -> bool {
+        output->struct_size = sizeof(FlutterVulkanImage);
+        output->image = reinterpret_cast<uint64_t>(test_image->GetImage());
+        output->format = VK_FORMAT_R8G8B8A8_UNORM;
+        output->width = texture_size.width;
+        output->height = texture_size.height;
+        output->user_data = &destruction_count;
+        output->destruction_callback = [](void* user_data) {
+          reinterpret_cast<std::atomic<int>*>(user_data)->fetch_add(1);
+        };
+        return true;
+      });
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetDartEntrypoint("render_texture");
+  builder.SetSurface(texture_size);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = texture_size.width;
+  event.height = texture_size.height;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(
+      ImageMatchesFixture("external_texture_vulkan.png", rendered_scene));
+
+  ASSERT_EQ(FlutterEngineUnregisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+  engine.reset();
+
+  EXPECT_GE(destruction_count.load(), 1);
+}
+
+TEST_F(EmbedderTest, UnsupportedPixelFormatExternalTextureVulkan) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  DlISize texture_size(800, 600);
+  int64_t texture_id = 1;
+
+  std::atomic<int> destruction_count{0};
+
+  context.SetExternalTextureCallback(
+      [texture_size, &destruction_count](int64_t id, size_t w, size_t h,
+                                         FlutterVulkanImage* output) -> bool {
+        output->struct_size = sizeof(FlutterVulkanImage);
+        output->image = 0x1234;  // Non-null handle
+        output->format = VK_FORMAT_UNDEFINED;
+        output->width = texture_size.width;
+        output->height = texture_size.height;
+        output->user_data = &destruction_count;
+        output->destruction_callback = [](void* user_data) {
+          reinterpret_cast<std::atomic<int>*>(user_data)->fetch_add(1);
+        };
+        return true;
+      });
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture");
+  builder.SetSurface(texture_size);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = texture_size.width;
+  event.height = texture_size.height;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  // Wait for frame to be presented so external texture callbacks execute.
+  rendered_scene.get();
+
+  ASSERT_EQ(FlutterEngineUnregisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+  engine.reset();
+
+  EXPECT_GE(destruction_count.load(), 1);
+}
+
+TEST_F(EmbedderTest, NullAndZeroDimensionExternalTextureVulkan) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  DlISize texture_size(800, 600);
+  int64_t texture_id = 1;
+
+  std::atomic<int> destruction_count{0};
+
+  context.SetExternalTextureCallback(
+      [&destruction_count](int64_t id, size_t w, size_t h,
+                           FlutterVulkanImage* output) -> bool {
+        output->struct_size = sizeof(FlutterVulkanImage);
+        output->image = 0;  // Null handle
+        output->format = VK_FORMAT_R8G8B8A8_UNORM;
+        output->width = 0;
+        output->height = 0;
+        output->user_data = &destruction_count;
+        output->destruction_callback = [](void* user_data) {
+          reinterpret_cast<std::atomic<int>*>(user_data)->fetch_add(1);
+        };
+        return true;
+      });
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture");
+  builder.SetSurface(texture_size);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = texture_size.width;
+  event.height = texture_size.height;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  // Wait for frame to be presented so external texture callbacks execute.
+  rendered_scene.get();
+
+  ASSERT_EQ(FlutterEngineUnregisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+  engine.reset();
+
+  EXPECT_GE(destruction_count.load(), 1);
+}
+
+TEST_F(EmbedderTest, InvalidExternalTextureVulkanHandling) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  DlISize texture_size(800, 600);
+  int64_t texture_id = 1;
+
+  context.SetExternalTextureCallback(
+      [](int64_t id, size_t w, size_t h, FlutterVulkanImage* output) -> bool {
+        return false;
+      });
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture");
+  builder.SetSurface(texture_size);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = texture_size.width;
+  event.height = texture_size.height;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(engine.is_valid());
 }
 
 }  // namespace testing

@@ -2574,6 +2574,29 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   }
 #endif
+#ifdef SHELL_ENABLE_VULKAN
+  flutter::EmbedderExternalTextureVK::ExternalTextureCallback
+      external_texture_vulkan_callback;
+  if (config->type == kVulkan) {
+    const FlutterVulkanRendererConfig* vulkan_config = &config->vulkan;
+    if (SAFE_ACCESS(vulkan_config, external_texture_frame_callback, nullptr)) {
+      external_texture_vulkan_callback =
+          [ptr = vulkan_config->external_texture_frame_callback, user_data](
+              int64_t texture_identifier, size_t width,
+              size_t height) -> std::unique_ptr<FlutterVulkanImage> {
+        std::unique_ptr<FlutterVulkanImage> image =
+            std::make_unique<FlutterVulkanImage>();
+        image->struct_size = sizeof(FlutterVulkanImage);
+        if (!ptr(user_data, texture_identifier, width, height, image.get())) {
+          return nullptr;
+        }
+        return image;
+      };
+      external_texture_resolver = std::make_unique<ExternalTextureResolver>(
+          external_texture_vulkan_callback);
+    }
+  }
+#endif
   auto custom_task_runners = SAFE_ACCESS(args, custom_task_runners, nullptr);
   auto thread_config_callback = [&custom_task_runners](
                                     const fml::Thread::ThreadConfig& config) {
