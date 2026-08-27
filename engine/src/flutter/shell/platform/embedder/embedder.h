@@ -2746,6 +2746,77 @@ typedef struct {
   bool transient;
 } FlutterLoadDeferredLibraryErrorInfo;
 
+/// The type of screenshot to capture.
+typedef enum {
+  /// A serialized representation of an SkPicture (SKP).
+  /// Not supported on Impeller.
+  kFlutterEngineScreenshotTypeSkiaPicture,
+
+  /// Raw, uncompressed raster pixel data (32-bit RGBA or BGRA).
+  kFlutterEngineScreenshotTypeUncompressedImage,
+
+  /// PNG-compressed image bytes.
+  kFlutterEngineScreenshotTypeCompressedImage,
+
+  /// Direct pixel readback from the rasterizer's surface.
+  kFlutterEngineScreenshotTypeSurfaceData,
+} FlutterEngineScreenshotType;
+
+/// Specifies the pixel format of data in a screenshot.
+typedef enum {
+  /// Unknown pixel format or default format.
+  kFlutterEngineScreenshotFormatUnknown = 0,
+  /// 8-bit RGBA unsigned normalized integer per channel (RGBA8888).
+  kFlutterEngineScreenshotFormatRGBA8888,
+  /// 8-bit BGRA unsigned normalized integer per channel (BGRA8888).
+  kFlutterEngineScreenshotFormatBGRA8888,
+  /// 16-bit RGBA floating point per channel (RGBA16F).
+  kFlutterEngineScreenshotFormatRGBA16F,
+} FlutterEngineScreenshotFormat;
+
+/// Callback invoked when a screenshot buffer is destroyed.
+typedef void (*FlutterEngineScreenshotDestructionCallback)(
+    void* /* user_data */);
+
+/// Information describing a screenshot request.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineScreenshotInfo).
+  size_t struct_size;
+
+  /// The type of screenshot to capture.
+  FlutterEngineScreenshotType type;
+
+  /// Whether to Base64-encode the captured screenshot buffer.
+  bool base64_encode;
+} FlutterEngineScreenshotInfo;
+
+/// Information describing the captured screenshot.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineScreenshot).
+  size_t struct_size;
+
+  /// Pointer to the screenshot bytes buffer.
+  const uint8_t* bytes;
+
+  /// The size of the bytes buffer in bytes.
+  size_t bytes_size;
+
+  /// Width of the frame in texels / pixels.
+  size_t width;
+
+  /// Height of the frame in texels / pixels.
+  size_t height;
+
+  /// The pixel format of the data in `bytes`.
+  FlutterEngineScreenshotFormat pixel_format;
+
+  /// User data associated with the screenshot destruction callback.
+  void* user_data;
+
+  /// Callback to invoke when the embedder is done with the screenshot buffer.
+  FlutterEngineScreenshotDestructionCallback destruction_callback;
+} FlutterEngineScreenshot;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
@@ -3993,6 +4064,50 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterLoadDeferredLibraryErrorInfo* error_info);
 
+//------------------------------------------------------------------------------
+/// @brief      Captures a screenshot of the last rendered frame from the
+///             engine.
+///
+///             This is a synchronous call that blocks until the rasterizer has
+///             produced the requested screenshot snapshot.
+///
+///             The returned screenshot buffer in `screenshot_out->bytes` is
+///             valid until `FlutterEngineReleaseScreenshot` is called or until
+///             `screenshot_out->destruction_callback(screenshot_out->user_data)`
+///             is invoked.
+///
+/// @param[in]  engine          A running engine instance.
+/// @param[in]  info            The screenshot configuration parameters.
+/// @param[out] screenshot_out  The struct to be populated with screenshot data.
+///                             Must not be null and must have its struct_size
+///                             initialized to
+///                             `sizeof(FlutterEngineScreenshot)`.
+///
+/// @return     `kSuccess` if the screenshot was successfully captured;
+///             `kInvalidArguments` if arguments or struct sizes are invalid;
+///             `kInternalInconsistency` if the engine is not running, invalid,
+///             or if no frame has been rendered / capture failed.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineGetScreenshot(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineScreenshotInfo* info,
+    FlutterEngineScreenshot* screenshot_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Releases the memory associated with a previously captured
+///             screenshot.
+///
+/// @param[in,out] screenshot  The screenshot whose underlying buffer should be
+///                            released.
+///
+/// @return     `kSuccess` if the screenshot was successfully released;
+///             `kInvalidArguments` if screenshot pointer is null or invalid.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineReleaseScreenshot(
+    FlutterEngineScreenshot* screenshot);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4140,6 +4255,12 @@ typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterLoadDeferredLibraryErrorInfo* error_info);
+typedef FlutterEngineResult (*FlutterEngineGetScreenshotFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineScreenshotInfo* info,
+    FlutterEngineScreenshot* screenshot_out);
+typedef FlutterEngineResult (*FlutterEngineReleaseScreenshotFnPtr)(
+    FlutterEngineScreenshot* screenshot);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4194,6 +4315,8 @@ typedef struct {
   FlutterEngineSpawnFnPtr Spawn;
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
+  FlutterEngineGetScreenshotFnPtr GetScreenshot;
+  FlutterEngineReleaseScreenshotFnPtr ReleaseScreenshot;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

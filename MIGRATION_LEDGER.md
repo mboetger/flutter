@@ -1,11 +1,11 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 1.8 (Embedder Screenshot / Raster Bitmap API)
-- **Active Branch**: `android-embedder-v3/phase-1.8-screenshot-api`
-- **Base Commit SHA**: (Phase 1.7 commit)
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7]
-- **Adversarial Review Loop Status**: Complete (Phase 1.7 Approved with 0 findings)
+- **Active Phase**: Phase 1.9 (Dart Callback Information Lookup API)
+- **Active Branch**: `android-embedder-v3/phase-1.9-callback-info`
+- **Base Commit SHA**: (Phase 1.8 commit)
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]
+- **Adversarial Review Loop Status**: Complete (Phase 1.8 Approved with 0 findings)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -20,7 +20,7 @@
 - [x] Phase 1.5: Dart Deferred Library Loading
 - [x] Phase 1.6: Raster Context Setup Hooks (`setup_callback`)
 - [x] Phase 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
-- [ ] Phase 1.8: Embedder Screenshot / Raster Bitmap API (`FlutterEngineScreenshot`)
+- [x] Phase 1.8: Embedder Screenshot / Raster Bitmap API (`FlutterEngineScreenshot`)
 - [ ] Phase 1.9: Dart Callback Information Lookup API (`FlutterEngineGetCallbackInformation`)
 - [ ] Phase 1.10: Platform View Extended Mutation Types (`ClipPath`, `ClipRSE`)
 - [ ] Phase 1.11: Platform Image Decoder / Generator Registration C API
