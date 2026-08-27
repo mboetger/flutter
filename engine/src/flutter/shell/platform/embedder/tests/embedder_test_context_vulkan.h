@@ -30,14 +30,31 @@ class EmbedderTestContextVulkan : public EmbedderTestContext {
 
   bool PresentImage(VkImage image);
 
+  using VulkanExternalTextureCallback =
+      std::function<bool(int64_t texture_identifier,
+                         size_t width,
+                         size_t height,
+                         FlutterVulkanImage* image_out)>;
+
   void SetVulkanInstanceProcAddressCallback(
       FlutterVulkanInstanceProcAddressCallback callback);
+
+  void SetVulkanExternalTextureCallback(VulkanExternalTextureCallback callback);
+
+  const fml::RefPtr<TestVulkanContext>& GetVulkanContext() const {
+    return vulkan_context_;
+  }
+
+  std::optional<TestVulkanImage> CreateImage(const DlISize& size) const {
+    return vulkan_context_->CreateImage(size);
+  }
 
   static void* InstanceProcAddr(void* user_data,
                                 FlutterVulkanInstanceHandle instance,
                                 const char* name);
 
  private:
+  VulkanExternalTextureCallback external_texture_callback_;
   // |EmbedderTestContext|
   void SetSurface(DlISize surface_size) override;
 

@@ -944,10 +944,21 @@ typedef struct {
   /// The size of this struct. Must be sizeof(FlutterVulkanImage).
   size_t struct_size;
   /// Handle to the VkImage that is owned by the embedder. The engine will
-  /// bind this image for writing the frame.
+  /// bind this image for writing the frame or reading external textures.
   FlutterVulkanImageHandle image;
   /// The VkFormat of the image (for example: VK_FORMAT_R8G8B8A8_UNORM).
   uint32_t format;
+  /// User data to be returned on the invocation of the destruction callback.
+  void* user_data;
+  /// Callback invoked (on an engine managed thread) that asks the embedder to
+  /// collect the image/texture.
+  VoidCallback destruction_callback;
+  /// Optional dimensions for the image. If 0, the dimensions will default to
+  /// the composition bounds requested by the engine.
+  /// Width of the image.
+  size_t width;
+  /// Height of the image.
+  size_t height;
 } FlutterVulkanImage;
 
 /// Callback to fetch a Vulkan function pointer for a given instance. Normally,
@@ -967,6 +978,14 @@ typedef FlutterVulkanImage (*FlutterVulkanImageCallback)(
 typedef bool (*FlutterVulkanPresentCallback)(
     void* /* user data */,
     const FlutterVulkanImage* /* image */);
+
+/// Callback for when a VkImage is requested for an external texture.
+typedef bool (*FlutterVulkanImageFrameCallback)(
+    void* /* user data */,
+    int64_t /* texture identifier */,
+    size_t /* width */,
+    size_t /* height */,
+    FlutterVulkanImage* /* image out */);
 
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterVulkanRendererConfig).
@@ -1031,6 +1050,11 @@ typedef struct {
   /// without any additional synchronization.
   /// Not used if a FlutterCompositor is supplied in FlutterProjectArgs.
   FlutterVulkanPresentCallback present_image_callback;
+  /// When the embedder specifies that a texture has a frame available, the
+  /// engine will call this method (on an internal engine managed thread) so
+  /// that external texture details can be supplied to the engine for subsequent
+  /// composition.
+  FlutterVulkanImageFrameCallback external_texture_frame_callback;
 
 } FlutterVulkanRendererConfig;
 

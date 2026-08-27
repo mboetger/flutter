@@ -57,6 +57,16 @@ EmbedderTestContextVulkan::EmbedderTestContextVulkan(std::string assets_path)
     return reinterpret_cast<EmbedderTestContextVulkan*>(context)->PresentImage(
         reinterpret_cast<VkImage>(image->image));
   };
+  vulkan.external_texture_frame_callback =
+      [](void* user_data, int64_t texture_identifier, size_t width,
+         size_t height, FlutterVulkanImage* image_out) -> bool {
+    auto* context = reinterpret_cast<EmbedderTestContextVulkan*>(user_data);
+    if (context && context->external_texture_callback_) {
+      return context->external_texture_callback_(texture_identifier, width,
+                                                 height, image_out);
+    }
+    return false;
+  };
   renderer_config_.vulkan = vulkan;
 }
 
@@ -69,6 +79,11 @@ EmbedderTestContextType EmbedderTestContextVulkan::GetContextType() const {
 void EmbedderTestContextVulkan::SetVulkanInstanceProcAddressCallback(
     FlutterVulkanInstanceProcAddressCallback callback) {
   renderer_config_.vulkan.get_instance_proc_address_callback = callback;
+}
+
+void EmbedderTestContextVulkan::SetVulkanExternalTextureCallback(
+    VulkanExternalTextureCallback callback) {
+  external_texture_callback_ = std::move(callback);
 }
 
 size_t EmbedderTestContextVulkan::GetSurfacePresentCount() const {
