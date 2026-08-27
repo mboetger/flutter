@@ -4303,6 +4303,121 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
   return kSuccess;
 }
 
+static_assert(
+    static_cast<int>(kFlutterEngineScreenshotTypeSkiaPicture) ==
+        static_cast<int>(flutter::Rasterizer::ScreenshotType::SkiaPicture),
+    "ScreenshotType enum mismatch");
+static_assert(static_cast<int>(kFlutterEngineScreenshotTypeUncompressedImage) ==
+                  static_cast<int>(
+                      flutter::Rasterizer::ScreenshotType::UncompressedImage),
+              "ScreenshotType enum mismatch");
+static_assert(
+    static_cast<int>(kFlutterEngineScreenshotTypeCompressedImage) ==
+        static_cast<int>(flutter::Rasterizer::ScreenshotType::CompressedImage),
+    "ScreenshotType enum mismatch");
+static_assert(
+    static_cast<int>(kFlutterEngineScreenshotTypeSurfaceData) ==
+        static_cast<int>(flutter::Rasterizer::ScreenshotType::SurfaceData),
+    "ScreenshotType enum mismatch");
+
+static_assert(
+    static_cast<int>(kFlutterEngineScreenshotPixelFormatUnknown) ==
+        static_cast<int>(flutter::Rasterizer::ScreenshotFormat::kUnknown),
+    "ScreenshotFormat enum mismatch");
+static_assert(
+    static_cast<int>(kFlutterEngineScreenshotPixelFormatR8G8B8A8UNormInt) ==
+        static_cast<int>(
+            flutter::Rasterizer::ScreenshotFormat::kR8G8B8A8UNormInt),
+    "ScreenshotFormat enum mismatch");
+static_assert(
+    static_cast<int>(kFlutterEngineScreenshotPixelFormatB8G8R8A8UNormInt) ==
+        static_cast<int>(
+            flutter::Rasterizer::ScreenshotFormat::kB8G8R8A8UNormInt),
+    "ScreenshotFormat enum mismatch");
+static_assert(
+    static_cast<int>(kFlutterEngineScreenshotPixelFormatR16G16B16A16Float) ==
+        static_cast<int>(
+            flutter::Rasterizer::ScreenshotFormat::kR16G16B16A16Float),
+    "ScreenshotFormat enum mismatch");
+
+FlutterEngineResult FlutterEngineScreenshot(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterEngineScreenshotType type,
+    bool base64_encode,
+    FlutterEngineScreenshotCallback callback,
+    void* user_data) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (callback == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Callback was null.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  flutter::Rasterizer::ScreenshotType rasterizer_type;
+  switch (type) {
+    case kFlutterEngineScreenshotTypeSkiaPicture:
+      rasterizer_type = flutter::Rasterizer::ScreenshotType::SkiaPicture;
+      break;
+    case kFlutterEngineScreenshotTypeUncompressedImage:
+      rasterizer_type = flutter::Rasterizer::ScreenshotType::UncompressedImage;
+      break;
+    case kFlutterEngineScreenshotTypeCompressedImage:
+      rasterizer_type = flutter::Rasterizer::ScreenshotType::CompressedImage;
+      break;
+    case kFlutterEngineScreenshotTypeSurfaceData:
+      rasterizer_type = flutter::Rasterizer::ScreenshotType::SurfaceData;
+      break;
+    default:
+      return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                                "Unknown screenshot type specified.");
+  }
+
+  auto screenshot = embedder_engine->Screenshot(rasterizer_type, base64_encode);
+  if (!screenshot.data) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not capture screenshot from engine rasterizer.");
+  }
+
+  FlutterEngineScreenshotPixelFormat pixel_format =
+      kFlutterEngineScreenshotPixelFormatUnknown;
+  switch (screenshot.pixel_format) {
+    case flutter::Rasterizer::ScreenshotFormat::kUnknown:
+      pixel_format = kFlutterEngineScreenshotPixelFormatUnknown;
+      break;
+    case flutter::Rasterizer::ScreenshotFormat::kR8G8B8A8UNormInt:
+      pixel_format = kFlutterEngineScreenshotPixelFormatR8G8B8A8UNormInt;
+      break;
+    case flutter::Rasterizer::ScreenshotFormat::kB8G8R8A8UNormInt:
+      pixel_format = kFlutterEngineScreenshotPixelFormatB8G8R8A8UNormInt;
+      break;
+    case flutter::Rasterizer::ScreenshotFormat::kR16G16B16A16Float:
+      pixel_format = kFlutterEngineScreenshotPixelFormatR16G16B16A16Float;
+      break;
+    default:
+      pixel_format = kFlutterEngineScreenshotPixelFormatUnknown;
+      break;
+  }
+
+  FlutterEngineScreenshotInfo flutter_screenshot = {};
+  flutter_screenshot.struct_size = sizeof(FlutterEngineScreenshotInfo);
+  flutter_screenshot.data =
+      reinterpret_cast<const uint8_t*>(screenshot.data->data());
+  flutter_screenshot.data_size = screenshot.data->size();
+  flutter_screenshot.width = screenshot.frame_size.width;
+  flutter_screenshot.height = screenshot.frame_size.height;
+  flutter_screenshot.pixel_format = pixel_format;
+
+  callback(&flutter_screenshot, user_data);
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4364,6 +4479,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
   SET_PROC(LoadDartDeferredLibraryError,
            FlutterEngineLoadDartDeferredLibraryError);
+  SET_PROC(Screenshot, FlutterEngineScreenshot);
 #undef SET_PROC
 
   return kSuccess;

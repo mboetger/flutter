@@ -3115,6 +3115,63 @@ typedef struct {
   size_t data_length;
 } FlutterSendSemanticsActionInfo;
 
+/// Types of screenshots that can be captured by `FlutterEngineScreenshot`.
+typedef enum {
+  /// Serialized Skia picture format (.skp). Only supported on Skia backend.
+  kFlutterEngineScreenshotTypeSkiaPicture,
+  /// Raw uncompressed pixel buffer.
+  kFlutterEngineScreenshotTypeUncompressedImage,
+  /// Compressed image container (e.g. PNG).
+  kFlutterEngineScreenshotTypeCompressedImage,
+  /// Direct surface readback pixel buffer.
+  kFlutterEngineScreenshotTypeSurfaceData,
+} FlutterEngineScreenshotType;
+
+/// Pixel format of uncompressed screenshot data.
+typedef enum {
+  /// Unknown format, or default 32-bit RGBA.
+  kFlutterEngineScreenshotPixelFormatUnknown,
+  /// RGBA 8 bits per channel (32-bit).
+  kFlutterEngineScreenshotPixelFormatR8G8B8A8UNormInt,
+  /// BGRA 8 bits per channel (32-bit).
+  kFlutterEngineScreenshotPixelFormatB8G8R8A8UNormInt,
+  /// RGBA 16-bit floating point per channel (64-bit HDR/wide gamut).
+  kFlutterEngineScreenshotPixelFormatR16G16B16A16Float,
+} FlutterEngineScreenshotPixelFormat;
+
+/// Data describing a captured engine screenshot.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineScreenshotInfo).
+  size_t struct_size;
+
+  /// Pointer to the screenshot byte data. For uncompressed types, this is the
+  /// raw pixel buffer. For compressed types, this is the encoded image bytes
+  /// (e.g., PNG). For Skia picture, this is the serialized .skp buffer.
+  ///
+  /// The memory pointed to by this buffer is owned by the engine and is only
+  /// guaranteed to be valid during the execution of the
+  /// `FlutterEngineScreenshotCallback`.
+  const uint8_t* data;
+
+  /// The size of the data in bytes.
+  size_t data_size;
+
+  /// The width of the frame in pixels.
+  size_t width;
+
+  /// The height of the frame in pixels.
+  size_t height;
+
+  /// The pixel format of the raw pixel data.
+  FlutterEngineScreenshotPixelFormat pixel_format;
+} FlutterEngineScreenshotInfo;
+
+/// Callback invoked with the captured screenshot data during
+/// `FlutterEngineScreenshot`.
+typedef void (*FlutterEngineScreenshotCallback)(
+    const FlutterEngineScreenshotInfo* screenshot,
+    void* user_data);
+
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 // NOLINTBEGIN(google-objc-function-naming)
@@ -3959,6 +4016,39 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDeferredLibraryErrorInfo* info);
 
+//------------------------------------------------------------------------------
+/// @brief      Captures a screenshot of the last rendered layer tree of the
+///             implicit view (View ID `kFlutterImplicitViewId` / 0) of the
+///             engine.
+///
+///             This call synchronously captures the screenshot by dispatching
+///             to the engine's raster thread and invoking the supplied callback
+///             before returning. Embedders must ensure they do not invoke this
+///             method from a thread holding locks required by the raster
+///             thread. Custom secondary views are not currently supported for
+///             screenshot capture.
+///
+/// @param[in]  engine        A running engine instance.
+/// @param[in]  type          The screenshot format type to capture (e.g. raw
+///                           pixels, PNG).
+/// @param[in]  base64_encode Whether the resulting buffer should be
+///                           base64-encoded.
+/// @param[in]  callback      The callback to receive the screenshot data.
+/// @param[in]  user_data     User data passed to the callback.
+///
+/// @return     `kSuccess` if the screenshot was captured and delivered to the
+///             callback.
+///             `kInvalidArguments` if arguments are invalid or engine is null.
+///             `kInternalInconsistency` if rasterizer was unable to capture a
+///             screenshot.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineScreenshot(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterEngineScreenshotType type,
+    bool base64_encode,
+    FlutterEngineScreenshotCallback callback,
+    void* user_data);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4107,6 +4197,13 @@ typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDeferredLibraryErrorInfo* info);
+typedef FlutterEngineResult (*FlutterEngineScreenshotFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterEngineScreenshotType type,
+    bool base64_encode,
+    FlutterEngineScreenshotCallback callback,
+    void* user_data);
+>>>>>>> d8a3a3a56a1 (feat: implement Phase 1.8 embedder screenshot and raster bitmap API)
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4161,6 +4258,7 @@ typedef struct {
   FlutterEngineSpawnFnPtr Spawn;
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
+  FlutterEngineScreenshotFnPtr Screenshot;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

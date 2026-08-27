@@ -5491,6 +5491,423 @@ TEST_F(EmbedderTest, DartDeferredLoadingCallbackSetup) {
   ASSERT_TRUE(engine.is_valid());
 }
 
+TEST_F(EmbedderTest, ScreenshotInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {};
+
+  // Null engine
+  EXPECT_EQ(FlutterEngineScreenshot(
+                nullptr, kFlutterEngineScreenshotTypeUncompressedImage,
+                /*base64_encode=*/false, callback, nullptr),
+            kInvalidArguments);
+
+  // Null callback
+  EXPECT_EQ(FlutterEngineScreenshot(
+                engine.get(), kFlutterEngineScreenshotTypeUncompressedImage,
+                /*base64_encode=*/false, nullptr, nullptr),
+            kInvalidArguments);
+
+  // Invalid screenshot type
+  EXPECT_EQ(FlutterEngineScreenshot(
+                engine.get(), static_cast<FlutterEngineScreenshotType>(9999),
+                /*base64_encode=*/false, callback, nullptr),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, ScreenshotBeforeFrameReturnsError) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(100, 100));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  bool called = false;
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    *reinterpret_cast<bool*>(user_data) = true;
+  };
+
+  // Before any layer tree is rendered, screenshotting should fail with
+  // kInternalInconsistency.
+  EXPECT_EQ(FlutterEngineScreenshot(
+                engine.get(), kFlutterEngineScreenshotTypeUncompressedImage,
+                /*base64_encode=*/false, callback, &called),
+            kInternalInconsistency);
+  EXPECT_FALSE(called);
+}
+
+TEST_F(EmbedderTest, ScreenshotUncompressedImage) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) { latch.Signal(); });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+
+  struct CallbackState {
+    bool invoked = false;
+    size_t struct_size = 0;
+    size_t width = 0;
+    size_t height = 0;
+    size_t data_size = 0;
+    FlutterEngineScreenshotPixelFormat pixel_format =
+        kFlutterEngineScreenshotPixelFormatUnknown;
+    bool has_data = false;
+  } state;
+
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    auto* s = reinterpret_cast<CallbackState*>(user_data);
+    s->invoked = true;
+    if (screenshot != nullptr) {
+      s->struct_size = screenshot->struct_size;
+      s->width = screenshot->width;
+      s->height = screenshot->height;
+      s->data_size = screenshot->data_size;
+      s->pixel_format = screenshot->pixel_format;
+      s->has_data = (screenshot->data != nullptr);
+    }
+  };
+
+  EXPECT_EQ(FlutterEngineScreenshot(
+                engine.get(), kFlutterEngineScreenshotTypeUncompressedImage,
+                /*base64_encode=*/false, callback, &state),
+            kSuccess);
+
+  EXPECT_TRUE(state.invoked);
+  EXPECT_EQ(state.struct_size, sizeof(FlutterEngineScreenshotInfo));
+  EXPECT_EQ(state.width, 800u);
+  EXPECT_EQ(state.height, 600u);
+  EXPECT_TRUE(state.has_data);
+  // Uncompressed 800x600 32-bit RGBA image = 800 * 600 * 4 bytes
+  EXPECT_EQ(state.data_size, 800u * 600u * 4u);
+  EXPECT_EQ(state.pixel_format, kFlutterEngineScreenshotPixelFormatUnknown);
+}
+
+TEST_F(EmbedderTest, ScreenshotSkiaPicture) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) { latch.Signal(); });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+
+  struct CallbackState {
+    bool invoked = false;
+    size_t struct_size = 0;
+    size_t width = 0;
+    size_t height = 0;
+    size_t data_size = 0;
+    bool has_data = false;
+  } state;
+
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    auto* s = reinterpret_cast<CallbackState*>(user_data);
+    s->invoked = true;
+    if (screenshot != nullptr) {
+      s->struct_size = screenshot->struct_size;
+      s->width = screenshot->width;
+      s->height = screenshot->height;
+      s->data_size = screenshot->data_size;
+      s->has_data = (screenshot->data != nullptr);
+    }
+  };
+
+  EXPECT_EQ(FlutterEngineScreenshot(engine.get(),
+                                    kFlutterEngineScreenshotTypeSkiaPicture,
+                                    /*base64_encode=*/false, callback, &state),
+            kSuccess);
+
+  EXPECT_TRUE(state.invoked);
+  EXPECT_EQ(state.struct_size, sizeof(FlutterEngineScreenshotInfo));
+  EXPECT_EQ(state.width, 800u);
+  EXPECT_EQ(state.height, 600u);
+  EXPECT_TRUE(state.has_data);
+  EXPECT_GT(state.data_size, 0u);
+}
+
+TEST_F(EmbedderTest, ScreenshotDeinitializedEngine) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(100, 100));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  auto raw_engine = engine.get();
+  EXPECT_EQ(FlutterEngineDeinitialize(raw_engine), kSuccess);
+
+  bool called = false;
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    *reinterpret_cast<bool*>(user_data) = true;
+  };
+
+  EXPECT_EQ(FlutterEngineScreenshot(
+                raw_engine, kFlutterEngineScreenshotTypeUncompressedImage,
+                /*base64_encode=*/false, callback, &called),
+            kInvalidArguments);
+  EXPECT_FALSE(called);
+}
+
+TEST_F(EmbedderTest, ScreenshotSurfaceDataUnsupportedOnSoftware) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) { latch.Signal(); });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+
+  bool called = false;
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    *reinterpret_cast<bool*>(user_data) = true;
+  };
+
+  // SurfaceData screenshot requires a GPU backing surface and is unsupported on
+  // software rasterizers.
+  EXPECT_EQ(FlutterEngineScreenshot(engine.get(),
+                                    kFlutterEngineScreenshotTypeSurfaceData,
+                                    /*base64_encode=*/false, callback, &called),
+            kInternalInconsistency);
+  EXPECT_FALSE(called);
+}
+
+TEST_F(EmbedderTest, ScreenshotCompressedImagePNG) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) { latch.Signal(); });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+
+  struct CallbackState {
+    bool invoked = false;
+    size_t width = 0;
+    size_t height = 0;
+    size_t data_size = 0;
+    bool is_png = false;
+  } state;
+
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    auto* s = reinterpret_cast<CallbackState*>(user_data);
+    s->invoked = true;
+    if (screenshot != nullptr && screenshot->data != nullptr &&
+        screenshot->data_size > 8) {
+      s->width = screenshot->width;
+      s->height = screenshot->height;
+      s->data_size = screenshot->data_size;
+      const uint8_t png_header[] = {0x89, 'P',  'N',  'G',
+                                    0x0D, 0x0A, 0x1A, 0x0A};
+      s->is_png =
+          (memcmp(screenshot->data, png_header, sizeof(png_header)) == 0);
+    }
+  };
+
+  EXPECT_EQ(FlutterEngineScreenshot(engine.get(),
+                                    kFlutterEngineScreenshotTypeCompressedImage,
+                                    /*base64_encode=*/false, callback, &state),
+            kSuccess);
+
+  EXPECT_TRUE(state.invoked);
+  EXPECT_EQ(state.width, 800u);
+  EXPECT_EQ(state.height, 600u);
+  EXPECT_GT(state.data_size, 8u);
+  EXPECT_TRUE(state.is_png);
+}
+
+TEST_F(EmbedderTest, ScreenshotBase64Encoded) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) { latch.Signal(); });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+
+  struct CallbackState {
+    bool invoked = false;
+    size_t data_size = 0;
+    bool is_ascii = true;
+  } state;
+
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    auto* s = reinterpret_cast<CallbackState*>(user_data);
+    s->invoked = true;
+    if (screenshot != nullptr && screenshot->data != nullptr &&
+        screenshot->data_size > 0) {
+      s->data_size = screenshot->data_size;
+      for (size_t i = 0; i < screenshot->data_size; ++i) {
+        char c = static_cast<char>(screenshot->data[i]);
+        if (!isalnum(c) && c != '+' && c != '/' && c != '=' && c != '\n' &&
+            c != '\r') {
+          s->is_ascii = false;
+          break;
+        }
+      }
+    }
+  };
+
+  EXPECT_EQ(FlutterEngineScreenshot(engine.get(),
+                                    kFlutterEngineScreenshotTypeCompressedImage,
+                                    /*base64_encode=*/true, callback, &state),
+            kSuccess);
+
+  EXPECT_TRUE(state.invoked);
+  EXPECT_GT(state.data_size, 0u);
+  EXPECT_TRUE(state.is_ascii);
+}
+
+TEST_F(EmbedderTest, ScreenshotViaProcTable) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) { latch.Signal(); });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  ASSERT_NE(table.Screenshot, nullptr);
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+
+  bool called = false;
+  auto callback = [](const FlutterEngineScreenshotInfo* screenshot,
+                     void* user_data) {
+    if (screenshot != nullptr && screenshot->width == 800 &&
+        screenshot->height == 600 && screenshot->data != nullptr) {
+      *reinterpret_cast<bool*>(user_data) = true;
+    }
+  };
+
+  EXPECT_EQ(table.Screenshot(engine.get(),
+                             kFlutterEngineScreenshotTypeUncompressedImage,
+                             /*base64_encode=*/false, callback, &called),
+            kSuccess);
+  EXPECT_TRUE(called);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

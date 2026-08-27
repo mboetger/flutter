@@ -1,12 +1,12 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 1.7 (Extended Semantics Completeness)
-- **Active Branch**: `android-migration-2/phase-1.7-semantics-node2`
+- **Active Phase**: Phase 1.9 (Dart Callback Information Lookup API)
+- **Active Branch**: `android-migration-2/phase-1.9-callback-information`
 - **Base Commit SHA**: `08d2a471fd10152bb7dbfbb9636cf8fa53e94b8b`
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6]
-- **Latest Commit SHA**: `214d5f4ded8` (Phase 1.6)
-- **Adversarial Review Loop Status**: Phase 1.6 Approved by reidbaker-agent
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]
+- **Latest Commit SHA**: `0fa1aaedba1` (Phase 1.8)
+- **Adversarial Review Loop Status**: Phase 1.8 Approved by reidbaker-agent
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -20,8 +20,8 @@
 - [x] Phase 1.4: Multi-Engine Spawning (`FlutterEngineSpawn`)
 - [x] Phase 1.5: Dart Deferred Library Loading
 - [x] Phase 1.6: Raster Context Setup Hooks (`setup_callback`)
-- [ ] Phase 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
-- [ ] Phase 1.8: Embedder Screenshot / Raster Bitmap API (`FlutterEngineScreenshot`)
+- [x] Phase 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
+- [x] Phase 1.8: Embedder Screenshot / Raster Bitmap API (`FlutterEngineScreenshot`)
 - [ ] Phase 1.9: Dart Callback Information Lookup API (`FlutterEngineGetCallbackInformation`)
 - [ ] Phase 1.10: Platform View Extended Mutation Types (`ClipPath`, `ClipRSE`)
 - [ ] Phase 1.11: Platform Image Decoder / Generator Registration C API
