@@ -13,6 +13,7 @@
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/lib/ui/semantics/semantics_node.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_semantics_update.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/testing/testing.h"
 #include "third_party/tonic/converter/dart_converter.h"
@@ -282,9 +283,7 @@ TEST_F(EmbedderA11yTest, A11yStringAttributes) {
         auto node = update->nodes[0];
 
         // Verify identifier
-        {
-          ASSERT_EQ(std::string(node->identifier), "identifier");
-        }
+        { ASSERT_EQ(std::string(node->identifier), "identifier"); }
 
         // Verify label
         {
@@ -883,6 +882,116 @@ TEST_F(EmbedderA11yTest, A11yTreesAreConsistentWithMultipleViews) {
   ASSERT_EQ(result, FlutterEngineResult::kSuccess);
   notify_semantics_enabled_latch_3.Wait();
 #endif
+}
+
+TEST(EmbedderSemanticsUpdate2Test,
+     FlutterSemanticsNode2ExtendedAttributesParity) {
+  SemanticsNode node;
+  node.id = 100;
+  node.maxValueLength = 50;
+  node.currentValueLength = 12;
+  node.traversalParent = 99;
+  node.role = SemanticsRole::kTab;
+  node.validationResult = SemanticsValidationResult::kValid;
+  node.linkUrl = "https://flutter.dev";
+  node.locale = "fr-CA";
+  node.minValue = "1.5";
+  node.maxValue = "99.5";
+  node.identifier = "custom_ident";
+  node.headingLevel = 2;
+  node.tooltip = "Test Tooltip";
+  node.label = "Test Label";
+  node.hint = "Test Hint";
+  node.value = "Test Value";
+  node.increasedValue = "Test Increased";
+  node.decreasedValue = "Test Decreased";
+  node.rect = SkRect::MakeLTRB(10, 20, 30, 40);
+
+  SkMatrix matrix;
+  matrix.setAll(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f);
+  node.transform = SkM44(matrix);
+
+  SkMatrix hit_test_matrix;
+  hit_test_matrix.setAll(2.0f, 0.0f, 5.0f, 0.0f, 3.0f, 15.0f, 0.0f, 0.0f, 1.0f);
+  node.hitTestTransform = SkM44(hit_test_matrix);
+
+  node.childrenInTraversalOrder = {101, 102};
+  node.childrenInHitTestOrder = {102, 101};
+  node.customAccessibilityActions = {1, 2};
+
+  SemanticsNodeUpdates updates;
+  updates[100] = node;
+  CustomAccessibilityActionUpdates actions;
+
+  EmbedderSemanticsUpdate2 update(0, updates, actions);
+  FlutterSemanticsUpdate2* update_ptr = update.get();
+  ASSERT_NE(update_ptr, nullptr);
+  ASSERT_EQ(update_ptr->node_count, 1u);
+
+  const FlutterSemanticsNode2* node_out = update_ptr->nodes[0];
+  ASSERT_NE(node_out, nullptr);
+  EXPECT_EQ(node_out->struct_size, sizeof(FlutterSemanticsNode2));
+  EXPECT_EQ(node_out->id, 100);
+  EXPECT_EQ(node_out->max_value_length, 50);
+  EXPECT_EQ(node_out->current_value_length, 12);
+  EXPECT_EQ(node_out->traversal_parent, 99);
+  EXPECT_EQ(node_out->role, kFlutterSemanticsRoleTab);
+  EXPECT_EQ(node_out->validation_result,
+            kFlutterSemanticsValidationResultValid);
+  EXPECT_STREQ(node_out->link_url, "https://flutter.dev");
+  EXPECT_STREQ(node_out->locale, "fr-CA");
+  EXPECT_STREQ(node_out->min_value, "1.5");
+  EXPECT_STREQ(node_out->max_value, "99.5");
+  EXPECT_STREQ(node_out->identifier, "custom_ident");
+  EXPECT_EQ(node_out->heading_level, 2);
+
+  // Verify hit_test_transform
+  EXPECT_DOUBLE_EQ(node_out->hit_test_transform.scaleX, 2.0);
+  EXPECT_DOUBLE_EQ(node_out->hit_test_transform.skewX, 0.0);
+  EXPECT_DOUBLE_EQ(node_out->hit_test_transform.transX, 5.0);
+  EXPECT_DOUBLE_EQ(node_out->hit_test_transform.skewY, 0.0);
+  EXPECT_DOUBLE_EQ(node_out->hit_test_transform.scaleY, 3.0);
+  EXPECT_DOUBLE_EQ(node_out->hit_test_transform.transY, 15.0);
+
+  // Verify transform
+  EXPECT_DOUBLE_EQ(node_out->transform.scaleX, 1.0);
+  EXPECT_DOUBLE_EQ(node_out->transform.skewX, 2.0);
+  EXPECT_DOUBLE_EQ(node_out->transform.transX, 3.0);
+}
+
+TEST(EmbedderSemanticsUpdate2Test,
+     FlutterSemanticsNode2RoleAndValidationMappings) {
+  for (int32_t r = static_cast<int32_t>(SemanticsRole::kNone);
+       r <= static_cast<int32_t>(SemanticsRole::kRegion); ++r) {
+    SemanticsNode node;
+    node.id = 1;
+    node.role = static_cast<SemanticsRole>(r);
+    SemanticsNodeUpdates updates;
+    updates[1] = node;
+    CustomAccessibilityActionUpdates actions;
+
+    EmbedderSemanticsUpdate2 update(0, updates, actions);
+    FlutterSemanticsUpdate2* update_ptr = update.get();
+    ASSERT_NE(update_ptr, nullptr);
+    ASSERT_EQ(update_ptr->node_count, 1u);
+    EXPECT_EQ(static_cast<int32_t>(update_ptr->nodes[0]->role), r);
+  }
+
+  for (int32_t v = static_cast<int32_t>(SemanticsValidationResult::kNone);
+       v <= static_cast<int32_t>(SemanticsValidationResult::kInvalid); ++v) {
+    SemanticsNode node;
+    node.id = 1;
+    node.validationResult = static_cast<SemanticsValidationResult>(v);
+    SemanticsNodeUpdates updates;
+    updates[1] = node;
+    CustomAccessibilityActionUpdates actions;
+
+    EmbedderSemanticsUpdate2 update(0, updates, actions);
+    FlutterSemanticsUpdate2* update_ptr = update.get();
+    ASSERT_NE(update_ptr, nullptr);
+    ASSERT_EQ(update_ptr->node_count, 1u);
+    EXPECT_EQ(static_cast<int32_t>(update_ptr->nodes[0]->validation_result), v);
+  }
 }
 
 }  // namespace testing
