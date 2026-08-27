@@ -13,6 +13,8 @@
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/lib/ui/semantics/semantics_node.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_semantics_update.h"
+#include "flutter/shell/platform/embedder/embedder_struct_macros.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/testing/testing.h"
 #include "third_party/tonic/converter/dart_converter.h"
@@ -883,6 +885,236 @@ TEST_F(EmbedderA11yTest, A11yTreesAreConsistentWithMultipleViews) {
   ASSERT_EQ(result, FlutterEngineResult::kSuccess);
   notify_semantics_enabled_latch_3.Wait();
 #endif
+}
+
+TEST_F(EmbedderA11yTest, ExtendedSemanticsNodeParity) {
+  // Arbitrary node ID for testing semantics update translation.
+  constexpr int32_t kTestNodeId = 42;
+  // Maximum value length of 250 characters for editable text fields.
+  constexpr int32_t kTestMaxValueLength = 250;
+  // Current value length of 15 characters for editable text fields.
+  constexpr int32_t kTestCurrentValueLength = 15;
+  // Traversal parent node ID of 7.
+  constexpr int32_t kTestTraversalParentId = 7;
+  // Test view ID of 1.
+  constexpr int64_t kTestViewId = 1;
+
+  SemanticsNode node;
+  node.id = kTestNodeId;
+  node.maxValueLength = kTestMaxValueLength;
+  node.currentValueLength = kTestCurrentValueLength;
+  node.traversalParent = kTestTraversalParentId;
+  node.minValue = "10.5";
+  node.maxValue = "99.5";
+  // Create 4x4 matrix with distinct components for testing:
+  // scaleX=1.0, skewX=2.0, transX=10.0,
+  // skewY=4.0, scaleY=5.0, transY=20.0,
+  // pers0=7.0, pers1=8.0, pers2=9.0
+  node.hitTestTransform =
+      SkM44(1.0f, 2.0f, 0.0f, 10.0f, 4.0f, 5.0f, 0.0f, 20.0f, 0.0f, 0.0f, 1.0f,
+            0.0f, 7.0f, 8.0f, 0.0f, 9.0f);
+  node.linkUrl = "https://flutter.dev/docs";
+  node.role = SemanticsRole::kProgressBar;
+  node.validationResult = SemanticsValidationResult::kValid;
+  node.locale = "en-US";
+
+  SemanticsNodeUpdates node_updates;
+  node_updates[node.id] = node;
+  CustomAccessibilityActionUpdates action_updates;
+
+  EmbedderSemanticsUpdate2 update(kTestViewId, node_updates, action_updates);
+  const FlutterSemanticsUpdate2* result = update.get();
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->struct_size, sizeof(FlutterSemanticsUpdate2));
+  ASSERT_EQ(result->node_count, size_t(1));
+  ASSERT_EQ(result->view_id, kTestViewId);
+
+  const FlutterSemanticsNode2* embedder_node = result->nodes[0];
+  ASSERT_NE(embedder_node, nullptr);
+  ASSERT_EQ(embedder_node->struct_size, sizeof(FlutterSemanticsNode2));
+  ASSERT_EQ(embedder_node->id, kTestNodeId);
+  ASSERT_EQ(embedder_node->max_value_length, kTestMaxValueLength);
+  ASSERT_EQ(embedder_node->current_value_length, kTestCurrentValueLength);
+  ASSERT_EQ(embedder_node->traversal_parent, kTestTraversalParentId);
+  ASSERT_STREQ(embedder_node->min_value, "10.5");
+  ASSERT_STREQ(embedder_node->max_value, "99.5");
+  ASSERT_EQ(embedder_node->hit_test_transform.scaleX, 1.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.skewX, 2.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.transX, 10.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.skewY, 4.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.scaleY, 5.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.transY, 20.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.pers0, 7.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.pers1, 8.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.pers2, 9.0);
+  ASSERT_STREQ(embedder_node->link_url, "https://flutter.dev/docs");
+  ASSERT_EQ(embedder_node->role, kFlutterSemanticsRoleProgressBar);
+  ASSERT_EQ(embedder_node->validation_result,
+            kFlutterSemanticsValidationResultValid);
+  ASSERT_STREQ(embedder_node->locale, "en-US");
+}
+
+TEST_F(EmbedderA11yTest, ExtendedSemanticsDefaultValues) {
+  // Arbitrary node ID for testing default semantics translation.
+  constexpr int32_t kDefaultNodeId = 100;
+  // Test view ID of 0 for the default/implicit view.
+  constexpr int64_t kDefaultViewId = 0;
+
+  SemanticsNode default_node;
+  default_node.id = kDefaultNodeId;
+
+  SemanticsNodeUpdates node_updates;
+  node_updates[default_node.id] = default_node;
+  CustomAccessibilityActionUpdates action_updates;
+
+  EmbedderSemanticsUpdate2 update(kDefaultViewId, node_updates, action_updates);
+  const FlutterSemanticsUpdate2* result = update.get();
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->node_count, size_t(1));
+
+  const FlutterSemanticsNode2* embedder_node = result->nodes[0];
+  ASSERT_NE(embedder_node, nullptr);
+  ASSERT_EQ(embedder_node->struct_size, sizeof(FlutterSemanticsNode2));
+  // Default values should match SemanticsNode defaults:
+  // Unconstrained max and current value length (-1).
+  ASSERT_EQ(embedder_node->max_value_length, -1);
+  ASSERT_EQ(embedder_node->current_value_length, -1);
+  // Root traversal parent (0).
+  ASSERT_EQ(embedder_node->traversal_parent, 0);
+  // Default hit test transform should be identity.
+  ASSERT_EQ(embedder_node->hit_test_transform.scaleX, 1.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.skewX, 0.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.transX, 0.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.skewY, 0.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.scaleY, 1.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.transY, 0.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.pers0, 0.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.pers1, 0.0);
+  ASSERT_EQ(embedder_node->hit_test_transform.pers2, 1.0);
+  // Empty strings should return valid non-null empty strings.
+  ASSERT_NE(embedder_node->min_value, nullptr);
+  ASSERT_STREQ(embedder_node->min_value, "");
+  ASSERT_NE(embedder_node->max_value, nullptr);
+  ASSERT_STREQ(embedder_node->max_value, "");
+  ASSERT_NE(embedder_node->link_url, nullptr);
+  ASSERT_STREQ(embedder_node->link_url, "");
+  ASSERT_NE(embedder_node->locale, nullptr);
+  ASSERT_STREQ(embedder_node->locale, "");
+  // Default role and validation result.
+  ASSERT_EQ(embedder_node->role, kFlutterSemanticsRoleNone);
+  ASSERT_EQ(embedder_node->validation_result,
+            kFlutterSemanticsValidationResultNone);
+}
+
+TEST_F(EmbedderA11yTest, FlutterSemanticsNode2SafeAccessCompatibility) {
+  // Arbitrary test node ID.
+  constexpr int32_t kTestId = 1;
+  // Default unconstrained value length.
+  constexpr int32_t kDefaultUnconstrained = -1;
+  // Test value length of 50 characters.
+  constexpr int32_t kTestLength = 50;
+
+  FlutterSemanticsNode2 node = {};
+  node.struct_size = sizeof(FlutterSemanticsNode2);
+  node.id = kTestId;
+  node.max_value_length = kTestLength;
+  node.role = kFlutterSemanticsRoleSpinButton;
+
+  const FlutterSemanticsNode2* node_ptr = &node;
+
+  // With full struct_size, SAFE_ACCESS retrieves actual values.
+  EXPECT_EQ(SAFE_ACCESS(node_ptr, max_value_length, kDefaultUnconstrained),
+            kTestLength);
+  EXPECT_EQ(SAFE_ACCESS(node_ptr, role, kFlutterSemanticsRoleNone),
+            kFlutterSemanticsRoleSpinButton);
+
+  // Simulate a legacy embedder compiled when struct ended at identifier.
+  node.struct_size = offsetof(FlutterSemanticsNode2, max_value_length);
+  EXPECT_EQ(SAFE_ACCESS(node_ptr, max_value_length, kDefaultUnconstrained),
+            kDefaultUnconstrained);
+  EXPECT_EQ(SAFE_ACCESS(node_ptr, role, kFlutterSemanticsRoleNone),
+            kFlutterSemanticsRoleNone);
+  EXPECT_EQ(SAFE_ACCESS(node_ptr, link_url, nullptr), nullptr);
+}
+
+TEST_F(EmbedderA11yTest, AllSemanticsRolesAndValidationEnumParity) {
+  // Validate that every single SemanticsRole value matches its
+  // FlutterSemanticsRole counterpart.
+  static_assert(static_cast<int32_t>(SemanticsRole::kNone) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleNone));
+  static_assert(static_cast<int32_t>(SemanticsRole::kTab) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleTab));
+  static_assert(static_cast<int32_t>(SemanticsRole::kTabBar) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleTabBar));
+  static_assert(static_cast<int32_t>(SemanticsRole::kTabPanel) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleTabPanel));
+  static_assert(static_cast<int32_t>(SemanticsRole::kDialog) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleDialog));
+  static_assert(static_cast<int32_t>(SemanticsRole::kAlertDialog) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleAlertDialog));
+  static_assert(static_cast<int32_t>(SemanticsRole::kTable) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleTable));
+  static_assert(static_cast<int32_t>(SemanticsRole::kCell) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleCell));
+  static_assert(static_cast<int32_t>(SemanticsRole::kRow) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleRow));
+  static_assert(static_cast<int32_t>(SemanticsRole::kColumnHeader) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleColumnHeader));
+  static_assert(static_cast<int32_t>(SemanticsRole::kDragHandle) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleDragHandle));
+  static_assert(static_cast<int32_t>(SemanticsRole::kSpinButton) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleSpinButton));
+  static_assert(static_cast<int32_t>(SemanticsRole::kComboBox) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleComboBox));
+  static_assert(static_cast<int32_t>(SemanticsRole::kMenuBar) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleMenuBar));
+  static_assert(static_cast<int32_t>(SemanticsRole::kMenu) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleMenu));
+  static_assert(static_cast<int32_t>(SemanticsRole::kMenuItem) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleMenuItem));
+  static_assert(static_cast<int32_t>(SemanticsRole::kMenuItemCheckbox) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleMenuItemCheckbox));
+  static_assert(static_cast<int32_t>(SemanticsRole::kMenuItemRadio) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleMenuItemRadio));
+  static_assert(static_cast<int32_t>(SemanticsRole::kList) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleList));
+  static_assert(static_cast<int32_t>(SemanticsRole::kListItem) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleListItem));
+  static_assert(static_cast<int32_t>(SemanticsRole::kForm) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleForm));
+  static_assert(static_cast<int32_t>(SemanticsRole::kTooltip) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleTooltip));
+  static_assert(static_cast<int32_t>(SemanticsRole::kLoadingSpinner) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleLoadingSpinner));
+  static_assert(static_cast<int32_t>(SemanticsRole::kProgressBar) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleProgressBar));
+  static_assert(static_cast<int32_t>(SemanticsRole::kHotKey) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleHotKey));
+  static_assert(static_cast<int32_t>(SemanticsRole::kRadioGroup) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleRadioGroup));
+  static_assert(static_cast<int32_t>(SemanticsRole::kStatus) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleStatus));
+  static_assert(static_cast<int32_t>(SemanticsRole::kAlert) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleAlert));
+  static_assert(static_cast<int32_t>(SemanticsRole::kComplementary) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleComplementary));
+  static_assert(static_cast<int32_t>(SemanticsRole::kContentInfo) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleContentInfo));
+  static_assert(static_cast<int32_t>(SemanticsRole::kMain) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleMain));
+  static_assert(static_cast<int32_t>(SemanticsRole::kNavigation) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleNavigation));
+  static_assert(static_cast<int32_t>(SemanticsRole::kRegion) ==
+                static_cast<int32_t>(kFlutterSemanticsRoleRegion));
+
+  // Validate that every SemanticsValidationResult matches its
+  // FlutterSemanticsValidationResult counterpart.
+  static_assert(static_cast<int32_t>(SemanticsValidationResult::kNone) ==
+                static_cast<int32_t>(kFlutterSemanticsValidationResultNone));
+  static_assert(static_cast<int32_t>(SemanticsValidationResult::kValid) ==
+                static_cast<int32_t>(kFlutterSemanticsValidationResultValid));
+  static_assert(static_cast<int32_t>(SemanticsValidationResult::kInvalid) ==
+                static_cast<int32_t>(kFlutterSemanticsValidationResultInvalid));
 }
 
 }  // namespace testing
