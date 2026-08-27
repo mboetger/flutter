@@ -2,12 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#define FML_USED_ON_EMBEDDER
+
 #include <string>
 #include <vector>
 
+#include "flutter/common/settings.h"
+#include "flutter/fml/message_loop.h"
+#include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/flutter_main.h"
+#include "flutter/shell/platform/android/jni/jni_mock.h"
+#include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/android/platform_view_android_adapter.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "shell/platform/android/flutter_main.h"
 
 namespace flutter {
 namespace testing {
@@ -121,6 +129,173 @@ INSTANTIATE_TEST_SUITE_P(
         RenderingAPITestCase{35, true, false, "",
                              AndroidRenderingAPI::kImpellerAutoselect}));
 #endif  // !SLIMPELLER
+
+class MockPlatformViewAndroidDelegate : public PlatformViewAndroid::Delegate {
+ public:
+  MockPlatformViewAndroidDelegate() {
+    settings_.enable_software_rendering = true;
+    settings_.enable_impeller = false;
+  }
+
+  const Settings& OnPlatformViewGetSettings() const override {
+    return settings_;
+  }
+
+  std::shared_ptr<fml::BasicTaskRunner>
+  OnPlatformViewGetShutdownSafeIOTaskRunner() const override {
+    return nullptr;
+  }
+
+  MOCK_METHOD(void, OnPlatformViewCreated, (), (override));
+  MOCK_METHOD(void, OnPlatformViewDestroyed, (), (override));
+  MOCK_METHOD(void, OnPlatformViewScheduleFrame, (), (override));
+  MOCK_METHOD(void,
+              OnPlatformViewDispatchPlatformMessage,
+              (std::unique_ptr<flutter::PlatformMessage> message),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewDispatchSemanticsAction,
+              (int64_t view_id,
+               int32_t id,
+               flutter::SemanticsAction action,
+               fml::MallocMapping args),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewSetViewportMetrics,
+              (int64_t view_id, const ViewportMetrics& metrics),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewDispatchPointerDataPacket,
+              (std::unique_ptr<PointerDataPacket> packet),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewSetSemanticsEnabled,
+              (bool enabled),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewSetAccessibilityFeatures,
+              (int32_t flags),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewRegisterTexture,
+              (std::shared_ptr<flutter::Texture> texture),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewUnregisterTexture,
+              (int64_t texture_id),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewMarkTextureFrameAvailable,
+              (int64_t texture_id),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewSetNextFrameCallback,
+              (const fml::closure& closure),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewLoadDartDeferredLibrary,
+              (intptr_t loading_unit_id,
+               std::unique_ptr<const fml::Mapping> snapshot_data,
+               std::unique_ptr<const fml::Mapping> snapshot_instructions),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewLoadDartDeferredLibraryError,
+              (intptr_t loading_unit_id,
+               const std::string error_message,
+               bool transient),
+              (override));
+  MOCK_METHOD(void,
+              OnPlatformViewUpdateAssetResolverByType,
+              (std::unique_ptr<AssetResolver> updated_asset_resolver,
+               AssetResolver::AssetResolverType type),
+              (override));
+
+ private:
+  Settings settings_;
+};
+
+TEST(PlatformViewAndroidTest, DelegatesOperationsCorrectly) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto loop = fml::MessageLoop::GetCurrent().GetTaskRunner();
+  flutter::TaskRunners task_runners("test", loop, loop, loop, loop);
+
+  MockPlatformViewAndroidDelegate delegate;
+  auto jni = std::make_shared<JNIMock>();
+
+  PlatformViewAndroid platform_view(delegate, task_runners, jni,
+                                    AndroidRenderingAPI::kSoftware);
+
+  EXPECT_CALL(delegate, OnPlatformViewCreated()).Times(1);
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(nullptr, true);
+  platform_view.NotifyCreated(window);
+
+  EXPECT_CALL(delegate, OnPlatformViewScheduleFrame()).Times(1);
+  platform_view.ScheduleFrame();
+
+  EXPECT_CALL(delegate, OnPlatformViewSetViewportMetrics(1, ::testing::_))
+      .Times(1);
+  ViewportMetrics metrics = {};
+  platform_view.SetViewportMetrics(1, metrics);
+
+  EXPECT_CALL(delegate, OnPlatformViewSetSemanticsEnabled(true)).Times(1);
+  platform_view.SetSemanticsEnabled(true);
+
+  EXPECT_CALL(delegate, OnPlatformViewSetAccessibilityFeatures(0x42)).Times(1);
+  platform_view.SetAccessibilityFeatures(0x42);
+
+  EXPECT_CALL(delegate, OnPlatformViewUnregisterTexture(100)).Times(1);
+  platform_view.UnregisterTexture(100);
+
+  EXPECT_CALL(delegate, OnPlatformViewMarkTextureFrameAvailable(100)).Times(1);
+  platform_view.MarkTextureFrameAvailable(100);
+
+  EXPECT_CALL(delegate, OnPlatformViewDispatchPointerDataPacket(::testing::_))
+      .Times(1);
+  platform_view.DispatchPointerDataPacket(
+      std::make_unique<PointerDataPacket>(1));
+
+  EXPECT_CALL(delegate, OnPlatformViewLoadDartDeferredLibrary(1, ::testing::_,
+                                                              ::testing::_))
+      .Times(1);
+  platform_view.LoadDartDeferredLibrary(
+      1, std::make_unique<fml::NonOwnedMapping>(nullptr, 0),
+      std::make_unique<fml::NonOwnedMapping>(nullptr, 0));
+
+  EXPECT_CALL(
+      delegate,
+      OnPlatformViewUpdateAssetResolverByType(
+          ::testing::_, AssetResolver::AssetResolverType::kApkAssetProvider))
+      .Times(1);
+  platform_view.UpdateAssetResolverByType(
+      nullptr, AssetResolver::AssetResolverType::kApkAssetProvider);
+
+  EXPECT_CALL(delegate,
+              OnPlatformViewLoadDartDeferredLibraryError(2, "fail", true))
+      .Times(1);
+  platform_view.LoadDartDeferredLibraryError(2, "fail", true);
+
+  EXPECT_CALL(delegate, OnPlatformViewDestroyed()).Times(1);
+  platform_view.NotifyDestroyed();
+}
+
+TEST(PlatformViewAndroidTest, AdapterBridgesToShellHolder) {
+  Settings settings;
+  settings.enable_software_rendering = true;
+  settings.enable_impeller = false;
+  auto jni = std::make_shared<JNIMock>();
+
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kSoftware);
+  ASSERT_NE(holder, nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_NE(platform_view.get(), nullptr);
+
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(nullptr, true);
+  platform_view->NotifyCreated(window);
+  platform_view->NotifyDestroyed();
+}
 
 }  // namespace testing
 }  // namespace flutter

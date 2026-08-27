@@ -27,6 +27,7 @@
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/android/platform_view_android_adapter.h"
 
 namespace flutter {
 
@@ -116,15 +117,16 @@ AndroidShellHolder::AndroidShellHolder(
   AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [&jni_facade, &weak_platform_view, rendering_api](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
-        platform_view_android = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
-            shell.GetTaskRunners(),  // task runners
-            jni_facade,              // JNI interop
-            rendering_api            // rendering API
-        );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        return platform_view_android;
+        auto platform_view_adapter =
+            std::make_unique<PlatformViewAndroidAdapter>(
+                shell,                   // delegate
+                shell.GetTaskRunners(),  // task runners
+                jni_facade,              // JNI interop
+                rendering_api            // rendering API
+            );
+        weak_platform_view =
+            platform_view_adapter->GetPlatformViewAndroid()->GetWeakPtr();
+        return platform_view_adapter;
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -251,15 +253,16 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   // This is a synchronous call, so the captures don't have race checks.
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [&jni_facade, android_context, &weak_platform_view](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
-        platform_view_android = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
-            shell.GetTaskRunners(),  // task runners
-            jni_facade,              // JNI interop
-            android_context          // Android context
-        );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        return platform_view_android;
+        auto platform_view_adapter =
+            std::make_unique<PlatformViewAndroidAdapter>(
+                shell,                   // delegate
+                shell.GetTaskRunners(),  // task runners
+                jni_facade,              // JNI interop
+                android_context          // Android context
+            );
+        weak_platform_view =
+            platform_view_adapter->GetPlatformViewAndroid()->GetWeakPtr();
+        return platform_view_adapter;
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
