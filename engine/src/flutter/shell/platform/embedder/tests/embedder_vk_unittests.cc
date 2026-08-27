@@ -12,6 +12,8 @@
 #include "embedder.h"
 #include "embedder_engine.h"
 #include "flutter/fml/synchronization/count_down_latch.h"
+#include "flutter/fml/synchronization/waitable_event.h"
+#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/shell/platform/embedder/tests/embedder_test.h"
 #include "flutter/shell/platform/embedder/tests/embedder_test_context_vulkan.h"
@@ -347,6 +349,86 @@ TEST_F(EmbedderTest, CanRegisterImpellerVulkanExternalTexture) {
 
   engine.reset();
   EXPECT_GE(destruction_called.load(), 1u);
+}
+
+TEST_F(EmbedderTest, VulkanSetupCallbackInvokedOnRasterThread) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 800x600.
+  builder.SetSurface(DlISize(800, 600));
+
+  fml::AutoResetWaitableEvent setup_latch;
+  static fml::AutoResetWaitableEvent* s_vk_setup_latch = nullptr;
+  s_vk_setup_latch = &setup_latch;
+
+  context.GetRendererConfig().vulkan.setup_callback =
+      [](void* user_data) -> bool {
+    if (s_vk_setup_latch) {
+      s_vk_setup_latch->Signal();
+    }
+    return true;
+  };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Wait for the setup callback to be executed on the raster thread.
+  setup_latch.Wait();
+  s_vk_setup_latch = nullptr;
+}
+
+TEST_F(EmbedderTest, VulkanSetupCallbackBackwardsCompatibleWithOldStructSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 800x600.
+  builder.SetSurface(DlISize(800, 600));
+
+  // Set struct size to exclude setup_callback.
+  context.GetRendererConfig().vulkan.struct_size =
+      offsetof(FlutterVulkanRendererConfig, setup_callback);
+  // Set a failing callback; since struct_size is old, it should never be
+  // called.
+  context.GetRendererConfig().vulkan.setup_callback =
+      [](void* user_data) -> bool { return false; };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
+TEST_F(EmbedderTest, VulkanSetupCallbackFailureInvalidatesSurface) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 800x600.
+  builder.SetSurface(DlISize(800, 600));
+
+  fml::AutoResetWaitableEvent setup_latch;
+  static fml::AutoResetWaitableEvent* s_vk_fail_latch = nullptr;
+  s_vk_fail_latch = &setup_latch;
+
+  context.GetRendererConfig().vulkan.setup_callback =
+      [](void* user_data) -> bool {
+    if (s_vk_fail_latch) {
+      s_vk_fail_latch->Signal();
+    }
+    // Return false to indicate setup failed.
+    return false;
+  };
+
+  auto engine = builder.LaunchEngine();
+  setup_latch.Wait();
+  s_vk_fail_latch = nullptr;
+
+  ASSERT_TRUE(engine.is_valid());
+  auto* embedder_engine = reinterpret_cast<EmbedderEngine*>(engine.get());
+  auto platform_view = embedder_engine->GetShell().GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  auto* platform_view_embedder =
+      static_cast<PlatformViewEmbedder*>(platform_view.get());
+  ASSERT_TRUE(platform_view_embedder->GetEmbedderSurface());
+  EXPECT_FALSE(platform_view_embedder->GetEmbedderSurface()->IsValid());
+  EXPECT_EQ(platform_view->GetImpellerContext(), nullptr);
+  EXPECT_EQ(platform_view_embedder->GetEmbedderSurface()->CreateGPUSurface(),
+            nullptr);
 }
 
 }  // namespace testing

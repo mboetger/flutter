@@ -5,6 +5,8 @@
 #ifndef FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_SURFACE_GL_IMPELLER_H_
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_SURFACE_GL_IMPELLER_H_
 
+#include <atomic>
+
 #include "flutter/fml/macros.h"
 #include "flutter/shell/gpu/gpu_surface_gl_impeller.h"
 #include "flutter/shell/platform/embedder/embedder_external_view_embedder.h"
@@ -43,7 +45,7 @@ class EmbedderSurfaceGLImpeller final : public EmbedderSurface,
                   GLES3ContextHasGLES3Shaders);
   FML_FRIEND_TEST(testing::EmbedderSurfaceGLImpellerTest,
                   GLES2ContextDoesNotHaveGLES3Shaders);
-  bool valid_ = false;
+  std::atomic<bool> valid_{false};
   EmbedderSurfaceGLSkia::GLDispatchTable gl_dispatch_table_;
   bool fbo_reset_after_present_;
   std::shared_ptr<impeller::ContextGLES> impeller_context_;
@@ -58,6 +60,9 @@ class EmbedderSurfaceGLImpeller final : public EmbedderSurface,
 
   // |EmbedderSurface|
   std::shared_ptr<impeller::Context> CreateImpellerContext() const override;
+
+  // |EmbedderSurface|
+  void SetupImpellerContext() override;
 
   // |GPUSurfaceGLDelegate|
   std::unique_ptr<GLContextResult> GLContextMakeCurrent() override;

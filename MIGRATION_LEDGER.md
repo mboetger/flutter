@@ -1,11 +1,11 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 1.5 (Dart Deferred Library Loading)
-- **Active Branch**: `android-embedder-v3/phase-1.5-deferred-components`
-- **Base Commit SHA**: `1df98f66e70`
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5]
-- **Adversarial Review Loop Status**: Complete (Phase 1.5 Approved with 0 findings)
+- **Active Phase**: Phase 1.7 (Extended Semantics Completeness)
+- **Active Branch**: `android-embedder-v3/phase-1.7-semantics-parity`
+- **Base Commit SHA**: (Phase 1.6 commit)
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6]
+- **Adversarial Review Loop Status**: Complete (Phase 1.6 Approved with 0 findings)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -18,7 +18,7 @@
 - [x] Phase 1.3: AHardwareBuffer & Vulkan External Textures
 - [x] Phase 1.4: Multi-Engine Spawning (`FlutterEngineSpawn`)
 - [x] Phase 1.5: Dart Deferred Library Loading
-- [ ] Phase 1.6: Raster Context Setup Hooks (`setup_callback`)
+- [x] Phase 1.6: Raster Context Setup Hooks (`setup_callback`)
 - [ ] Phase 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
 - [ ] Phase 1.8: Embedder Screenshot / Raster Bitmap API (`FlutterEngineScreenshot`)
 - [ ] Phase 1.9: Dart Callback Information Lookup API (`FlutterEngineGetCallbackInformation`)

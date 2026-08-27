@@ -24,6 +24,8 @@ class EmbedderSurface {
 
   virtual std::shared_ptr<impeller::Context> CreateImpellerContext() const;
 
+  virtual void SetupImpellerContext();
+
   virtual sk_sp<GrDirectContext> CreateResourceContext() const;
 
   /// Release any platform specific resources associated with the graphics

@@ -5,6 +5,8 @@
 #ifndef FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_SURFACE_GL_SKIA_H_
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_SURFACE_GL_SKIA_H_
 
+#include <atomic>
+
 #include "flutter/fml/macros.h"
 #include "flutter/shell/gpu/gpu_surface_gl_skia.h"
 #include "flutter/shell/platform/embedder/embedder_external_view_embedder.h"
@@ -25,6 +27,7 @@ class EmbedderSurfaceGLSkia final : public EmbedderSurface,
         gl_surface_transformation_callback;                          // optional
     std::function<void*(const char*)> gl_proc_resolver;              // optional
     std::function<GLFBOInfo(intptr_t)> gl_populate_existing_damage;  // required
+    std::function<bool(void)> gl_setup_callback;                     // optional
   };
 
   EmbedderSurfaceGLSkia(
@@ -35,7 +38,7 @@ class EmbedderSurfaceGLSkia final : public EmbedderSurface,
   ~EmbedderSurfaceGLSkia() override;
 
  private:
-  bool valid_ = false;
+  std::atomic<bool> valid_{false};
   GLDispatchTable gl_dispatch_table_;
   bool fbo_reset_after_present_;
 
@@ -46,6 +49,9 @@ class EmbedderSurfaceGLSkia final : public EmbedderSurface,
 
   // |EmbedderSurface|
   std::unique_ptr<Surface> CreateGPUSurface() override;
+
+  // |EmbedderSurface|
+  void SetupImpellerContext() override;
 
   // |EmbedderSurface|
   sk_sp<GrDirectContext> CreateResourceContext() const override;

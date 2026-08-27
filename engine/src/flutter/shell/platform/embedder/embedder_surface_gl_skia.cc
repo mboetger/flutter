@@ -36,6 +36,16 @@ bool EmbedderSurfaceGLSkia::IsValid() const {
   return valid_;
 }
 
+// |EmbedderSurface|
+void EmbedderSurfaceGLSkia::SetupImpellerContext() {
+  if (gl_dispatch_table_.gl_setup_callback) {
+    if (!gl_dispatch_table_.gl_setup_callback()) {
+      FML_LOG(ERROR) << "OpenGL setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
+}
+
 // |GPUSurfaceGLDelegate|
 std::unique_ptr<GLContextResult> EmbedderSurfaceGLSkia::GLContextMakeCurrent() {
   return std::make_unique<GLContextDefaultResult>(
@@ -95,6 +105,9 @@ SurfaceFrame::FramebufferInfo EmbedderSurfaceGLSkia::GLContextFramebufferInfo()
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceGLSkia::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
   const bool render_to_surface = !external_view_embedder_;
   return std::make_unique<GPUSurfaceGLSkia>(
       this,              // GPU surface GL delegate

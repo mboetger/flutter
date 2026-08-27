@@ -145,6 +145,10 @@ std::unique_ptr<Surface> PlatformViewEmbedder::CreateRenderingSurface() {
     FML_LOG(ERROR) << "Embedder surface was null.";
     return nullptr;
   }
+  if (!embedder_surface_->IsValid()) {
+    FML_LOG(ERROR) << "Embedder surface was invalid.";
+    return nullptr;
+  }
   return embedder_surface_->CreateGPUSurface();
 }
 
@@ -156,7 +160,17 @@ PlatformViewEmbedder::CreateExternalViewEmbedder() {
 
 std::shared_ptr<impeller::Context> PlatformViewEmbedder::GetImpellerContext()
     const {
+  if (embedder_surface_ == nullptr || !embedder_surface_->IsValid()) {
+    return nullptr;
+  }
   return embedder_surface_->CreateImpellerContext();
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::SetupImpellerContext() {
+  if (embedder_surface_) {
+    embedder_surface_->SetupImpellerContext();
+  }
 }
 
 // |PlatformView|

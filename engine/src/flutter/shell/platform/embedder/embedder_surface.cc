@@ -15,6 +15,8 @@ std::shared_ptr<impeller::Context> EmbedderSurface::CreateImpellerContext()
   return nullptr;
 }
 
+void EmbedderSurface::SetupImpellerContext() {}
+
 sk_sp<GrDirectContext> EmbedderSurface::CreateResourceContext() const {
   return nullptr;
 }

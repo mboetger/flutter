@@ -201,6 +201,10 @@ EmbedderSurfaceGLImpeller::GLContextFramebufferInfo() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceGLImpeller::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
+
   // Ensure that the GL context is current before creating the GPU surface.
   // GPUSurfaceGLImpeller initialization will set up shader pipelines, and the
   // current thread needs to be able to execute reactor operations.
@@ -216,13 +220,27 @@ std::unique_ptr<Surface> EmbedderSurfaceGLImpeller::CreateGPUSurface() {
 // |EmbedderSurface|
 std::shared_ptr<impeller::Context>
 EmbedderSurfaceGLImpeller::CreateImpellerContext() const {
+  if (!IsValid()) {
+    return nullptr;
+  }
   return impeller_context_;
+}
+
+// |EmbedderSurface|
+void EmbedderSurfaceGLImpeller::SetupImpellerContext() {
+  if (gl_dispatch_table_.gl_setup_callback) {
+    if (!gl_dispatch_table_.gl_setup_callback()) {
+      FML_LOG(ERROR) << "OpenGL setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
 }
 
 // |EmbedderSurface|
 sk_sp<GrDirectContext> EmbedderSurfaceGLImpeller::CreateResourceContext()
     const {
-  if (gl_dispatch_table_.gl_make_resource_current_callback()) {
+  if (gl_dispatch_table_.gl_make_resource_current_callback &&
+      gl_dispatch_table_.gl_make_resource_current_callback()) {
     worker_->SetReactionsAllowedOnCurrentThread(true);
   } else {
     FML_DLOG(ERROR) << "Could not make the resource context current.";
@@ -234,7 +252,9 @@ sk_sp<GrDirectContext> EmbedderSurfaceGLImpeller::CreateResourceContext()
 // |EmbedderSurface|
 void EmbedderSurfaceGLImpeller::ReleaseResourceContext() const {
   worker_->SetReactionsAllowedOnCurrentThread(false);
-  gl_dispatch_table_.gl_clear_current_callback();
+  if (gl_dispatch_table_.gl_clear_current_callback) {
+    gl_dispatch_table_.gl_clear_current_callback();
+  }
 }
 
 }  // namespace flutter

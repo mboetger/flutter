@@ -104,12 +104,25 @@ bool EmbedderSurfaceVulkan::PresentImage(VkImage image, VkFormat format) {
 }
 
 // |EmbedderSurface|
+void EmbedderSurfaceVulkan::SetupImpellerContext() {
+  if (vulkan_dispatch_table_.setup_callback) {
+    if (!vulkan_dispatch_table_.setup_callback()) {
+      FML_LOG(ERROR) << "Vulkan setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
+}
+
+// |EmbedderSurface|
 bool EmbedderSurfaceVulkan::IsValid() const {
   return valid_;
 }
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceVulkan::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
   const bool render_to_surface = !external_view_embedder_;
   return std::make_unique<GPUSurfaceVulkan>(this, main_context_,
                                             render_to_surface);

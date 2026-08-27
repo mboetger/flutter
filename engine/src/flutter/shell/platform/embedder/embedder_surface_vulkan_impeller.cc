@@ -91,7 +91,20 @@ EmbedderSurfaceVulkanImpeller::~EmbedderSurfaceVulkanImpeller() {}
 
 std::shared_ptr<impeller::Context>
 EmbedderSurfaceVulkanImpeller::CreateImpellerContext() const {
+  if (!IsValid()) {
+    return nullptr;
+  }
   return context_;
+}
+
+// |EmbedderSurface|
+void EmbedderSurfaceVulkanImpeller::SetupImpellerContext() {
+  if (vulkan_dispatch_table_.setup_callback) {
+    if (!vulkan_dispatch_table_.setup_callback()) {
+      FML_LOG(ERROR) << "Vulkan setup callback failed on raster thread.";
+      valid_ = false;
+    }
+  }
 }
 
 // |GPUSurfaceVulkanDelegate|
@@ -118,6 +131,9 @@ bool EmbedderSurfaceVulkanImpeller::IsValid() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceVulkanImpeller::CreateGPUSurface() {
+  if (!IsValid()) {
+    return nullptr;
+  }
   return std::make_unique<GPUSurfaceVulkanImpeller>(this, context_);
 }
 

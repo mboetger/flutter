@@ -5,6 +5,8 @@
 #ifndef FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_SURFACE_VULKAN_IMPELLER_H_
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_SURFACE_VULKAN_IMPELLER_H_
 
+#include <atomic>
+
 #include "flutter/shell/common/context_options.h"
 #include "flutter/shell/gpu/gpu_surface_vulkan.h"
 #include "flutter/shell/gpu/gpu_surface_vulkan_delegate.h"
@@ -26,7 +28,8 @@ class EmbedderSurfaceVulkanImpeller final : public EmbedderSurface,
     std::function<FlutterVulkanImage(const DlISize& frame_size)>
         get_next_image;  // required
     std::function<bool(VkImage image, VkFormat format)>
-        present_image;  // required
+        present_image;                         // required
+    std::function<bool(void)> setup_callback;  // optional
   };
 
   EmbedderSurfaceVulkanImpeller(
@@ -58,8 +61,11 @@ class EmbedderSurfaceVulkanImpeller final : public EmbedderSurface,
   // |GPUSurfaceVulkanDelegate|
   std::shared_ptr<impeller::Context> CreateImpellerContext() const override;
 
+  // |EmbedderSurface|
+  void SetupImpellerContext() override;
+
  private:
-  bool valid_ = false;
+  std::atomic<bool> valid_{false};
   fml::RefPtr<vulkan::VulkanProcTable> vk_;
   VulkanDispatchTable vulkan_dispatch_table_;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;

@@ -24,8 +24,9 @@
 #include "flutter/fml/task_source.h"
 #include "flutter/fml/thread.h"
 #include "flutter/lib/ui/painting/image.h"
-#include "flutter/runtime/dart_vm.h"
+#include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_surface_gl_impeller.h"
+#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/shell/platform/embedder/tests/embedder_test.h"
@@ -5342,6 +5343,86 @@ TEST_F(EmbedderTest, CompositorMustBeAbleToRenderKnownSceneToOpenGLSurfaces) {
 
   // There should no present calls on the root surface.
   ASSERT_EQ(context.GetSurfacePresentCount(), 0u);
+}
+
+TEST_F(EmbedderTest, OpenGLSetupCallbackInvokedOnRasterThread) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 800x600.
+  builder.SetSurface(DlISize(800, 600));
+
+  fml::AutoResetWaitableEvent setup_latch;
+  static fml::AutoResetWaitableEvent* s_gl_setup_latch = nullptr;
+  s_gl_setup_latch = &setup_latch;
+
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    if (s_gl_setup_latch) {
+      s_gl_setup_latch->Signal();
+    }
+    return true;
+  };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Wait for the setup callback to be executed on the raster thread.
+  setup_latch.Wait();
+  s_gl_setup_latch = nullptr;
+}
+
+TEST_F(EmbedderTest, OpenGLSetupCallbackBackwardsCompatibleWithOldStructSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 800x600.
+  builder.SetSurface(DlISize(800, 600));
+
+  // Set struct size to exclude setup_callback.
+  context.GetRendererConfig().open_gl.struct_size =
+      offsetof(FlutterOpenGLRendererConfig, setup_callback);
+  // Set a failing callback; since struct_size is old, it should never be
+  // called.
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool { return false; };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
+TEST_F(EmbedderTest, OpenGLSetupCallbackFailureInvalidatesSurface) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 800x600.
+  builder.SetSurface(DlISize(800, 600));
+
+  fml::AutoResetWaitableEvent setup_latch;
+  static fml::AutoResetWaitableEvent* s_gl_fail_latch = nullptr;
+  s_gl_fail_latch = &setup_latch;
+
+  context.GetRendererConfig().open_gl.setup_callback =
+      [](void* user_data) -> bool {
+    if (s_gl_fail_latch) {
+      s_gl_fail_latch->Signal();
+    }
+    // Return false to indicate setup failed.
+    return false;
+  };
+
+  auto engine = builder.LaunchEngine();
+  setup_latch.Wait();
+  s_gl_fail_latch = nullptr;
+
+  ASSERT_TRUE(engine.is_valid());
+  auto* embedder_engine = reinterpret_cast<EmbedderEngine*>(engine.get());
+  auto platform_view = embedder_engine->GetShell().GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  auto* platform_view_embedder =
+      static_cast<PlatformViewEmbedder*>(platform_view.get());
+  ASSERT_TRUE(platform_view_embedder->GetEmbedderSurface());
+  EXPECT_FALSE(platform_view_embedder->GetEmbedderSurface()->IsValid());
+  EXPECT_EQ(platform_view->GetImpellerContext(), nullptr);
+  EXPECT_EQ(platform_view_embedder->GetEmbedderSurface()->CreateGPUSurface(),
+            nullptr);
 }
 
 INSTANTIATE_TEST_SUITE_P(
