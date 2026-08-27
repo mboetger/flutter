@@ -6,6 +6,8 @@
 
 #include <algorithm>
 
+#include "flutter/display_list/geometry/dl_path.h"
+
 namespace flutter {
 
 EmbedderLayers::EmbedderLayers(DlISize frame_size,
@@ -132,6 +134,118 @@ static std::unique_ptr<FlutterPlatformViewMutation> ConvertMutation(
   return std::make_unique<FlutterPlatformViewMutation>(mutation);
 }
 
+namespace {
+class EmbedderPathCollector final : public DlPathReceiver {
+ public:
+  void MoveTo(const DlPoint& p2, bool will_be_closed) override {
+    FlutterPathSegment seg = {};
+    seg.verb = kFlutterPathVerbMove;
+    seg.points[0].x = p2.x;
+    seg.points[0].y = p2.y;
+    segments_.push_back(seg);
+  }
+
+  void LineTo(const DlPoint& p2) override {
+    FlutterPathSegment seg = {};
+    seg.verb = kFlutterPathVerbLine;
+    seg.points[0].x = p2.x;
+    seg.points[0].y = p2.y;
+    segments_.push_back(seg);
+  }
+
+  void QuadTo(const DlPoint& cp, const DlPoint& p2) override {
+    FlutterPathSegment seg = {};
+    seg.verb = kFlutterPathVerbQuad;
+    seg.points[0].x = cp.x;
+    seg.points[0].y = cp.y;
+    seg.points[1].x = p2.x;
+    seg.points[1].y = p2.y;
+    segments_.push_back(seg);
+  }
+
+  bool ConicTo(const DlPoint& cp, const DlPoint& p2, DlScalar weight) override {
+    FlutterPathSegment seg = {};
+    seg.verb = kFlutterPathVerbConic;
+    seg.points[0].x = cp.x;
+    seg.points[0].y = cp.y;
+    seg.points[1].x = p2.x;
+    seg.points[1].y = p2.y;
+    seg.conic_weight = weight;
+    segments_.push_back(seg);
+    return true;
+  }
+
+  void CubicTo(const DlPoint& cp1,
+               const DlPoint& cp2,
+               const DlPoint& p2) override {
+    FlutterPathSegment seg = {};
+    seg.verb = kFlutterPathVerbCubic;
+    seg.points[0].x = cp1.x;
+    seg.points[0].y = cp1.y;
+    seg.points[1].x = cp2.x;
+    seg.points[1].y = cp2.y;
+    seg.points[2].x = p2.x;
+    seg.points[2].y = p2.y;
+    segments_.push_back(seg);
+  }
+
+  void Close() override {
+    FlutterPathSegment seg = {};
+    seg.verb = kFlutterPathVerbClose;
+    segments_.push_back(seg);
+  }
+
+  std::vector<FlutterPathSegment> TakeSegments() {
+    return std::move(segments_);
+  }
+
+ private:
+  std::vector<FlutterPathSegment> segments_;
+};
+}  // namespace
+
+static std::unique_ptr<FlutterPlatformViewMutation> ConvertMutation(
+    const DlRoundSuperellipse& rse) {
+  FlutterPlatformViewMutation mutation = {};
+  mutation.type = kFlutterPlatformViewMutationTypeClipRoundedSuperellipse;
+  const auto& rect = rse.GetBounds();
+  mutation.clip_rounded_superellipse.rect.left = rect.GetLeft();
+  mutation.clip_rounded_superellipse.rect.top = rect.GetTop();
+  mutation.clip_rounded_superellipse.rect.right = rect.GetRight();
+  mutation.clip_rounded_superellipse.rect.bottom = rect.GetBottom();
+  const auto& radii = rse.GetRadii();
+  mutation.clip_rounded_superellipse.upper_left_corner_radius =
+      ConvertSize(radii.top_left);
+  mutation.clip_rounded_superellipse.upper_right_corner_radius =
+      ConvertSize(radii.top_right);
+  mutation.clip_rounded_superellipse.lower_right_corner_radius =
+      ConvertSize(radii.bottom_right);
+  mutation.clip_rounded_superellipse.lower_left_corner_radius =
+      ConvertSize(radii.bottom_left);
+  return std::make_unique<FlutterPlatformViewMutation>(mutation);
+}
+
+static std::unique_ptr<FlutterPlatformViewMutation> ConvertMutation(
+    const DlPath& path,
+    std::vector<std::unique_ptr<std::vector<FlutterPathSegment>>>&
+        path_segments_referenced) {
+  FlutterPlatformViewMutation mutation = {};
+  mutation.type = kFlutterPlatformViewMutationTypeClipPath;
+  mutation.clip_path.struct_size = sizeof(FlutterPath);
+  mutation.clip_path.fill_type = (path.GetFillType() == DlPathFillType::kOdd)
+                                     ? kFlutterPathFillTypeOdd
+                                     : kFlutterPathFillTypeNonZero;
+
+  EmbedderPathCollector collector;
+  path.Dispatch(collector);
+  auto segments = std::make_unique<std::vector<FlutterPathSegment>>(
+      collector.TakeSegments());
+  mutation.clip_path.segments_count = segments->size();
+  mutation.clip_path.segments = segments->data();
+  path_segments_referenced.emplace_back(std::move(segments));
+  return std::make_unique<FlutterPlatformViewMutation>(mutation);
+}
+
 void EmbedderLayers::PushPlatformViewLayer(
     FlutterPlatformViewIdentifier identifier,
     const EmbeddedViewParams& params) {
@@ -162,11 +276,15 @@ void EmbedderLayers::PushPlatformViewLayer(
         case MutatorType::kClipRSE: {
           mutations_array.push_back(
               mutations_referenced_
-                  .emplace_back(ConvertMutation(mutator->GetRSEApproximation()))
+                  .emplace_back(ConvertMutation(mutator->GetRSE()))
                   .get());
         } break;
         case MutatorType::kClipPath: {
-          // Unsupported mutation.
+          mutations_array.push_back(
+              mutations_referenced_
+                  .emplace_back(ConvertMutation(mutator->GetPath(),
+                                                path_segments_referenced_))
+                  .get());
         } break;
         case MutatorType::kTransform: {
           const auto& matrix = mutator->GetMatrix();

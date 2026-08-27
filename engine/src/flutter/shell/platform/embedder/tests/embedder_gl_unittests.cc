@@ -2581,6 +2581,11 @@ TEST_P(EmbedderTestMultiBackend, PlatformViewMutatorsAreValid) {
                 FML_CHECK(false)
                     << "There should be no transformation in the test.";
                 break;
+              case kFlutterPlatformViewMutationTypeClipPath:
+              case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse:
+                FML_CHECK(false)
+                    << "Unexpected extended mutation in legacy GL test.";
+                break;
             }
 
             ASSERT_EQ(*platform_view.mutations[i], mutation);
@@ -2691,6 +2696,11 @@ TEST_F(EmbedderTest, PlatformViewMutatorsAreValidWithPixelRatio) {
                 mutation.type = kFlutterPlatformViewMutationTypeTransformation;
                 mutation.transformation = FlutterTransformationMake(
                     DlMatrix::MakeScale({2.0, 2.0, 1}));
+                break;
+              case kFlutterPlatformViewMutationTypeClipPath:
+              case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse:
+                FML_CHECK(false)
+                    << "Unexpected extended mutation in legacy GL test.";
                 break;
             }
 
@@ -2809,7 +2819,11 @@ TEST_F(EmbedderTest,
                 mutation.type = kFlutterPlatformViewMutationTypeTransformation;
                 mutation.transformation =
                     FlutterTransformationMake(root_surface_transformation);
-
+                break;
+              case kFlutterPlatformViewMutationTypeClipPath:
+              case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse:
+                FML_CHECK(false)
+                    << "Unexpected extended mutation in legacy GL test.";
                 break;
             }
 

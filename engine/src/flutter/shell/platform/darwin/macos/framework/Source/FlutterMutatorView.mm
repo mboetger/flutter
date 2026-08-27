@@ -354,6 +354,8 @@ CATransform3D CATransformFromMutations(const MutationVector& mutations) {
       }
       case kFlutterPlatformViewMutationTypeClipRect:
       case kFlutterPlatformViewMutationTypeClipRoundedRect:
+      case kFlutterPlatformViewMutationTypeClipPath:
+      case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse:
       case kFlutterPlatformViewMutationTypeOpacity:
         break;
     }
@@ -371,6 +373,8 @@ float OpacityFromMutations(const MutationVector& mutations) {
         break;
       case kFlutterPlatformViewMutationTypeClipRect:
       case kFlutterPlatformViewMutationTypeClipRoundedRect:
+      case kFlutterPlatformViewMutationTypeClipPath:
+      case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse:
       case kFlutterPlatformViewMutationTypeTransformation:
         break;
     }
@@ -405,6 +409,8 @@ CGRect MasterClipFromMutations(CGRect bounds, const MutationVector& mutations) {
         transform = CATransform3DConcat(ToCATransform3D(mutation.transformation), transform);
         break;
       case kFlutterPlatformViewMutationTypeOpacity:
+      case kFlutterPlatformViewMutationTypeClipPath:
+      case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse:
         break;
     }
   }
@@ -444,6 +450,8 @@ NSMutableArray* ClipPathFromMutations(CGRect master_clip, const MutationVector& 
         break;
       }
       case kFlutterPlatformViewMutationTypeOpacity:
+      case kFlutterPlatformViewMutationTypeClipPath:
+      case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse:
         break;
     }
   }

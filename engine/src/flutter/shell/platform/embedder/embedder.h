@@ -725,6 +725,72 @@ typedef struct {
   FlutterSize lower_left_corner_radius;
 } FlutterRoundedRect;
 
+/// A structure to represent a rounded superellipse.
+typedef struct {
+  /// The bounding rectangle.
+  FlutterRect rect;
+  /// Upper-left corner radius.
+  FlutterSize upper_left_corner_radius;
+  /// Upper-right corner radius.
+  FlutterSize upper_right_corner_radius;
+  /// Lower-right corner radius.
+  FlutterSize lower_right_corner_radius;
+  /// Lower-left corner radius.
+  FlutterSize lower_left_corner_radius;
+} FlutterRoundedSuperellipse;
+
+/// The fill type of a path.
+typedef enum {
+  /// The non-zero winding fill rule.
+  kFlutterPathFillTypeNonZero = 0,
+  /// The even-odd fill rule.
+  kFlutterPathFillTypeOdd = 1,
+} FlutterPathFillType;
+
+/// The verb / operation type for a path segment.
+typedef enum {
+  /// Move to point (points[0]).
+  kFlutterPathVerbMove = 0,
+  /// Line to point (points[0]).
+  kFlutterPathVerbLine = 1,
+  /// Quadratic Bezier curve with control point (points[0]) to end point
+  /// (points[1]).
+  kFlutterPathVerbQuad = 2,
+  /// Conic / rational quadratic Bezier curve with control point (points[0]) to
+  /// end point (points[1]) with conic_weight.
+  kFlutterPathVerbConic = 3,
+  /// Cubic Bezier curve with control points (points[0], points[1]) to end point
+  /// (points[2]).
+  kFlutterPathVerbCubic = 4,
+  /// Close the current contour.
+  kFlutterPathVerbClose = 5,
+} FlutterPathVerb;
+
+/// Represents an individual path segment / operation.
+typedef struct {
+  /// The operation verb.
+  FlutterPathVerb verb;
+  /// The points for this operation (up to 3 points depending on verb).
+  FlutterPoint points[3];
+  /// Conic weight (only used when verb == kFlutterPathVerbConic).
+  double conic_weight;
+} FlutterPathSegment;
+
+/// A structure to represent a path in 2D space.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterPath).
+  size_t struct_size;
+  /// The fill rule for this path.
+  FlutterPathFillType fill_type;
+  /// The number of segments in this path.
+  size_t segments_count;
+  /// Array of path segments describing the contours. The memory referenced by
+  /// `segments` is owned by the engine and is valid only during the execution
+  /// of the presentation callback. Embedders retaining path data must copy the
+  /// segments array.
+  const FlutterPathSegment* segments;
+} FlutterPath;
+
 /// A structure to represent a damage region.
 ///
 // Frozen because adding members would break the ABI of `FlutterPresentInfo`.
@@ -2199,6 +2265,12 @@ typedef enum {
   /// Indicates that the Flutter application requested that the platform view be
   /// transformed before composition.
   kFlutterPlatformViewMutationTypeTransformation,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using a path.
+  kFlutterPlatformViewMutationTypeClipPath,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using a rounded superellipse.
+  kFlutterPlatformViewMutationTypeClipRoundedSuperellipse,
 } FlutterPlatformViewMutationType;
 
 typedef struct {
@@ -2209,6 +2281,8 @@ typedef struct {
     FlutterRect clip_rect;
     FlutterRoundedRect clip_rounded_rect;
     FlutterTransformation transformation;
+    FlutterPath clip_path;
+    FlutterRoundedSuperellipse clip_rounded_superellipse;
   };
 } FlutterPlatformViewMutation;
 

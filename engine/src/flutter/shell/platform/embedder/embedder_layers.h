@@ -44,6 +44,8 @@ class EmbedderLayers {
       mutations_referenced_;
   std::vector<std::unique_ptr<std::vector<const FlutterPlatformViewMutation*>>>
       mutations_arrays_referenced_;
+  std::vector<std::unique_ptr<std::vector<FlutterPathSegment>>>
+      path_segments_referenced_;
   std::vector<std::unique_ptr<FlutterBackingStorePresentInfo>>
       present_info_referenced_;
   std::vector<std::unique_ptr<FlutterRegion>> regions_referenced_;
