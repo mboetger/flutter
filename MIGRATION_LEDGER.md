@@ -1,12 +1,12 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 1.5 (Dart Deferred Library Loading)
-- **Active Branch**: `android-migration-2/phase-1.5-deferred-components`
+- **Active Phase**: Phase 1.6 (Raster Context Setup Hooks)
+- **Active Branch**: `android-migration-2/phase-1.6-raster-context-setup`
 - **Base Commit SHA**: `08d2a471fd10152bb7dbfbb9636cf8fa53e94b8b`
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4]
-- **Latest Commit SHA**: `554b3863440` (Phase 1.4)
-- **Adversarial Review Loop Status**: Phase 1.4 Approved by reidbaker-agent
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5]
+- **Latest Commit SHA**: `501996d60b0` (Phase 1.5)
+- **Adversarial Review Loop Status**: Phase 1.5 Approved by reidbaker-agent
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -18,7 +18,7 @@
 - [x] Phase 1.2: Vulkan Impeller Render Target Backing Store
 - [x] Phase 1.3: AHardwareBuffer & Vulkan External Textures
 - [x] Phase 1.4: Multi-Engine Spawning (`FlutterEngineSpawn`)
-- [ ] Phase 1.5: Dart Deferred Library Loading
+- [x] Phase 1.5: Dart Deferred Library Loading
 - [ ] Phase 1.6: Raster Context Setup Hooks (`setup_callback`)
 - [ ] Phase 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
 - [ ] Phase 1.8: Embedder Screenshot / Raster Bitmap API (`FlutterEngineScreenshot`)
