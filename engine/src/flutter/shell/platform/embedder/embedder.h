@@ -4082,6 +4082,108 @@ FlutterEngineResult FlutterEngineUpdateAssetResolver(
     const FlutterAssetResolverConfig* resolver_config);
 
 //------------------------------------------------------------------------------
+/// @brief      Callback signature for receiving Dart VM Service server status
+///             notifications (such as when the observatory / devtools server
+///             URI becomes available).
+///
+/// @param[in]  server_uri  The URI string for the VM service server, or nullptr
+///                         if the server has shut down.
+/// @param[in]  user_data   The user data pointer supplied when the callback was
+///                         registered.
+///
+typedef void (*FlutterEngineDartServiceIsolateServerStatusCallback)(
+    const char* server_uri,
+    void* user_data);
+
+//------------------------------------------------------------------------------
+/// @brief      Registers a global callback to receive Dart VM service server
+///             status updates.
+///
+/// @param[in]  callback   The callback function to invoke upon status changes.
+/// @param[in]  user_data  User data pointer passed to the callback.
+///
+/// @return     An opaque integer handle that can be passed to
+///             `FlutterEngineRemoveServerStatusCallback` to unregister, or 0
+///             on failure.
+///
+FLUTTER_EXPORT
+intptr_t FlutterEngineAddServerStatusCallback(
+    FlutterEngineDartServiceIsolateServerStatusCallback callback,
+    void* user_data);
+
+//------------------------------------------------------------------------------
+/// @brief      Unregisters a Dart VM service server status callback previously
+///             registered with `FlutterEngineAddServerStatusCallback`.
+///
+/// @param[in]  callback_handle  The handle returned from
+///                              `FlutterEngineAddServerStatusCallback`.
+///
+FLUTTER_EXPORT
+void FlutterEngineRemoveServerStatusCallback(intptr_t callback_handle);
+
+//------------------------------------------------------------------------------
+/// @brief      Information about a Dart entrypoint or callback retrieved by its
+///             persistent handle in the Dart callback cache.
+///
+typedef struct {
+  /// The size of this struct. Must be set to
+  /// sizeof(FlutterCallbackInformation).
+  size_t struct_size;
+  /// The name of the Dart entry point or method.
+  ///
+  /// The returned string points to engine-managed memory and remains valid
+  /// only until the next call to `FlutterEngineGetCallbackInformation` on the
+  /// calling thread. Embedders should copy this string if needed across calls.
+  const char* name;
+  /// The name of the class containing the callback, or empty if a top-level
+  /// function.
+  ///
+  /// The returned string points to engine-managed memory and remains valid
+  /// only until the next call to `FlutterEngineGetCallbackInformation` on the
+  /// calling thread. Embedders should copy this string if needed across calls.
+  const char* class_name;
+  /// The URI / library path defining the Dart callback.
+  ///
+  /// The returned string points to engine-managed memory and remains valid
+  /// only until the next call to `FlutterEngineGetCallbackInformation` on the
+  /// calling thread. Embedders should copy this string if needed across calls.
+  const char* library_path;
+} FlutterCallbackInformation;
+
+//------------------------------------------------------------------------------
+/// @brief      Retrieves callback information (entrypoint name, class, library)
+///             from the Dart callback cache for the specified handle.
+///
+/// @param[in]  handle    The handle representing the callback.
+/// @param[out] info_out  Pointer to a `FlutterCallbackInformation` struct to
+///                       populate. `info_out->struct_size` must be initialized
+///                       to `sizeof(FlutterCallbackInformation)`.
+///
+/// @return     `kSuccess` if the callback information was found and populated,
+///             or `kInvalidArguments` if the handle was not found or invalid
+///             parameters were provided.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineGetCallbackInformation(
+    int64_t handle,
+    FlutterCallbackInformation* info_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Initializes the disk-backed Dart callback cache from the given
+///             directory path and loads cached callbacks into memory.
+///
+/// @param[in]  cache_path  A null-terminated string specifying the directory
+///                         where the callback cache is stored. Must not be null
+///                         or empty.
+///
+/// @return     `kSuccess` on success, or `kInvalidArguments` if `cache_path`
+///             is null or empty.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineInitializeCallbackCache(
+    const char* cache_path);
+
+//------------------------------------------------------------------------------
 /// @brief      Spawns a new FlutterEngine instance from an existing running
 ///             engine. The spawned engine shares the isolate group, task
 ///             runners, and rendering context of the parent engine.

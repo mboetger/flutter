@@ -10,7 +10,9 @@
 #define GL_GLEXT_PROTOTYPES
 #include <GLES2/gl2ext.h>
 
+#include "flutter/display_list/geometry/dl_geometry_conversions.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/impeller/display_list/aiks_context.h"
 #include "flutter/impeller/display_list/dl_image_impeller.h"
 #include "flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h"
 #include "flutter/impeller/renderer/backend/vulkan/surface_context_vk.h"

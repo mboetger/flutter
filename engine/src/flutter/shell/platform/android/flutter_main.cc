@@ -18,8 +18,6 @@
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
-#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -69,7 +67,12 @@ FlutterMain::FlutterMain(const flutter::Settings& settings,
       android_rendering_api_(android_rendering_api),
       args_(std::move(args)) {}
 
-FlutterMain::~FlutterMain() = default;
+FlutterMain::~FlutterMain() {
+  if (vm_service_uri_callback_ != 0) {
+    FlutterEngineRemoveServerStatusCallback(vm_service_uri_callback_);
+    vm_service_uri_callback_ = 0;
+  }
+}
 
 static std::unique_ptr<FlutterMain> g_flutter_main;
 
@@ -159,13 +162,11 @@ void FlutterMain::Init(JNIEnv* env,
   // Restore the callback cache.
   // TODO(chinmaygarde): Route all cache file access through FML and remove this
   // setter.
-  flutter::DartCallbackCache::SetCachePath(
-      fml::jni::JavaStringToString(env, appStoragePath));
+  FlutterEngineInitializeCallbackCache(
+      fml::jni::JavaStringToString(env, appStoragePath).c_str());
 
   fml::paths::InitializeAndroidCachesPath(
       fml::jni::JavaStringToString(env, engineCachesPath));
-
-  flutter::DartCallbackCache::LoadCacheFromDisk();
 
   if (!FlutterEngineRunsAOTCompiledDartCode() && kernelPath) {
     // Check to see if the appropriate kernel files are present and configure
@@ -241,10 +242,19 @@ void FlutterMain::SetupDartVMServiceUriCallback(JNIEnv* env) {
   fml::RefPtr<fml::TaskRunner> platform_runner =
       fml::MessageLoop::GetCurrent().GetTaskRunner();
 
-  vm_service_uri_callback_ = DartServiceIsolate::AddServerStatusCallback(
-      [platform_runner, set_uri](const std::string& uri) {
-        platform_runner->PostTask([uri, set_uri] { set_uri(uri); });
-      });
+  vm_service_callback_data_ = std::make_unique<VMServiceUriCallbackData>(
+      VMServiceUriCallbackData{platform_runner, set_uri});
+  vm_service_uri_callback_ = FlutterEngineAddServerStatusCallback(
+      [](const char* uri, void* user_data) {
+        auto* data = static_cast<VMServiceUriCallbackData*>(user_data);
+        if (data) {
+          std::string uri_str(uri ? uri : "");
+          auto set_uri_fn = data->set_uri;
+          data->platform_runner->PostTask(
+              [uri_str, set_uri_fn] { set_uri_fn(uri_str); });
+        }
+      },
+      vm_service_callback_data_.get());
 }
 
 static void PrefetchDefaultFontManager(JNIEnv* env, jclass jcaller) {

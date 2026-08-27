@@ -11,9 +11,9 @@
 
 #include "flutter/common/task_runners.h"
 #include "flutter/display_list/geometry/dl_geometry_types.h"
-#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/macros.h"
 #include "flutter/fml/memory/weak_ptr.h"
+#include "flutter/shell/platform/android/android_mutators_stack.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/surface_pool.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -171,9 +171,10 @@ class AndroidCompositor
   double GetDevicePixelRatio() const;
 
   //----------------------------------------------------------------------------
-  /// @brief Converts a FlutterPlatformView's mutations into a MutatorsStack.
+  /// @brief Converts a FlutterPlatformView's mutations into a
+  /// AndroidMutatorsStack.
   ///
-  static MutatorsStack ToMutatorsStack(
+  static AndroidMutatorsStack ToAndroidMutatorsStack(
       const FlutterPlatformView* platform_view);
 
   //----------------------------------------------------------------------------

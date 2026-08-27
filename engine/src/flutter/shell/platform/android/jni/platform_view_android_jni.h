@@ -9,9 +9,10 @@
 
 #include "flutter/fml/mapping.h"
 
-#include "flutter/flow/embedded_views.h"
 #include "flutter/lib/ui/window/platform_message.h"
+#include "flutter/shell/platform/android/android_mutators_stack.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
+#include "third_party/skia/include/core/SkM44.h"
 
 #if FML_OS_ANDROID
 #include "flutter/fml/platform/android/scoped_java_ref.h"
@@ -165,7 +166,7 @@ class PlatformViewAndroidJNI {
       int height,
       int viewWidth,
       int viewHeight,
-      MutatorsStack mutators_stack) = 0;
+      AndroidMutatorsStack mutators_stack) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Positions and sizes an overlay surface in hybrid composition.
@@ -249,7 +250,7 @@ class PlatformViewAndroidJNI {
                                       int32_t height,
                                       int32_t viewWidth,
                                       int32_t viewHeight,
-                                      MutatorsStack mutators_stack) = 0;
+                                      AndroidMutatorsStack mutators_stack) = 0;
 
   virtual void hidePlatformView2(int32_t view_id) = 0;
 

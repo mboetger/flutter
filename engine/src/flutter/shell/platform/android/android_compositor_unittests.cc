@@ -408,7 +408,7 @@ TEST_F(AndroidCompositorTest, ToDlMatrixConversion) {
   EXPECT_FLOAT_EQ(m.m[15], 1.0f);   // pers2
 }
 
-TEST_F(AndroidCompositorTest, ToMutatorsStackConversion) {
+TEST_F(AndroidCompositorTest, ToAndroidMutatorsStackConversion) {
   FlutterPlatformViewMutation m1 = {};
   m1.type = kFlutterPlatformViewMutationTypeOpacity;
   m1.opacity = 0.5;
@@ -428,20 +428,20 @@ TEST_F(AndroidCompositorTest, ToMutatorsStackConversion) {
   pv.mutations_count = 3;
   pv.mutations = mutations;
 
-  MutatorsStack stack = AndroidCompositor::ToMutatorsStack(&pv);
+  AndroidMutatorsStack stack = AndroidCompositor::ToAndroidMutatorsStack(&pv);
   EXPECT_FALSE(stack.is_empty());
   EXPECT_EQ(stack.stack_count(), 3u);
 
   auto iter = stack.Begin();
-  EXPECT_EQ((*iter)->GetType(), MutatorType::kOpacity);
+  EXPECT_EQ((*iter)->GetType(), AndroidMutatorType::kOpacity);
   EXPECT_EQ((*iter)->GetAlpha(), 128u);
 
   iter++;
-  EXPECT_EQ((*iter)->GetType(), MutatorType::kClipRect);
+  EXPECT_EQ((*iter)->GetType(), AndroidMutatorType::kClipRect);
   EXPECT_FLOAT_EQ((*iter)->GetRect().GetLeft(), 10.0f);
 
   iter++;
-  EXPECT_EQ((*iter)->GetType(), MutatorType::kTransform);
+  EXPECT_EQ((*iter)->GetType(), AndroidMutatorType::kTransform);
   EXPECT_FLOAT_EQ((*iter)->GetMatrix().m[12], 50.0f);
 }
 
@@ -480,9 +480,9 @@ TEST_F(AndroidCompositorTest, PresentWithPlatformViewMutatorsPassedToJNI) {
   EXPECT_CALL(*jni_mock_, onDisplayPlatformView2(99, 20, 30, 150, 250, _, _, _))
       .WillOnce([](int32_t view_id, int32_t x, int32_t y, int32_t width,
                    int32_t height, int32_t view_width, int32_t view_height,
-                   MutatorsStack stack) {
+                   AndroidMutatorsStack stack) {
         EXPECT_EQ(stack.stack_count(), 1u);
-        EXPECT_EQ((*stack.Begin())->GetType(), MutatorType::kOpacity);
+        EXPECT_EQ((*stack.Begin())->GetType(), AndroidMutatorType::kOpacity);
       });
   EXPECT_CALL(*jni_mock_, swapTransaction()).Times(1);
   EXPECT_CALL(*jni_mock_, onEndFrame2()).Times(1);
@@ -491,9 +491,10 @@ TEST_F(AndroidCompositorTest, PresentWithPlatformViewMutatorsPassedToJNI) {
   PostTaskSync(task_runners_.GetPlatformTaskRunner(), []() {});
 }
 
-TEST_F(AndroidCompositorTest, ToMutatorsStackEdgeCases) {
+TEST_F(AndroidCompositorTest, ToAndroidMutatorsStackEdgeCases) {
   // Test 1: Null platform_view
-  MutatorsStack null_pv_stack = AndroidCompositor::ToMutatorsStack(nullptr);
+  AndroidMutatorsStack null_pv_stack =
+      AndroidCompositor::ToAndroidMutatorsStack(nullptr);
   EXPECT_TRUE(null_pv_stack.is_empty());
 
   // Test 2: Null mutations array
@@ -501,8 +502,8 @@ TEST_F(AndroidCompositorTest, ToMutatorsStackEdgeCases) {
   pv_null_mutations.struct_size = sizeof(pv_null_mutations);
   pv_null_mutations.mutations = nullptr;
   pv_null_mutations.mutations_count = 5;
-  MutatorsStack null_muts_stack =
-      AndroidCompositor::ToMutatorsStack(&pv_null_mutations);
+  AndroidMutatorsStack null_muts_stack =
+      AndroidCompositor::ToAndroidMutatorsStack(&pv_null_mutations);
   EXPECT_TRUE(null_muts_stack.is_empty());
 
   // Test 3: Null elements inside mutations array
@@ -517,10 +518,11 @@ TEST_F(AndroidCompositorTest, ToMutatorsStackEdgeCases) {
   pv_with_null.mutations = mutations_with_null;
   pv_with_null.mutations_count = 3;
 
-  MutatorsStack with_null_stack =
-      AndroidCompositor::ToMutatorsStack(&pv_with_null);
+  AndroidMutatorsStack with_null_stack =
+      AndroidCompositor::ToAndroidMutatorsStack(&pv_with_null);
   EXPECT_EQ(with_null_stack.stack_count(), 1u);
-  EXPECT_EQ((*with_null_stack.Begin())->GetType(), MutatorType::kOpacity);
+  EXPECT_EQ((*with_null_stack.Begin())->GetType(),
+            AndroidMutatorType::kOpacity);
 
   // Test 4: NaN, negative, and oversized opacity clamping
   FlutterPlatformViewMutation nan_opacity = {};
@@ -542,7 +544,8 @@ TEST_F(AndroidCompositorTest, ToMutatorsStackEdgeCases) {
   pv_opacities.mutations = opacity_muts;
   pv_opacities.mutations_count = 3;
 
-  MutatorsStack op_stack = AndroidCompositor::ToMutatorsStack(&pv_opacities);
+  AndroidMutatorsStack op_stack =
+      AndroidCompositor::ToAndroidMutatorsStack(&pv_opacities);
   EXPECT_EQ(op_stack.stack_count(), 3u);
 
   auto it = op_stack.Begin();
@@ -551,6 +554,78 @@ TEST_F(AndroidCompositorTest, ToMutatorsStackEdgeCases) {
   EXPECT_EQ((*it)->GetAlpha(), 0u);  // -2.5 clamps to 0.0 (0)
   it++;
   EXPECT_EQ((*it)->GetAlpha(), 255u);  // 5.0 clamps to 1.0 (255)
+}
+
+TEST_F(AndroidCompositorTest, AndroidMutatorsStackDirectOperations) {
+  AndroidMutatorsStack stack;
+  EXPECT_TRUE(stack.is_empty());
+  EXPECT_EQ(stack.size(), 0u);
+  EXPECT_EQ(stack.stack_count(), 0u);
+
+  // Push ClipRect
+  stack.PushClipRect(DlRect::MakeLTRB(10, 20, 30, 40));
+  EXPECT_FALSE(stack.is_empty());
+  EXPECT_EQ(stack.stack_count(), 1u);
+  EXPECT_EQ((*stack.Begin())->GetType(), AndroidMutatorType::kClipRect);
+  EXPECT_TRUE((*stack.Begin())->IsClipType());
+  EXPECT_FLOAT_EQ((*stack.Begin())->GetRect().GetLeft(), 10.0f);
+
+  // Push ClipRRect
+  stack.PushClipRRect(
+      DlRoundRect::MakeRectRadius(DlRect::MakeLTRB(0, 0, 50, 50), 5.0f));
+  EXPECT_EQ(stack.stack_count(), 2u);
+  EXPECT_EQ((*stack.Bottom())->GetType(), AndroidMutatorType::kClipRRect);
+  EXPECT_TRUE((*stack.Bottom())->IsClipType());
+
+  // Push ClipRSE
+  DlRoundSuperellipse rse =
+      DlRoundSuperellipse::MakeRectRadius(DlRect::MakeLTRB(0, 0, 80, 80), 8.0f);
+  stack.PushClipRSE(rse);
+  EXPECT_EQ(stack.stack_count(), 3u);
+  EXPECT_EQ((*stack.Bottom())->GetType(), AndroidMutatorType::kClipRSE);
+  EXPECT_TRUE((*stack.Bottom())->IsClipType());
+  DlRoundRect rse_approx = (*stack.Bottom())->GetRSEApproximation();
+  EXPECT_FLOAT_EQ(rse_approx.GetBounds().GetWidth(), 80.0f);
+
+  // Push ClipPath
+  DlPath path = DlPath::MakeCircle(DlPoint(50, 50), 25);
+  stack.PushClipPath(path);
+  EXPECT_EQ(stack.stack_count(), 4u);
+  EXPECT_EQ((*stack.Bottom())->GetType(), AndroidMutatorType::kClipPath);
+  EXPECT_TRUE((*stack.Bottom())->IsClipType());
+
+  // Push Transform
+  DlMatrix matrix = DlMatrix::MakeTranslation({15, 25, 0});
+  stack.PushTransform(matrix);
+  EXPECT_EQ(stack.stack_count(), 5u);
+  EXPECT_EQ((*stack.Bottom())->GetType(), AndroidMutatorType::kTransform);
+  EXPECT_FALSE((*stack.Bottom())->IsClipType());
+
+  // Push Opacity
+  stack.PushOpacity(128);
+  EXPECT_EQ(stack.stack_count(), 6u);
+  EXPECT_EQ((*stack.Bottom())->GetType(), AndroidMutatorType::kOpacity);
+  EXPECT_FALSE((*stack.Bottom())->IsClipType());
+  EXPECT_EQ((*stack.Bottom())->GetAlpha(), 128u);
+  EXPECT_NEAR((*stack.Bottom())->GetAlphaFloat(), 128.0f / 255.0f, 0.001f);
+
+  // Copy and equality
+  AndroidMutatorsStack copy_stack = stack;
+  EXPECT_EQ(copy_stack, stack);
+
+  // Pop
+  copy_stack.Pop();
+  EXPECT_EQ(copy_stack.stack_count(), 5u);
+  EXPECT_NE(copy_stack, stack);
+
+  // Pop all
+  while (!copy_stack.is_empty()) {
+    copy_stack.Pop();
+  }
+  EXPECT_TRUE(copy_stack.is_empty());
+  // Pop on empty stack is safe
+  copy_stack.Pop();
+  EXPECT_TRUE(copy_stack.is_empty());
 }
 
 TEST_F(AndroidCompositorTest, ToDlMatrixEdgeCases) {

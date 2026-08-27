@@ -266,7 +266,7 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
       int32_t height;
       int32_t view_width;
       int32_t view_height;
-      MutatorsStack mutators_stack;
+      AndroidMutatorsStack mutators_stack;
     };
 
     std::vector<DisplayPlatformViewInfo> display_infos;
@@ -283,7 +283,7 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
         info.height = static_cast<int32_t>(std::round(layer->size.height));
         info.view_width = static_cast<int32_t>(std::round(layer->size.width));
         info.view_height = static_cast<int32_t>(std::round(layer->size.height));
-        info.mutators_stack = ToMutatorsStack(layer->platform_view);
+        info.mutators_stack = ToAndroidMutatorsStack(layer->platform_view);
         display_infos.push_back(std::move(info));
       }
     }
@@ -613,9 +613,9 @@ double AndroidCompositor::GetDevicePixelRatio() const {
   return device_pixel_ratio_;
 }
 
-MutatorsStack AndroidCompositor::ToMutatorsStack(
+AndroidMutatorsStack AndroidCompositor::ToAndroidMutatorsStack(
     const FlutterPlatformView* platform_view) {
-  MutatorsStack stack;
+  AndroidMutatorsStack stack;
   if (platform_view == nullptr || platform_view->mutations == nullptr) {
     return stack;
   }

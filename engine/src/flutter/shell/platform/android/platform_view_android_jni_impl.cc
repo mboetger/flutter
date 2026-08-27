@@ -15,20 +15,20 @@
 #include "unicode/uchar.h"
 
 #include "flutter/common/constants.h"
-#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/mapping.h"
 #include "flutter/fml/native_library.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/shell/common/display.h"
 #include "flutter/shell/platform/android/android_engine.h"
+#include "flutter/shell/platform/android/android_mutators_stack.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -349,15 +349,15 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
 static jobject LookupCallbackInformation(JNIEnv* env,
                                          /* unused */ jobject,
                                          jlong handle) {
-  auto cbInfo = flutter::DartCallbackCache::GetCallbackInformation(handle);
-  if (cbInfo == nullptr) {
+  FlutterCallbackInformation cbInfo;
+  cbInfo.struct_size = sizeof(FlutterCallbackInformation);
+  if (FlutterEngineGetCallbackInformation(handle, &cbInfo) != kSuccess) {
     return nullptr;
   }
-  return env->NewObject(g_flutter_callback_info_class->obj(),
-                        g_flutter_callback_info_constructor,
-                        env->NewStringUTF(cbInfo->name.c_str()),
-                        env->NewStringUTF(cbInfo->class_name.c_str()),
-                        env->NewStringUTF(cbInfo->library_path.c_str()));
+  return env->NewObject(
+      g_flutter_callback_info_class->obj(), g_flutter_callback_info_constructor,
+      env->NewStringUTF(cbInfo.name), env->NewStringUTF(cbInfo.class_name),
+      env->NewStringUTF(cbInfo.library_path));
 }
 
 static void SetViewportMetrics(JNIEnv* env,
@@ -1789,7 +1789,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
     int height,
     int viewWidth,
     int viewHeight,
-    MutatorsStack mutators_stack) {
+    AndroidMutatorsStack mutators_stack) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
@@ -1799,11 +1799,10 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
   jobject mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
                                          g_mutators_stack_init_method);
 
-  std::vector<std::shared_ptr<Mutator>>::const_iterator iter =
-      mutators_stack.Begin();
+  auto iter = mutators_stack.Begin();
   while (iter != mutators_stack.End()) {
     switch ((*iter)->GetType()) {
-      case MutatorType::kTransform: {
+      case AndroidMutatorType::kTransform: {
         const DlMatrix& matrix = (*iter)->GetMatrix();
         DlScalar matrix_array[9]{
             matrix.m[0], matrix.m[4], matrix.m[12],  //
@@ -1819,7 +1818,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
                             transformMatrix.obj());
         break;
       }
-      case MutatorType::kClipRect: {
+      case AndroidMutatorType::kClipRect: {
         const DlRect& rect = (*iter)->GetRect();
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_cliprect_method,
@@ -1829,7 +1828,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
                             rect.GetBottom());
         break;
       }
-      case MutatorType::kClipRRect: {
+      case AndroidMutatorType::kClipRRect: {
         const DlRoundRect& rrect = (*iter)->GetRRect();
         const DlRect& rect = rrect.GetBounds();
         const DlRoundingRadii radii = rrect.GetRadii();
@@ -1851,7 +1850,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
                             radiisArray.obj());
         break;
       }
-      case MutatorType::kClipRSE: {
+      case AndroidMutatorType::kClipRSE: {
         const DlRoundRect& rrect = (*iter)->GetRSEApproximation();
         const DlRect& rect = rrect.GetBounds();
         const DlRoundingRadii radii = rrect.GetRadii();
@@ -1875,13 +1874,8 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
       }
       // TODO(cyanglaz): Implement other mutators.
       // https://github.com/flutter/flutter/issues/58426
-      case MutatorType::kClipPath:
-      case MutatorType::kOpacity:
-      case MutatorType::kBackdropFilter:
-      case MutatorType::kBackdropClipRect:
-      case MutatorType::kBackdropClipRRect:
-      case MutatorType::kBackdropClipRSuperellipse:
-      case MutatorType::kBackdropClipPath:
+      case AndroidMutatorType::kClipPath:
+      case AndroidMutatorType::kOpacity:
         break;
     }
     ++iter;
@@ -2274,7 +2268,7 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
     int32_t height,
     int32_t viewWidth,
     int32_t viewHeight,
-    MutatorsStack mutators_stack) {
+    AndroidMutatorsStack mutators_stack) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
@@ -2284,11 +2278,10 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
   jobject mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
                                          g_mutators_stack_init_method);
 
-  std::vector<std::shared_ptr<Mutator>>::const_iterator iter =
-      mutators_stack.Begin();
+  auto iter = mutators_stack.Begin();
   while (iter != mutators_stack.End()) {
     switch ((*iter)->GetType()) {
-      case MutatorType::kTransform: {
+      case AndroidMutatorType::kTransform: {
         const DlMatrix& matrix = (*iter)->GetMatrix();
         DlScalar matrix_array[9]{
             matrix.m[0], matrix.m[4], matrix.m[12],  //
@@ -2304,7 +2297,7 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
                             transformMatrix.obj());
         break;
       }
-      case MutatorType::kClipRect: {
+      case AndroidMutatorType::kClipRect: {
         const DlRect& rect = (*iter)->GetRect();
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_cliprect_method,
@@ -2314,7 +2307,7 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
                             rect.GetBottom());
         break;
       }
-      case MutatorType::kClipRRect: {
+      case AndroidMutatorType::kClipRRect: {
         const DlRoundRect& rrect = (*iter)->GetRRect();
         const DlRect& rect = rrect.GetBounds();
         const DlRoundingRadii& radii = rrect.GetRadii();
@@ -2336,7 +2329,7 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
                             radiisArray.obj());
         break;
       }
-      case MutatorType::kClipRSE: {
+      case AndroidMutatorType::kClipRSE: {
         const DlRoundRect& rrect = (*iter)->GetRSEApproximation();
         const DlRect& rect = rrect.GetBounds();
         const DlRoundingRadii& radii = rrect.GetRadii();
@@ -2358,13 +2351,13 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
                             radiisArray.obj());
         break;
       }
-      case MutatorType::kOpacity: {
+      case AndroidMutatorType::kOpacity: {
         float opacity = (*iter)->GetAlphaFloat();
         env->CallVoidMethod(mutatorsStack, g_mutators_stack_push_opacity_method,
                             opacity);
         break;
       }
-      case MutatorType::kClipPath: {
+      case AndroidMutatorType::kClipPath: {
         auto& dlPath = (*iter)->GetPath();
         // The layer mutator mechanism should have already caught and
         // redirected these simplified path cases, which is important because
@@ -2390,12 +2383,7 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
       }
       // TODO(cyanglaz): Implement other mutators.
       // https://github.com/flutter/flutter/issues/58426
-      case MutatorType::kBackdropFilter:
-      case MutatorType::kBackdropClipRect:
-      case MutatorType::kBackdropClipRRect:
-      case MutatorType::kBackdropClipRSuperellipse:
-      case MutatorType::kBackdropClipPath:
-        break;
+      break;
     }
     ++iter;
   }

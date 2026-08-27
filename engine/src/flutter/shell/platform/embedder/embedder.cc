@@ -56,6 +56,8 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/lib/ui/plugins/callback_cache.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -4285,5 +4287,56 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(SendPointerDataPacket, FlutterEngineSendPointerDataPacket);
 #undef SET_PROC
 
+  return kSuccess;
+}
+intptr_t FlutterEngineAddServerStatusCallback(
+    FlutterEngineDartServiceIsolateServerStatusCallback callback,
+    void* user_data) {
+  if (callback == nullptr) {
+    return 0;
+  }
+  return flutter::DartServiceIsolate::AddServerStatusCallback(
+      [callback, user_data](const std::string& uri) {
+        callback(uri.c_str(), user_data);
+      });
+}
+
+void FlutterEngineRemoveServerStatusCallback(intptr_t callback_handle) {
+  if (callback_handle == 0) {
+    return;
+  }
+  flutter::DartServiceIsolate::RemoveServerStatusCallback(callback_handle);
+}
+
+FlutterEngineResult FlutterEngineGetCallbackInformation(
+    int64_t handle,
+    FlutterCallbackInformation* info_out) {
+  if (info_out == nullptr ||
+      info_out->struct_size != sizeof(FlutterCallbackInformation)) {
+    return kInvalidArguments;
+  }
+  auto cb_info = flutter::DartCallbackCache::GetCallbackInformation(handle);
+  if (!cb_info) {
+    return kInvalidArguments;
+  }
+  static thread_local std::string last_name;
+  static thread_local std::string last_class_name;
+  static thread_local std::string last_library_path;
+  last_name = cb_info->name;
+  last_class_name = cb_info->class_name;
+  last_library_path = cb_info->library_path;
+  info_out->name = last_name.c_str();
+  info_out->class_name = last_class_name.c_str();
+  info_out->library_path = last_library_path.c_str();
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineInitializeCallbackCache(
+    const char* cache_path) {
+  if (cache_path == nullptr || strlen(cache_path) == 0) {
+    return kInvalidArguments;
+  }
+  flutter::DartCallbackCache::SetCachePath(std::string(cache_path));
+  flutter::DartCallbackCache::LoadCacheFromDisk();
   return kSuccess;
 }

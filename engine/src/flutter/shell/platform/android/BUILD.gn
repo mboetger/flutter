@@ -12,6 +12,17 @@ import("//flutter/lib/snapshot/gen_snapshot.gni")
 import("//flutter/shell/config.gni")
 import("//flutter/shell/version/version.gni")
 
+source_set("android_mutators_stack") {
+  sources = [ "android_mutators_stack.h" ]
+
+  public_configs = [ "//flutter:config" ]
+
+  public_deps = [
+    "//flutter/display_list",
+    "//flutter/fml",
+  ]
+}
+
 source_set("image_generator") {
   sources = [
     "android_image_generator.cc",
@@ -153,10 +164,10 @@ source_set("flutter_shell_native_src") {
   }
 
   public_deps = [
+    ":android_mutators_stack",
     ":image_generator",
     "//flutter/common",
     "//flutter/common/graphics",
-    "//flutter/flow",
     "//flutter/fml",
     "//flutter/impeller",
     "//flutter/impeller/toolkit/android",
@@ -164,8 +175,6 @@ source_set("flutter_shell_native_src") {
     "//flutter/impeller/toolkit/gles",
     "//flutter/impeller/toolkit/glvk",
     "//flutter/lib/ui",
-    "//flutter/runtime",
-    "//flutter/runtime:libdart",
     "//flutter/shell/common",
     "//flutter/shell/platform/android/context",
     "//flutter/shell/platform/android/external_view_embedder",

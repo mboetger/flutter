@@ -44,6 +44,11 @@ class FlutterMain {
   const flutter::Settings settings_;
   const flutter::AndroidRenderingAPI android_rendering_api_;
   const std::vector<std::string> args_;
+  struct VMServiceUriCallbackData {
+    fml::RefPtr<fml::TaskRunner> platform_runner;
+    std::function<void(const std::string&)> set_uri;
+  };
+  std::unique_ptr<VMServiceUriCallbackData> vm_service_callback_data_;
   intptr_t vm_service_uri_callback_ = 0;
 
   static void Init(JNIEnv* env,

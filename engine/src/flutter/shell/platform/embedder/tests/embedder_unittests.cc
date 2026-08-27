@@ -5125,6 +5125,55 @@ TEST(EmbedderExternalTextureTest,
   texture.OnTextureUnregistered();
 }
 
+TEST(EmbedderServerStatusCallbackTest, RegisterAndUnregister) {
+  int call_count = 0;
+  std::string received_uri;
+  auto callback = [](const char* uri, void* user_data) {
+    auto* tuple = static_cast<std::tuple<int*, std::string*>*>(user_data);
+    (*std::get<0>(*tuple))++;
+    *std::get<1>(*tuple) = uri ? uri : "";
+  };
+
+  std::tuple<int*, std::string*> user_data(&call_count, &received_uri);
+
+  // Null callback returns 0
+  EXPECT_EQ(FlutterEngineAddServerStatusCallback(nullptr, nullptr), 0);
+
+  // Valid callback returns non-zero handle
+  intptr_t handle = FlutterEngineAddServerStatusCallback(callback, &user_data);
+  EXPECT_NE(handle, 0);
+
+  // Remove callback handle
+  FlutterEngineRemoveServerStatusCallback(handle);
+
+  // Removing 0 handle is safe and non-crashing
+  FlutterEngineRemoveServerStatusCallback(0);
+}
+
+TEST(EmbedderCallbackCacheTest, InitializeCallbackCacheValidation) {
+  EXPECT_EQ(FlutterEngineInitializeCallbackCache(nullptr), kInvalidArguments);
+  EXPECT_EQ(FlutterEngineInitializeCallbackCache(""), kInvalidArguments);
+}
+
+TEST(EmbedderCallbackCacheTest, GetCallbackInformationValidation) {
+  FlutterCallbackInformation info;
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  // Invalid struct size
+  FlutterCallbackInformation bad_info;
+  bad_info.struct_size = sizeof(FlutterCallbackInformation) - 1;
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(12345, &bad_info),
+            kInvalidArguments);
+
+  // Null pointer
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(12345, nullptr),
+            kInvalidArguments);
+
+  // Non-existent handle returns kInvalidArguments
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(0xDEADBEEF, &info),
+            kInvalidArguments);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
