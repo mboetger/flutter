@@ -59,6 +59,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/platform/embedder/embedder_asset_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
+#include "flutter/shell/platform/embedder/embedder_image_generator.h"
 #include "flutter/shell/platform/embedder/embedder_platform_message_response.h"
 #include "flutter/shell/platform/embedder/embedder_render_target.h"
 #include "flutter/shell/platform/embedder/embedder_render_target_skia.h"
@@ -2835,8 +2836,23 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   );
 
   // Release the ownership of the embedder engine to the caller.
+  auto* raw_engine_ptr = embedder_engine.get();
   *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
       embedder_engine.release());
+
+  if (SAFE_ACCESS(args, image_decoder_registrations, nullptr) != nullptr) {
+    size_t count = SAFE_ACCESS(args, image_decoder_registrations_count, 0);
+    const FlutterImageDecoderRegistration* const* registrations =
+        args->image_decoder_registrations;
+    for (size_t i = 0; i < count; ++i) {
+      if (registrations[i] != nullptr) {
+        FlutterEngineRegisterImageDecoder(
+            reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(raw_engine_ptr),
+            registrations[i]);
+      }
+    }
+  }
+
   return kSuccess;
 }
 
@@ -3301,8 +3317,25 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
         "Could not initialize platform view on spawned engine.");
   }
 
+  auto* raw_spawned_ptr = spawned_engine.get();
   *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
       spawned_engine.release());
+
+  if (args != nullptr &&
+      SAFE_ACCESS(args, image_decoder_registrations, nullptr) != nullptr) {
+    size_t count = SAFE_ACCESS(args, image_decoder_registrations_count, 0);
+    const FlutterImageDecoderRegistration* const* registrations =
+        args->image_decoder_registrations;
+    for (size_t i = 0; i < count; ++i) {
+      if (registrations[i] != nullptr) {
+        FlutterEngineRegisterImageDecoder(
+            reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
+                raw_spawned_ptr),
+            registrations[i]);
+      }
+    }
+  }
+
   return kSuccess;
 }
 
@@ -4796,6 +4829,59 @@ FlutterEngineResult FlutterEngineGetCallbackInformation(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineRegisterImageDecoder(
+    FLUTTER_API_SYMBOL(FlutterEngine) raw_engine,
+    const FlutterImageDecoderRegistration* registration) {
+  if (raw_engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
+  }
+
+  if (registration == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid registration pointer specified.");
+  }
+
+  if (SAFE_ACCESS(registration, struct_size, 0) <
+      sizeof(FlutterImageDecoderRegistration)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid struct_size specified in registration.");
+  }
+
+  if (SAFE_ACCESS(registration, factory, nullptr) == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Invalid factory callback specified in registration.");
+  }
+
+  auto engine = reinterpret_cast<flutter::EmbedderEngine*>(raw_engine);
+
+  FlutterImageGeneratorFactoryCallback factory_callback = registration->factory;
+  void* factory_user_data = registration->user_data;
+  int32_t priority = registration->priority;
+
+  flutter::ImageGeneratorFactory factory =
+      [factory_callback, factory_user_data](
+          sk_sp<SkData> buffer) -> std::shared_ptr<flutter::ImageGenerator> {
+    if (!buffer || buffer->isEmpty()) {
+      return nullptr;
+    }
+    FlutterImageGeneratorCallbacks callbacks = {};
+    callbacks.struct_size = sizeof(FlutterImageGeneratorCallbacks);
+    if (!factory_callback(reinterpret_cast<const uint8_t*>(buffer->data()),
+                          buffer->size(), &callbacks, factory_user_data)) {
+      return nullptr;
+    }
+    return std::make_shared<flutter::EmbedderImageGenerator>(callbacks);
+  };
+
+  if (!engine->RegisterImageDecoder(std::move(factory), priority)) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Engine is not valid or cannot register image decoder.");
+  }
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4860,6 +4946,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(GetScreenshot, FlutterEngineGetScreenshot);
   SET_PROC(ReleaseScreenshot, FlutterEngineReleaseScreenshot);
   SET_PROC(GetCallbackInformation, FlutterEngineGetCallbackInformation);
+  SET_PROC(RegisterImageDecoder, FlutterEngineRegisterImageDecoder);
 #undef SET_PROC
 
   return kSuccess;

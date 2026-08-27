@@ -66,6 +66,13 @@ bool EmbedderEngine::LaunchShell() {
       flutter::PlatformData(), task_runners_, shell_args_->settings,
       shell_args_->on_create_platform_view, shell_args_->on_create_rasterizer);
 
+  if (shell_) {
+    for (auto& [factory, priority] : pending_image_decoders_) {
+      shell_->RegisterImageDecoder(std::move(factory), priority);
+    }
+    pending_image_decoders_.clear();
+  }
+
   // Reset the args no matter what. They will never be used to initialize a
   // shell again.
   shell_args_.reset();
@@ -423,6 +430,19 @@ Rasterizer::Screenshot EmbedderEngine::Screenshot(
     return {};
   }
   return shell_->Screenshot(type, base64_encode);
+}
+
+bool EmbedderEngine::RegisterImageDecoder(ImageGeneratorFactory factory,
+                                          int32_t priority) {
+  if (shell_) {
+    shell_->RegisterImageDecoder(std::move(factory), priority);
+    return true;
+  }
+  if (shell_args_) {
+    pending_image_decoders_.emplace_back(std::move(factory), priority);
+    return true;
+  }
+  return false;
 }
 
 Shell& EmbedderEngine::GetShell() {

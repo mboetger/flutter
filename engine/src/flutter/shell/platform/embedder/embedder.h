@@ -2909,6 +2909,140 @@ typedef struct {
   const char* library_path;
 } FlutterCallbackInformation;
 
+/// Specifies the pixel format of an image.
+typedef enum {
+  /// Unknown or default pixel format.
+  kFlutterImagePixelFormatUnknown = 0,
+  /// 8-bit RGBA unsigned normalized integer per channel (RGBA8888).
+  kFlutterImagePixelFormatRGBA8888,
+  /// 8-bit BGRA unsigned normalized integer per channel (BGRA8888).
+  kFlutterImagePixelFormatBGRA8888,
+  /// 16-bit RGBA half-precision floating point per channel (RGBA16F).
+  kFlutterImagePixelFormatRGBA16F,
+} FlutterImagePixelFormat;
+
+/// Specifies the alpha transparency interpretation of image pixel data.
+typedef enum {
+  /// Unknown alpha format.
+  kFlutterImageAlphaTypeUnknown = 0,
+  /// Pixels are completely opaque.
+  kFlutterImageAlphaTypeOpaque,
+  /// Pixel color channels are premultiplied by alpha.
+  kFlutterImageAlphaTypePremul,
+  /// Pixel color channels are unassociated / unpremultiplied.
+  kFlutterImageAlphaTypeUnpremul,
+} FlutterImageAlphaType;
+
+/// Specifies how an animation frame is disposed before rendering the next
+/// frame.
+typedef enum {
+  /// Keep the current frame buffer intact.
+  kFlutterImageDisposalMethodKeep = 0,
+  /// Clear the frame buffer to transparent black / background.
+  kFlutterImageDisposalMethodBackground,
+  /// Restore the frame buffer to the previous state.
+  kFlutterImageDisposalMethodRestorePrevious,
+} FlutterImageDisposalMethod;
+
+/// Specifies how a frame blends with the previous frame buffer.
+typedef enum {
+  /// Source replaces destination entirely.
+  kFlutterImageBlendModeSource = 0,
+  /// Source blends over destination using Porter-Duff source-over.
+  kFlutterImageBlendModeSourceOver,
+} FlutterImageBlendMode;
+
+/// Information describing the image dimensions, format, and frame properties.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageInfo).
+  size_t struct_size;
+  /// Width of the image in pixels.
+  size_t width;
+  /// Height of the image in pixels.
+  size_t height;
+  /// Pixel format of the image data.
+  FlutterImagePixelFormat pixel_format;
+  /// Alpha format of the image data.
+  FlutterImageAlphaType alpha_type;
+  /// Total number of animation frames in the image. 1 for still images.
+  size_t frame_count;
+  /// Number of play loops for animated images. 1 for single playthrough,
+  /// SIZE_MAX or UINT32_MAX for infinite loop.
+  size_t play_count;
+} FlutterImageInfo;
+
+/// Information describing an individual frame in an animated image.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageFrameInfo).
+  size_t struct_size;
+  /// Duration to display this frame in milliseconds. 0 if single frame /
+  /// unspecified.
+  size_t duration_millis;
+  /// Disposal method for this frame before the next frame is rendered.
+  FlutterImageDisposalMethod disposal_method;
+  /// Blend mode when rendering this frame over previous frame.
+  FlutterImageBlendMode blend_mode;
+} FlutterImageFrameInfo;
+
+/// Callbacks provided by a platform image generator instance to perform
+/// header inspection and decoding.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageGeneratorCallbacks).
+  size_t struct_size;
+  /// User data pointer passed to generator callbacks.
+  void* user_data;
+  /// Callback to retrieve basic image information (width, height, format,
+  /// etc.). Executed on the UI thread.
+  bool (*get_info)(void* user_data, FlutterImageInfo* info_out);
+  /// Callback to retrieve frame metadata for multi-frame animated images.
+  bool (*get_frame_info)(void* user_data,
+                         size_t frame_index,
+                         FlutterImageFrameInfo* frame_info_out);
+  /// Callback to retrieve preferred scaled dimensions for subpixel or
+  /// downscaled decoding. If downscaled decoding is not supported, set
+  /// *width_out and *height_out to original dimensions.
+  bool (*get_scaled_dimensions)(void* user_data,
+                                float scale,
+                                size_t* width_out,
+                                size_t* height_out);
+  /// Callback to decode image pixels into the provided output buffer.
+  /// Executed on IO/worker threads (never on the UI thread).
+  bool (*get_pixels)(void* user_data,
+                     const FlutterImageInfo* desired_info,
+                     void* pixels_out,
+                     size_t row_bytes,
+                     size_t frame_index);
+  /// Callback invoked when the generator is destroyed and its resources should
+  /// be freed.
+  void (*destroy)(void* user_data);
+} FlutterImageGeneratorCallbacks;
+
+/// Callback invoked to inspect raw encoded image data and create a generator
+/// instance if the data is supported by this decoder.
+///
+/// Returns true if this factory successfully produced a generator, filling
+/// `generator_out`. Returns false if this factory cannot handle the given image
+/// format.
+typedef bool (*FlutterImageGeneratorFactoryCallback)(
+    const uint8_t* data,
+    size_t data_size,
+    FlutterImageGeneratorCallbacks* generator_out,
+    void* user_data);
+
+/// Configuration for registering a custom platform image decoder.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageDecoderRegistration).
+  size_t struct_size;
+  /// User data passed to `factory` callback.
+  void* user_data;
+  /// Factory callback to instantiate image generators for compatible image
+  /// buffers.
+  FlutterImageGeneratorFactoryCallback factory;
+  /// Priority for this image decoder. Higher priority decoders are evaluated
+  /// first. Values > 0 take precedence over built-in decoders.
+  int32_t priority;
+} FlutterImageDecoderRegistration;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
@@ -3239,6 +3373,15 @@ typedef struct {
   /// This is optional.
   FlutterRequestDartDeferredLibraryCallback
       request_dart_deferred_library_callback;
+
+  /// Array of custom image decoder registrations provided by the embedder.
+  ///
+  /// This is optional. If provided, the engine will register these image
+  /// decoders with the image generator registry upon initialization.
+  const FlutterImageDecoderRegistration* const* image_decoder_registrations;
+
+  /// Number of image decoder registrations in `image_decoder_registrations`.
+  size_t image_decoder_registrations_count;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -4228,6 +4371,26 @@ FlutterEngineResult FlutterEngineGetCallbackInformation(
     int64_t handle,
     FlutterCallbackInformation* info_out);
 
+//------------------------------------------------------------------------------
+/// @brief      Registers a custom platform image decoder with the engine.
+///
+///             Platform image decoders allow the engine to delegate decoding of
+///             certain image formats (such as platform-native HEIF, WebP, or
+///             AVIF via Android ImageDecoder) to the platform rather than the
+///             built-in decoders.
+///
+/// @param[in]  engine        A running engine instance.
+/// @param[in]  registration  The image decoder registration configuration.
+///
+/// @return     `kSuccess` if the decoder was successfully registered;
+///             `kInvalidArguments` if arguments or struct size are invalid;
+///             `kInternalInconsistency` if the engine is not running.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineRegisterImageDecoder(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterImageDecoderRegistration* registration);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4384,6 +4547,9 @@ typedef FlutterEngineResult (*FlutterEngineReleaseScreenshotFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineGetCallbackInformationFnPtr)(
     int64_t handle,
     FlutterCallbackInformation* info_out);
+typedef FlutterEngineResult (*FlutterEngineRegisterImageDecoderFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterImageDecoderRegistration* registration);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4441,6 +4607,7 @@ typedef struct {
   FlutterEngineGetScreenshotFnPtr GetScreenshot;
   FlutterEngineReleaseScreenshotFnPtr ReleaseScreenshot;
   FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
+  FlutterEngineRegisterImageDecoderFnPtr RegisterImageDecoder;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

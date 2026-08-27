@@ -11,6 +11,7 @@
 #include "embedder.h"
 #include "embedder_asset_resolver.h"
 #include "embedder_engine.h"
+#include "embedder_image_generator.h"
 #include "embedder_layers.h"
 #include "embedder_struct_macros.h"
 #include "flutter/common/constants.h"
@@ -38,6 +39,7 @@
 #include "flutter/testing/testing.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/tonic/converter/dart_converter.h"
+#include "third_party/tonic/scopes/dart_isolate_scope.h"
 
 #if defined(FML_OS_MACOSX)
 #include <pthread.h>
@@ -5719,6 +5721,353 @@ TEST_F(EmbedderTest, PlatformViewMutationsMultipleAndOrdering) {
         return true;
       });
   EXPECT_TRUE(present_called);
+}
+
+TEST_F(EmbedderTest, ImageDecoderArgumentValidation) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterImageDecoderRegistration registration = {};
+  registration.struct_size = sizeof(FlutterImageDecoderRegistration);
+  registration.factory = [](const uint8_t*, size_t,
+                            FlutterImageGeneratorCallbacks*,
+                            void*) { return true; };
+  registration.priority = 1;
+
+  // 1. Null engine handle.
+  EXPECT_EQ(FlutterEngineRegisterImageDecoder(nullptr, &registration),
+            kInvalidArguments);
+
+  // 2. Null registration pointer.
+  EXPECT_EQ(FlutterEngineRegisterImageDecoder(engine.get(), nullptr),
+            kInvalidArguments);
+
+  // 3. Invalid struct_size in registration.
+  FlutterImageDecoderRegistration bad_size_reg = registration;
+  bad_size_reg.struct_size = sizeof(FlutterImageDecoderRegistration) - 1;
+  EXPECT_EQ(FlutterEngineRegisterImageDecoder(engine.get(), &bad_size_reg),
+            kInvalidArguments);
+
+  // 4. Null factory callback in registration.
+  FlutterImageDecoderRegistration null_factory_reg = registration;
+  null_factory_reg.factory = nullptr;
+  EXPECT_EQ(FlutterEngineRegisterImageDecoder(engine.get(), &null_factory_reg),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, ImageDecoderDirectBridge) {
+  // Test user data tracking generator lifecycle.
+  struct GeneratorContext {
+    bool destroyed = false;
+    size_t get_info_calls = 0;
+    size_t get_frame_info_calls = 0;
+    size_t get_scaled_dims_calls = 0;
+    size_t get_pixels_calls = 0;
+  };
+
+  auto gen_ctx = std::make_unique<GeneratorContext>();
+  FlutterImageGeneratorCallbacks callbacks = {};
+  callbacks.struct_size = sizeof(FlutterImageGeneratorCallbacks);
+  callbacks.user_data = gen_ctx.get();
+
+  // Configure 200x100 RGBA8888 2-frame image.
+  constexpr size_t kImageWidth = 200;
+  constexpr size_t kImageHeight = 100;
+  constexpr size_t kFrameCount = 2;
+  constexpr size_t kPlayCount = 5;
+
+  callbacks.get_info = [](void* user_data, FlutterImageInfo* info_out) -> bool {
+    auto* ctx = reinterpret_cast<GeneratorContext*>(user_data);
+    ctx->get_info_calls++;
+    info_out->struct_size = sizeof(FlutterImageInfo);
+    info_out->width = kImageWidth;
+    info_out->height = kImageHeight;
+    info_out->pixel_format = kFlutterImagePixelFormatRGBA8888;
+    info_out->alpha_type = kFlutterImageAlphaTypePremul;
+    info_out->frame_count = kFrameCount;
+    info_out->play_count = kPlayCount;
+    return true;
+  };
+
+  constexpr size_t kFrameDurationMs = 250;
+  callbacks.get_frame_info = [](void* user_data, size_t frame_index,
+                                FlutterImageFrameInfo* frame_info_out) -> bool {
+    auto* ctx = reinterpret_cast<GeneratorContext*>(user_data);
+    ctx->get_frame_info_calls++;
+    frame_info_out->struct_size = sizeof(FlutterImageFrameInfo);
+    frame_info_out->duration_millis = kFrameDurationMs;
+    frame_info_out->disposal_method = kFlutterImageDisposalMethodBackground;
+    frame_info_out->blend_mode = kFlutterImageBlendModeSource;
+    return true;
+  };
+
+  callbacks.get_scaled_dimensions = [](void* user_data, float scale,
+                                       size_t* width_out,
+                                       size_t* height_out) -> bool {
+    auto* ctx = reinterpret_cast<GeneratorContext*>(user_data);
+    ctx->get_scaled_dims_calls++;
+    *width_out = static_cast<size_t>(kImageWidth * scale);
+    *height_out = static_cast<size_t>(kImageHeight * scale);
+    return true;
+  };
+
+  constexpr uint8_t kPixelFillByte = 0xAB;
+  callbacks.get_pixels =
+      [](void* user_data, const FlutterImageInfo* desired_info,
+         void* pixels_out, size_t row_bytes, size_t frame_index) -> bool {
+    auto* ctx = reinterpret_cast<GeneratorContext*>(user_data);
+    ctx->get_pixels_calls++;
+    size_t total_bytes = desired_info->height * row_bytes;
+    memset(pixels_out, kPixelFillByte, total_bytes);
+    return true;
+  };
+
+  callbacks.destroy = [](void* user_data) {
+    auto* ctx = reinterpret_cast<GeneratorContext*>(user_data);
+    ctx->destroyed = true;
+  };
+
+  {
+    EmbedderImageGenerator generator(callbacks);
+
+    // Verify info.
+    const SkImageInfo& info = generator.GetInfo();
+    EXPECT_EQ(info.width(), static_cast<int>(kImageWidth));
+    EXPECT_EQ(info.height(), static_cast<int>(kImageHeight));
+    EXPECT_EQ(info.colorType(), kRGBA_8888_SkColorType);
+    EXPECT_EQ(info.alphaType(), kPremul_SkAlphaType);
+    EXPECT_EQ(generator.GetFrameCount(),
+              static_cast<unsigned int>(kFrameCount));
+    EXPECT_EQ(generator.GetPlayCount(), static_cast<unsigned int>(kPlayCount));
+
+    // Verify frame info.
+    auto frame_info = generator.GetFrameInfo(0);
+    EXPECT_EQ(frame_info.duration, static_cast<unsigned int>(kFrameDurationMs));
+    EXPECT_EQ(frame_info.disposal_method,
+              SkCodecAnimation::DisposalMethod::kRestoreBGColor);
+    EXPECT_EQ(frame_info.blend_mode, SkCodecAnimation::Blend::kSrc);
+
+    // Verify scaled dimensions (0.5 scale -> 100x50).
+    constexpr float kHalfScale = 0.5f;
+    SkISize scaled = generator.GetScaledDimensions(kHalfScale);
+    EXPECT_EQ(scaled.width(), 100);
+    EXPECT_EQ(scaled.height(), 50);
+
+    // Verify pixel decoding.
+    constexpr size_t kBytesPerPixel = 4;
+    size_t row_bytes = kImageWidth * kBytesPerPixel;
+    std::vector<uint8_t> pixel_buffer(kImageHeight * row_bytes, 0);
+    bool decode_result =
+        generator.GetPixels(info, pixel_buffer.data(), row_bytes);
+    EXPECT_TRUE(decode_result);
+    EXPECT_EQ(pixel_buffer[0], kPixelFillByte);
+    EXPECT_EQ(pixel_buffer[pixel_buffer.size() - 1], kPixelFillByte);
+
+    EXPECT_FALSE(gen_ctx->destroyed);
+  }
+
+  // Verify destructor invoked destroy callback.
+  EXPECT_TRUE(gen_ctx->destroyed);
+}
+
+TEST_F(EmbedderTest, ImageDecoderRuntimeRegistration) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  Dart_Isolate root_isolate = nullptr;
+  fml::AutoResetWaitableEvent isolate_latch;
+  context.AddIsolateCreateCallback([&]() {
+    root_isolate = Dart_CurrentIsolate();
+    isolate_latch.Signal();
+  });
+
+  EmbedderConfigBuilder builder(context);
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  isolate_latch.Wait();
+
+  constexpr size_t kWidth = 64;
+  constexpr size_t kHeight = 64;
+
+  struct DecoderState {
+    size_t factory_invocations = 0;
+    size_t decode_invocations = 0;
+  };
+  DecoderState state;
+
+  FlutterImageDecoderRegistration registration = {};
+  registration.struct_size = sizeof(FlutterImageDecoderRegistration);
+  registration.user_data = &state;
+  // Priority 10 takes precedence over built-in decoders.
+  constexpr int32_t kPriority = 10;
+  registration.priority = kPriority;
+
+  registration.factory = [](const uint8_t* data, size_t data_size,
+                            FlutterImageGeneratorCallbacks* generator_out,
+                            void* user_data) -> bool {
+    auto* s = reinterpret_cast<DecoderState*>(user_data);
+    s->factory_invocations++;
+
+    if (data_size < 4 || data[0] != 'T' || data[1] != 'E' || data[2] != 'S' ||
+        data[3] != 'T') {
+      return false;
+    }
+
+    generator_out->struct_size = sizeof(FlutterImageGeneratorCallbacks);
+    generator_out->user_data = user_data;
+    generator_out->get_info = [](void*, FlutterImageInfo* info_out) -> bool {
+      info_out->struct_size = sizeof(FlutterImageInfo);
+      info_out->width = kWidth;
+      info_out->height = kHeight;
+      info_out->pixel_format = kFlutterImagePixelFormatRGBA8888;
+      info_out->alpha_type = kFlutterImageAlphaTypeOpaque;
+      info_out->frame_count = 1;
+      info_out->play_count = 1;
+      return true;
+    };
+    generator_out->get_pixels =
+        [](void* user_data, const FlutterImageInfo* desired_info,
+           void* pixels_out, size_t row_bytes, size_t frame_index) -> bool {
+      auto* s = reinterpret_cast<DecoderState*>(user_data);
+      s->decode_invocations++;
+      constexpr uint8_t kFillValue = 0x7F;
+      memset(pixels_out, kFillValue, desired_info->height * row_bytes);
+      return true;
+    };
+    generator_out->destroy = nullptr;
+    return true;
+  };
+
+  EXPECT_EQ(FlutterEngineRegisterImageDecoder(engine.get(), &registration),
+            kSuccess);
+
+  // Synthesize test image data with magic prefix 'T' 'E' 'S' 'T'.
+  std::vector<uint8_t> encoded_data = {'T', 'E', 'S', 'T', 0x01, 0x02};
+  auto sk_data = SkData::MakeWithCopy(encoded_data.data(), encoded_data.size());
+
+  auto embedder_engine =
+      reinterpret_cast<flutter::EmbedderEngine*>(engine.get());
+
+  fml::AutoResetWaitableEvent ui_latch;
+  std::shared_ptr<flutter::ImageGenerator> generator;
+  embedder_engine->GetTaskRunners().GetUITaskRunner()->PostTask([&]() {
+    tonic::DartIsolateScope scope(root_isolate);
+    auto dart_state = flutter::UIDartState::Current();
+    if (dart_state) {
+      auto registry = dart_state->GetImageGeneratorRegistry();
+      if (registry) {
+        generator = registry->CreateCompatibleGenerator(sk_data);
+      }
+    }
+    ui_latch.Signal();
+  });
+  ui_latch.Wait();
+
+  ASSERT_NE(generator, nullptr);
+  EXPECT_EQ(state.factory_invocations, 1u);
+
+  const SkImageInfo& info = generator->GetInfo();
+  EXPECT_EQ(info.width(), static_cast<int>(kWidth));
+  EXPECT_EQ(info.height(), static_cast<int>(kHeight));
+
+  constexpr size_t kBytesPerPixel = 4;
+  std::vector<uint8_t> pixels(kHeight * kWidth * kBytesPerPixel, 0);
+  EXPECT_TRUE(
+      generator->GetPixels(info, pixels.data(), kWidth * kBytesPerPixel));
+  EXPECT_EQ(state.decode_invocations, 1u);
+  EXPECT_EQ(pixels[0], 0x7F);
+}
+
+TEST_F(EmbedderTest, ImageDecoderProjectArgsRegistration) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  Dart_Isolate root_isolate = nullptr;
+  fml::AutoResetWaitableEvent isolate_latch;
+  context.AddIsolateCreateCallback([&]() {
+    root_isolate = Dart_CurrentIsolate();
+    isolate_latch.Signal();
+  });
+
+  struct DecoderState {
+    size_t factory_invocations = 0;
+  };
+  DecoderState state;
+
+  FlutterImageDecoderRegistration registration = {};
+  registration.struct_size = sizeof(FlutterImageDecoderRegistration);
+  registration.user_data = &state;
+  constexpr int32_t kPriority = 5;
+  registration.priority = kPriority;
+  registration.factory = [](const uint8_t* data, size_t data_size,
+                            FlutterImageGeneratorCallbacks* generator_out,
+                            void* user_data) -> bool {
+    auto* s = reinterpret_cast<DecoderState*>(user_data);
+    s->factory_invocations++;
+    if (data_size < 3 || data[0] != 'X' || data[1] != 'Y' || data[2] != 'Z') {
+      return false;
+    }
+    generator_out->struct_size = sizeof(FlutterImageGeneratorCallbacks);
+    generator_out->user_data = user_data;
+    generator_out->get_info = [](void*, FlutterImageInfo* info_out) -> bool {
+      info_out->struct_size = sizeof(FlutterImageInfo);
+      info_out->width = 32;
+      info_out->height = 32;
+      info_out->pixel_format = kFlutterImagePixelFormatRGBA8888;
+      info_out->alpha_type = kFlutterImageAlphaTypePremul;
+      info_out->frame_count = 1;
+      info_out->play_count = 1;
+      return true;
+    };
+    generator_out->get_pixels = [](void*, const FlutterImageInfo* desired_info,
+                                   void* pixels_out, size_t row_bytes,
+                                   size_t) -> bool {
+      memset(pixels_out, 0x42, desired_info->height * row_bytes);
+      return true;
+    };
+    generator_out->destroy = nullptr;
+    return true;
+  };
+
+  const FlutterImageDecoderRegistration* registrations[] = {&registration};
+  EmbedderConfigBuilder builder(context);
+  builder.GetProjectArgs().image_decoder_registrations = registrations;
+  builder.GetProjectArgs().image_decoder_registrations_count = 1;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  isolate_latch.Wait();
+
+  std::vector<uint8_t> encoded_data = {'X', 'Y', 'Z', 0x10};
+  auto sk_data = SkData::MakeWithCopy(encoded_data.data(), encoded_data.size());
+
+  auto embedder_engine =
+      reinterpret_cast<flutter::EmbedderEngine*>(engine.get());
+
+  fml::AutoResetWaitableEvent ui_latch;
+  std::shared_ptr<flutter::ImageGenerator> generator;
+  embedder_engine->GetTaskRunners().GetUITaskRunner()->PostTask([&]() {
+    tonic::DartIsolateScope scope(root_isolate);
+    auto dart_state = flutter::UIDartState::Current();
+    if (dart_state) {
+      auto registry = dart_state->GetImageGeneratorRegistry();
+      if (registry) {
+        generator = registry->CreateCompatibleGenerator(sk_data);
+      }
+    }
+    ui_latch.Signal();
+  });
+  ui_latch.Wait();
+
+  ASSERT_NE(generator, nullptr);
+  EXPECT_EQ(state.factory_invocations, 1u);
+  EXPECT_EQ(generator->GetInfo().width(), 32);
+}
+
+TEST_F(EmbedderTest, ImageDecoderProcTable) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+
+  EXPECT_EQ(procs.RegisterImageDecoder, &FlutterEngineRegisterImageDecoder);
 }
 
 }  // namespace testing
