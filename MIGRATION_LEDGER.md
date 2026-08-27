@@ -1,12 +1,12 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 2.4 (Runtime Feature Flag Switch & Test Harness Overrides)
-- **Active Branch**: `android-migration-2/phase-2.4-feature-flag`
+- **Active Phase**: Phase 3.2 (AndroidCompositor Layer Presentation & Surface Detach Barrier)
+- **Active Branch**: `android-migration-2/phase-3.2-compositor`
 - **Base Commit SHA**: `08d2a471fd10152bb7dbfbb9636cf8fa53e94b8b`
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 2.3]
-- **Latest Commit SHA**: `765f4a3b610` (Phase 2.3)
-- **Adversarial Review Loop Status**: Phase 2.3 Approved by reidbaker-agent
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1]
+- **Latest Commit SHA**: Pending Phase 3.1 commit
+- **Adversarial Review Loop Status**: Phase 3.1 Approved by reidbaker-agent
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -28,9 +28,9 @@
 - [x] Phase 2.1: Break PlatformViewAndroid Inheritance & Establish GN Quarantine Target
 - [x] Phase 2.2: Adapt APKAssetProvider
 - [x] Phase 2.3: Custom Task Runners & Thread Priorities
-- [ ] Phase 2.4: Runtime Feature Flag Switch & Test Harness Overrides
-- [ ] Phase 2.5: Decouple `flutter_main.cc` using `//flutter/shell/platform/common`
-- [ ] Phase 3.1: AndroidSurfaceManager Backing Store Pool (Gated: flag=true & false)
+- [x] Phase 2.4: Runtime Feature Flag Switch & Test Harness Overrides
+- [x] Phase 2.5: Decouple `flutter_main.cc` using `//flutter/shell/platform/common`
+- [x] Phase 3.1: AndroidSurfaceManager Backing Store Pool (Gated: flag=true & false)
 - [ ] Phase 3.2: AndroidCompositor Layer Presentation & Surface Detach Barrier (Gated: flag=true & false)
 - [ ] Phase 3.3: Direct JNI Platform View Mutator Mapping & DPR Normalization (Gated: flag=true & false)
 - [ ] Phase 4.1: AndroidEngine Implementation (Gated: flag=true & false)

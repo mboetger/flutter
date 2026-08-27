@@ -58,6 +58,7 @@ executable("flutter_shell_native_unittests") {
     "android_context_gl_impeller_unittests.cc",
     "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
+    "android_surface_manager_unittests.cc",
     "android_thread_config_unittests.cc",
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
@@ -216,6 +217,8 @@ source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
   sources = [
+    "android_surface_manager.cc",
+    "android_surface_manager.h",
     "flutter_main.cc",
     "flutter_main.h",
     "library_loader.cc",
