@@ -6,6 +6,7 @@
 
 #include <android/log.h>
 #include <sys/system_properties.h>
+#include <atomic>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -80,6 +81,32 @@ FlutterMain& FlutterMain::Get() {
 
 const flutter::Settings& FlutterMain::GetSettings() const {
   return settings_;
+}
+
+// -1 = unset (use Settings), 0 = false, 1 = true.
+static std::atomic<int8_t> g_embedder_api_enabled_override{-1};
+
+bool FlutterMain::IsEmbedderAPIEnabled() {
+  int8_t override_val = g_embedder_api_enabled_override.load();
+  if (override_val >= 0) {
+    return override_val == 1;
+  }
+  if (g_flutter_main) {
+    return g_flutter_main->GetSettings().enable_android_embedder_api;
+  }
+  return false;
+}
+
+void FlutterMain::SetEmbedderAPIEnabledForTesting(std::optional<bool> enabled) {
+  if (enabled.has_value()) {
+    g_embedder_api_enabled_override.store(enabled.value() ? 1 : 0);
+  } else {
+    g_embedder_api_enabled_override.store(-1);
+  }
+}
+
+void FlutterMain::ResetEmbedderAPIEnabledForTesting() {
+  g_embedder_api_enabled_override.store(-1);
 }
 
 flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() {

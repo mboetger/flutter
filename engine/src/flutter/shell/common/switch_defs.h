@@ -270,6 +270,10 @@ DEF_SWITCH(LeakVM,
 DEF_SWITCH(EnableEmbedderAPI,
            "enable-embedder-api",
            "Enable the embedder api. Defaults to false. iOS only.")
+DEF_SWITCH(
+    EnableAndroidEmbedderAPI,
+    "enable-android-embedder-api",
+    "Enable the new Android Embedder API runtime backend. Defaults to false.")
 DEF_SWITCH(EnablePlatformIsolates,
            "enable-platform-isolates",
            "Enable support for isolates that run on the platform thread.")

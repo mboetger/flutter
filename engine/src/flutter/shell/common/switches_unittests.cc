@@ -103,6 +103,23 @@ TEST(SwitchesTest, EnableEmbedderAPI) {
   }
 }
 
+TEST(SwitchesTest, EnableAndroidEmbedderAPI) {
+  {
+    // enable
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-android-embedder-api"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, true);
+  }
+  {
+    // default
+    fml::CommandLine command_line =
+        fml::CommandLineFromInitializerList({"command"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_android_embedder_api, false);
+  }
+}
+
 TEST(SwitchesTest, NoEnableImpeller) {
   {
     // enable

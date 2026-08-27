@@ -465,6 +465,8 @@ Settings SettingsFromCommandLine(const fml::CommandLine& command_line,
 
   settings.enable_embedder_api =
       command_line.HasOption(FlagForSwitch(Switch::EnableEmbedderAPI));
+  settings.enable_android_embedder_api =
+      command_line.HasOption(FlagForSwitch(Switch::EnableAndroidEmbedderAPI));
 
   settings.prefetched_default_font_manager = command_line.HasOption(
       FlagForSwitch(Switch::PrefetchedDefaultFontManager));

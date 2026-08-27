@@ -297,5 +297,19 @@ TEST(PlatformViewAndroidTest, AdapterBridgesToShellHolder) {
   platform_view->NotifyDestroyed();
 }
 
+TEST(FlutterMainTest, EmbedderAPIEnabledOverride) {
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+}
+
 }  // namespace testing
 }  // namespace flutter
