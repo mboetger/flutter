@@ -1191,8 +1191,8 @@ void AndroidEngine::HandleSemanticsUpdate(
 
 bool AndroidEngine::LoadDartDeferredLibrary(
     intptr_t loading_unit_id,
-    std::unique_ptr<fml::Mapping> snapshot_data,
-    std::unique_ptr<fml::Mapping> snapshot_instructions) {
+    std::unique_ptr<const fml::Mapping> snapshot_data,
+    std::unique_ptr<const fml::Mapping> snapshot_instructions) {
   std::lock_guard engine_lock(engine_mutex_);
   if (!is_running_.load() || engine_ == nullptr ||
       embedder_api_.LoadDartDeferredLibrary == nullptr) {

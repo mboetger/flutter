@@ -236,8 +236,8 @@ class AndroidEngine {
   /// Loads a Dart deferred library with snapshot data and instructions.
   bool LoadDartDeferredLibrary(
       intptr_t loading_unit_id,
-      std::unique_ptr<fml::Mapping> snapshot_data,
-      std::unique_ptr<fml::Mapping> snapshot_instructions);
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions);
 
   /// Reports an error loading a Dart deferred library.
   bool LoadDartDeferredLibraryError(intptr_t loading_unit_id,
