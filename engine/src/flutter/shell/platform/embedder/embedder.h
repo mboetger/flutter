@@ -2173,6 +2173,58 @@ typedef struct {
   VoidCallback destruction_callback;
 } FlutterVulkanBackingStore;
 
+/// A structure to represent a rounded superellipse.
+typedef struct {
+  FlutterRect rect;
+  FlutterSize upper_left_corner_radius;
+  FlutterSize upper_right_corner_radius;
+  FlutterSize lower_right_corner_radius;
+  FlutterSize lower_left_corner_radius;
+} FlutterRoundedSuperellipse;
+
+/// Verbs that describe drawing operations in a `FlutterPath`.
+typedef enum {
+  /// Starts a new contour at the specified point (points[0]).
+  kFlutterPathVerbMove,
+  /// Draws a line from the current point to points[0].
+  kFlutterPathVerbLine,
+  /// Draws a quadratic bezier curve to points[1] using control point points[0].
+  kFlutterPathVerbQuad,
+  /// Draws a rational quadratic bezier (conic) curve to points[1] using control
+  /// point points[0] and `conic_weight`.
+  kFlutterPathVerbConic,
+  /// Draws a cubic bezier curve to points[2] using control points points[0] and
+  /// points[1].
+  kFlutterPathVerbCubic,
+  /// Closes the current contour with a line back to its starting point.
+  kFlutterPathVerbClose,
+} FlutterPathVerb;
+
+/// Winding rule / fill type for a `FlutterPath`.
+typedef enum {
+  /// Non-zero winding rule (default).
+  kFlutterPathFillTypeNonZero,
+  /// Even-odd winding rule.
+  kFlutterPathFillTypeEvenOdd,
+} FlutterPathFillType;
+
+/// A segment in a `FlutterPath`.
+typedef struct {
+  FlutterPathVerb verb;
+  FlutterPoint points[3];
+  double conic_weight;
+} FlutterPathSegment;
+
+/// A 2D vector path for clipping platform views.
+typedef struct {
+  /// The fill type of the path.
+  FlutterPathFillType fill_type;
+  /// The number of segments in `segments`.
+  size_t segments_count;
+  /// The array of path segments. The memory is valid during layer presentation.
+  const FlutterPathSegment* segments;
+} FlutterPath;
+
 typedef enum {
   /// Indicates that the Flutter application requested that an opacity be
   /// applied to the platform view.
@@ -2186,6 +2238,12 @@ typedef enum {
   /// Indicates that the Flutter application requested that the platform view be
   /// transformed before composition.
   kFlutterPlatformViewMutationTypeTransformation,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using a rounded superellipse.
+  kFlutterPlatformViewMutationTypeClipRoundedSuperellipse,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using an arbitrary path.
+  kFlutterPlatformViewMutationTypeClipPath,
 } FlutterPlatformViewMutationType;
 
 typedef struct {
@@ -2196,6 +2254,8 @@ typedef struct {
     FlutterRect clip_rect;
     FlutterRoundedRect clip_rounded_rect;
     FlutterTransformation transformation;
+    FlutterRoundedSuperellipse clip_rounded_superellipse;
+    FlutterPath clip_path;
   };
 } FlutterPlatformViewMutation;
 

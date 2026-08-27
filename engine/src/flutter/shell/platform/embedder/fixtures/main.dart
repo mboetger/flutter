@@ -1141,6 +1141,51 @@ void platform_view_mutators() {
 
 @pragma('vm:entry-point')
 // ignore: non_constant_identifier_names
+void platform_view_mutators_clip_path() {
+  PlatformDispatcher.instance.onBeginFrame = (Duration duration) {
+    final builder = SceneBuilder();
+    builder.pushOffset(0.0, 0.0); // base
+    builder.addPicture(Offset.zero, createGradientBox(const Size(800.0, 600.0)));
+
+    final path = Path()
+      ..moveTo(10.0, 10.0)
+      ..lineTo(790.0, 10.0)
+      ..quadraticBezierTo(750.0, 300.0, 790.0, 590.0)
+      ..cubicTo(500.0, 550.0, 300.0, 550.0, 10.0, 590.0)
+      ..close();
+
+    builder.pushClipPath(path);
+    builder.addPlatformView(42, width: 800.0, height: 600.0);
+    builder.pop(); // clip path
+
+    builder.pop(); // base
+    PlatformDispatcher.instance.views.first.render(builder.build());
+  };
+  PlatformDispatcher.instance.scheduleFrame();
+}
+
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
+void platform_view_mutators_clip_rse() {
+  PlatformDispatcher.instance.onBeginFrame = (Duration duration) {
+    final builder = SceneBuilder();
+    builder.pushOffset(0.0, 0.0); // base
+    builder.addPicture(Offset.zero, createGradientBox(const Size(800.0, 600.0)));
+
+    builder.pushClipRSuperellipse(
+      RSuperellipse.fromRectXY(const Rect.fromLTRB(10.0, 20.0, 790.0, 580.0), 30.0, 40.0),
+    );
+    builder.addPlatformView(42, width: 800.0, height: 600.0);
+    builder.pop(); // clip rsuperellipse
+
+    builder.pop(); // base
+    PlatformDispatcher.instance.views.first.render(builder.build());
+  };
+  PlatformDispatcher.instance.scheduleFrame();
+}
+
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
 void platform_view_mutators_with_pixel_ratio() {
   PlatformDispatcher.instance.onBeginFrame = (Duration duration) {
     final builder = SceneBuilder();

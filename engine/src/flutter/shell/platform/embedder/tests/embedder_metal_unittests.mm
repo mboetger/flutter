@@ -741,6 +741,130 @@ TEST_F(EmbedderTest, CanRenderPlatformViewWithImpeller) {
   ASSERT_TRUE(ImageMatchesFixture("impeller_render_platform_view.png", rendered_scene));
 }
 
+TEST_F(EmbedderTest, PlatformViewMutatorsClipPathMetal) {
+  auto& context = GetEmbedderContext<EmbedderTestContextMetal>();
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("platform_view_mutators_clip_path");
+
+  builder.SetRenderTargetType(EmbedderTestBackingStoreProducer::RenderTargetType::kMetalTexture);
+
+  fml::CountDownLatch latch(1);
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers, size_t layers_count) {
+        ASSERT_EQ(layers_count, 2u);
+
+        // Layer 1 (Platform view)
+        {
+          FlutterPlatformView platform_view = *layers[1]->platform_view;
+          ASSERT_EQ(platform_view.identifier, 42);
+          ASSERT_EQ(platform_view.mutations_count, 1u);
+          ASSERT_EQ(platform_view.mutations[0]->type, kFlutterPlatformViewMutationTypeClipPath);
+
+          const auto& clip_path = platform_view.mutations[0]->clip_path;
+          EXPECT_EQ(clip_path.fill_type, kFlutterPathFillTypeNonZero);
+          EXPECT_EQ(clip_path.segments_count, 6u);
+          ASSERT_NE(clip_path.segments, nullptr);
+
+          EXPECT_EQ(clip_path.segments[0].verb, kFlutterPathVerbMove);
+          EXPECT_FLOAT_EQ(clip_path.segments[0].points[0].x, 10.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[0].points[0].y, 10.0f);
+
+          EXPECT_EQ(clip_path.segments[1].verb, kFlutterPathVerbLine);
+          EXPECT_FLOAT_EQ(clip_path.segments[1].points[0].x, 790.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[1].points[0].y, 10.0f);
+
+          EXPECT_EQ(clip_path.segments[2].verb, kFlutterPathVerbQuad);
+          EXPECT_FLOAT_EQ(clip_path.segments[2].points[0].x, 750.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[2].points[0].y, 300.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[2].points[1].x, 790.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[2].points[1].y, 590.0f);
+
+          EXPECT_EQ(clip_path.segments[3].verb, kFlutterPathVerbCubic);
+          EXPECT_FLOAT_EQ(clip_path.segments[3].points[0].x, 500.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[3].points[0].y, 550.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[3].points[1].x, 300.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[3].points[1].y, 550.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[3].points[2].x, 10.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[3].points[2].y, 590.0f);
+
+          EXPECT_EQ(clip_path.segments[4].verb, kFlutterPathVerbLine);
+          EXPECT_FLOAT_EQ(clip_path.segments[4].points[0].x, 10.0f);
+          EXPECT_FLOAT_EQ(clip_path.segments[4].points[0].y, 10.0f);
+
+          EXPECT_EQ(clip_path.segments[5].verb, kFlutterPathVerbClose);
+        }
+        latch.CountDown();
+      });
+
+  auto engine = builder.LaunchEngine();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event), kSuccess);
+  ASSERT_TRUE(engine.is_valid());
+
+  latch.Wait();
+}
+
+TEST_F(EmbedderTest, PlatformViewMutatorsClipRSEMetal) {
+  auto& context = GetEmbedderContext<EmbedderTestContextMetal>();
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("platform_view_mutators_clip_rse");
+
+  builder.SetRenderTargetType(EmbedderTestBackingStoreProducer::RenderTargetType::kMetalTexture);
+
+  fml::CountDownLatch latch(1);
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers, size_t layers_count) {
+        ASSERT_EQ(layers_count, 2u);
+
+        // Layer 1 (Platform view)
+        {
+          FlutterPlatformView platform_view = *layers[1]->platform_view;
+          ASSERT_EQ(platform_view.identifier, 42);
+          ASSERT_EQ(platform_view.mutations_count, 1u);
+          ASSERT_EQ(platform_view.mutations[0]->type,
+                    kFlutterPlatformViewMutationTypeClipRoundedSuperellipse);
+
+          const auto& rse = platform_view.mutations[0]->clip_rounded_superellipse;
+          EXPECT_FLOAT_EQ(rse.rect.left, 10.0f);
+          EXPECT_FLOAT_EQ(rse.rect.top, 20.0f);
+          EXPECT_FLOAT_EQ(rse.rect.right, 790.0f);
+          EXPECT_FLOAT_EQ(rse.rect.bottom, 580.0f);
+          EXPECT_FLOAT_EQ(rse.upper_left_corner_radius.width, 30.0f);
+          EXPECT_FLOAT_EQ(rse.upper_left_corner_radius.height, 40.0f);
+          EXPECT_FLOAT_EQ(rse.upper_right_corner_radius.width, 30.0f);
+          EXPECT_FLOAT_EQ(rse.upper_right_corner_radius.height, 40.0f);
+          EXPECT_FLOAT_EQ(rse.lower_right_corner_radius.width, 30.0f);
+          EXPECT_FLOAT_EQ(rse.lower_right_corner_radius.height, 40.0f);
+          EXPECT_FLOAT_EQ(rse.lower_left_corner_radius.width, 30.0f);
+          EXPECT_FLOAT_EQ(rse.lower_left_corner_radius.height, 40.0f);
+        }
+        latch.CountDown();
+      });
+
+  auto engine = builder.LaunchEngine();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event), kSuccess);
+  ASSERT_TRUE(engine.is_valid());
+
+  latch.Wait();
+}
+
 }  // namespace testing
 }  // namespace flutter
 

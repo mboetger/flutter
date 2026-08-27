@@ -11,7 +11,9 @@
 #include "embedder.h"
 #include "embedder_asset_resolver.h"
 #include "embedder_engine.h"
+#include "embedder_layers.h"
 #include "flutter/common/constants.h"
+#include "flutter/display_list/geometry/dl_path_builder.h"
 #include "flutter/flow/raster_cache.h"
 #include "flutter/fml/file.h"
 #include "flutter/fml/make_copyable.h"
@@ -6004,6 +6006,184 @@ TEST_F(EmbedderTest, CallbackInfoViaProcTable) {
   EXPECT_STREQ(info.class_name, kCallbackClass.c_str());
   ASSERT_NE(info.library_path, nullptr);
   EXPECT_STREQ(info.library_path, kCallbackLib.c_str());
+}
+
+TEST_F(EmbedderTest, EmbedderLayersPlatformViewClipPathMutation) {
+  EmbedderLayers layers(DlISize(800, 600), 1.0, DlMatrix(), 0);
+
+  DlPathBuilder path_builder;
+  path_builder.MoveTo(DlPoint(10.0f, 15.0f));
+  path_builder.LineTo(DlPoint(20.0f, 25.0f));
+  path_builder.QuadraticCurveTo(DlPoint(30.0f, 35.0f), DlPoint(40.0f, 45.0f));
+  path_builder.ConicCurveTo(DlPoint(50.0f, 55.0f), DlPoint(60.0f, 65.0f),
+                            0.707f);
+  path_builder.CubicCurveTo(DlPoint(70.0f, 75.0f), DlPoint(80.0f, 85.0f),
+                            DlPoint(90.0f, 95.0f));
+  path_builder.Close();
+  path_builder.SetFillType(DlPathFillType::kOdd);
+
+  DlPath path = path_builder.TakePath();
+
+  MutatorsStack mutators_stack;
+  mutators_stack.PushClipPath(path);
+
+  EmbeddedViewParams params(DlMatrix(), DlSize(100.0, 100.0), mutators_stack);
+  layers.PushPlatformViewLayer(101, params);
+
+  layers.InvokePresentCallback(
+      0,
+      [](FlutterViewId view_id,
+         const std::vector<const FlutterLayer*>& presented_layers) -> bool {
+        EXPECT_EQ(presented_layers.size(), 1u);
+        const auto* layer = presented_layers[0];
+        EXPECT_EQ(layer->type, kFlutterLayerContentTypePlatformView);
+        EXPECT_EQ(layer->platform_view->identifier, 101);
+        EXPECT_EQ(layer->platform_view->mutations_count, 1u);
+
+        const auto* mutation = layer->platform_view->mutations[0];
+        EXPECT_EQ(mutation->type, kFlutterPlatformViewMutationTypeClipPath);
+        EXPECT_EQ(mutation->clip_path.fill_type, kFlutterPathFillTypeEvenOdd);
+        EXPECT_EQ(mutation->clip_path.segments_count, 7u);
+        EXPECT_NE(mutation->clip_path.segments, nullptr);
+        if (mutation->clip_path.segments == nullptr ||
+            mutation->clip_path.segments_count < 7) {
+          return false;
+        }
+
+        EXPECT_EQ(mutation->clip_path.segments[0].verb, kFlutterPathVerbMove);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[0].points[0].x, 10.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[0].points[0].y, 15.0f);
+
+        EXPECT_EQ(mutation->clip_path.segments[1].verb, kFlutterPathVerbLine);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[1].points[0].x, 20.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[1].points[0].y, 25.0f);
+
+        EXPECT_EQ(mutation->clip_path.segments[2].verb, kFlutterPathVerbQuad);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[2].points[0].x, 30.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[2].points[0].y, 35.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[2].points[1].x, 40.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[2].points[1].y, 45.0f);
+
+        EXPECT_EQ(mutation->clip_path.segments[3].verb, kFlutterPathVerbConic);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[3].points[0].x, 50.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[3].points[0].y, 55.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[3].points[1].x, 60.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[3].points[1].y, 65.0f);
+        EXPECT_NEAR(mutation->clip_path.segments[3].conic_weight, 0.707f,
+                    0.001);
+
+        EXPECT_EQ(mutation->clip_path.segments[4].verb, kFlutterPathVerbCubic);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[4].points[0].x, 70.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[4].points[0].y, 75.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[4].points[1].x, 80.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[4].points[1].y, 85.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[4].points[2].x, 90.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[4].points[2].y, 95.0f);
+
+        EXPECT_EQ(mutation->clip_path.segments[5].verb, kFlutterPathVerbLine);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[5].points[0].x, 10.0f);
+        EXPECT_FLOAT_EQ(mutation->clip_path.segments[5].points[0].y, 15.0f);
+
+        EXPECT_EQ(mutation->clip_path.segments[6].verb, kFlutterPathVerbClose);
+        return true;
+      });
+}
+
+TEST_F(EmbedderTest, EmbedderLayersPlatformViewClipRSEMutation) {
+  EmbedderLayers layers(DlISize(800, 600), 1.0, DlMatrix(), 0);
+
+  DlRoundingRadii radii = {
+      .top_left = DlSize(12.0f, 14.0f),
+      .top_right = DlSize(16.0f, 18.0f),
+      .bottom_left = DlSize(24.0f, 26.0f),
+      .bottom_right = DlSize(20.0f, 22.0f),
+  };
+  DlRoundSuperellipse rse = DlRoundSuperellipse::MakeRectRadii(
+      DlRect::MakeLTRB(10.0f, 20.0f, 300.0f, 400.0f), radii);
+
+  MutatorsStack mutators_stack;
+  mutators_stack.PushClipRSE(rse);
+
+  EmbeddedViewParams params(DlMatrix(), DlSize(100.0, 100.0), mutators_stack);
+  layers.PushPlatformViewLayer(202, params);
+
+  layers.InvokePresentCallback(
+      0,
+      [](FlutterViewId view_id,
+         const std::vector<const FlutterLayer*>& presented_layers) -> bool {
+        EXPECT_EQ(presented_layers.size(), 1u);
+        const auto* layer = presented_layers[0];
+        EXPECT_EQ(layer->type, kFlutterLayerContentTypePlatformView);
+        EXPECT_EQ(layer->platform_view->identifier, 202);
+        EXPECT_EQ(layer->platform_view->mutations_count, 1u);
+
+        const auto* mutation = layer->platform_view->mutations[0];
+        EXPECT_EQ(mutation->type,
+                  kFlutterPlatformViewMutationTypeClipRoundedSuperellipse);
+
+        const auto& rse_out = mutation->clip_rounded_superellipse;
+        EXPECT_FLOAT_EQ(rse_out.rect.left, 10.0f);
+        EXPECT_FLOAT_EQ(rse_out.rect.top, 20.0f);
+        EXPECT_FLOAT_EQ(rse_out.rect.right, 300.0f);
+        EXPECT_FLOAT_EQ(rse_out.rect.bottom, 400.0f);
+        EXPECT_FLOAT_EQ(rse_out.upper_left_corner_radius.width, 12.0f);
+        EXPECT_FLOAT_EQ(rse_out.upper_left_corner_radius.height, 14.0f);
+        EXPECT_FLOAT_EQ(rse_out.upper_right_corner_radius.width, 16.0f);
+        EXPECT_FLOAT_EQ(rse_out.upper_right_corner_radius.height, 18.0f);
+        EXPECT_FLOAT_EQ(rse_out.lower_right_corner_radius.width, 20.0f);
+        EXPECT_FLOAT_EQ(rse_out.lower_right_corner_radius.height, 22.0f);
+        EXPECT_FLOAT_EQ(rse_out.lower_left_corner_radius.width, 24.0f);
+        EXPECT_FLOAT_EQ(rse_out.lower_left_corner_radius.height, 26.0f);
+        return true;
+      });
+}
+
+TEST_F(EmbedderTest, EmbedderLayersPlatformViewAllMutationTypes) {
+  EmbedderLayers layers(DlISize(800, 600), 1.0, DlMatrix(), 0);
+
+  MutatorsStack mutators_stack;
+  mutators_stack.PushOpacity(128);
+  mutators_stack.PushClipRect(DlRect::MakeLTRB(0.0f, 0.0f, 500.0f, 500.0f));
+  mutators_stack.PushClipRRect(DlRoundRect::MakeRectRadius(
+      DlRect::MakeLTRB(10.0f, 10.0f, 400.0f, 400.0f), 8.0f));
+  mutators_stack.PushClipRSE(DlRoundSuperellipse::MakeRectRadii(
+      DlRect::MakeLTRB(20.0f, 20.0f, 300.0f, 300.0f),
+      DlRoundingRadii::MakeRadius(10.0f)));
+
+  DlPathBuilder path_builder;
+  path_builder.MoveTo(DlPoint(30.0f, 30.0f));
+  path_builder.LineTo(DlPoint(250.0f, 250.0f));
+  path_builder.Close();
+  mutators_stack.PushClipPath(path_builder.TakePath());
+
+  mutators_stack.PushTransform(DlMatrix::MakeScale({2.0f, 2.0f, 1.0f}));
+
+  EmbeddedViewParams params(DlMatrix(), DlSize(100.0, 100.0), mutators_stack);
+  layers.PushPlatformViewLayer(303, params);
+
+  layers.InvokePresentCallback(
+      0,
+      [](FlutterViewId view_id,
+         const std::vector<const FlutterLayer*>& presented_layers) -> bool {
+        EXPECT_EQ(presented_layers.size(), 1u);
+        const auto* layer = presented_layers[0];
+        EXPECT_EQ(layer->platform_view->identifier, 303);
+        EXPECT_EQ(layer->platform_view->mutations_count, 6u);
+
+        EXPECT_EQ(layer->platform_view->mutations[0]->type,
+                  kFlutterPlatformViewMutationTypeOpacity);
+        EXPECT_EQ(layer->platform_view->mutations[1]->type,
+                  kFlutterPlatformViewMutationTypeClipRect);
+        EXPECT_EQ(layer->platform_view->mutations[2]->type,
+                  kFlutterPlatformViewMutationTypeClipRoundedRect);
+        EXPECT_EQ(layer->platform_view->mutations[3]->type,
+                  kFlutterPlatformViewMutationTypeClipRoundedSuperellipse);
+        EXPECT_EQ(layer->platform_view->mutations[4]->type,
+                  kFlutterPlatformViewMutationTypeClipPath);
+        EXPECT_EQ(layer->platform_view->mutations[5]->type,
+                  kFlutterPlatformViewMutationTypeTransformation);
+        return true;
+      });
 }
 
 }  // namespace testing
