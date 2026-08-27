@@ -2592,6 +2592,63 @@ typedef struct {
   FlutterAssetResolverGetAssetCallback get_asset_callback;
 } FlutterAssetResolver;
 
+/// The callback invoked by the engine when the Dart VM requests a deferred
+/// library loading unit to be loaded.
+///
+/// The callback is invoked on a task posted to the platform thread.
+///
+/// @param[in]  loading_unit_id  The unique ID of the loading unit to be loaded.
+/// @param[in]  user_data        The user data provided when the engine was
+///                              started or spawned.
+typedef void (*FlutterRequestDartDeferredLibraryCallback)(
+    intptr_t /* loading_unit_id */,
+    void* /* user_data */);
+
+/// Information describing a Dart deferred library loading unit to be loaded
+/// into the running isolate.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterLoadDeferredLibraryInfo).
+  size_t struct_size;
+
+  /// The unique loading unit ID of the deferred library to load.
+  intptr_t loading_unit_id;
+
+  /// The isolate snapshot data mapping for the deferred library. Must be mapped
+  /// with read-only permissions and must remain valid for the lifetime of the
+  /// running isolate. Must not be null.
+  const uint8_t* isolate_snapshot_data;
+
+  /// The size of the isolate snapshot data buffer in bytes. Must be greater
+  /// than 0.
+  size_t isolate_snapshot_data_size;
+
+  /// The isolate snapshot instructions mapping for the deferred library. In
+  /// AOT mode, this must be mapped with read-execute permissions and must
+  /// remain valid for the lifetime of the running isolate. May be null if the
+  /// loading unit contains no executable code or when not running in AOT mode.
+  const uint8_t* isolate_snapshot_instructions;
+
+  /// The size of the isolate snapshot instructions buffer in bytes. Must be 0
+  /// if isolate_snapshot_instructions is null.
+  size_t isolate_snapshot_instructions_size;
+} FlutterLoadDeferredLibraryInfo;
+
+/// Information describing a failure to load a requested Dart deferred library.
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterLoadDeferredLibraryErrorInfo).
+  size_t struct_size;
+
+  /// The unique loading unit ID of the deferred library that failed to load.
+  intptr_t loading_unit_id;
+
+  /// The error message describing the failure. Must be null-terminated.
+  const char* error_message;
+
+  /// Whether the failure is transient (i.e. retryable).
+  bool transient;
+} FlutterLoadDeferredLibraryErrorInfo;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
@@ -2915,6 +2972,13 @@ typedef struct {
 
   /// Number of asset resolvers in `asset_resolvers`.
   size_t asset_resolvers_count;
+
+  /// Callback invoked when the Dart application requests that a deferred
+  /// library loading unit be loaded by the embedder.
+  ///
+  /// This is optional.
+  FlutterRequestDartDeferredLibraryCallback
+      request_dart_deferred_library_callback;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3789,6 +3853,49 @@ FlutterEngineResult FlutterEngineUpdateAssetResolver(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterAssetResolver* resolver);
 
+//------------------------------------------------------------------------------
+/// @brief      Loads a Dart deferred library (loading unit) into the running
+///             isolate.
+///
+///             When the Dart VM requests a deferred library via
+///             `FlutterRequestDartDeferredLibraryCallback`, the embedder should
+///             obtain the loading unit snapshot data and instructions and call
+///             this function to complete the loading request.
+///
+/// @param[in]  engine     A running engine instance.
+/// @param[in]  load_info  The information describing the deferred library to
+///                        load.
+///
+/// @return     `kSuccess` if the loading unit was successfully submitted to the
+///             engine; `kInvalidArguments` if arguments are invalid;
+///             `kInternalInconsistency` if the engine is not running.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryInfo* load_info);
+
+//------------------------------------------------------------------------------
+/// @brief      Notifies the engine that a requested Dart deferred library
+///             failed to load.
+///
+///             When the Dart VM requests a deferred library via
+///             `FlutterRequestDartDeferredLibraryCallback`, if the embedder
+///             fails to obtain or load the required loading unit, it must call
+///             this function to notify the waiting Dart isolate.
+///
+/// @param[in]  engine      A running engine instance.
+/// @param[in]  error_info  The information describing the load failure.
+///
+/// @return     `kSuccess` if the failure notification was successfully
+///             submitted; `kInvalidArguments` if arguments are invalid;
+///             `kInternalInconsistency` if the engine is not running.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryErrorInfo* error_info);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3930,6 +4037,12 @@ typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterEngineSpawnInfo* info,
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryInfo* load_info);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterLoadDeferredLibraryErrorInfo* error_info);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3982,6 +4095,8 @@ typedef struct {
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
   FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
   FlutterEngineSpawnFnPtr Spawn;
+  FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
+  FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------
