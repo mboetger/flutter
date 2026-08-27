@@ -88,6 +88,9 @@ class EmbedderEngine {
 
   bool ScheduleFrame();
 
+  bool UpdateAssetResolver(
+      std::unique_ptr<AssetResolver> updated_asset_resolver);
+
   Shell& GetShell();
 
  private:

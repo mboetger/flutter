@@ -21,16 +21,30 @@ RunConfiguration RunConfiguration::InferFromSettings(
     const fml::RefPtr<fml::TaskRunner>& io_worker,
     IsolateLaunchType launch_type) {
   auto asset_manager = std::make_shared<AssetManager>();
+  return InferFromSettings(settings, std::move(asset_manager), io_worker,
+                           launch_type);
+}
+
+RunConfiguration RunConfiguration::InferFromSettings(
+    const Settings& settings,
+    std::shared_ptr<AssetManager> asset_manager,
+    const fml::RefPtr<fml::TaskRunner>& io_worker,
+    IsolateLaunchType launch_type) {
+  if (!asset_manager) {
+    asset_manager = std::make_shared<AssetManager>();
+  }
 
   if (fml::UniqueFD::traits_type::IsValid(settings.assets_dir)) {
     asset_manager->PushBack(std::make_unique<DirectoryAssetBundle>(
         fml::Duplicate(settings.assets_dir), true));
   }
 
-  asset_manager->PushBack(std::make_unique<DirectoryAssetBundle>(
-      fml::OpenDirectory(settings.assets_path.c_str(), false,
-                         fml::FilePermission::kRead),
-      true));
+  if (!settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<DirectoryAssetBundle>(
+        fml::OpenDirectory(settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
 
   return {IsolateConfiguration::InferFromSettings(settings, asset_manager,
                                                   io_worker, launch_type),

@@ -63,6 +63,25 @@ class RunConfiguration {
       IsolateLaunchType launch_type = IsolateLaunchType::kNewGroup);
 
   //----------------------------------------------------------------------------
+  /// @brief      Attempts to infer a run configuration from the settings
+  ///             object and a pre-configured asset manager.
+  ///
+  /// @param[in]  settings       The settings object.
+  /// @param[in]  asset_manager  The asset manager containing asset resolvers.
+  /// @param[in]  io_worker      An optional IO worker.
+  /// @param[in]  launch_type    Whether to launch the new isolate into an
+  /// existing
+  ///                            group or a new one.
+  ///
+  /// @return     A run configuration.
+  ///
+  static RunConfiguration InferFromSettings(
+      const Settings& settings,
+      std::shared_ptr<AssetManager> asset_manager,
+      const fml::RefPtr<fml::TaskRunner>& io_worker = nullptr,
+      IsolateLaunchType launch_type = IsolateLaunchType::kNewGroup);
+
+  //----------------------------------------------------------------------------
   /// @brief      Creates a run configuration with only an isolate
   ///             configuration. There is no asset manager and default
   ///             entrypoint and root library are used ("main" in root library).

@@ -1,11 +1,11 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 0.1 (Baseline Verification)
-- **Active Branch**: `android-embedder-v3/phase-0.1-baseline-tests`
+- **Active Phase**: Phase 1.1 (Custom Asset Resolvers)
+- **Active Branch**: `android-embedder-v3/phase-1.1-custom-asset-resolvers`
 - **Base Commit SHA**: `0c041cb5252`
-- **Completed PRs**: [0.1]
-- **Adversarial Review Loop Status**: Approved (0 remaining findings across Round 1 & Round 2 by reidbaker-agent)
+- **Completed PRs**: [0.1, 1.1]
+- **Adversarial Review Loop Status**: Approved (0 findings)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -13,7 +13,7 @@
 
 ## Quick PR Index & Checkpoints
 - [x] Phase 0.1: Baseline & Thread-Safety Tests
-- [ ] Phase 1.1: Custom Asset Resolvers (`FlutterAssetResolver`)
+- [x] Phase 1.1: Custom Asset Resolvers (`FlutterAssetResolver`)
 - [ ] Phase 1.2: Vulkan Impeller Render Target Backing Store
 - [ ] Phase 1.3: AHardwareBuffer & Vulkan External Textures
 - [ ] Phase 1.4: Multi-Engine Spawning (`FlutterEngineSpawn`)

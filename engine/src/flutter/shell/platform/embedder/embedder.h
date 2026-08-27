@@ -2524,6 +2524,50 @@ typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
 
+/// A mapping of a byte buffer.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterMapping).
+  size_t struct_size;
+  /// Pointer to the mapped byte buffer.
+  const uint8_t* mapping;
+  /// The size of the mapped byte buffer in bytes.
+  size_t size;
+  /// User data passed back to `release_callback`.
+  void* user_data;
+  /// Optional callback invoked when the engine is done reading the mapping.
+  /// If null, the engine will not attempt to release the buffer.
+  ///
+  /// @note `release_callback` may be invoked on an arbitrary background thread
+  ///       when the engine finishes consuming the asset mapping (or upon Dart
+  ///       VM garbage collection).
+  VoidCallback release_callback;
+} FlutterMapping;
+
+/// Callback invoked by the engine to resolve an asset from a custom asset
+/// resolver.
+///
+/// The embedder should return a `FlutterMapping` containing the asset data. If
+/// the asset is not found, the returned struct should have `mapping` set to
+/// `NULL` and `size` set to 0.
+///
+/// @note `get_asset_callback` may be called concurrently from multiple
+/// background
+///       threads (e.g., IO worker threads, Dart worker isolates, UI thread).
+///       Implementations must be thread-safe.
+typedef FlutterMapping (*FlutterAssetResolverGetAssetCallback)(
+    const char* /* asset_name */,
+    void* /* user_data */);
+
+/// Interface for custom asset resolvers.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAssetResolver).
+  size_t struct_size;
+  /// User data passed to `get_asset_callback`.
+  void* user_data;
+  /// Callback invoked to resolve an asset.
+  FlutterAssetResolverGetAssetCallback get_asset_callback;
+} FlutterAssetResolver;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
@@ -2838,6 +2882,15 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// Array of custom asset resolvers provided by the embedder.
+  ///
+  /// This is optional. If provided, the engine will query these resolvers
+  /// when attempting to locate and load assets.
+  const FlutterAssetResolver* const* asset_resolvers;
+
+  /// Number of asset resolvers in `asset_resolvers`.
+  size_t asset_resolvers_count;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3640,6 +3693,24 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Updates the custom asset resolver on a running or initialized
+///             engine instance.
+///
+///             This replaces the previously registered asset resolver of the
+///             custom embedder type (or replaces the first custom resolver if
+///             multiple custom resolvers were supplied at initialization).
+///
+/// @param[in]  engine    An engine instance.
+/// @param[in]  resolver  The custom asset resolver to install.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineUpdateAssetResolver(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolver* resolver);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3774,6 +3845,9 @@ typedef FlutterEngineResult (*FlutterEngineRemoveViewFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterViewFocusEvent* event);
+typedef FlutterEngineResult (*FlutterEngineUpdateAssetResolverFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolver* resolver);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3824,6 +3898,7 @@ typedef struct {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "embedder.h"
+#include "embedder_asset_resolver.h"
 #include "embedder_engine.h"
 #include "flutter/common/constants.h"
 #include "flutter/flow/raster_cache.h"
@@ -4314,6 +4315,298 @@ TEST_F(EmbedderTest, PlatformThreadIsolatesWithCustomPlatformTaskRunner) {
 
   // Check that the FFI call was executed on the platform thread.
   ASSERT_EQ(platform_thread_id, ffi_call_thread_id);
+}
+
+TEST(EmbedderAssetResolverTest, DirectMappingAndRelease) {
+  struct State {
+    bool release_called = false;
+    bool zero_byte_release_called = false;
+    std::string data = "embedder_asset_payload";
+    uint8_t dummy_byte = 0;
+  } state;
+
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = &state;
+  resolver.get_asset_callback = [](const char* name, void* user_data) {
+    auto* s = static_cast<State*>(user_data);
+    if (std::string(name) == "my_asset.txt") {
+      FlutterMapping mapping = {};
+      mapping.struct_size = sizeof(FlutterMapping);
+      mapping.mapping = reinterpret_cast<const uint8_t*>(s->data.data());
+      mapping.size = s->data.size();
+      mapping.user_data = s;
+      mapping.release_callback = [](void* ud) {
+        auto* st = static_cast<State*>(ud);
+        st->release_called = true;
+      };
+      return mapping;
+    }
+    if (std::string(name) == "zero_byte_asset.txt") {
+      FlutterMapping mapping = {};
+      mapping.struct_size = sizeof(FlutterMapping);
+      // Valid non-null pointer with 0 size represents a valid zero-byte asset.
+      mapping.mapping = &s->dummy_byte;
+      mapping.size = 0;
+      mapping.user_data = s;
+      mapping.release_callback = [](void* ud) {
+        auto* st = static_cast<State*>(ud);
+        st->zero_byte_release_called = true;
+      };
+      return mapping;
+    }
+    if (std::string(name) == "null_release_cb.txt") {
+      FlutterMapping mapping = {};
+      mapping.struct_size = sizeof(FlutterMapping);
+      mapping.mapping = reinterpret_cast<const uint8_t*>(s->data.data());
+      mapping.size = s->data.size();
+      mapping.user_data = nullptr;
+      mapping.release_callback = nullptr;
+      return mapping;
+    }
+    if (std::string(name) == "invalid_struct_size.txt") {
+      FlutterMapping mapping = {};
+      // Invalid struct size should be rejected.
+      mapping.struct_size = 0;
+      mapping.mapping = reinterpret_cast<const uint8_t*>(s->data.data());
+      mapping.size = s->data.size();
+      return mapping;
+    }
+    FlutterMapping empty = {};
+    empty.struct_size = sizeof(FlutterMapping);
+    return empty;
+  };
+
+  EmbedderAssetResolver asset_resolver(resolver);
+  EXPECT_TRUE(asset_resolver.IsValid());
+  EXPECT_TRUE(asset_resolver.IsValidAfterAssetManagerChange());
+  EXPECT_EQ(asset_resolver.GetType(),
+            AssetResolver::AssetResolverType::kEmbedderAssetResolver);
+
+  // 1. Non-existent asset returns null.
+  EXPECT_EQ(asset_resolver.GetAsMapping("non_existent"), nullptr);
+
+  // 2. Existing asset returns non-null mapping and correct content.
+  {
+    auto mapping = asset_resolver.GetAsMapping("my_asset.txt");
+    ASSERT_NE(mapping, nullptr);
+    EXPECT_EQ(mapping->GetSize(), state.data.size());
+    EXPECT_EQ(std::string(reinterpret_cast<const char*>(mapping->GetMapping()),
+                          mapping->GetSize()),
+              state.data);
+    EXPECT_FALSE(state.release_called);
+  }
+  // Mapping destroyed, release callback should have fired.
+  EXPECT_TRUE(state.release_called);
+
+  // 3. Valid zero-byte asset returns non-null mapping with size 0.
+  {
+    auto mapping = asset_resolver.GetAsMapping("zero_byte_asset.txt");
+    ASSERT_NE(mapping, nullptr);
+    EXPECT_EQ(mapping->GetSize(), 0u);
+    EXPECT_FALSE(state.zero_byte_release_called);
+  }
+  EXPECT_TRUE(state.zero_byte_release_called);
+
+  // 4. Asset with null release_callback destroys safely without crashing.
+  {
+    auto mapping = asset_resolver.GetAsMapping("null_release_cb.txt");
+    ASSERT_NE(mapping, nullptr);
+    EXPECT_EQ(mapping->GetSize(), state.data.size());
+  }
+
+  // 5. Asset with invalid struct_size is rejected and returns null.
+  EXPECT_EQ(asset_resolver.GetAsMapping("invalid_struct_size.txt"), nullptr);
+
+  // 6. Equality operator testing.
+  EmbedderAssetResolver same_resolver(resolver);
+  EXPECT_TRUE(asset_resolver == same_resolver);
+
+  FlutterAssetResolver different_resolver_def = resolver;
+  int different_user_data = 42;
+  different_resolver_def.user_data = &different_user_data;
+  EmbedderAssetResolver different_resolver(different_resolver_def);
+  EXPECT_FALSE(asset_resolver == different_resolver);
+}
+
+TEST_F(EmbedderTest, CustomAssetResolver) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  fml::AutoResetWaitableEvent latch;
+  context.AddIsolateCreateCallback([&latch]() { latch.Signal(); });
+
+  struct ResolverState {
+    std::atomic<bool> asset_requested = false;
+    std::atomic<bool> release_called = false;
+    std::string test_data = "[]";
+  } state;
+
+  FlutterAssetResolverGetAssetCallback get_asset_cb = [](const char* name,
+                                                         void* user_data) {
+    auto* s = static_cast<ResolverState*>(user_data);
+    s->asset_requested = true;
+    if (std::string(name) == "FontManifest.json") {
+      FlutterMapping mapping = {};
+      mapping.struct_size = sizeof(FlutterMapping);
+      mapping.mapping = reinterpret_cast<const uint8_t*>(s->test_data.data());
+      mapping.size = s->test_data.size();
+      mapping.user_data = s;
+      mapping.release_callback = [](void* ud) {
+        auto* st = static_cast<ResolverState*>(ud);
+        st->release_called = true;
+      };
+      return mapping;
+    }
+    FlutterMapping empty_mapping = {};
+    empty_mapping.struct_size = sizeof(FlutterMapping);
+    return empty_mapping;
+  };
+
+  FlutterAssetResolver custom_resolver = {};
+  custom_resolver.struct_size = sizeof(FlutterAssetResolver);
+  custom_resolver.user_data = &state;
+  custom_resolver.get_asset_callback = get_asset_cb;
+
+  const FlutterAssetResolver* resolvers[] = {&custom_resolver};
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.GetProjectArgs().asset_resolvers = resolvers;
+  // 1 custom asset resolver in the array.
+  builder.GetProjectArgs().asset_resolvers_count = 1;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  latch.Wait();
+
+  EXPECT_TRUE(state.asset_requested.load());
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, CustomAssetResolverWithoutAssetsPath) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  fml::AutoResetWaitableEvent latch;
+  context.AddIsolateCreateCallback([&latch]() { latch.Signal(); });
+
+  std::string assets_dir = context.GetAssetsPath();
+  struct ResolverState {
+    std::string assets_path;
+    std::atomic<bool> kernel_requested = false;
+  } state;
+  state.assets_path = assets_dir;
+
+  FlutterAssetResolverGetAssetCallback get_asset_cb = [](const char* name,
+                                                         void* user_data) {
+    auto* s = static_cast<ResolverState*>(user_data);
+    if (std::string(name) == "kernel_blob.bin") {
+      s->kernel_requested = true;
+    }
+    std::string full_path = fml::paths::JoinPaths({s->assets_path, name});
+    if (!fml::IsFile(full_path)) {
+      FlutterMapping not_found = {};
+      not_found.struct_size = sizeof(FlutterMapping);
+      return not_found;
+    }
+    auto mapping = fml::FileMapping::CreateReadOnly(full_path);
+    if (!mapping) {
+      FlutterMapping not_found = {};
+      not_found.struct_size = sizeof(FlutterMapping);
+      return not_found;
+    }
+    FlutterMapping result = {};
+    result.struct_size = sizeof(FlutterMapping);
+    result.mapping = mapping->GetMapping();
+    result.size = mapping->GetSize();
+    result.user_data = mapping.release();
+    result.release_callback = [](void* ud) {
+      delete static_cast<fml::FileMapping*>(ud);
+    };
+    return result;
+  };
+
+  FlutterAssetResolver custom_resolver = {};
+  custom_resolver.struct_size = sizeof(FlutterAssetResolver);
+  custom_resolver.user_data = &state;
+  custom_resolver.get_asset_callback = get_asset_cb;
+
+  const FlutterAssetResolver* resolvers[] = {&custom_resolver};
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  // Omit the filesystem assets_path entirely.
+  builder.GetProjectArgs().assets_path = nullptr;
+  builder.GetProjectArgs().asset_resolvers = resolvers;
+  // 1 custom asset resolver in the array.
+  builder.GetProjectArgs().asset_resolvers_count = 1;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  latch.Wait();
+
+  EXPECT_TRUE(state.kernel_requested.load());
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, CustomAssetResolverUpdate) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  fml::AutoResetWaitableEvent latch;
+  context.AddIsolateCreateCallback([&latch]() { latch.Signal(); });
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  latch.Wait();
+
+  struct ResolverState {
+    std::atomic<bool> asset_requested = false;
+  } state;
+
+  FlutterAssetResolverGetAssetCallback get_asset_cb = [](const char* name,
+                                                         void* user_data) {
+    auto* s = static_cast<ResolverState*>(user_data);
+    s->asset_requested = true;
+    FlutterMapping empty = {};
+    empty.struct_size = sizeof(FlutterMapping);
+    return empty;
+  };
+
+  FlutterAssetResolver updated_resolver = {};
+  updated_resolver.struct_size = sizeof(FlutterAssetResolver);
+  updated_resolver.user_data = &state;
+  updated_resolver.get_asset_callback = get_asset_cb;
+
+  FlutterEngineResult result =
+      FlutterEngineUpdateAssetResolver(engine.get(), &updated_resolver);
+  EXPECT_EQ(result, kSuccess);
+
+  // Test with invalid args
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(nullptr, &updated_resolver),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), nullptr),
+            kInvalidArguments);
+
+  FlutterAssetResolver invalid_size_resolver = updated_resolver;
+  invalid_size_resolver.struct_size = 0;
+  EXPECT_EQ(
+      FlutterEngineUpdateAssetResolver(engine.get(), &invalid_size_resolver),
+      kInvalidArguments);
+
+  FlutterAssetResolver null_cb_resolver = updated_resolver;
+  null_cb_resolver.get_asset_callback = nullptr;
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &null_cb_resolver),
+            kInvalidArguments);
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, CustomAssetResolverProcTable) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  auto result = FlutterEngineGetProcAddresses(&procs);
+  ASSERT_EQ(result, kSuccess);
+  ASSERT_NE(procs.UpdateAssetResolver, nullptr);
 }
 
 }  // namespace testing

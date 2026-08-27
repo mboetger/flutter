@@ -344,6 +344,30 @@ bool EmbedderEngine::ScheduleFrame() {
   return true;
 }
 
+bool EmbedderEngine::UpdateAssetResolver(
+    std::unique_ptr<AssetResolver> updated_asset_resolver) {
+  if (!updated_asset_resolver || !updated_asset_resolver->IsValid()) {
+    return false;
+  }
+  if (shell_) {
+    auto platform_view = shell_->GetPlatformView();
+    if (!platform_view) {
+      return false;
+    }
+    platform_view->UpdateAssetResolverByType(
+        std::move(updated_asset_resolver),
+        AssetResolver::AssetResolverType::kEmbedderAssetResolver);
+    return true;
+  }
+  if (run_configuration_.IsValid() && run_configuration_.GetAssetManager()) {
+    run_configuration_.GetAssetManager()->UpdateResolverByType(
+        std::move(updated_asset_resolver),
+        AssetResolver::AssetResolverType::kEmbedderAssetResolver);
+    return true;
+  }
+  return false;
+}
+
 Shell& EmbedderEngine::GetShell() {
   FML_DCHECK(shell_);
   return *shell_.get();
