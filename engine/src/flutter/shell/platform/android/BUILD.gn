@@ -12,17 +12,6 @@ import("//flutter/lib/snapshot/gen_snapshot.gni")
 import("//flutter/shell/config.gni")
 import("//flutter/shell/version/version.gni")
 
-source_set("android_mutators_stack") {
-  sources = [ "android_mutators_stack.h" ]
-
-  public_configs = [ "//flutter:config" ]
-
-  public_deps = [
-    "//flutter/display_list",
-    "//flutter/fml",
-  ]
-}
-
 source_set("image_generator") {
   sources = [
     "android_image_generator.cc",
@@ -163,8 +152,10 @@ source_set("flutter_shell_native_src") {
     ]
   }
 
+  # The Android embedder is decoupled from internal engine subsystems (flow, runtime,
+  # assets, vulkan, etc.) and interacts with the Flutter engine exclusively through the
+  # Embedder API (embedder_as_internal_library), FML, and platform support libraries.
   public_deps = [
-    ":android_mutators_stack",
     ":image_generator",
     "//flutter/common",
     "//flutter/common/graphics",
@@ -179,6 +170,7 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/android/context",
     "//flutter/shell/platform/android/external_view_embedder",
     "//flutter/shell/platform/android/jni",
+    "//flutter/shell/platform/android/mutators_stack",
     "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface",
     "//flutter/shell/platform/android/surface:native_window",

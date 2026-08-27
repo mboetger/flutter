@@ -67,10 +67,16 @@ class AndroidMutator {
   const DlPath& GetPath() const { return std::get<DlPath>(data_); }
   const DlMatrix& GetMatrix() const { return std::get<DlMatrix>(data_); }
   const uint8_t& GetAlpha() const { return std::get<uint8_t>(data_); }
-  float GetAlphaFloat() const { return static_cast<float>(GetAlpha()) / 255.0f; }
+  float GetAlphaFloat() const {
+    return static_cast<float>(GetAlpha()) / 255.0f;
+  }
 
-  bool operator==(const AndroidMutator& other) const { return data_ == other.data_; }
-  bool operator!=(const AndroidMutator& other) const { return !(*this == other); }
+  bool operator==(const AndroidMutator& other) const {
+    return data_ == other.data_;
+  }
+  bool operator!=(const AndroidMutator& other) const {
+    return !(*this == other);
+  }
 
   bool IsClipType() const {
     AndroidMutatorType type = GetType();
