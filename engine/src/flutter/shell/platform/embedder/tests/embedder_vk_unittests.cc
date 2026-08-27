@@ -129,6 +129,211 @@ TEST_F(EmbedderTest, CanSwapOutVulkanCalls) {
   EXPECT_TRUE(g_vulkan_proc_info.did_call_queue_submit);
 }
 
+TEST_F(EmbedderTest, CanRenderWithImpellerVulkan) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_impeller_test");
+  builder.SetSurface(DlISize(800, 600));
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Send a window metrics event so frames may be scheduled.
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(ImageMatchesFixture("impeller_test.png", rendered_scene));
+}
+
+TEST_F(EmbedderTest, CanRenderWithImpellerVulkanCompositor) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_impeller_test");
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Send a window metrics event so frames may be scheduled.
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(ImageMatchesFixture("impeller_test.png", rendered_scene));
+}
+
+TEST_F(EmbedderTest, CanRenderTextWithImpellerAndCompositorVulkan) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_impeller_text_test");
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Send a window metrics event so frames may be scheduled.
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_TRUE(
+      ImageMatchesFixture("impeller_text_test.png", rendered_scene, 500));
+}
+
+TEST_F(EmbedderTest, CanRenderPlatformViewWithImpellerVulkan) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_impeller_platform_view");
+
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+
+  auto rendered_scene = context.GetNextSceneImage();
+
+  fml::CountDownLatch latch(3);
+
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&latch]() { latch.CountDown(); }));
+
+  context.GetCompositor().SetPlatformViewRendererCallback(
+      [&](const FlutterLayer& layer,
+          GrDirectContext* context) -> sk_sp<SkImage> {
+        auto surface = CreateRenderSurface(layer, context);
+        auto canvas = surface->getCanvas();
+        FML_CHECK(canvas != nullptr);
+
+        switch (layer.platform_view->identifier) {
+          case 1: {
+            SkPaint paint;
+            paint.setColor(SK_ColorGREEN);
+            const auto& rect =
+                SkRect::MakeWH(layer.size.width, layer.size.height);
+            canvas->drawRect(rect, paint);
+            latch.CountDown();
+          } break;
+          default:
+            FML_CHECK(false)
+                << "Test was asked to composite an unknown platform view.";
+        }
+
+        return surface->makeImageSnapshot();
+      });
+
+  auto engine = builder.LaunchEngine();
+
+  // Send a window metrics event so frames may be scheduled.
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+  ASSERT_TRUE(engine.is_valid());
+
+  latch.Wait();
+
+  ASSERT_TRUE(
+      ImageMatchesFixture("impeller_render_platform_view.png", rendered_scene));
+}
+
+TEST_F(EmbedderTest, CreateInvalidBackingStoreVulkanImage) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+  builder.SetDartEntrypoint("invalid_backingstore");
+
+  static bool collected = false;
+  static fml::AutoResetWaitableEvent* s_collect_latch = nullptr;
+  fml::AutoResetWaitableEvent collect_latch;
+  collected = false;
+  s_collect_latch = &collect_latch;
+
+  builder.GetCompositor().create_backing_store_callback =
+      [](const FlutterBackingStoreConfig* config,
+         FlutterBackingStore* backing_store_out, void* user_data) -> bool {
+    backing_store_out->type = kFlutterBackingStoreTypeVulkan;
+    backing_store_out->user_data = nullptr;
+    backing_store_out->vulkan.struct_size = sizeof(FlutterVulkanBackingStore);
+    backing_store_out->vulkan.image = nullptr;
+    return true;
+  };
+
+  builder.GetCompositor().collect_backing_store_callback =
+      [](const FlutterBackingStore* backing_store, void* user_data) -> bool {
+    collected = true;
+    if (s_collect_latch) {
+      s_collect_latch->Signal();
+    }
+    return reinterpret_cast<EmbedderTestCompositor*>(user_data)
+        ->CollectBackingStore(backing_store);
+  };
+
+  fml::AutoResetWaitableEvent latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&latch]() { latch.Signal(); }));
+
+  auto engine = builder.LaunchEngine();
+
+  // Send a window metrics event so frames may be scheduled.
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+  ASSERT_TRUE(engine.is_valid());
+  latch.Wait();
+  collect_latch.Wait();
+  EXPECT_TRUE(collected);
+  s_collect_latch = nullptr;
+}
+
 }  // namespace testing
 }  // namespace flutter
 

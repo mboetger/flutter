@@ -46,8 +46,45 @@ TestVulkanContext::TestVulkanContext() {
     return;
   }
 
+  std::vector<std::string> candidate_instance_extensions = {
+      VK_KHR_SURFACE_EXTENSION_NAME,
+      "VK_EXT_headless_surface",
+      "VK_EXT_metal_surface",
+      "VK_MVK_macos_surface",
+      "VK_KHR_portability_enumeration",
+      "VK_KHR_xcb_surface",
+      "VK_KHR_xlib_surface",
+      "VK_KHR_wayland_surface",
+      "VK_KHR_win32_surface",
+      "VK_KHR_android_surface",
+  };
+
+  std::vector<std::string> enabled_instance_extensions;
+  uint32_t ext_count = 0;
+  if (vk_->EnumerateInstanceExtensionProperties &&
+      vk_->EnumerateInstanceExtensionProperties(nullptr, &ext_count, nullptr) ==
+          VK_SUCCESS &&
+      ext_count > 0) {
+    std::vector<VkExtensionProperties> properties(ext_count);
+    if (vk_->EnumerateInstanceExtensionProperties(
+            nullptr, &ext_count, properties.data()) == VK_SUCCESS) {
+      for (const auto& prop : properties) {
+        for (const auto& cand : candidate_instance_extensions) {
+          if (cand == prop.extensionName) {
+            enabled_instance_extensions.push_back(cand);
+          }
+        }
+      }
+    }
+  }
+
+  instance_extensions_ = enabled_instance_extensions;
+#if !OS_FUCHSIA
+  device_extensions_ = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+#endif
+
   application_ = std::make_unique<vulkan::VulkanApplication>(
-      *vk_, "Flutter Unittests", std::vector<std::string>{},
+      *vk_, "Flutter Unittests", enabled_instance_extensions,
       VK_MAKE_VERSION(1, 0, 0), VK_MAKE_VERSION(1, 1, 0), true);
   if (!application_->IsValid()) {
     FML_LOG(ERROR) << "Failed to initialize basic Vulkan state.";

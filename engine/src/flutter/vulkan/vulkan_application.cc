@@ -109,13 +109,25 @@ VulkanApplication::VulkanApplication(
       .pfnCallback = &DebugReportCallback,
       .pUserData = this};
 
+#ifndef VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR
+#define VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR 0x00000001
+#endif
+
+  VkInstanceCreateFlags flags = 0;
+  for (const auto& ext : extensions) {
+    if (strcmp(ext, "VK_KHR_portability_enumeration") == 0) {
+      flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+      break;
+    }
+  }
+
   const VkInstanceCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
       .pNext = ExtensionSupported(supported_extensions,
                                   VK_EXT_DEBUG_REPORT_EXTENSION_NAME)
                    ? &debug_report_info
                    : nullptr,
-      .flags = 0,
+      .flags = flags,
       .pApplicationInfo = &info,
       .enabledLayerCount = static_cast<uint32_t>(layers.size()),
       .ppEnabledLayerNames = layers.data(),

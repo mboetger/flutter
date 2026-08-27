@@ -50,6 +50,9 @@ class EmbedderTestContextVulkan : public EmbedderTestContext {
 
   std::unique_ptr<TestVulkanSurface> surface_;
 
+  std::vector<const char*> instance_extensions_;
+  std::vector<const char*> device_extensions_;
+
   DlISize surface_size_;
   size_t present_count_ = 0;
 

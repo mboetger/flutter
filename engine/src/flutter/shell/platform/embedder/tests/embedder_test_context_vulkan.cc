@@ -20,6 +20,13 @@ namespace flutter::testing {
 EmbedderTestContextVulkan::EmbedderTestContextVulkan(std::string assets_path)
     : EmbedderTestContext(std::move(assets_path)), surface_() {
   vulkan_context_ = fml::MakeRefCounted<TestVulkanContext>();
+  for (const auto& ext : vulkan_context_->GetInstanceExtensions()) {
+    instance_extensions_.push_back(ext.c_str());
+  }
+  for (const auto& ext : vulkan_context_->GetDeviceExtensions()) {
+    device_extensions_.push_back(ext.c_str());
+  }
+
   renderer_config_.type = FlutterRendererType::kVulkan;
   renderer_config_.vulkan = {
       .struct_size = sizeof(FlutterVulkanRendererConfig),
@@ -29,6 +36,10 @@ EmbedderTestContextVulkan::EmbedderTestContextVulkan(std::string assets_path)
       .device = vulkan_context_->device_->GetHandle(),
       .queue_family_index = vulkan_context_->device_->GetGraphicsQueueIndex(),
       .queue = vulkan_context_->device_->GetQueueHandle(),
+      .enabled_instance_extension_count = instance_extensions_.size(),
+      .enabled_instance_extensions = instance_extensions_.data(),
+      .enabled_device_extension_count = device_extensions_.size(),
+      .enabled_device_extensions = device_extensions_.data(),
       .get_instance_proc_address_callback =
           EmbedderTestContextVulkan::InstanceProcAddr,
       .get_next_image_callback =

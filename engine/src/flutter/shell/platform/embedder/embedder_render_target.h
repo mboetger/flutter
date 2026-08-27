@@ -109,6 +109,16 @@ class EmbedderRenderTarget {
   /// @return     The result of the operation.
   virtual SetCurrentResult MaybeClearCurrent() const { return {true, false}; }
 
+  //----------------------------------------------------------------------------
+  /// @brief      Sets the collection callback to invoke when this render
+  ///             target is released.
+  ///
+  /// @param[in]  on_release  The callback to invoke.
+  ///
+  void SetCollectCallback(fml::closure on_release) {
+    on_release_ = std::move(on_release);
+  }
+
  protected:
   //----------------------------------------------------------------------------
   /// @brief      Creates a render target whose backing store is managed by the

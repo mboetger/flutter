@@ -58,7 +58,7 @@ VulkanDevice::VulkanDevice(VulkanProcTable& p_vk,
   };
 
   const char* extensions[] = {
-#if FML_OS_ANDROID
+#if !OS_FUCHSIA
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 #endif
 #if OS_FUCHSIA
