@@ -25,6 +25,7 @@ EmbedderRenderTargetImpeller::EmbedderRenderTargetImpeller(
 }
 
 EmbedderRenderTargetImpeller::~EmbedderRenderTargetImpeller() {
+  impeller_target_.reset();
   if (framebuffer_destruction_callback_) {
     framebuffer_destruction_callback_();
   }

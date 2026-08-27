@@ -58,9 +58,7 @@ VulkanDevice::VulkanDevice(VulkanProcTable& p_vk,
   };
 
   const char* extensions[] = {
-#if FML_OS_ANDROID
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-#endif
 #if OS_FUCHSIA
       VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
       VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,

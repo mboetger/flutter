@@ -46,9 +46,34 @@ TestVulkanContext::TestVulkanContext() {
     return;
   }
 
+  instance_extensions_ = {
+      VK_KHR_SURFACE_EXTENSION_NAME,
+#if defined(FML_OS_LINUX)
+      "VK_KHR_xcb_surface",
+#elif defined(FML_OS_MACOS)
+      "VK_EXT_metal_surface",
+#elif defined(FML_OS_WIN)
+      "VK_KHR_win32_surface",
+#elif defined(FML_OS_ANDROID)
+      "VK_KHR_android_surface",
+#endif
+  };
+  instance_extension_ptrs_.clear();
+  for (const auto& ext : instance_extensions_) {
+    instance_extension_ptrs_.push_back(ext.c_str());
+  }
+
+  device_extensions_ = {
+      VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+  };
+  device_extension_ptrs_.clear();
+  for (const auto& ext : device_extensions_) {
+    device_extension_ptrs_.push_back(ext.c_str());
+  }
+
   application_ = std::make_unique<vulkan::VulkanApplication>(
-      *vk_, "Flutter Unittests", std::vector<std::string>{},
-      VK_MAKE_VERSION(1, 0, 0), VK_MAKE_VERSION(1, 1, 0), true);
+      *vk_, "Flutter Unittests", instance_extensions_, VK_MAKE_VERSION(1, 0, 0),
+      VK_MAKE_VERSION(1, 1, 0), true);
   if (!application_->IsValid()) {
     FML_LOG(ERROR) << "Failed to initialize basic Vulkan state.";
     return;

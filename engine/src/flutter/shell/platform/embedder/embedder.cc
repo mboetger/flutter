@@ -105,6 +105,15 @@ extern const intptr_t kPlatformStrongDillSize;
 #ifdef SHELL_ENABLE_VULKAN
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkTypes.h"
+#ifdef IMPELLER_SUPPORTS_RENDERING
+#include "flutter/shell/platform/embedder/embedder_render_target_impeller.h"  // nogncheck
+#include "impeller/core/texture.h"                               // nogncheck
+#include "impeller/renderer/backend/vulkan/context_vk.h"         // nogncheck
+#include "impeller/renderer/backend/vulkan/formats_vk.h"         // nogncheck
+#include "impeller/renderer/backend/vulkan/texture_source_vk.h"  // nogncheck
+#include "impeller/renderer/backend/vulkan/texture_vk.h"         // nogncheck
+#include "impeller/renderer/render_target.h"                     // nogncheck
+#endif  // IMPELLER_SUPPORTS_RENDERING
 #endif  // SHELL_ENABLE_VULKAN
 
 const int32_t kFlutterSemanticsNodeIdBatchEnd = -1;
@@ -1312,6 +1321,223 @@ MakeRenderTargetFromBackingStoreImpeller(
 #endif
 }
 
+#if defined(SHELL_ENABLE_VULKAN) && defined(IMPELLER_SUPPORTS_RENDERING)
+class EmbedderWrappedTextureSourceVK : public impeller::TextureSourceVK {
+ public:
+  explicit EmbedderWrappedTextureSourceVK(
+      impeller::vk::Image image,
+      impeller::vk::UniqueImageView image_view,
+      impeller::TextureDescriptor desc,
+      fml::closure destruction_callback)
+      : TextureSourceVK(desc),
+        image_(image),
+        image_view_(std::move(image_view)),
+        destruction_callback_(std::move(destruction_callback)) {}
+
+  ~EmbedderWrappedTextureSourceVK() override {
+    // Explicitly reset the ImageView before invoking the embedder's destruction
+    // callback so the VkImageView is destroyed before the underlying VkImage
+    // can be freed by the embedder.
+    image_view_.reset();
+    if (destruction_callback_) {
+      destruction_callback_();
+    }
+  }
+
+ private:
+  impeller::vk::Image GetImage() const override { return image_; }
+
+  impeller::vk::ImageView GetImageView() const override {
+    return image_view_.get();
+  }
+
+  impeller::vk::ImageView GetRenderTargetView(
+      uint32_t mip_level,
+      uint32_t array_layer) const override {
+    // Backing store images are always a single 2D mip and layer.
+    return image_view_.get();
+  }
+
+  bool IsSwapchainImage() const override { return true; }
+
+  impeller::vk::Image image_;
+  impeller::vk::UniqueImageView image_view_;
+  fml::closure destruction_callback_;
+};
+
+static std::unique_ptr<flutter::EmbedderRenderTarget>
+MakeRenderTargetFromBackingStoreImpeller(
+    FlutterBackingStore backing_store,
+    const fml::closure& on_release,
+    const std::shared_ptr<impeller::AiksContext>& aiks_context,
+    const FlutterBackingStoreConfig& config,
+    const FlutterVulkanBackingStore* vulkan) {
+  if (!vulkan) {
+    FML_LOG(ERROR) << "Embedder supplied null Vulkan backing store.";
+    return nullptr;
+  }
+  if (vulkan->struct_size != sizeof(FlutterVulkanBackingStore)) {
+    FML_LOG(ERROR)
+        << "Embedder supplied Vulkan backing store with invalid struct size: "
+        << vulkan->struct_size;
+    return nullptr;
+  }
+  if (!vulkan->image) {
+    FML_LOG(ERROR) << "Embedder supplied null Vulkan image.";
+    return nullptr;
+  }
+  if (vulkan->image->struct_size != sizeof(FlutterVulkanImage)) {
+    FML_LOG(ERROR)
+        << "Embedder supplied Vulkan image with invalid struct size: "
+        << vulkan->image->struct_size;
+    return nullptr;
+  }
+  if (vulkan->image->image == 0) {
+    FML_LOG(ERROR) << "Embedder supplied invalid Vulkan image handle (0).";
+    return nullptr;
+  }
+  if (config.size.width <= 0 || config.size.height <= 0) {
+    FML_LOG(ERROR) << "Embedder supplied invalid backing store dimensions: "
+                   << config.size.width << "x" << config.size.height;
+    return nullptr;
+  }
+
+  if (!aiks_context) {
+    FML_LOG(ERROR) << "AiksContext was null.";
+    return nullptr;
+  }
+  auto context = aiks_context->GetContext();
+  if (!context) {
+    FML_LOG(ERROR) << "AiksContext had null Context.";
+    return nullptr;
+  }
+
+  impeller::ContextVK& context_vk = impeller::ContextVK::Cast(*context);
+
+  impeller::vk::Format vk_format =
+      static_cast<impeller::vk::Format>(vulkan->image->format);
+  std::optional<impeller::PixelFormat> format =
+      impeller::VkFormatToImpellerFormat(vk_format);
+  if (!format.has_value()) {
+    FML_LOG(ERROR) << "Unsupported Vulkan pixel format: "
+                   << impeller::vk::to_string(vk_format);
+    return nullptr;
+  }
+
+  const auto size = impeller::ISize(config.size.width, config.size.height);
+
+  impeller::TextureDescriptor resolve_tex_desc;
+  resolve_tex_desc.type = impeller::TextureType::kTexture2D;
+  resolve_tex_desc.format = format.value();
+  resolve_tex_desc.size = size;
+  resolve_tex_desc.storage_mode = impeller::StorageMode::kDevicePrivate;
+  // 1 mip level and 1 sample for the resolve/onscreen render target texture.
+  resolve_tex_desc.mip_count = 1;
+  resolve_tex_desc.sample_count = impeller::SampleCount::kCount1;
+  resolve_tex_desc.compression_type = impeller::CompressionType::kLossless;
+  resolve_tex_desc.usage = impeller::TextureUsage::kRenderTarget |
+                           impeller::TextureUsage::kShaderRead;
+
+  impeller::vk::Image vk_image =
+      impeller::vk::Image(reinterpret_cast<VkImage>(vulkan->image->image));
+
+  impeller::vk::ImageViewCreateInfo view_info = {};
+  view_info.viewType = impeller::vk::ImageViewType::e2D;
+  view_info.format = ToVKImageFormat(resolve_tex_desc.format);
+  view_info.subresourceRange.aspectMask =
+      impeller::vk::ImageAspectFlagBits::eColor;
+  // 0th mip level and 0th array layer.
+  view_info.subresourceRange.baseMipLevel = 0u;
+  view_info.subresourceRange.baseArrayLayer = 0u;
+  // Single mip level and single array layer.
+  view_info.subresourceRange.levelCount = 1;
+  view_info.subresourceRange.layerCount = 1;
+  view_info.image = vk_image;
+
+  auto [result, image_view] =
+      context_vk.GetDevice().createImageViewUnique(view_info);
+  if (result != impeller::vk::Result::eSuccess) {
+    FML_LOG(ERROR) << "Failed to create Vulkan image view for provided image: "
+                   << impeller::vk::to_string(result);
+    return nullptr;
+  }
+
+  fml::closure image_destruct = [callback = vulkan->destruction_callback,
+                                 user_data = vulkan->user_data]() {
+    if (callback) {
+      callback(user_data);
+    }
+  };
+
+  auto wrapped_texture_source =
+      std::make_shared<EmbedderWrappedTextureSourceVK>(
+          vk_image, std::move(image_view), resolve_tex_desc,
+          std::move(image_destruct));
+
+  std::shared_ptr<impeller::Texture> resolve_tex =
+      std::make_shared<impeller::TextureVK>(context,
+                                            std::move(wrapped_texture_source));
+  if (!resolve_tex) {
+    FML_LOG(ERROR) << "Could not create TextureVK from wrapped texture source.";
+    return nullptr;
+  }
+  resolve_tex->SetLabel("ImpellerBackingStoreResolve");
+
+  context->UpdateOffscreenLayerPixelFormat(
+      resolve_tex->GetTextureDescriptor().format);
+
+  const bool enable_msaa = true;
+  impeller::ColorAttachment color0;
+  color0.clear_color = impeller::Color::DarkSlateGray();
+  color0.load_action = impeller::LoadAction::kClear;
+
+  if (enable_msaa) {
+    impeller::TextureDescriptor msaa_tex_desc;
+    msaa_tex_desc.storage_mode = impeller::StorageMode::kDeviceTransient;
+    msaa_tex_desc.type = impeller::TextureType::kTexture2DMultisample;
+    // 4x MSAA count for antialiasing.
+    msaa_tex_desc.sample_count = impeller::SampleCount::kCount4;
+    msaa_tex_desc.format = resolve_tex->GetTextureDescriptor().format;
+    msaa_tex_desc.size = size;
+    msaa_tex_desc.usage = impeller::TextureUsage::kRenderTarget;
+
+    auto msaa_tex =
+        context->GetResourceAllocator()->CreateTexture(msaa_tex_desc);
+    if (!msaa_tex) {
+      FML_LOG(ERROR) << "Could not allocate Vulkan MSAA color texture.";
+      return nullptr;
+    }
+    msaa_tex->SetLabel("ImpellerBackingStoreColorMSAA");
+
+    color0.texture = msaa_tex;
+    color0.store_action = impeller::StoreAction::kMultisampleResolve;
+    color0.resolve_texture = resolve_tex;
+  } else {
+    color0.texture = resolve_tex;
+    color0.store_action = impeller::StoreAction::kStore;
+  }
+
+  impeller::RenderTarget render_target_desc;
+  // Color attachment index 0.
+  render_target_desc.SetColorAttachment(color0, 0u);
+
+  return std::make_unique<flutter::EmbedderRenderTargetImpeller>(
+      backing_store, aiks_context,
+      std::make_unique<impeller::RenderTarget>(std::move(render_target_desc)),
+      on_release, nullptr);
+}
+#else
+static std::unique_ptr<flutter::EmbedderRenderTarget>
+MakeRenderTargetFromBackingStoreImpeller(
+    FlutterBackingStore backing_store,
+    const fml::closure& on_release,
+    const std::shared_ptr<impeller::AiksContext>& aiks_context,
+    const FlutterBackingStoreConfig& config,
+    const FlutterVulkanBackingStore* vulkan) {
+  return nullptr;
+}
+#endif
+
 static sk_sp<SkSurface> MakeSkSurfaceFromBackingStore(
     GrDirectContext* context,
     const FlutterBackingStoreConfig& config,
@@ -1524,7 +1750,9 @@ CreateEmbedderRenderTarget(
     }
     case kFlutterBackingStoreTypeVulkan: {
       if (enable_impeller) {
-        FML_LOG(ERROR) << "Unimplemented";
+        render_target = MakeRenderTargetFromBackingStoreImpeller(
+            backing_store, collect_callback.Release(), aiks_context, config,
+            &backing_store.vulkan);
         break;
       } else {
         auto skia_surface = MakeSkSurfaceFromBackingStore(

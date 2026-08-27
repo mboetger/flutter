@@ -129,6 +129,85 @@ TEST_F(EmbedderTest, CanSwapOutVulkanCalls) {
   EXPECT_TRUE(g_vulkan_proc_info.did_call_queue_submit);
 }
 
+TEST_F(EmbedderTest, CanRenderWithVulkanCompositor) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 1024x1024.
+  builder.SetSurface(DlISize(1024, 1024));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) {
+        // Assert at least 1 layer composited.
+        ASSERT_GE(layers_count, 1u);
+        ASSERT_NE(layers[0]->backing_store, nullptr);
+        EXPECT_EQ(layers[0]->backing_store->type,
+                  kFlutterBackingStoreTypeVulkan);
+        EXPECT_NE(layers[0]->backing_store->vulkan.image, nullptr);
+        latch.Signal();
+      });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 1024;
+  event.height = 1024;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, CanRenderWithImpellerVulkanCompositor) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+  // Viewport dimensions: 1024x1024.
+  builder.SetSurface(DlISize(1024, 1024));
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+
+  fml::AutoResetWaitableEvent latch;
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) {
+        // Assert at least 1 layer composited.
+        ASSERT_GE(layers_count, 1u);
+        ASSERT_NE(layers[0]->backing_store, nullptr);
+        EXPECT_EQ(layers[0]->backing_store->type,
+                  kFlutterBackingStoreTypeVulkan);
+        EXPECT_NE(layers[0]->backing_store->vulkan.image, nullptr);
+        latch.Signal();
+      });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 1024;
+  event.height = 1024;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+  engine.reset();
+}
+
 }  // namespace testing
 }  // namespace flutter
 

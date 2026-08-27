@@ -21,35 +21,43 @@ EmbedderTestContextVulkan::EmbedderTestContextVulkan(std::string assets_path)
     : EmbedderTestContext(std::move(assets_path)), surface_() {
   vulkan_context_ = fml::MakeRefCounted<TestVulkanContext>();
   renderer_config_.type = FlutterRendererType::kVulkan;
-  renderer_config_.vulkan = {
-      .struct_size = sizeof(FlutterVulkanRendererConfig),
-      .version = vulkan_context_->application_->GetAPIVersion(),
-      .instance = vulkan_context_->application_->GetInstance(),
-      .physical_device = vulkan_context_->device_->GetPhysicalDeviceHandle(),
-      .device = vulkan_context_->device_->GetHandle(),
-      .queue_family_index = vulkan_context_->device_->GetGraphicsQueueIndex(),
-      .queue = vulkan_context_->device_->GetQueueHandle(),
-      .get_instance_proc_address_callback =
-          EmbedderTestContextVulkan::InstanceProcAddr,
-      .get_next_image_callback =
-          [](void* context,
-             const FlutterFrameInfo* frame_info) -> FlutterVulkanImage {
-        VkImage image =
-            reinterpret_cast<EmbedderTestContextVulkan*>(context)->GetNextImage(
-                {static_cast<int>(frame_info->size.width),
-                 static_cast<int>(frame_info->size.height)});
-        return {
-            .struct_size = sizeof(FlutterVulkanImage),
-            .image = reinterpret_cast<uint64_t>(image),
-            .format = VK_FORMAT_R8G8B8A8_UNORM,
-        };
-      },
-      .present_image_callback = [](void* context,
-                                   const FlutterVulkanImage* image) -> bool {
-        return reinterpret_cast<EmbedderTestContextVulkan*>(context)
-            ->PresentImage(reinterpret_cast<VkImage>(image->image));
-      },
+  FlutterVulkanRendererConfig vulkan = {};
+  vulkan.struct_size = sizeof(FlutterVulkanRendererConfig);
+  vulkan.version = vulkan_context_->application_->GetAPIVersion();
+  vulkan.instance = vulkan_context_->application_->GetInstance();
+  vulkan.physical_device = vulkan_context_->device_->GetPhysicalDeviceHandle();
+  vulkan.device = vulkan_context_->device_->GetHandle();
+  vulkan.queue_family_index = vulkan_context_->device_->GetGraphicsQueueIndex();
+  vulkan.queue = vulkan_context_->device_->GetQueueHandle();
+  vulkan.enabled_instance_extension_count =
+      vulkan_context_->GetInstanceExtensionPointers().size();
+  vulkan.enabled_instance_extensions = const_cast<const char**>(
+      vulkan_context_->GetInstanceExtensionPointers().data());
+  vulkan.enabled_device_extension_count =
+      vulkan_context_->GetDeviceExtensionPointers().size();
+  vulkan.enabled_device_extensions = const_cast<const char**>(
+      vulkan_context_->GetDeviceExtensionPointers().data());
+  vulkan.get_instance_proc_address_callback =
+      EmbedderTestContextVulkan::InstanceProcAddr;
+  vulkan.get_next_image_callback =
+      [](void* context,
+         const FlutterFrameInfo* frame_info) -> FlutterVulkanImage {
+    VkImage image =
+        reinterpret_cast<EmbedderTestContextVulkan*>(context)->GetNextImage(
+            {static_cast<int>(frame_info->size.width),
+             static_cast<int>(frame_info->size.height)});
+    return {
+        .struct_size = sizeof(FlutterVulkanImage),
+        .image = reinterpret_cast<uint64_t>(image),
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+    };
   };
+  vulkan.present_image_callback = [](void* context,
+                                     const FlutterVulkanImage* image) -> bool {
+    return reinterpret_cast<EmbedderTestContextVulkan*>(context)->PresentImage(
+        reinterpret_cast<VkImage>(image->image));
+  };
+  renderer_config_.vulkan = vulkan;
 }
 
 EmbedderTestContextVulkan::~EmbedderTestContextVulkan() {}

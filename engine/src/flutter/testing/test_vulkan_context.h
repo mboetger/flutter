@@ -26,7 +26,25 @@ class TestVulkanContext : public fml::RefCountedThreadSafe<TestVulkanContext> {
 
   sk_sp<GrDirectContext> GetGrDirectContext() const;
 
+  const std::vector<std::string>& GetInstanceExtensions() const {
+    return instance_extensions_;
+  }
+  const std::vector<const char*>& GetInstanceExtensionPointers() const {
+    return instance_extension_ptrs_;
+  }
+
+  const std::vector<std::string>& GetDeviceExtensions() const {
+    return device_extensions_;
+  }
+  const std::vector<const char*>& GetDeviceExtensionPointers() const {
+    return device_extension_ptrs_;
+  }
+
  private:
+  std::vector<std::string> instance_extensions_;
+  std::vector<const char*> instance_extension_ptrs_;
+  std::vector<std::string> device_extensions_;
+  std::vector<const char*> device_extension_ptrs_;
   fml::RefPtr<vulkan::VulkanProcTable> vk_;
   std::unique_ptr<vulkan::VulkanApplication> application_;
   std::unique_ptr<vulkan::VulkanDevice> device_;
