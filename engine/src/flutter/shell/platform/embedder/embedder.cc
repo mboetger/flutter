@@ -493,35 +493,35 @@ InferOpenGLPlatformViewCreationCallback(
       gl_populate_existing_damage,         // gl_populate_existing_damage
   };
 
-  return fml::MakeCopyable(
-      [gl_dispatch_table, fbo_reset_after_present, platform_dispatch_table,
-       enable_impeller, impeller_flags,
-       external_view_embedder =
-           std::move(external_view_embedder)](flutter::Shell& shell) mutable {
-        std::shared_ptr<flutter::EmbedderExternalViewEmbedder> view_embedder =
-            std::move(external_view_embedder);
-        if (enable_impeller) {
-          return std::make_unique<flutter::PlatformViewEmbedder>(
-              shell,                   // delegate
-              shell.GetTaskRunners(),  // task runners
-              std::make_unique<flutter::EmbedderSurfaceGLImpeller>(
-                  gl_dispatch_table, fbo_reset_after_present, view_embedder,
-                  shell.GetShutdownSafeIOTaskRunner(),
-                  impeller_flags),      // embedder_surface
-              platform_dispatch_table,  // embedder platform dispatch table
-              view_embedder             // external view embedder
-          );
-        }
-        return std::make_unique<flutter::PlatformViewEmbedder>(
-            shell,                   // delegate
-            shell.GetTaskRunners(),  // task runners
-            std::make_unique<flutter::EmbedderSurfaceGLSkia>(
-                gl_dispatch_table, fbo_reset_after_present,
-                view_embedder),       // embedder_surface
-            platform_dispatch_table,  // embedder platform dispatch table
-            view_embedder             // external view embedder
-        );
-      });
+  std::shared_ptr<flutter::EmbedderExternalViewEmbedder> view_embedder =
+      std::move(external_view_embedder);
+
+  return fml::MakeCopyable([gl_dispatch_table, fbo_reset_after_present,
+                            platform_dispatch_table, enable_impeller,
+                            impeller_flags,
+                            view_embedder](flutter::Shell& shell) mutable {
+    if (enable_impeller) {
+      return std::make_unique<flutter::PlatformViewEmbedder>(
+          shell,                   // delegate
+          shell.GetTaskRunners(),  // task runners
+          std::make_unique<flutter::EmbedderSurfaceGLImpeller>(
+              gl_dispatch_table, fbo_reset_after_present, view_embedder,
+              shell.GetShutdownSafeIOTaskRunner(),
+              impeller_flags),      // embedder_surface
+          platform_dispatch_table,  // embedder platform dispatch table
+          view_embedder             // external view embedder
+      );
+    }
+    return std::make_unique<flutter::PlatformViewEmbedder>(
+        shell,                   // delegate
+        shell.GetTaskRunners(),  // task runners
+        std::make_unique<flutter::EmbedderSurfaceGLSkia>(
+            gl_dispatch_table, fbo_reset_after_present,
+            view_embedder),       // embedder_surface
+        platform_dispatch_table,  // embedder platform dispatch table
+        view_embedder             // external view embedder
+    );
+  });
 #else   // SHELL_ENABLE_GL
   FML_LOG(ERROR) << "This Flutter Engine does not support OpenGL rendering.";
   return nullptr;
@@ -617,7 +617,7 @@ InferMetalPlatformViewCreationCallback(
         shell.GetTaskRunners(),       // task runners
         std::move(embedder_surface),  // embedder surface
         platform_dispatch_table,      // platform dispatch table
-        std::move(view_embedder)      // external view embedder
+        view_embedder                 // external view embedder
     );
   });
 #else   // SHELL_ENABLE_METAL
@@ -678,53 +678,64 @@ InferVulkanPlatformViewCreationCallback(
   std::shared_ptr<flutter::EmbedderExternalViewEmbedder> view_embedder =
       std::move(external_view_embedder);
 
+  return fml::MakeCopyable(
+      [config, proc_addr, vk_instance, vulkan_get_next_image,
+       vulkan_present_image_callback, view_embedder, platform_dispatch_table,
+       enable_impeller, impeller_flags](flutter::Shell& shell) mutable {
+        std::unique_ptr<flutter::EmbedderSurface> embedder_surface;
 #if IMPELLER_SUPPORTS_RENDERING
-  if (enable_impeller) {
-    flutter::EmbedderSurfaceVulkanImpeller::VulkanDispatchTable
-        vulkan_dispatch_table = {
-            .get_instance_proc_address =
-                reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
-            .get_next_image = vulkan_get_next_image,
-            .present_image = vulkan_present_image_callback,
-        };
+        if (enable_impeller) {
+          flutter::EmbedderSurfaceVulkanImpeller::VulkanDispatchTable
+              vulkan_dispatch_table = {
+                  .get_instance_proc_address =
+                      reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
+                  .get_next_image = vulkan_get_next_image,
+                  .present_image = vulkan_present_image_callback,
+              };
 
-    std::unique_ptr<flutter::EmbedderSurfaceVulkanImpeller> embedder_surface =
-        std::make_unique<flutter::EmbedderSurfaceVulkanImpeller>(
-            config->vulkan.version, vk_instance,
-            config->vulkan.enabled_instance_extension_count,
-            config->vulkan.enabled_instance_extensions,
-            config->vulkan.enabled_device_extension_count,
-            config->vulkan.enabled_device_extensions,
-            static_cast<VkPhysicalDevice>(config->vulkan.physical_device),
-            static_cast<VkDevice>(config->vulkan.device),
-            config->vulkan.queue_family_index,
-            static_cast<VkQueue>(config->vulkan.queue), vulkan_dispatch_table,
-            view_embedder, impeller_flags);
+          embedder_surface =
+              std::make_unique<flutter::EmbedderSurfaceVulkanImpeller>(
+                  config->vulkan.version, vk_instance,
+                  config->vulkan.enabled_instance_extension_count,
+                  config->vulkan.enabled_instance_extensions,
+                  config->vulkan.enabled_device_extension_count,
+                  config->vulkan.enabled_device_extensions,
+                  static_cast<VkPhysicalDevice>(config->vulkan.physical_device),
+                  static_cast<VkDevice>(config->vulkan.device),
+                  config->vulkan.queue_family_index,
+                  static_cast<VkQueue>(config->vulkan.queue),
+                  vulkan_dispatch_table, view_embedder, impeller_flags);
+        } else {
+          flutter::EmbedderSurfaceVulkan::VulkanDispatchTable
+              vulkan_dispatch_table = {
+                  .get_instance_proc_address =
+                      reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
+                  .get_next_image = vulkan_get_next_image,
+                  .present_image = vulkan_present_image_callback,
+              };
 
-    return fml::MakeCopyable(
-        [embedder_surface = std::move(embedder_surface),
-         platform_dispatch_table,
-         external_view_embedder =
-             std::move(view_embedder)](flutter::Shell& shell) mutable {
-          return std::make_unique<flutter::PlatformViewEmbedder>(
-              shell,                             // delegate
-              shell.GetTaskRunners(),            // task runners
-              std::move(embedder_surface),       // embedder surface
-              platform_dispatch_table,           // platform dispatch table
-              std::move(external_view_embedder)  // external view embedder
-          );
-        });
-  } else {
-    flutter::EmbedderSurfaceVulkan::VulkanDispatchTable vulkan_dispatch_table =
-        {
-            .get_instance_proc_address =
-                reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
-            .get_next_image = vulkan_get_next_image,
-            .present_image = vulkan_present_image_callback,
-        };
+          embedder_surface = std::make_unique<flutter::EmbedderSurfaceVulkan>(
+              config->vulkan.version, vk_instance,
+              config->vulkan.enabled_instance_extension_count,
+              config->vulkan.enabled_instance_extensions,
+              config->vulkan.enabled_device_extension_count,
+              config->vulkan.enabled_device_extensions,
+              static_cast<VkPhysicalDevice>(config->vulkan.physical_device),
+              static_cast<VkDevice>(config->vulkan.device),
+              config->vulkan.queue_family_index,
+              static_cast<VkQueue>(config->vulkan.queue), vulkan_dispatch_table,
+              view_embedder);
+        }
+#else
+        flutter::EmbedderSurfaceVulkan::VulkanDispatchTable
+            vulkan_dispatch_table = {
+                .get_instance_proc_address =
+                    reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
+                .get_next_image = vulkan_get_next_image,
+                .present_image = vulkan_present_image_callback,
+            };
 
-    std::unique_ptr<flutter::EmbedderSurfaceVulkan> embedder_surface =
-        std::make_unique<flutter::EmbedderSurfaceVulkan>(
+        embedder_surface = std::make_unique<flutter::EmbedderSurfaceVulkan>(
             config->vulkan.version, vk_instance,
             config->vulkan.enabled_instance_extension_count,
             config->vulkan.enabled_instance_extensions,
@@ -735,59 +746,19 @@ InferVulkanPlatformViewCreationCallback(
             config->vulkan.queue_family_index,
             static_cast<VkQueue>(config->vulkan.queue), vulkan_dispatch_table,
             view_embedder);
-
-    return fml::MakeCopyable(
-        [embedder_surface = std::move(embedder_surface),
-         platform_dispatch_table,
-         external_view_embedder =
-             std::move(view_embedder)](flutter::Shell& shell) mutable {
-          return std::make_unique<flutter::PlatformViewEmbedder>(
-              shell,                             // delegate
-              shell.GetTaskRunners(),            // task runners
-              std::move(embedder_surface),       // embedder surface
-              platform_dispatch_table,           // platform dispatch table
-              std::move(external_view_embedder)  // external view embedder
-          );
-        });
-  }
-#else
-  flutter::EmbedderSurfaceVulkan::VulkanDispatchTable vulkan_dispatch_table = {
-      .get_instance_proc_address =
-          reinterpret_cast<PFN_vkGetInstanceProcAddr>(proc_addr),
-      .get_next_image = vulkan_get_next_image,
-      .present_image = vulkan_present_image_callback,
-  };
-
-  std::unique_ptr<flutter::EmbedderSurfaceVulkan> embedder_surface =
-      std::make_unique<flutter::EmbedderSurfaceVulkan>(
-          config->vulkan.version, vk_instance,
-          config->vulkan.enabled_instance_extension_count,
-          config->vulkan.enabled_instance_extensions,
-          config->vulkan.enabled_device_extension_count,
-          config->vulkan.enabled_device_extensions,
-          static_cast<VkPhysicalDevice>(config->vulkan.physical_device),
-          static_cast<VkDevice>(config->vulkan.device),
-          config->vulkan.queue_family_index,
-          static_cast<VkQueue>(config->vulkan.queue), vulkan_dispatch_table,
-          view_embedder);
-
-  return fml::MakeCopyable(
-      [embedder_surface = std::move(embedder_surface), platform_dispatch_table,
-       external_view_embedder =
-           std::move(view_embedder)](flutter::Shell& shell) mutable {
+#endif
         return std::make_unique<flutter::PlatformViewEmbedder>(
-            shell,                             // delegate
-            shell.GetTaskRunners(),            // task runners
-            std::move(embedder_surface),       // embedder surface
-            platform_dispatch_table,           // platform dispatch table
-            std::move(external_view_embedder)  // external view embedder
+            shell,                        // delegate
+            shell.GetTaskRunners(),       // task runners
+            std::move(embedder_surface),  // embedder surface
+            platform_dispatch_table,      // platform dispatch table
+            view_embedder                 // external view embedder
         );
-      });
-#endif  //  // IMPELLER_SUPPORTS_RENDERING
-#else   // SHELL_ENABLE_VULKAN
+      });  //  // IMPELLER_SUPPORTS_RENDERING
+#else      // SHELL_ENABLE_VULKAN
   FML_LOG(ERROR) << "This Flutter Engine does not support Vulkan rendering.";
   return nullptr;
-#endif  // SHELL_ENABLE_VULKAN
+#endif     // SHELL_ENABLE_VULKAN
 }
 
 static flutter::Shell::CreateCallback<flutter::PlatformView>
@@ -813,18 +784,19 @@ InferSoftwarePlatformViewCreationCallback(
           software_present_backing_store,  // required
       };
 
-  return fml::MakeCopyable(
-      [software_dispatch_table, platform_dispatch_table,
-       external_view_embedder =
-           std::move(external_view_embedder)](flutter::Shell& shell) mutable {
-        return std::make_unique<flutter::PlatformViewEmbedder>(
-            shell,                             // delegate
-            shell.GetTaskRunners(),            // task runners
-            software_dispatch_table,           // software dispatch table
-            platform_dispatch_table,           // platform dispatch table
-            std::move(external_view_embedder)  // external view embedder
-        );
-      });
+  std::shared_ptr<flutter::EmbedderExternalViewEmbedder> view_embedder =
+      std::move(external_view_embedder);
+
+  return fml::MakeCopyable([software_dispatch_table, platform_dispatch_table,
+                            view_embedder](flutter::Shell& shell) {
+    return std::make_unique<flutter::PlatformViewEmbedder>(
+        shell,                    // delegate
+        shell.GetTaskRunners(),   // task runners
+        software_dispatch_table,  // software dispatch table
+        platform_dispatch_table,  // platform dispatch table
+        view_embedder             // external view embedder
+    );
+  });
 }
 
 static flutter::Shell::CreateCallback<flutter::PlatformView>
@@ -3603,6 +3575,10 @@ FlutterEngineResult FlutterEngineRunTask(FLUTTER_API_SYMBOL(FlutterEngine)
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
 
+  if (task == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid task pointer.");
+  }
+
   if (!flutter::EmbedderThreadHost::RunnerIsValid(
           reinterpret_cast<intptr_t>(task->runner))) {
     // This task came too late, the embedder has already been destroyed.
@@ -4018,6 +3994,140 @@ FlutterEngineResult FlutterEngineUpdateAssetResolvers(
                             "Failed to update asset resolvers.");
 }
 
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                       const FlutterEngineSpawnInfo* spawn_info,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (spawn_info == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Spawn info handle was invalid.");
+  }
+  if (engine_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine out parameter was invalid.");
+  }
+  if (SAFE_ACCESS(spawn_info, struct_size, 0) <
+      sizeof(FlutterEngineSpawnInfo)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Spawn info struct size mismatch.");
+  }
+
+  auto parent_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!parent_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Parent engine is not valid or not running.");
+  }
+
+  auto isolate_configuration = flutter::IsolateConfiguration::InferFromSettings(
+      parent_engine->GetShell().GetSettings(), nullptr, nullptr,
+      flutter::IsolateLaunchType::kExistingGroup);
+  if (!isolate_configuration) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not infer isolate configuration for spawned engine.");
+  }
+
+  flutter::RunConfiguration run_configuration(std::move(isolate_configuration));
+
+  const size_t custom_resolvers_count =
+      SAFE_ACCESS(spawn_info, asset_resolvers_count, 0);
+  const FlutterAssetResolver* const* custom_resolvers =
+      SAFE_ACCESS(spawn_info, asset_resolvers, nullptr);
+
+  if (custom_resolvers_count > 0 && custom_resolvers == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Custom asset resolvers count was > 0 but the array was null.");
+  }
+
+  for (size_t i = 0; i < custom_resolvers_count; ++i) {
+    if (custom_resolvers[i] == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          ("Custom asset resolver at index " + std::to_string(i) + " was null.")
+              .c_str());
+    }
+    auto resolver =
+        std::make_unique<flutter::EmbedderAssetResolver>(custom_resolvers[i]);
+    if (!resolver->IsValid()) {
+      return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                                ("Custom asset resolver at index " +
+                                 std::to_string(i) + " was invalid.")
+                                    .c_str());
+    }
+    run_configuration.AddAssetResolver(std::move(resolver));
+  }
+
+  const char* entrypoint_cstr = SAFE_ACCESS(spawn_info, entrypoint, nullptr);
+  const char* library_cstr = SAFE_ACCESS(spawn_info, library_uri, nullptr);
+
+  std::string entrypoint = entrypoint_cstr ? entrypoint_cstr : "";
+  std::string library = library_cstr ? library_cstr : "";
+
+  if (!entrypoint.empty() && !library.empty()) {
+    run_configuration.SetEntrypointAndLibrary(std::move(entrypoint),
+                                              std::move(library));
+  } else if (!entrypoint.empty()) {
+    run_configuration.SetEntrypoint(std::move(entrypoint));
+  }
+
+  const int64_t argc = SAFE_ACCESS(spawn_info, entrypoint_argc, 0);
+  if (argc < 0) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "entrypoint_argc cannot be negative.");
+  }
+  const char* const* argv = SAFE_ACCESS(spawn_info, entrypoint_argv, nullptr);
+  if (argc > 0) {
+    if (argv == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          "entrypoint_argc was > 0 but entrypoint_argv was null.");
+    }
+    std::vector<std::string> arguments(argc);
+    for (int64_t i = 0; i < argc; ++i) {
+      if (argv[i] == nullptr) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            ("entrypoint argument at index " + std::to_string(i) + " was null.")
+                .c_str());
+      }
+      arguments[i] = std::string(argv[i]);
+    }
+    run_configuration.SetEntrypointArgs(std::move(arguments));
+  }
+
+  const int64_t engine_id = SAFE_ACCESS(spawn_info, engine_id, 0);
+  if (engine_id != 0) {
+    run_configuration.SetEngineId(engine_id);
+  }
+
+  std::string initial_route;
+  const char* route_cstr = SAFE_ACCESS(spawn_info, initial_route, nullptr);
+  if (route_cstr != nullptr) {
+    initial_route = route_cstr;
+  }
+
+  auto spawned_engine =
+      parent_engine->Spawn(std::move(run_configuration), initial_route);
+  if (!spawned_engine) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not spawn engine.");
+  }
+
+  if (!spawned_engine->NotifyCreated()) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not initialize platform view components for spawned engine.");
+  }
+
+  *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
+      spawned_engine.release());
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4075,6 +4185,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(RemoveView, FlutterEngineRemoveView);
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
   SET_PROC(UpdateAssetResolvers, FlutterEngineUpdateAssetResolvers);
+  SET_PROC(Spawn, FlutterEngineSpawn);
 #undef SET_PROC
 
   return kSuccess;

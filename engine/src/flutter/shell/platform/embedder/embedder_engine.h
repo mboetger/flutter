@@ -6,6 +6,7 @@
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_ENGINE_H_
 
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "flutter/fml/macros.h"
@@ -23,7 +24,7 @@ struct ShellArgs;
 class EmbedderEngine {
  public:
   EmbedderEngine(
-      std::unique_ptr<EmbedderThreadHost> thread_host,
+      std::shared_ptr<EmbedderThreadHost> thread_host,
       const TaskRunners& task_runners,
       const Settings& settings,
       RunConfiguration run_configuration,
@@ -32,7 +33,19 @@ class EmbedderEngine {
       std::unique_ptr<EmbedderExternalTextureResolver>
           external_texture_resolver);
 
+  EmbedderEngine(
+      std::shared_ptr<EmbedderThreadHost> thread_host,
+      const TaskRunners& task_runners,
+      std::unique_ptr<Shell> shell,
+      const Shell::CreateCallback<PlatformView>& on_create_platform_view,
+      const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+      std::unique_ptr<EmbedderExternalTextureResolver>
+          external_texture_resolver);
+
   ~EmbedderEngine();
+
+  std::unique_ptr<EmbedderEngine> Spawn(RunConfiguration run_configuration,
+                                        const std::string& initial_route);
 
   bool LaunchShell();
 
@@ -94,10 +107,12 @@ class EmbedderEngine {
   Shell& GetShell();
 
  private:
-  std::unique_ptr<EmbedderThreadHost> thread_host_;
+  std::shared_ptr<EmbedderThreadHost> thread_host_;
   TaskRunners task_runners_;
-  RunConfiguration run_configuration_;
+  std::optional<RunConfiguration> run_configuration_;
   std::unique_ptr<ShellArgs> shell_args_;
+  Shell::CreateCallback<PlatformView> on_create_platform_view_;
+  Shell::CreateCallback<Rasterizer> on_create_rasterizer_;
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
 

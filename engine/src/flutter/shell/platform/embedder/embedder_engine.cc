@@ -24,7 +24,7 @@ struct ShellArgs {
 };
 
 EmbedderEngine::EmbedderEngine(
-    std::unique_ptr<EmbedderThreadHost> thread_host,
+    std::shared_ptr<EmbedderThreadHost> thread_host,
     const flutter::TaskRunners& task_runners,
     const flutter::Settings& settings,
     RunConfiguration run_configuration,
@@ -37,9 +37,57 @@ EmbedderEngine::EmbedderEngine(
       shell_args_(std::make_unique<ShellArgs>(settings,
                                               on_create_platform_view,
                                               on_create_rasterizer)),
+      on_create_platform_view_(on_create_platform_view),
+      on_create_rasterizer_(on_create_rasterizer),
+      external_texture_resolver_(std::move(external_texture_resolver)) {}
+
+EmbedderEngine::EmbedderEngine(
+    std::shared_ptr<EmbedderThreadHost> thread_host,
+    const flutter::TaskRunners& task_runners,
+    std::unique_ptr<Shell> shell,
+    const Shell::CreateCallback<PlatformView>& on_create_platform_view,
+    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver)
+    : thread_host_(std::move(thread_host)),
+      task_runners_(task_runners),
+      on_create_platform_view_(on_create_platform_view),
+      on_create_rasterizer_(on_create_rasterizer),
+      shell_(std::move(shell)),
       external_texture_resolver_(std::move(external_texture_resolver)) {}
 
 EmbedderEngine::~EmbedderEngine() = default;
+
+std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
+    RunConfiguration run_configuration,
+    const std::string& initial_route) {
+  if (!IsValid()) {
+    return nullptr;
+  }
+  if (!on_create_platform_view_ || !on_create_rasterizer_) {
+    return nullptr;
+  }
+  std::unique_ptr<Shell> spawned_shell =
+      shell_->Spawn(std::move(run_configuration), initial_route,
+                    on_create_platform_view_, on_create_rasterizer_);
+  if (!spawned_shell) {
+    return nullptr;
+  }
+
+  std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver;
+  if (external_texture_resolver_) {
+    external_texture_resolver =
+        std::make_unique<EmbedderExternalTextureResolver>(
+            *external_texture_resolver_);
+  } else {
+    external_texture_resolver =
+        std::make_unique<EmbedderExternalTextureResolver>();
+  }
+
+  return std::make_unique<EmbedderEngine>(
+      thread_host_, task_runners_, std::move(spawned_shell),
+      on_create_platform_view_, on_create_rasterizer_,
+      std::move(external_texture_resolver));
+}
 
 bool EmbedderEngine::LaunchShell() {
   if (!shell_args_) {
@@ -69,6 +117,13 @@ bool EmbedderEngine::CollectShell() {
 
 void EmbedderEngine::CollectThreadHost() {
   if (!thread_host_) {
+    return;
+  }
+
+  // If other engines (e.g. spawned engines) are still sharing this thread host,
+  // do not invalidate runners or tear down OS threads yet.
+  if (thread_host_.use_count() > 1) {
+    thread_host_.reset();
     return;
   }
 
@@ -108,10 +163,11 @@ void EmbedderEngine::CollectThreadHost() {
 }
 
 bool EmbedderEngine::RunRootIsolate() {
-  if (!IsValid() || !run_configuration_.IsValid()) {
+  if (!IsValid() || !run_configuration_.has_value() ||
+      !run_configuration_->IsValid()) {
     return false;
   }
-  shell_->RunEngine(std::move(run_configuration_));
+  shell_->RunEngine(std::move(*run_configuration_));
   return true;
 }
 
@@ -285,7 +341,7 @@ bool EmbedderEngine::RunTask(const FlutterTask* task) {
   // The shell doesn't need to be running or valid for access to the thread
   // host. This is why there is no `IsValid` check here. This allows embedders
   // to perform custom task runner interop before the shell is running.
-  if (task == nullptr) {
+  if (task == nullptr || !thread_host_) {
     return false;
   }
   auto result = thread_host_->PostTask(reinterpret_cast<intptr_t>(task->runner),

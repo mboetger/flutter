@@ -2920,6 +2920,37 @@ typedef struct {
   size_t asset_resolvers_count;
 } FlutterProjectArgs;
 
+/// Information used to spawn a new engine from an existing running engine.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineSpawnInfo).
+  size_t struct_size;
+
+  /// Optional custom entrypoint. If null or empty, defaults to "main".
+  const char* entrypoint;
+
+  /// Optional library URI. If null or empty, defaults to the root library.
+  const char* library_uri;
+
+  /// Optional initial route. If null or empty, defaults to "/".
+  const char* initial_route;
+
+  /// Number of entrypoint arguments in `entrypoint_argv`.
+  int64_t entrypoint_argc;
+
+  /// Array of null-terminated strings to pass as entrypoint arguments.
+  const char* const* entrypoint_argv;
+
+  /// Array of custom asset resolvers for the spawned engine.
+  const FlutterAssetResolver* const* asset_resolvers;
+
+  /// Number of custom asset resolvers in `asset_resolvers`.
+  size_t asset_resolvers_count;
+
+  /// Optional engine identifier for the spawned engine. If 0, an internal
+  /// engine ID is assigned.
+  int64_t engine_id;
+} FlutterEngineSpawnInfo;
+
 typedef struct {
   /// The size of this struct. Must be
   /// sizeof(FlutterSendSemanticsActionInfo).
@@ -3735,6 +3766,23 @@ FlutterEngineResult FlutterEngineUpdateAssetResolvers(
     const FlutterAssetResolver* const* asset_resolvers,
     size_t asset_resolvers_count);
 
+//------------------------------------------------------------------------------
+/// @brief      Spawns a new FlutterEngine instance from an existing running
+///             engine. The spawned engine shares the isolate group, task
+///             runners, and rendering context of the parent engine.
+///
+/// @param[in]  engine      A running parent engine instance.
+/// @param[in]  spawn_info  The configuration for the spawned engine.
+/// @param[out] engine_out  The handle to the spawned engine on success.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                       const FlutterEngineSpawnInfo* spawn_info,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3873,6 +3921,10 @@ typedef FlutterEngineResult (*FlutterEngineUpdateAssetResolversFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterAssetResolver* const* asset_resolvers,
     size_t asset_resolvers_count);
+typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineSpawnInfo* spawn_info,
+    FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3924,6 +3976,7 @@ typedef struct {
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
   FlutterEngineUpdateAssetResolversFnPtr UpdateAssetResolvers;
+  FlutterEngineSpawnFnPtr Spawn;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------
