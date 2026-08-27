@@ -2268,10 +2268,18 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
         [ptr = args->platform_message_callback,
          user_data](std::unique_ptr<flutter::PlatformMessage> message) {
           auto handle = new FlutterPlatformMessageResponseHandle();
+          const uint8_t* data_ptr = nullptr;
+          if (message->hasData()) {
+            data_ptr = message->data().GetMapping();
+            if (data_ptr == nullptr) {
+              static const uint8_t kEmpty = 0;
+              data_ptr = &kEmpty;
+            }
+          }
           const FlutterPlatformMessage incoming_message = {
               sizeof(FlutterPlatformMessage),  // struct_size
               message->channel().c_str(),      // channel
-              message->data().GetMapping(),    // message
+              data_ptr,                        // message
               message->data().GetSize(),       // message_size
               handle,                          // response_handle
           };
@@ -2585,14 +2593,20 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   settings.enable_wide_gamut = SAFE_ACCESS(args, enable_wide_gamut, false);
 
   if (!flutter::DartVM::IsRunningPrecompiledCode()) {
-    // Verify the assets path contains Dart 2 kernel assets.
+    // Verify the assets path contains Dart 2 kernel assets if custom asset
+    // resolvers are not provided.
     const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
-    std::string application_kernel_path = fml::paths::JoinPaths(
-        {settings.assets_path, kApplicationKernelSnapshotFileName});
-    if (!fml::IsFile(application_kernel_path)) {
-      return LOG_EMBEDDER_ERROR(
-          kInvalidArguments,
-          "Not running in AOT mode but could not resolve the kernel binary.");
+    bool has_asset_resolvers =
+        SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+        SAFE_ACCESS(args, asset_resolvers_count, 0) > 0;
+    if (!has_asset_resolvers) {
+      std::string application_kernel_path = fml::paths::JoinPaths(
+          {settings.assets_path, kApplicationKernelSnapshotFileName});
+      if (!fml::IsFile(application_kernel_path)) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "Not running in AOT mode but could not resolve the kernel binary.");
+      }
     }
     settings.application_kernel_asset = kApplicationKernelSnapshotFileName;
   }
@@ -2613,7 +2627,7 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
                                         const std::string& message) {
       callback(tag.c_str(), message.c_str(), user_data);
     };
-  } else {
+  } else if (!settings.log_message_callback) {
     settings.log_message_callback = [](const std::string& tag,
                                        const std::string& message) {
       // Fall back to logging to stdout if unspecified.
@@ -2744,8 +2758,36 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   };
 
-  auto run_configuration =
-      flutter::RunConfiguration::InferFromSettings(settings);
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+
+  if (fml::UniqueFD::traits_type::IsValid(settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(settings.assets_dir), true));
+  }
+
+  if (!settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
+
+  if (SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
+    for (size_t i = 0; i < args->asset_resolvers_count; ++i) {
+      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
+      if (resolver != nullptr &&
+          resolver->struct_size >= sizeof(FlutterAssetResolver) &&
+          resolver->get_asset_callback != nullptr) {
+        asset_manager->PushBack(
+            std::make_unique<flutter::EmbedderAssetResolver>(*resolver));
+      }
+    }
+  }
+
+  auto run_configuration = flutter::RunConfiguration(
+      flutter::IsolateConfiguration::InferFromSettings(settings, asset_manager),
+      asset_manager);
 
   if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
@@ -2770,19 +2812,6 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   if (SAFE_ACCESS(args, engine_id, 0) != 0) {
     run_configuration.SetEngineId(args->engine_id);
-  }
-
-  if (SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
-      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
-    for (size_t i = 0; i < args->asset_resolvers_count; ++i) {
-      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
-      if (resolver != nullptr &&
-          resolver->struct_size >= sizeof(FlutterAssetResolver) &&
-          resolver->get_asset_callback != nullptr) {
-        run_configuration.AddAssetResolver(
-            std::make_unique<flutter::EmbedderAssetResolver>(*resolver));
-      }
-    }
   }
 
   if (!run_configuration.IsValid()) {
@@ -3635,11 +3664,11 @@ FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
   auto response = handle->message->response();
 
   if (response) {
-    if (data_length == 0) {
+    if (data == nullptr) {
       response->CompleteEmpty();
     } else {
       response->Complete(std::make_unique<fml::DataMapping>(
-          std::vector<uint8_t>({data, data + data_length})));
+          std::vector<uint8_t>(data, data + data_length)));
     }
   }
 
@@ -3660,7 +3689,7 @@ FlutterEngineResult FlutterEngineRegisterExternalTexture(
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
 
-  if (texture_identifier == 0) {
+  if (texture_identifier < 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Texture identifier was invalid.");
   }
@@ -3679,7 +3708,7 @@ FlutterEngineResult FlutterEngineUnregisterExternalTexture(
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
 
-  if (texture_identifier == 0) {
+  if (texture_identifier < 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Texture identifier was invalid.");
   }
@@ -3699,7 +3728,7 @@ FlutterEngineResult FlutterEngineMarkExternalTextureFrameAvailable(
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
-  if (texture_identifier == 0) {
+  if (texture_identifier < 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid texture identifier.");
   }
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)

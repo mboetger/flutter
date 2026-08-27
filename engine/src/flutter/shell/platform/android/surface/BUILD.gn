@@ -23,6 +23,10 @@ source_set("surface") {
     "//flutter/shell/platform/android/jni",
     "//flutter/skia",
   ]
+
+  if (shell_enable_gl) {
+    deps += [ "//flutter/shell/gpu:gpu_surface_gl" ]
+  }
 }
 
 source_set("native_window") {

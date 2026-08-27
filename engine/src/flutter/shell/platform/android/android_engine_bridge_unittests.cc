@@ -13,7 +13,22 @@
 namespace flutter {
 namespace testing {
 
-TEST(AndroidEngineBridgeTest, CreateDefaultLegacyBridge) {
+TEST(AndroidEngineBridgeTest, CreateDefaultEmbedderBridge) {
+  auto jni_mock = std::make_shared<JNIMock>();
+  Settings settings;
+  settings.enable_embedder_api = true;
+  settings.enable_software_rendering = true;
+
+  auto bridge = AndroidEngineBridge::Create(settings, jni_mock,
+                                            AndroidRenderingAPI::kSoftware);
+  ASSERT_NE(bridge, nullptr);
+  EXPECT_TRUE(bridge->IsValid());
+  EXPECT_EQ(bridge->GetSettings().enable_embedder_api, true);
+  EXPECT_NE(bridge->GetPlatformViewAndroid(), nullptr);
+  EXPECT_NE(bridge->GetEmbedderSurfaceAndroid(), nullptr);
+}
+
+TEST(AndroidEngineBridgeTest, CreateLegacyBridgeWhenFlagDisabled) {
   auto jni_mock = std::make_shared<JNIMock>();
   Settings settings;
   settings.enable_embedder_api = false;
@@ -24,21 +39,6 @@ TEST(AndroidEngineBridgeTest, CreateDefaultLegacyBridge) {
   ASSERT_NE(bridge, nullptr);
   EXPECT_TRUE(bridge->IsValid());
   EXPECT_EQ(bridge->GetSettings().enable_embedder_api, false);
-}
-
-TEST(AndroidEngineBridgeTest, CreateEmbedderBridgeWhenFlagEnabled) {
-  auto jni_mock = std::make_shared<JNIMock>();
-  Settings settings;
-  settings.enable_embedder_api = true;
-  settings.enable_software_rendering = true;
-
-  auto bridge = AndroidEngineBridge::Create(settings, jni_mock,
-                                            AndroidRenderingAPI::kSoftware);
-  ASSERT_NE(bridge, nullptr);
-  EXPECT_FALSE(bridge->IsValid());
-  EXPECT_EQ(bridge->GetSettings().enable_embedder_api, true);
-  EXPECT_NE(bridge->GetPlatformViewAndroid(), nullptr);
-  EXPECT_NE(bridge->GetEmbedderSurfaceAndroid(), nullptr);
 }
 
 TEST(AndroidEngineBridgeTest, ShellForTestingReturnsNullOnBaseClass) {

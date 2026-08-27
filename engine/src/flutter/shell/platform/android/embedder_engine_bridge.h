@@ -127,6 +127,7 @@ class EmbedderEngineBridge : public AndroidEngineBridge {
       const std::string& entrypoint,
       const std::string& libraryUrl,
       const std::vector<std::string>& entrypoint_args);
+  void OnVsync(intptr_t baton);
 
   flutter::Settings settings_;
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;

@@ -63,6 +63,15 @@ class AndroidSurfaceDynamicImpeller : public AndroidSurface {
   // |AndroidSurface|
   void SetupImpellerSurface() override;
 
+  // |AndroidSurface|
+  std::unique_ptr<GLContextResult> GLContextMakeCurrent() override;
+
+  // |AndroidSurface|
+  bool GLContextClearCurrent() override;
+
+  // |AndroidSurface|
+  bool GLContextPresent(const GLPresentInfo& present_info) override;
+
  private:
   std::shared_ptr<AndroidContextDynamicImpeller> android_context_;
   std::unique_ptr<AndroidSurfaceVKImpeller> vulkan_surface_;

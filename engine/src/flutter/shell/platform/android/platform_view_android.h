@@ -112,6 +112,8 @@ class PlatformViewAndroid final {
 
   void SetupImpellerContext();
 
+  std::shared_ptr<impeller::Context> GetImpellerContext() const;
+
   fml::WeakPtr<PlatformViewAndroid> GetWeakPtr() const;
 
   // |PlatformDispatchTable|

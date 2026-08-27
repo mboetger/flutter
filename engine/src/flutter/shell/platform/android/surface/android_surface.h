@@ -8,7 +8,7 @@
 #include <memory>
 #include "flutter/flow/embedded_views.h"
 #include "flutter/flow/surface.h"
-#include "flutter/fml/macros.h"
+#include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
@@ -47,6 +47,12 @@ class AndroidSurface {
   virtual std::shared_ptr<impeller::Context> GetImpellerContext();
 
   virtual void SetupImpellerSurface();
+
+  virtual std::unique_ptr<GLContextResult> GLContextMakeCurrent();
+
+  virtual bool GLContextClearCurrent();
+
+  virtual bool GLContextPresent(const GLPresentInfo& present_info);
 
  protected:
   AndroidSurface();

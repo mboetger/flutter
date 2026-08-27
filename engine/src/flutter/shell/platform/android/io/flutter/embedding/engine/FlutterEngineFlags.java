@@ -246,7 +246,7 @@ public final class FlutterEngineFlags {
    * <p>Allowed in release to opt-in to the new C Embedder API engine implementation. Settable via
    * the manifest and the command line (via --enable-embedder-api).
    */
-  private static final Flag ENABLE_EMBEDDER_API =
+  public static final Flag ENABLE_EMBEDDER_API =
       new Flag("--enable-embedder-api", "EnableEmbedderAPI", true);
 
   /**

@@ -231,7 +231,8 @@ EmbedderSurfaceGLImpeller::CreateImpellerContext() const {
 // |EmbedderSurface|
 sk_sp<GrDirectContext> EmbedderSurfaceGLImpeller::CreateResourceContext()
     const {
-  if (gl_dispatch_table_.gl_make_resource_current_callback()) {
+  auto callback = gl_dispatch_table_.gl_make_resource_current_callback;
+  if (callback && callback()) {
     worker_->SetReactionsAllowedOnCurrentThread(true);
   } else {
     FML_DLOG(ERROR) << "Could not make the resource context current.";
@@ -243,7 +244,10 @@ sk_sp<GrDirectContext> EmbedderSurfaceGLImpeller::CreateResourceContext()
 // |EmbedderSurface|
 void EmbedderSurfaceGLImpeller::ReleaseResourceContext() const {
   worker_->SetReactionsAllowedOnCurrentThread(false);
-  gl_dispatch_table_.gl_clear_current_callback();
+  auto callback = gl_dispatch_table_.gl_clear_current_callback;
+  if (callback) {
+    callback();
+  }
 }
 
 }  // namespace flutter

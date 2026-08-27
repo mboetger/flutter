@@ -104,6 +104,11 @@ void FlutterMain::Init(JNIEnv* env,
 
   auto settings = SettingsFromCommandLine(command_line, true);
 
+  // Android embedder uses the public Embedder API by default.
+  if (!command_line.HasOption(FlagForSwitch(Switch::EnableEmbedderAPI))) {
+    settings.enable_embedder_api = true;
+  }
+
   // Turn systracing on if ATrace_isEnabled is true and the user did not already
   // request systracing
   if (!settings.trace_systrace) {

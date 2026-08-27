@@ -5,6 +5,7 @@
 #include "flutter/shell/platform/android/platform_view_android.h"
 
 #include <android/api-level.h>
+#include <android/log.h>
 #include <sys/system_properties.h>
 #include <memory>
 #include <utility>
@@ -118,15 +119,19 @@ void PlatformViewAndroid::NotifyCreated(
   if (embedder_surface_) {
     InstallFirstFrameCallback();
 
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, embedder_surface = embedder_surface_,
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          embedder_surface->NotifyCreated(native_window, jni_facade);
-          latch.Signal();
-        });
-    latch.Wait();
+    if (auto raster_runner = task_runners_.GetRasterTaskRunner()) {
+      fml::AutoResetWaitableEvent latch;
+      fml::TaskRunner::RunNowOrPostTask(
+          raster_runner, [&latch, embedder_surface = embedder_surface_,
+                          native_window = std::move(native_window),
+                          jni_facade = jni_facade_]() {
+            embedder_surface->NotifyCreated(native_window, jni_facade);
+            latch.Signal();
+          });
+      latch.Wait();
+    } else {
+      embedder_surface_->NotifyCreated(native_window, jni_facade_);
+    }
   }
 
   if (platform_view_) {
@@ -137,16 +142,20 @@ void PlatformViewAndroid::NotifyCreated(
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
     fml::RefPtr<AndroidNativeWindow> native_window) {
   if (embedder_surface_) {
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, embedder_surface = embedder_surface_,
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          embedder_surface->NotifySurfaceWindowChanged(native_window,
-                                                       jni_facade);
-          latch.Signal();
-        });
-    latch.Wait();
+    if (auto raster_runner = task_runners_.GetRasterTaskRunner()) {
+      fml::AutoResetWaitableEvent latch;
+      fml::TaskRunner::RunNowOrPostTask(
+          raster_runner, [&latch, embedder_surface = embedder_surface_,
+                          native_window = std::move(native_window),
+                          jni_facade = jni_facade_]() {
+            embedder_surface->NotifySurfaceWindowChanged(native_window,
+                                                         jni_facade);
+            latch.Signal();
+          });
+      latch.Wait();
+    } else {
+      embedder_surface_->NotifySurfaceWindowChanged(native_window, jni_facade_);
+    }
   }
 
   if (platform_view_) {
@@ -160,14 +169,17 @@ void PlatformViewAndroid::NotifyDestroyed() {
   }
 
   if (embedder_surface_) {
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, embedder_surface = embedder_surface_]() {
-          embedder_surface->NotifyDestroyed();
-          latch.Signal();
-        });
-    latch.Wait();
+    if (auto raster_runner = task_runners_.GetRasterTaskRunner()) {
+      fml::AutoResetWaitableEvent latch;
+      fml::TaskRunner::RunNowOrPostTask(
+          raster_runner, [&latch, embedder_surface = embedder_surface_]() {
+            embedder_surface->NotifyDestroyed();
+            latch.Signal();
+          });
+      latch.Wait();
+    } else {
+      embedder_surface_->NotifyDestroyed();
+    }
   }
 }
 
@@ -175,14 +187,17 @@ void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
   if (!embedder_surface_) {
     return;
   }
-  fml::AutoResetWaitableEvent latch;
-  fml::TaskRunner::RunNowOrPostTask(
-      task_runners_.GetRasterTaskRunner(),  //
-      [&latch, embedder_surface = embedder_surface_, size]() {
-        embedder_surface->NotifyChanged(size);
-        latch.Signal();
-      });
-  latch.Wait();
+  if (auto raster_runner = task_runners_.GetRasterTaskRunner()) {
+    fml::AutoResetWaitableEvent latch;
+    fml::TaskRunner::RunNowOrPostTask(
+        raster_runner, [&latch, embedder_surface = embedder_surface_, size]() {
+          embedder_surface->NotifyChanged(size);
+          latch.Signal();
+        });
+    latch.Wait();
+  } else {
+    embedder_surface_->NotifyChanged(size);
+  }
 }
 
 void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
@@ -277,16 +292,20 @@ void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
 void PlatformViewAndroid::RegisterExternalTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+  if (android_context_->RenderingApi() ==
+      AndroidRenderingAPI::kImpellerAutoselect) {
+    SetupImpellerContext();
+  }
   std::shared_ptr<Texture> texture;
   switch (android_context_->RenderingApi()) {
     case AndroidRenderingAPI::kImpellerOpenGLES:
       // Impeller GLES.
       texture = std::make_shared<SurfaceTextureExternalTextureGLImpeller>(
           std::static_pointer_cast<impeller::ContextGLES>(
-              android_context_->GetImpellerContext()),  //
-          texture_id,                                   //
-          surface_texture,                              //
-          jni_facade_                                   //
+              GetImpellerContext()),  //
+          texture_id,                 //
+          surface_texture,            //
+          jni_facade_                 //
       );
       break;
 #if !SLIMPELLER
@@ -310,10 +329,10 @@ void PlatformViewAndroid::RegisterExternalTexture(
              "android-surface-plugins";
       texture = std::make_shared<SurfaceTextureExternalTextureVKImpeller>(
           std::static_pointer_cast<impeller::ContextVK>(
-              android_context_->GetImpellerContext()),  //
-          texture_id,                                   //
-          surface_texture,                              //
-          jni_facade_                                   //
+              GetImpellerContext()),  //
+          texture_id,                 //
+          surface_texture,            //
+          jni_facade_                 //
       );
       break;
     case AndroidRenderingAPI::kImpellerAutoselect:
@@ -330,6 +349,10 @@ void PlatformViewAndroid::RegisterImageTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
     ImageExternalTexture::ImageLifecycle lifecycle) {
+  if (android_context_->RenderingApi() ==
+      AndroidRenderingAPI::kImpellerAutoselect) {
+    SetupImpellerContext();
+  }
   std::shared_ptr<Texture> texture;
   switch (android_context_->RenderingApi()) {
 #if !SLIMPELLER
@@ -346,14 +369,12 @@ void PlatformViewAndroid::RegisterImageTexture(
     case AndroidRenderingAPI::kImpellerOpenGLES:
       // Impeller GLES.
       texture = std::make_shared<ImageExternalTextureGLImpeller>(
-          std::static_pointer_cast<impeller::ContextGLES>(
-              android_context_->GetImpellerContext()),
+          std::static_pointer_cast<impeller::ContextGLES>(GetImpellerContext()),
           texture_id, image_texture_entry, jni_facade_, lifecycle);
       break;
     case AndroidRenderingAPI::kImpellerVulkan:
       texture = std::make_shared<ImageExternalTextureVKImpeller>(
-          std::static_pointer_cast<impeller::ContextVK>(
-              android_context_->GetImpellerContext()),
+          std::static_pointer_cast<impeller::ContextVK>(GetImpellerContext()),
           texture_id, image_texture_entry, jni_facade_, lifecycle);
       break;
     case AndroidRenderingAPI::kImpellerAutoselect:
@@ -369,43 +390,53 @@ void PlatformViewAndroid::OnVsyncCallback(intptr_t baton) {
   const static bool use_choreographer =
       impeller::android::Choreographer::IsAvailableOnPlatform();
   if (use_choreographer) {
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetUITaskRunner(),
-        [baton, task_runners = task_runners_]() {
-          const auto& choreographer =
-              impeller::android::Choreographer::GetInstance();
-          choreographer.PostFrameCallback([baton, task_runners](auto time) {
-            auto time_ns =
-                std::chrono::time_point_cast<std::chrono::nanoseconds>(time)
-                    .time_since_epoch()
-                    .count();
-            auto frame_time = fml::TimePoint::FromEpochDelta(
-                fml::TimeDelta::FromNanoseconds(time_ns));
-            auto now = fml::TimePoint::Now();
-            if (frame_time > now) {
-              frame_time = now;
-            }
-            // Assume 60 FPS standard display interval: 1,000,000,000 ns / 60
-            // = 16.66ms
-            // TODO(team-android): Get the actual refresh rate from the display.
-            // https://github.com/flutter/flutter/issues/142845
-            constexpr double kStandardRefreshRateHz = 60.0;
-            constexpr double kNanosPerSecond = 1000000000.0;
-            auto target_time =
-                frame_time + fml::TimeDelta::FromNanoseconds(
-                                 kNanosPerSecond / kStandardRefreshRateHz);
-            VsyncWaiterEmbedder::OnEmbedderVsync(task_runners, baton,
-                                                 frame_time, target_time);
-          });
-        });
+    auto post_to_choreographer = [baton, task_runners = task_runners_]() {
+      const auto& choreographer =
+          impeller::android::Choreographer::GetInstance();
+      choreographer.PostFrameCallback([baton, task_runners](auto time) {
+        auto time_ns =
+            std::chrono::time_point_cast<std::chrono::nanoseconds>(time)
+                .time_since_epoch()
+                .count();
+        auto frame_time = fml::TimePoint::FromEpochDelta(
+            fml::TimeDelta::FromNanoseconds(time_ns));
+        auto now = fml::TimePoint::Now();
+        if (frame_time > now) {
+          frame_time = now;
+        }
+        // Assume 60 FPS standard display interval: 1,000,000,000 ns / 60
+        // = 16.66ms
+        // TODO(team-android): Get the actual refresh rate from the display.
+        // https://github.com/flutter/flutter/issues/142845
+        constexpr double kStandardRefreshRateHz = 60.0;
+        constexpr double kNanosPerSecond = 1000000000.0;
+        auto target_time =
+            frame_time + fml::TimeDelta::FromNanoseconds(
+                             kNanosPerSecond / kStandardRefreshRateHz);
+        if (task_runners.GetUITaskRunner()) {
+          VsyncWaiterEmbedder::OnEmbedderVsync(task_runners, baton, frame_time,
+                                               target_time);
+        }
+      });
+    };
+    if (auto ui_runner = task_runners_.GetUITaskRunner()) {
+      fml::TaskRunner::RunNowOrPostTask(ui_runner,
+                                        std::move(post_to_choreographer));
+    } else {
+      post_to_choreographer();
+    }
   } else {
     // TODO(99798): Remove it when we drop support for API level < 29 and 32-bit
     // devices.
-    task_runners_.GetPlatformTaskRunner()->PostTask(
-        [task_runners = task_runners_]() {
-          FML_LOG(ERROR) << "Java-based Vsync is not yet implemented in the "
-                            "new Android embedder.";
-        });
+    if (auto platform_runner = task_runners_.GetPlatformTaskRunner()) {
+      platform_runner->PostTask([task_runners = task_runners_]() {
+        FML_LOG(ERROR) << "Java-based Vsync is not yet implemented in the "
+                          "new Android embedder.";
+      });
+    } else {
+      FML_LOG(ERROR) << "Java-based Vsync is not yet implemented in the "
+                        "new Android embedder.";
+    }
   }
 }
 
@@ -457,12 +488,14 @@ void PlatformViewAndroid::InstallFirstFrameCallback() {
       [platform_view = GetWeakPtr(),
        platform_task_runner = task_runners_.GetPlatformTaskRunner()]() {
         // On GPU Task Runner.
-        platform_task_runner->PostTask([platform_view]() {
-          // Back on Platform Task Runner.
-          if (platform_view) {
-            platform_view->FireFirstFrameCallback();
-          }
-        });
+        if (platform_task_runner) {
+          platform_task_runner->PostTask([platform_view]() {
+            // Back on Platform Task Runner.
+            if (platform_view) {
+              platform_view->FireFirstFrameCallback();
+            }
+          });
+        }
       });
 }
 
@@ -491,6 +524,20 @@ void PlatformViewAndroid::SetupImpellerContext() {
   } else if (android_context_) {
     android_context_->SetupImpellerContext();
   }
+}
+
+std::shared_ptr<impeller::Context> PlatformViewAndroid::GetImpellerContext()
+    const {
+  if (platform_view_) {
+    return platform_view_->GetImpellerContext();
+  }
+  if (embedder_surface_) {
+    return embedder_surface_->CreateImpellerContext();
+  }
+  if (android_context_) {
+    return android_context_->GetImpellerContext();
+  }
+  return nullptr;
 }
 
 fml::WeakPtr<PlatformViewAndroid> PlatformViewAndroid::GetWeakPtr() const {
@@ -537,6 +584,7 @@ void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
 void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
   if (platform_view_) {
     platform_view_->MarkTextureFrameAvailable(texture_id);
+    platform_view_->ScheduleFrame();
   }
 }
 

@@ -21,7 +21,7 @@ TEST(EmbedderEngineBridgeTest, ConstructorInitializesComponents) {
   EmbedderEngineBridge bridge(settings, jni_mock,
                               AndroidRenderingAPI::kSoftware);
 
-  EXPECT_FALSE(bridge.IsValid());
+  EXPECT_TRUE(bridge.IsValid());
   EXPECT_NE(bridge.GetPlatformViewAndroid(), nullptr);
   EXPECT_NE(bridge.GetEmbedderSurfaceAndroid(), nullptr);
   EXPECT_NE(bridge.GetAndroidCompositor(), nullptr);

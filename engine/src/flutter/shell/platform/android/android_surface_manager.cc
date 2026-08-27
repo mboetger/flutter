@@ -91,7 +91,9 @@ bool AndroidSurfaceManager::CreateOpenGLBackingStore(
 
   backing_store_out->open_gl.type = kFlutterOpenGLTargetTypeFramebuffer;
   backing_store_out->open_gl.framebuffer.target = kOpenGLSizedFormatRGBA8;
-  backing_store_out->open_gl.framebuffer.name = record->id;
+  // Framebuffer 0 represents the default window framebuffer in OpenGL ES on
+  // Android.
+  backing_store_out->open_gl.framebuffer.name = 0;
   backing_store_out->open_gl.framebuffer.user_data = record.get();
   backing_store_out->open_gl.framebuffer.destruction_callback =
       [](void* user_data) {

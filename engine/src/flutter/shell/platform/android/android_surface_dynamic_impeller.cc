@@ -50,9 +50,15 @@ void AndroidSurfaceDynamicImpeller::SetupImpellerSurface() {
   if (api == AndroidRenderingAPI::kImpellerVulkan) {
     vulkan_surface_ = std::make_unique<AndroidSurfaceVKImpeller>(
         android_context_->GetVKContext());
+    if (window_) {
+      vulkan_surface_->SetNativeWindow(window_, jni_facade_);
+    }
   } else if (api == AndroidRenderingAPI::kImpellerOpenGLES) {
     gl_surface_ = std::make_unique<AndroidSurfaceGLImpeller>(
         android_context_->GetGLContext());
+    if (window_) {
+      gl_surface_->SetNativeWindow(window_, jni_facade_);
+    }
   } else {
     FML_UNREACHABLE();
   }
@@ -91,14 +97,14 @@ bool AndroidSurfaceDynamicImpeller::ResourceContextClearCurrent() {
 bool AndroidSurfaceDynamicImpeller::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
+  window_ = window;
+  jni_facade_ = jni_facade;
   if (vulkan_surface_) {
     return vulkan_surface_->SetNativeWindow(window, jni_facade);
   }
   if (gl_surface_) {
     return gl_surface_->SetNativeWindow(window, jni_facade);
   }
-  window_ = window;
-  jni_facade_ = jni_facade;
   return true;
 }
 
@@ -116,6 +122,29 @@ AndroidSurfaceDynamicImpeller::CreateSnapshotSurface() {
 std::shared_ptr<impeller::Context>
 AndroidSurfaceDynamicImpeller::GetImpellerContext() {
   return android_context_->GetImpellerContext();
+}
+
+std::unique_ptr<GLContextResult>
+AndroidSurfaceDynamicImpeller::GLContextMakeCurrent() {
+  if (gl_surface_) {
+    return gl_surface_->GLContextMakeCurrent();
+  }
+  return std::make_unique<GLContextDefaultResult>(false);
+}
+
+bool AndroidSurfaceDynamicImpeller::GLContextClearCurrent() {
+  if (gl_surface_) {
+    return gl_surface_->GLContextClearCurrent();
+  }
+  return false;
+}
+
+bool AndroidSurfaceDynamicImpeller::GLContextPresent(
+    const GLPresentInfo& present_info) {
+  if (gl_surface_) {
+    return gl_surface_->GLContextPresent(present_info);
+  }
+  return false;
 }
 
 }  // namespace flutter

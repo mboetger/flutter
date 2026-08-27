@@ -24,24 +24,34 @@ PlatformMessageResponseAndroid::~PlatformMessageResponseAndroid() = default;
 // |flutter::PlatformMessageResponse|
 void PlatformMessageResponseAndroid::Complete(
     std::unique_ptr<fml::Mapping> data) {
-  platform_task_runner_->PostTask(
-      fml::MakeCopyable([response_id = response_id_,  //
-                         data = std::move(data),      //
-                         jni_facade = jni_facade_]() mutable {
-        jni_facade->FlutterViewHandlePlatformMessageResponse(response_id,
-                                                             std::move(data));
-      }));
+  if (platform_task_runner_) {
+    platform_task_runner_->PostTask(
+        fml::MakeCopyable([response_id = response_id_,  //
+                           data = std::move(data),      //
+                           jni_facade = jni_facade_]() mutable {
+          jni_facade->FlutterViewHandlePlatformMessageResponse(response_id,
+                                                               std::move(data));
+        }));
+  } else {
+    jni_facade_->FlutterViewHandlePlatformMessageResponse(response_id_,
+                                                          std::move(data));
+  }
 }
 
 // |flutter::PlatformMessageResponse|
 void PlatformMessageResponseAndroid::CompleteEmpty() {
-  platform_task_runner_->PostTask(
-      fml::MakeCopyable([response_id = response_id_,  //
-                         jni_facade = jni_facade_     //
-  ]() {
-        // Make the response call into Java.
-        jni_facade->FlutterViewHandlePlatformMessageResponse(response_id,
-                                                             nullptr);
-      }));
+  if (platform_task_runner_) {
+    platform_task_runner_->PostTask(
+        fml::MakeCopyable([response_id = response_id_,  //
+                           jni_facade = jni_facade_     //
+    ]() {
+          // Make the response call into Java.
+          jni_facade->FlutterViewHandlePlatformMessageResponse(response_id,
+                                                               nullptr);
+        }));
+  } else {
+    jni_facade_->FlutterViewHandlePlatformMessageResponse(response_id_,
+                                                          nullptr);
+  }
 }
 }  // namespace flutter

@@ -2,19 +2,30 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// Allow access to fml::MessageLoop::GetCurrent() for platform task runner.
+#define FML_USED_ON_EMBEDDER
+
 #include "flutter/shell/platform/android/embedder_engine_bridge.h"
 
+#include <EGL/egl.h>
+#include <android/log.h>
 #include <utility>
 
 #include "flutter/common/constants.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/mapping.h"
+#include "flutter/fml/message_loop.h"
+#include "flutter/fml/time/time_delta.h"
+#include "flutter/fml/time/time_point.h"
 #include "flutter/shell/common/shell.h"
+#include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/android_display.h"
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/platform_message_response_android.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
+#include "impeller/toolkit/android/choreographer.h"
+#include "impeller/toolkit/egl/egl.h"
 
 namespace flutter {
 
@@ -26,9 +37,34 @@ class EmbedderPlatformViewDelegate final : public PlatformView::Delegate {
 
   ~EmbedderPlatformViewDelegate() = default;
 
+  void SetEngine(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+    engine_ = engine;
+    if (engine_) {
+      auto* embedder_engine =
+          reinterpret_cast<flutter::EmbedderEngine*>(engine_);
+      if (embedder_engine->IsValid()) {
+        if (auto platform_view =
+                embedder_engine->GetShell().GetPlatformView()) {
+          for (auto& texture : pending_textures_) {
+            platform_view->RegisterTexture(std::move(texture));
+          }
+          pending_textures_.clear();
+          for (int64_t texture_id : pending_frames_) {
+            platform_view->MarkTextureFrameAvailable(texture_id);
+          }
+          pending_frames_.clear();
+        }
+      }
+    }
+  }
+
   void OnPlatformViewCreated(std::unique_ptr<Surface> surface) override {}
   void OnPlatformViewDestroyed() override {}
-  void OnPlatformViewScheduleFrame() override {}
+  void OnPlatformViewScheduleFrame() override {
+    if (engine_) {
+      FlutterEngineScheduleFrame(engine_);
+    }
+  }
   void OnPlatformViewAddView(int64_t view_id,
                              const ViewportMetrics& viewport_metrics,
                              AddViewCallback callback) override {
@@ -44,10 +80,31 @@ class EmbedderPlatformViewDelegate final : public PlatformView::Delegate {
   }
   void OnPlatformViewSendViewFocusEvent(const ViewFocusEvent& event) override {}
   void OnPlatformViewSetNextFrameCallback(
-      const fml::closure& closure) override {}
+      const fml::closure& closure) override {
+    if (engine_) {
+      auto* embedder_engine =
+          reinterpret_cast<flutter::EmbedderEngine*>(engine_);
+      if (embedder_engine->IsValid()) {
+        if (auto platform_view =
+                embedder_engine->GetShell().GetPlatformView()) {
+          platform_view->SetNextFrameCallback(closure);
+        }
+      }
+    }
+  }
   void OnPlatformViewSetViewportMetrics(
       int64_t view_id,
-      const ViewportMetrics& metrics) override {}
+      const ViewportMetrics& metrics) override {
+    if (engine_) {
+      FlutterWindowMetricsEvent event = {};
+      event.struct_size = sizeof(FlutterWindowMetricsEvent);
+      event.width = metrics.physical_width;
+      event.height = metrics.physical_height;
+      event.pixel_ratio = metrics.device_pixel_ratio;
+      event.view_id = view_id;
+      FlutterEngineSendWindowMetricsEvent(engine_, &event);
+    }
+  }
   void OnPlatformViewDispatchPlatformMessage(
       std::unique_ptr<PlatformMessage> message) override {}
   void OnPlatformViewDispatchPointerDataPacket(
@@ -61,13 +118,67 @@ class EmbedderPlatformViewDelegate final : public PlatformView::Delegate {
                                              int32_t node_id,
                                              SemanticsAction action,
                                              fml::MallocMapping args) override {
+    if (engine_) {
+      FlutterEngineDispatchSemanticsAction(
+          engine_, node_id, static_cast<FlutterSemanticsAction>(action),
+          args.GetMapping(), args.GetSize());
+    }
   }
-  void OnPlatformViewSetSemanticsEnabled(bool enabled) override {}
-  void OnPlatformViewSetAccessibilityFeatures(int32_t flags) override {}
+  void OnPlatformViewSetSemanticsEnabled(bool enabled) override {
+    if (engine_) {
+      FlutterEngineUpdateSemanticsEnabled(engine_, enabled);
+    }
+  }
+  void OnPlatformViewSetAccessibilityFeatures(int32_t flags) override {
+    if (engine_) {
+      FlutterEngineUpdateAccessibilityFeatures(
+          engine_, static_cast<FlutterAccessibilityFeature>(flags));
+    }
+  }
   void OnPlatformViewRegisterTexture(
-      std::shared_ptr<Texture> texture) override {}
-  void OnPlatformViewUnregisterTexture(int64_t texture_id) override {}
-  void OnPlatformViewMarkTextureFrameAvailable(int64_t texture_id) override {}
+      std::shared_ptr<Texture> texture) override {
+    if (engine_) {
+      auto* embedder_engine =
+          reinterpret_cast<flutter::EmbedderEngine*>(engine_);
+      if (embedder_engine->IsValid()) {
+        if (auto platform_view =
+                embedder_engine->GetShell().GetPlatformView()) {
+          platform_view->RegisterTexture(std::move(texture));
+          return;
+        }
+      }
+    }
+    if (texture) {
+      pending_textures_.push_back(std::move(texture));
+    }
+  }
+  void OnPlatformViewUnregisterTexture(int64_t texture_id) override {
+    if (engine_) {
+      auto* embedder_engine =
+          reinterpret_cast<flutter::EmbedderEngine*>(engine_);
+      if (embedder_engine->IsValid()) {
+        if (auto platform_view =
+                embedder_engine->GetShell().GetPlatformView()) {
+          platform_view->UnregisterTexture(texture_id);
+        }
+      }
+    }
+  }
+  void OnPlatformViewMarkTextureFrameAvailable(int64_t texture_id) override {
+    if (engine_) {
+      auto* embedder_engine =
+          reinterpret_cast<flutter::EmbedderEngine*>(engine_);
+      if (embedder_engine->IsValid()) {
+        if (auto platform_view =
+                embedder_engine->GetShell().GetPlatformView()) {
+          platform_view->MarkTextureFrameAvailable(texture_id);
+          FlutterEngineScheduleFrame(engine_);
+          return;
+        }
+      }
+    }
+    pending_frames_.push_back(texture_id);
+  }
   void LoadDartDeferredLibrary(
       intptr_t loading_unit_id,
       std::unique_ptr<const fml::Mapping> snapshot_data,
@@ -88,6 +199,55 @@ class EmbedderPlatformViewDelegate final : public PlatformView::Delegate {
 
  private:
   const Settings& settings_;
+  FLUTTER_API_SYMBOL(FlutterEngine) engine_ = nullptr;
+  std::vector<std::shared_ptr<Texture>> pending_textures_;
+  std::vector<int64_t> pending_frames_;
+};
+
+// PlatformMessageResponse implementation that wraps
+// FlutterPlatformMessageResponseHandle.
+class PlatformMessageResponseEmbedderHandle final
+    : public flutter::PlatformMessageResponse {
+ public:
+  PlatformMessageResponseEmbedderHandle(
+      FLUTTER_API_SYMBOL(FlutterEngine) engine,
+      const FlutterPlatformMessageResponseHandle* handle)
+      : engine_(engine), handle_(handle) {}
+
+  ~PlatformMessageResponseEmbedderHandle() override {
+    if (engine_ && handle_) {
+      FlutterEngineSendPlatformMessageResponse(engine_, handle_, nullptr, 0);
+    }
+  }
+
+  void Complete(std::unique_ptr<fml::Mapping> data) override {
+    if (engine_ && handle_) {
+      const uint8_t* ptr = data ? data->GetMapping() : nullptr;
+      if (data && ptr == nullptr) {
+        static const uint8_t kEmpty = 0;
+        ptr = &kEmpty;
+      }
+      FlutterEngineSendPlatformMessageResponse(engine_, handle_, ptr,
+                                               data ? data->GetSize() : 0);
+      handle_ = nullptr;
+    }
+    is_complete_ = true;
+  }
+
+  void CompleteEmpty() override {
+    if (engine_ && handle_) {
+      FlutterEngineSendPlatformMessageResponse(engine_, handle_, nullptr, 0);
+      handle_ = nullptr;
+    }
+    is_complete_ = true;
+  }
+
+ private:
+  FLUTTER_API_SYMBOL(FlutterEngine) engine_;
+  const FlutterPlatformMessageResponseHandle* handle_;
+
+  FML_FRIEND_MAKE_REF_COUNTED(PlatformMessageResponseEmbedderHandle);
+  FML_DISALLOW_COPY_AND_ASSIGN(PlatformMessageResponseEmbedderHandle);
 };
 
 // Callback that resolves assets from the APKAssetProvider via the public
@@ -143,6 +303,9 @@ EmbedderEngineBridge::EmbedderEngineBridge(
       platform_view_android_(std::move(platform_view_android)),
       embedder_surface_(std::move(embedder_surface)) {
   FML_DCHECK(jni_facade_);
+  if (platform_view_delegate_ && engine_) {
+    platform_view_delegate_->SetEngine(engine_);
+  }
 }
 
 EmbedderEngineBridge::~EmbedderEngineBridge() {
@@ -158,9 +321,13 @@ EmbedderEngineBridge::~EmbedderEngineBridge() {
 }
 
 void EmbedderEngineBridge::InitializePlatformView() {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  fml::RefPtr<fml::TaskRunner> platform_runner =
+      fml::MessageLoop::GetCurrent().GetTaskRunner();
+
   auto context_settings = PlatformViewAndroid::CreateContextSettings(settings_);
   auto android_context = PlatformViewAndroid::CreateAndroidContext(
-      TaskRunners("", nullptr, nullptr, nullptr, nullptr),
+      TaskRunners("", platform_runner, nullptr, nullptr, nullptr),
       android_rendering_api_, settings_.enable_opengl_gpu_tracing,
       context_settings, nullptr);
 
@@ -177,8 +344,10 @@ void EmbedderEngineBridge::InitializePlatformView() {
 
   platform_view_android_ = std::make_unique<PlatformViewAndroid>(
       *platform_view_delegate_,
-      TaskRunners("", nullptr, nullptr, nullptr, nullptr), jni_facade_,
+      TaskRunners("", platform_runner, nullptr, nullptr, nullptr), jni_facade_,
       android_context, embedder_surface_.get());
+
+  platform_view_android_->SetupImpellerContext();
 
   android_surface_manager_ =
       std::make_shared<AndroidSurfaceManager>(android_context);
@@ -187,11 +356,17 @@ void EmbedderEngineBridge::InitializePlatformView() {
       android_surface_manager_, jni_facade_);
 
   android_compositor_->AddView(kFlutterImplicitViewId);
+
+  is_valid_ = platform_view_android_ != nullptr && embedder_surface_ != nullptr;
 }
 
 FlutterRendererConfig EmbedderEngineBridge::CreateRendererConfig() {
   FlutterRendererConfig config = {};
-  switch (android_rendering_api_) {
+  AndroidRenderingAPI rendering_api =
+      platform_view_android_
+          ? platform_view_android_->GetAndroidContext()->RenderingApi()
+          : android_rendering_api_;
+  switch (rendering_api) {
 #if !SLIMPELLER
     case AndroidRenderingAPI::kSoftware: {
       config.type = kSoftware;
@@ -232,15 +407,68 @@ FlutterRendererConfig EmbedderEngineBridge::CreateRendererConfig() {
       config.type = kOpenGL;
       config.open_gl.struct_size = sizeof(FlutterOpenGLRendererConfig);
       config.open_gl.make_current = [](void* user_data) -> bool {
-        return true;
+        auto* self = static_cast<EmbedderEngineBridge*>(user_data);
+        if (self && self->embedder_surface_) {
+          if (auto* surface = self->embedder_surface_->GetAndroidSurface()) {
+            auto result = surface->GLContextMakeCurrent();
+            if (result && result->GetResult()) {
+              return true;
+            }
+            return surface->ResourceContextMakeCurrent();
+          }
+        }
+        return false;
       };
       config.open_gl.clear_current = [](void* user_data) -> bool {
+        auto* self = static_cast<EmbedderEngineBridge*>(user_data);
+        if (self && self->embedder_surface_) {
+          if (auto* surface = self->embedder_surface_->GetAndroidSurface()) {
+            surface->GLContextClearCurrent();
+            surface->ResourceContextClearCurrent();
+            return true;
+          }
+        }
         return true;
+      };
+      config.open_gl.make_resource_current = [](void* user_data) -> bool {
+        auto* self = static_cast<EmbedderEngineBridge*>(user_data);
+        if (self && self->embedder_surface_) {
+          if (auto* surface = self->embedder_surface_->GetAndroidSurface()) {
+            return surface->ResourceContextMakeCurrent();
+          }
+        }
+        return false;
       };
       config.open_gl.fbo_callback = [](void* user_data) -> uint32_t {
         return 0;
       };
-      config.open_gl.present = [](void* user_data) -> bool { return true; };
+      config.open_gl.present = [](void* user_data) -> bool {
+        auto* self = static_cast<EmbedderEngineBridge*>(user_data);
+        if (self && self->embedder_surface_) {
+          if (auto* surface = self->embedder_surface_->GetAndroidSurface()) {
+            static const std::optional<DlIRect> kEmptyDamage = std::nullopt;
+            return surface->GLContextPresent(GLPresentInfo{
+                .fbo_id = 0,
+                .frame_damage = kEmptyDamage,
+                .buffer_damage = kEmptyDamage,
+            });
+          }
+        }
+        return false;
+      };
+      config.open_gl.gl_proc_resolver = [](void* user_data,
+                                           const char* name) -> void* {
+        static auto resolver = impeller::egl::CreateProcAddressResolver();
+        return resolver ? resolver(name) : nullptr;
+      };
+      config.open_gl.populate_existing_damage =
+          [](void* user_data, intptr_t fbo_id, FlutterDamage* damage) {
+            if (damage) {
+              damage->struct_size = sizeof(FlutterDamage);
+              damage->num_rects = 0;
+              damage->damage = nullptr;
+            }
+          };
       break;
     }
   }
@@ -288,10 +516,17 @@ FlutterProjectArgs EmbedderEngineBridge::CreateProjectArgs(
     args.asset_resolvers_count = 1;
   }
 
+  args.log_tag = "flutter";
+  args.log_message_callback = [](const char* tag, const char* message,
+                                 void* user_data) {
+    const char* log_tag = (tag && strlen(tag) > 0) ? tag : "flutter";
+    __android_log_print(ANDROID_LOG_INFO, log_tag, "%s", message);
+  };
+
   args.vsync_callback = [](void* user_data, intptr_t baton) {
     auto* self = static_cast<EmbedderEngineBridge*>(user_data);
-    if (self && self->platform_view_android_) {
-      self->platform_view_android_->OnVsyncCallback(baton);
+    if (self) {
+      self->OnVsync(baton);
     }
   };
 
@@ -303,11 +538,78 @@ FlutterProjectArgs EmbedderEngineBridge::CreateProjectArgs(
     }
   };
 
+  args.platform_message_callback = [](const FlutterPlatformMessage* message,
+                                      void* user_data) {
+    auto* self = static_cast<EmbedderEngineBridge*>(user_data);
+    if (!self || !self->platform_view_android_) {
+      return;
+    }
+    fml::RefPtr<flutter::PlatformMessageResponse> response;
+    if (message->response_handle) {
+      response = fml::MakeRefCounted<PlatformMessageResponseEmbedderHandle>(
+          self->engine_, message->response_handle);
+    }
+    std::string channel = message->channel ? message->channel : "";
+    std::unique_ptr<flutter::PlatformMessage> platform_message;
+    if (message->message != nullptr) {
+      fml::MallocMapping data =
+          (message->message_size > 0)
+              ? fml::MallocMapping::Copy(message->message,
+                                         message->message_size)
+              : fml::MallocMapping();
+      platform_message = std::make_unique<flutter::PlatformMessage>(
+          std::move(channel), std::move(data), std::move(response));
+    } else {
+      platform_message = std::make_unique<flutter::PlatformMessage>(
+          std::move(channel), std::move(response));
+    }
+    self->platform_view_android_->HandlePlatformMessage(
+        std::move(platform_message));
+  };
+
   return args;
 }
 
+void EmbedderEngineBridge::OnVsync(intptr_t baton) {
+  const static bool use_choreographer =
+      impeller::android::Choreographer::IsAvailableOnPlatform();
+  if (use_choreographer) {
+    if (!engine_) {
+      return;
+    }
+    const auto& choreographer = impeller::android::Choreographer::GetInstance();
+    choreographer.PostFrameCallback([engine = engine_, baton](auto time) {
+      auto time_ns =
+          std::chrono::time_point_cast<std::chrono::nanoseconds>(time)
+              .time_since_epoch()
+              .count();
+      auto frame_time = fml::TimePoint::FromEpochDelta(
+          fml::TimeDelta::FromNanoseconds(time_ns));
+      auto now = fml::TimePoint::Now();
+      if (frame_time > now) {
+        frame_time = now;
+      }
+      // Assume 60 FPS standard display interval: 1,000,000,000 ns / 60
+      // = 16.66ms.
+      // TODO(team-android): Get the actual refresh rate from the display.
+      // https://github.com/flutter/flutter/issues/142845
+      constexpr double kStandardRefreshRateHz = 60.0;
+      constexpr double kNanosPerSecond = 1000000000.0;
+      auto target_time =
+          frame_time + fml::TimeDelta::FromNanoseconds(kNanosPerSecond /
+                                                       kStandardRefreshRateHz);
+      FlutterEngineOnVsync(engine, baton,
+                           frame_time.ToEpochDelta().ToNanoseconds(),
+                           target_time.ToEpochDelta().ToNanoseconds());
+    });
+  } else {
+    FML_LOG(ERROR) << "Java-based Vsync is not yet implemented in the "
+                      "new Android embedder.";
+  }
+}
+
 bool EmbedderEngineBridge::IsValid() const {
-  return is_valid_ && engine_ != nullptr;
+  return is_valid_;
 }
 
 void EmbedderEngineBridge::Launch(
@@ -345,6 +647,10 @@ void EmbedderEngineBridge::Launch(
   }
 
   is_valid_ = true;
+
+  if (platform_view_delegate_) {
+    platform_view_delegate_->SetEngine(engine_);
+  }
 
   auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine_);
   if (platform_view_android_) {
@@ -410,10 +716,16 @@ std::unique_ptr<AndroidEngineBridge> EmbedderEngineBridge::Spawn(
   auto child_platform_view_delegate =
       std::make_unique<EmbedderPlatformViewDelegate>(settings_);
 
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  fml::RefPtr<fml::TaskRunner> platform_runner =
+      fml::MessageLoop::GetCurrent().GetTaskRunner();
+
   auto child_platform_view = std::make_unique<PlatformViewAndroid>(
       *child_platform_view_delegate,
-      TaskRunners("", nullptr, nullptr, nullptr, nullptr), jni_facade,
+      TaskRunners("", platform_runner, nullptr, nullptr, nullptr), jni_facade,
       child_context, child_embedder_surface.get());
+
+  child_platform_view->SetupImpellerContext();
 
   auto child_surface_manager =
       std::make_shared<AndroidSurfaceManager>(child_context);
@@ -462,7 +774,7 @@ bool EmbedderEngineBridge::IsSurfaceControlEnabled() {
 Rasterizer::Screenshot EmbedderEngineBridge::Screenshot(
     Rasterizer::ScreenshotType type,
     bool base64_encode) {
-  if (!IsValid()) {
+  if (!IsValid() || !engine_) {
     return {nullptr, DlISize(), "", Rasterizer::ScreenshotFormat::kUnknown};
   }
   auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine_);
@@ -482,7 +794,7 @@ EmbedderEngineBridge::GetPlatformMessageHandler() const {
 }
 
 void EmbedderEngineBridge::UpdateDisplayMetrics() {
-  if (!IsValid() || !jni_facade_) {
+  if (!IsValid() || !jni_facade_ || !engine_) {
     return;
   }
   std::vector<std::unique_ptr<Display>> displays;

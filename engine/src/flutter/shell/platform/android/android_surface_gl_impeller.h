@@ -85,7 +85,7 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
 
   bool OnGLContextMakeCurrent();
 
-  bool RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
+  bool RecreateOnscreenSurface();
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidSurfaceGLImpeller);
 };

@@ -113,7 +113,6 @@ std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
 
 // |AndroidSurface|
 void AndroidSurfaceGLImpeller::TeardownOnScreenContext() {
-  GLContextClearCurrent();
   onscreen_surface_.reset();
 }
 
@@ -121,7 +120,7 @@ void AndroidSurfaceGLImpeller::TeardownOnScreenContext() {
 bool AndroidSurfaceGLImpeller::OnScreenSurfaceResize(const DlISize& size) {
   // The size is unused. It was added only for iOS where the sizes were
   // necessary to re-create auxiliary buffers (stencil, depth, etc.).
-  return RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
+  return RecreateOnscreenSurface();
 }
 
 // |AndroidSurface|
@@ -142,7 +141,7 @@ bool AndroidSurfaceGLImpeller::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
   native_window_ = std::move(window);
-  return RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
+  return RecreateOnscreenSurface();
 }
 
 // |AndroidSurface|
@@ -246,9 +245,7 @@ sk_sp<const GrGLInterface> AndroidSurfaceGLImpeller::GetGLInterface() const {
   return nullptr;
 }
 
-bool AndroidSurfaceGLImpeller::
-    RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent() {
-  GLContextClearCurrent();
+bool AndroidSurfaceGLImpeller::RecreateOnscreenSurface() {
   if (!native_window_) {
     return false;
   }
@@ -260,7 +257,7 @@ bool AndroidSurfaceGLImpeller::
     return false;
   }
   onscreen_surface_ = std::move(onscreen_surface);
-  return OnGLContextMakeCurrent();
+  return true;
 }
 
 }  // namespace flutter

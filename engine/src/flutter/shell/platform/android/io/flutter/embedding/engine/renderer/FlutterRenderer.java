@@ -342,6 +342,7 @@ public class FlutterRenderer implements TextureRegistry {
       // mNativeView==null.
       SurfaceTexture.OnFrameAvailableListener onFrameListener =
           texture -> {
+            Log.i(TAG, "SurfaceTexture onFrameListener id=" + id);
             if (released || !flutterJNI.isAttached()) {
               // Even though we make sure to unregister the callback before releasing, as of
               // Android O, SurfaceTexture has a data race when accessing the callback, so the
@@ -350,7 +351,7 @@ public class FlutterRenderer implements TextureRegistry {
               return;
             }
             textureWrapper.markDirty();
-            scheduleEngineFrame();
+            markTextureFrameAvailable(id);
           };
       // The callback relies on being executed on the UI thread (un-synchronised read of
       // mNativeView and also the engine code check for platform thread in
@@ -1361,6 +1362,10 @@ public class FlutterRenderer implements TextureRegistry {
   @VisibleForTesting
   /* package */ void scheduleEngineFrame() {
     flutterJNI.scheduleFrame();
+  }
+
+  private void markTextureFrameAvailable(long textureId) {
+    flutterJNI.markTextureFrameAvailable(textureId);
   }
 
   private void unregisterTexture(long textureId) {

@@ -405,6 +405,10 @@ public class FlutterLoader {
             enableSoftwareRendering =
                 applicationMetaData.getBoolean(
                     FlutterEngineFlags.ENABLE_SOFTWARE_RENDERING.metadataKey, false);
+          } else if (flag == FlutterEngineFlags.ENABLE_EMBEDDER_API) {
+            boolean enable = applicationMetaData.getBoolean(metadataKey, true);
+            shellArgs.add(flag.engineArgument + "=" + (enable ? "true" : "false"));
+            continue;
           } else if (flag == FlutterEngineFlags.AOT_SHARED_LIBRARY_NAME
               || flag == FlutterEngineFlags.DEPRECATED_AOT_SHARED_LIBRARY_NAME) {
             // Perform security check for path containing application's compiled Dart

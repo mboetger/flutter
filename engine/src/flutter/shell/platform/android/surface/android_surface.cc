@@ -21,4 +21,16 @@ std::shared_ptr<impeller::Context> AndroidSurface::GetImpellerContext() {
 
 void AndroidSurface::SetupImpellerSurface() {}
 
+std::unique_ptr<GLContextResult> AndroidSurface::GLContextMakeCurrent() {
+  return std::make_unique<GLContextDefaultResult>(false);
+}
+
+bool AndroidSurface::GLContextClearCurrent() {
+  return false;
+}
+
+bool AndroidSurface::GLContextPresent(const GLPresentInfo& present_info) {
+  return false;
+}
+
 }  // namespace flutter
