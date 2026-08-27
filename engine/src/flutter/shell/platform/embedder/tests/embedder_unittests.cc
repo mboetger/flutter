@@ -25,6 +25,7 @@
 #include "flutter/fml/thread.h"
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
+#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/runtime/dart_vm.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
@@ -5346,6 +5347,70 @@ TEST_F(EmbedderTest, ScreenshotProcTable) {
   ASSERT_NE(procs.ReleaseScreenshot, nullptr);
   EXPECT_EQ(procs.GetScreenshot, &FlutterEngineGetScreenshot);
   EXPECT_EQ(procs.ReleaseScreenshot, &FlutterEngineReleaseScreenshot);
+}
+
+TEST_F(EmbedderTest, CallbackInfoArgumentValidation) {
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  // Null info_out pointer.
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(0, nullptr), kInvalidArguments);
+
+  // Bad struct_size in info_out.
+  FlutterCallbackInformation bad_info = info;
+  bad_info.struct_size = 0;
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(0, &bad_info),
+            kInvalidArguments);
+
+  // Arbitrary non-existent handle.
+  constexpr int64_t kUnknownCallbackHandle = 0x1234567890ABCDEF;
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(kUnknownCallbackHandle, &info),
+            kInternalInconsistency);
+}
+
+TEST_F(EmbedderTest, CallbackInfoLookupClassMethod) {
+  const std::string name = "testMethodCallback";
+  const std::string class_name = "TestClass";
+  const std::string library_path = "package:test_pkg/test_callbacks.dart";
+
+  int64_t handle = flutter::DartCallbackCache::GetCallbackHandle(
+      name, class_name, library_path);
+  ASSERT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(handle, &info), kSuccess);
+  EXPECT_STREQ(info.callback_name, name.c_str());
+  EXPECT_STREQ(info.class_name, class_name.c_str());
+  EXPECT_STREQ(info.library_path, library_path.c_str());
+}
+
+TEST_F(EmbedderTest, CallbackInfoLookupTopLevelFunction) {
+  const std::string name = "topLevelCallback";
+  const std::string class_name = "";
+  const std::string library_path = "package:test_pkg/top_level.dart";
+
+  int64_t handle = flutter::DartCallbackCache::GetCallbackHandle(
+      name, class_name, library_path);
+  ASSERT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(handle, &info), kSuccess);
+  EXPECT_STREQ(info.callback_name, name.c_str());
+  EXPECT_STREQ(info.class_name, class_name.c_str());
+  EXPECT_STREQ(info.library_path, library_path.c_str());
+}
+
+TEST_F(EmbedderTest, CallbackInfoProcTable) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  auto result = FlutterEngineGetProcAddresses(&procs);
+  ASSERT_EQ(result, kSuccess);
+  ASSERT_NE(procs.GetCallbackInformation, nullptr);
+  EXPECT_EQ(procs.GetCallbackInformation, &FlutterEngineGetCallbackInformation);
 }
 
 }  // namespace testing

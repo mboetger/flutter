@@ -52,6 +52,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -4766,6 +4767,35 @@ FlutterEngineResult FlutterEngineReleaseScreenshot(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineGetCallbackInformation(
+    int64_t handle,
+    FlutterCallbackInformation* info_out) {
+  if (info_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid info_out pointer specified.");
+  }
+
+  if (SAFE_ACCESS(info_out, struct_size, 0) <
+      sizeof(FlutterCallbackInformation)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid struct_size specified in info_out.");
+  }
+
+  const flutter::DartCallbackRepresentation* info =
+      flutter::DartCallbackCache::GetCallbackInformationPtr(handle);
+  if (info == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Callback handle not found in Dart callback cache.");
+  }
+
+  info_out->callback_name = info->name.c_str();
+  info_out->class_name = info->class_name.c_str();
+  info_out->library_path = info->library_path.c_str();
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4829,6 +4859,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
            FlutterEngineLoadDartDeferredLibraryError);
   SET_PROC(GetScreenshot, FlutterEngineGetScreenshot);
   SET_PROC(ReleaseScreenshot, FlutterEngineReleaseScreenshot);
+  SET_PROC(GetCallbackInformation, FlutterEngineGetCallbackInformation);
 #undef SET_PROC
 
   return kSuccess;

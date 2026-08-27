@@ -72,6 +72,16 @@ DartCallbackCache::GetCallbackInformation(int64_t handle) {
   return nullptr;
 }
 
+const DartCallbackRepresentation* DartCallbackCache::GetCallbackInformationPtr(
+    int64_t handle) {
+  std::scoped_lock lock(mutex_);
+  auto iterator = cache_.find(handle);
+  if (iterator != cache_.end()) {
+    return &iterator->second;
+  }
+  return nullptr;
+}
+
 void DartCallbackCache::SaveCacheToDisk() {
   // Cache JSON format
   // [
