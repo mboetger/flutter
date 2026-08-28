@@ -2,13 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <map>
+#include <string>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
@@ -29,13 +34,22 @@ class PlatformViewAndroidJNIImplTest : public ::testing::Test {
     std::call_once(jvm_init_flag, SetUpJVM);
   }
 
+  void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
+
+  static void* GetNativeMethod(const std::string& name) {
+    auto it = native_methods_.find(name);
+    return it != native_methods_.end() ? it->second : nullptr;
+  }
+
  private:
   friend class MockJNIEnvProvider;
   static MockJavaVM jvm_;
+  static std::map<std::string, void*> native_methods_;
   static void SetUpJVM();
 };
 
 MockJavaVM PlatformViewAndroidJNIImplTest::jvm_;
+std::map<std::string, void*> PlatformViewAndroidJNIImplTest::native_methods_;
 
 class MockJNIEnvProvider {
  public:
@@ -77,7 +91,14 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
   EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
       .WillRepeatedly(Return(kPlaceholderMethodID));
   EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
-  EXPECT_CALL(mock_env, RegisterNatives(_, _, _)).WillRepeatedly(Return(0));
+  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
+      .WillRepeatedly(
+          [&](jclass clazz, const JNINativeMethod* methods, jint nMethods) {
+            for (jint i = 0; i < nMethods; ++i) {
+              native_methods_[methods[i].name] = methods[i].fnPtr;
+            }
+            return 0;
+          });
 
   PlatformViewAndroid::Register(&mock_env);
 }
@@ -172,6 +193,380 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
                        reinterpret_cast<jlong>(holder.get()), 1.0f, 100, 100, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
                        0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualPathAttachAndDestroy) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+
+  // Synthetic placeholder for Java FlutterJNI instance.
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+
+  // 1. Test Legacy Path (flag = false)
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  jlong legacy_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  EXPECT_NE(legacy_handle, 0);
+  native_destroy(&mock_env, nullptr, legacy_handle);
+
+  // 2. Test Embedder API Path (flag = true)
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  jlong embedder_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  EXPECT_NE(embedder_handle, 0);
+  native_destroy(&mock_env, nullptr, embedder_handle);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualPathSurfaceLifecycle) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using SurfaceDestroyedFn = void (*)(JNIEnv*, jobject, jlong);
+  using SurfaceChangedFn = void (*)(JNIEnv*, jobject, jlong, jint, jint);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto native_surface_destroyed = reinterpret_cast<SurfaceDestroyedFn>(
+      GetNativeMethod("nativeSurfaceDestroyed"));
+  auto native_surface_changed = reinterpret_cast<SurfaceChangedFn>(
+      GetNativeMethod("nativeSurfaceChanged"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(native_surface_destroyed, nullptr);
+  ASSERT_NE(native_surface_changed, nullptr);
+
+  // Standard surface viewport dimensions for test.
+  constexpr jint kTestWidth = 800;
+  constexpr jint kTestHeight = 600;
+
+  // Synthetic placeholder for Java FlutterJNI instance.
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+
+  // 1. Legacy path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  jlong legacy_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(legacy_handle, 0);
+  native_surface_changed(&mock_env, nullptr, legacy_handle, kTestWidth,
+                         kTestHeight);
+  native_surface_destroyed(&mock_env, nullptr, legacy_handle);
+  native_destroy(&mock_env, nullptr, legacy_handle);
+
+  // 2. Embedder API path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  jlong embedder_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(embedder_handle, 0);
+  native_surface_changed(&mock_env, nullptr, embedder_handle, kTestWidth,
+                         kTestHeight);
+  native_surface_destroyed(&mock_env, nullptr, embedder_handle);
+  native_destroy(&mock_env, nullptr, embedder_handle);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualPathSetViewportMetrics) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using SetViewportMetricsFn = void (*)(
+      JNIEnv*, jobject, jlong, jfloat, jint, jint, jint, jint, jint, jint, jint,
+      jint, jint, jint, jint, jint, jint, jint, jint, jintArray, jintArray,
+      jintArray, jint, jint, jint, jint, jint, jint, jint, jint);
+  using UpdateDisplayMetricsFn = void (*)(JNIEnv*, jobject, jlong);
+  using IsSurfaceControlEnabledFn = bool (*)(JNIEnv*, jobject, jlong);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto set_viewport_metrics = reinterpret_cast<SetViewportMetricsFn>(
+      GetNativeMethod("nativeSetViewportMetrics"));
+  auto update_display_metrics = reinterpret_cast<UpdateDisplayMetricsFn>(
+      GetNativeMethod("nativeUpdateDisplayMetrics"));
+  auto is_surface_control = reinterpret_cast<IsSurfaceControlEnabledFn>(
+      GetNativeMethod("nativeIsSurfaceControlEnabled"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(set_viewport_metrics, nullptr);
+  ASSERT_NE(update_display_metrics, nullptr);
+  ASSERT_NE(is_surface_control, nullptr);
+
+  EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
+
+  // Synthetic placeholder for Java FlutterJNI instance.
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+
+  // 1. Legacy path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  jlong legacy_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(legacy_handle, 0);
+  set_viewport_metrics(&mock_env, nullptr, legacy_handle, 2.0f, 1080, 1920, 0,
+                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr, nullptr,
+                       nullptr, 0, 0, 0, 0, 0, 0, 0, 0);
+  update_display_metrics(&mock_env, nullptr, legacy_handle);
+  EXPECT_FALSE(is_surface_control(&mock_env, nullptr, legacy_handle));
+  native_destroy(&mock_env, nullptr, legacy_handle);
+
+  // 2. Embedder API path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  jlong embedder_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(embedder_handle, 0);
+  set_viewport_metrics(&mock_env, nullptr, embedder_handle, 2.0f, 1080, 1920, 0,
+                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr, nullptr,
+                       nullptr, 0, 0, 0, 0, 0, 0, 0, 0);
+  update_display_metrics(&mock_env, nullptr, embedder_handle);
+  EXPECT_FALSE(is_surface_control(&mock_env, nullptr, embedder_handle));
+  native_destroy(&mock_env, nullptr, embedder_handle);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualPathPlatformMessaging) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using DispatchPlatformMessageFn =
+      void (*)(JNIEnv*, jobject, jlong, jstring, jobject, jint, jint);
+  using DispatchEmptyPlatformMessageFn =
+      void (*)(JNIEnv*, jobject, jlong, jstring, jint);
+  using InvokePlatformMessageResponseCallbackFn =
+      void (*)(JNIEnv*, jobject, jlong, jint, jobject, jint);
+  using InvokePlatformMessageEmptyResponseCallbackFn =
+      void (*)(JNIEnv*, jobject, jlong, jint);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto native_dispatch_msg = reinterpret_cast<DispatchPlatformMessageFn>(
+      GetNativeMethod("nativeDispatchPlatformMessage"));
+  auto native_dispatch_empty_msg =
+      reinterpret_cast<DispatchEmptyPlatformMessageFn>(
+          GetNativeMethod("nativeDispatchEmptyPlatformMessage"));
+  auto native_invoke_response =
+      reinterpret_cast<InvokePlatformMessageResponseCallbackFn>(
+          GetNativeMethod("nativeInvokePlatformMessageResponseCallback"));
+  auto native_invoke_empty_response =
+      reinterpret_cast<InvokePlatformMessageEmptyResponseCallbackFn>(
+          GetNativeMethod("nativeInvokePlatformMessageEmptyResponseCallback"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(native_dispatch_msg, nullptr);
+  ASSERT_NE(native_dispatch_empty_msg, nullptr);
+  ASSERT_NE(native_invoke_response, nullptr);
+  ASSERT_NE(native_invoke_empty_response, nullptr);
+
+  // Synthetic placeholder for Java FlutterJNI instance.
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+
+  EXPECT_CALL(mock_env, GetStringUTFChars(_, _))
+      .WillRepeatedly(Return("test_channel"));
+  EXPECT_CALL(mock_env, ReleaseStringUTFChars(_, _)).WillRepeatedly(Return());
+
+  // Rationale: Test response ID and byte payload dimensions.
+  constexpr jint kResponseId = 42;
+  constexpr jint kPayloadSize = 4;
+  uint8_t payload[kPayloadSize] = {1, 2, 3, 4};
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(_))
+      .WillRepeatedly(Return(payload));
+
+  // 1. Legacy path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  jlong legacy_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(legacy_handle, 0);
+  native_dispatch_empty_msg(&mock_env, nullptr, legacy_handle, nullptr,
+                            kResponseId);
+  native_dispatch_msg(&mock_env, nullptr, legacy_handle, nullptr, nullptr,
+                      kPayloadSize, kResponseId);
+  native_destroy(&mock_env, nullptr, legacy_handle);
+
+  // 2. Embedder API path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  jlong embedder_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(embedder_handle, 0);
+  native_dispatch_empty_msg(&mock_env, nullptr, embedder_handle, nullptr,
+                            kResponseId);
+  native_dispatch_msg(&mock_env, nullptr, embedder_handle, nullptr, nullptr,
+                      kPayloadSize, kResponseId);
+  native_destroy(&mock_env, nullptr, embedder_handle);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualPathSemanticsAndAccessibility) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using DispatchSemanticsActionFn =
+      void (*)(JNIEnv*, jobject, jlong, jint, jint, jobject, jint);
+  using SetSemanticsEnabledFn = void (*)(JNIEnv*, jobject, jlong, jboolean);
+  using SetAccessibilityFeaturesFn = void (*)(JNIEnv*, jobject, jlong, jint);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto native_semantics_action = reinterpret_cast<DispatchSemanticsActionFn>(
+      GetNativeMethod("nativeDispatchSemanticsAction"));
+  auto native_set_semantics = reinterpret_cast<SetSemanticsEnabledFn>(
+      GetNativeMethod("nativeSetSemanticsEnabled"));
+  auto native_set_a11y = reinterpret_cast<SetAccessibilityFeaturesFn>(
+      GetNativeMethod("nativeSetAccessibilityFeatures"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(native_semantics_action, nullptr);
+  ASSERT_NE(native_set_semantics, nullptr);
+  ASSERT_NE(native_set_a11y, nullptr);
+
+  // Synthetic placeholder for Java FlutterJNI instance.
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+
+  // Rationale: Test semantics node ID, action ID (tap = 1), and flags bitmask
+  // (1).
+  constexpr jint kNodeId = 100;
+  constexpr jint kActionId = 1;
+  constexpr jint kFlags = 1;
+
+  // 1. Legacy path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  jlong legacy_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(legacy_handle, 0);
+  native_set_semantics(&mock_env, nullptr, legacy_handle, JNI_TRUE);
+  native_set_a11y(&mock_env, nullptr, legacy_handle, kFlags);
+  native_semantics_action(&mock_env, nullptr, legacy_handle, kNodeId, kActionId,
+                          nullptr, 0);
+  native_destroy(&mock_env, nullptr, legacy_handle);
+
+  // 2. Embedder API path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  jlong embedder_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(embedder_handle, 0);
+  native_set_semantics(&mock_env, nullptr, embedder_handle, JNI_TRUE);
+  native_set_a11y(&mock_env, nullptr, embedder_handle, kFlags);
+  native_semantics_action(&mock_env, nullptr, embedder_handle, kNodeId,
+                          kActionId, nullptr, 0);
+  native_destroy(&mock_env, nullptr, embedder_handle);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualPathTextureAndMemoryManagement) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using RegisterTextureFn = void (*)(JNIEnv*, jobject, jlong, jlong, jobject);
+  using MarkTextureFrameAvailableFn = void (*)(JNIEnv*, jobject, jlong, jlong);
+  using UnregisterTextureFn = void (*)(JNIEnv*, jobject, jlong, jlong);
+  using NotifyLowMemoryWarningFn = void (*)(JNIEnv*, jobject, jlong);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto native_register_tex = reinterpret_cast<RegisterTextureFn>(
+      GetNativeMethod("nativeRegisterTexture"));
+  auto native_mark_frame = reinterpret_cast<MarkTextureFrameAvailableFn>(
+      GetNativeMethod("nativeMarkTextureFrameAvailable"));
+  auto native_unregister_tex = reinterpret_cast<UnregisterTextureFn>(
+      GetNativeMethod("nativeUnregisterTexture"));
+  auto native_low_mem = reinterpret_cast<NotifyLowMemoryWarningFn>(
+      GetNativeMethod("nativeNotifyLowMemoryWarning"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(native_register_tex, nullptr);
+  ASSERT_NE(native_mark_frame, nullptr);
+  ASSERT_NE(native_unregister_tex, nullptr);
+  ASSERT_NE(native_low_mem, nullptr);
+
+  // Synthetic placeholder for Java FlutterJNI instance.
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+  // Rationale: Arbitrary texture ID.
+  constexpr jlong kTextureId = 55;
+
+  // 1. Legacy path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  jlong legacy_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(legacy_handle, 0);
+  native_register_tex(&mock_env, nullptr, legacy_handle, kTextureId,
+                      dummy_flutter_jni);
+  native_mark_frame(&mock_env, nullptr, legacy_handle, kTextureId);
+  native_unregister_tex(&mock_env, nullptr, legacy_handle, kTextureId);
+  native_low_mem(&mock_env, nullptr, legacy_handle);
+  native_destroy(&mock_env, nullptr, legacy_handle);
+
+  // 2. Embedder API path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  jlong embedder_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(embedder_handle, 0);
+  native_register_tex(&mock_env, nullptr, embedder_handle, kTextureId,
+                      dummy_flutter_jni);
+  native_mark_frame(&mock_env, nullptr, embedder_handle, kTextureId);
+  native_unregister_tex(&mock_env, nullptr, embedder_handle, kTextureId);
+  native_low_mem(&mock_env, nullptr, embedder_handle);
+  native_destroy(&mock_env, nullptr, embedder_handle);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualPathPointerDataPacket) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using DispatchPointerDataPacketFn =
+      void (*)(JNIEnv*, jobject, jlong, jobject, jint);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto native_pointer = reinterpret_cast<DispatchPointerDataPacketFn>(
+      GetNativeMethod("nativeDispatchPointerDataPacket"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(native_pointer, nullptr);
+
+  // Synthetic placeholder for Java FlutterJNI instance.
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+
+  // 288 bytes per PointerData record.
+  constexpr size_t kPointerPacketSize = 288;
+  std::vector<uint8_t> packet_data(kPointerPacketSize, 0);
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(_))
+      .WillRepeatedly(Return(packet_data.data()));
+
+  // 1. Legacy path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  jlong legacy_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(legacy_handle, 0);
+  native_pointer(&mock_env, nullptr, legacy_handle, nullptr,
+                 kPointerPacketSize);
+  native_destroy(&mock_env, nullptr, legacy_handle);
+
+  // 2. Embedder API path
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  jlong embedder_handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(embedder_handle, 0);
+  native_pointer(&mock_env, nullptr, embedder_handle, nullptr,
+                 kPointerPacketSize);
+  native_destroy(&mock_env, nullptr, embedder_handle);
 }
 
 // The load order is exercised with an injected loader rather than real

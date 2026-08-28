@@ -70,6 +70,9 @@ class MockableJNIEnv : public JNIEnv {
     jni_.RegisterNatives = WrapRegisterNatives;
     jni_.GetArrayLength = WrapGetArrayLength;
     jni_.GetIntArrayRegion = WrapGetIntArrayRegion;
+    jni_.GetStringUTFChars = WrapGetStringUTFChars;
+    jni_.ReleaseStringUTFChars = WrapReleaseStringUTFChars;
+    jni_.GetDirectBufferAddress = WrapGetDirectBufferAddress;
   }
 
   virtual jobject CallObjectMethodV(jobject, jmethodID, va_list) = 0;
@@ -90,6 +93,9 @@ class MockableJNIEnv : public JNIEnv {
   virtual jint RegisterNatives(jclass, const JNINativeMethod*, jint) = 0;
   virtual jsize GetArrayLength(jarray) = 0;
   virtual void GetIntArrayRegion(jintArray, jsize, jsize, jint*) = 0;
+  virtual const char* GetStringUTFChars(jstring, jboolean*) = 0;
+  virtual void ReleaseStringUTFChars(jstring, const char*) = 0;
+  virtual void* GetDirectBufferAddress(jobject) = 0;
 
  private:
   static jobject WrapCallObjectMethod(JNIEnv* env,
@@ -183,6 +189,19 @@ class MockableJNIEnv : public JNIEnv {
     static_cast<MockableJNIEnv*>(env)->GetIntArrayRegion(array, start, len,
                                                          buf);
   }
+  static const char* WrapGetStringUTFChars(JNIEnv* env,
+                                           jstring string,
+                                           jboolean* isCopy) {
+    return static_cast<MockableJNIEnv*>(env)->GetStringUTFChars(string, isCopy);
+  }
+  static void WrapReleaseStringUTFChars(JNIEnv* env,
+                                        jstring string,
+                                        const char* utf) {
+    static_cast<MockableJNIEnv*>(env)->ReleaseStringUTFChars(string, utf);
+  }
+  static void* WrapGetDirectBufferAddress(JNIEnv* env, jobject buf) {
+    return static_cast<MockableJNIEnv*>(env)->GetDirectBufferAddress(buf);
+  }
 
   JNINativeInterface jni_ = {};
 };
@@ -228,6 +247,9 @@ class MockJNIEnv : public MockableJNIEnv {
               GetIntArrayRegion,
               (jintArray, jsize, jsize, jint*),
               (override));
+  MOCK_METHOD(const char*, GetStringUTFChars, (jstring, jboolean*), (override));
+  MOCK_METHOD(void, ReleaseStringUTFChars, (jstring, const char*), (override));
+  MOCK_METHOD(void*, GetDirectBufferAddress, (jobject), (override));
 };
 
 }  // namespace flutter
