@@ -5,7 +5,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 * **Base Tracking Commit SHA**: `[TBD: Insert SHA when starting]`
 * **Target OS Environment**: Android (All rendering backends: GL, Vulkan, Software)
-* **Goal State**: Android Engine initializes completely independent of legacy engine internals, backed purely by public C APIs (`embedder.h`), with 0 legacy code remaining in `shell/platform/android`.
+* **Goal State**: Android Engine initializes completely independent of legacy engine internals, backed purely by public C APIs (`embedder.h`), with 0 legacy code remaining in `shell/platform/android`. All unit tests, integration tests, and golden tests MUST pass. Furthermore, the ONLY engine dependencies permitted are: `//flutter/shell/platform/embedder:embedder_as_internal_library` (required), `//flutter/fml` (optional), `//flutter/shell/platform/common` (optional), and `//flutter/third_party` (optional).
 
 ## Quality & Architectural Invariants (Enforced via Ledger)
 1. **The Struct-Size Invariant**: Every C API structural addition (`info`) MUST have `struct_size` validated.
