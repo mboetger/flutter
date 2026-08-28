@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "flutter/fml/platform/android/jni_weak_ref.h"
+#include "flutter/fml/task_runner.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 
 namespace flutter {
@@ -166,6 +167,7 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
  private:
   // Reference to FlutterJNI object.
   const fml::jni::JavaObjectWeakGlobalRef java_object_;
+  fml::RefPtr<fml::TaskRunner> platform_task_runner_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewAndroidJNIImpl);
 };

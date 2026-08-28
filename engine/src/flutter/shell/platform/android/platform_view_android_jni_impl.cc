@@ -1,6 +1,4 @@
-// Copyright 2013 The Flutter Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
+#define FML_USED_ON_EMBEDDER
 
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 
@@ -16,6 +14,7 @@
 #include "flutter/common/constants.h"
 #include "flutter/flow/embedded_views.h"
 #include "flutter/fml/mapping.h"
+#include "flutter/fml/message_loop.h"
 #include "flutter/fml/native_library.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
@@ -1619,7 +1618,11 @@ bool PlatformViewAndroid::Register(JNIEnv* env) {
 
 PlatformViewAndroidJNIImpl::PlatformViewAndroidJNIImpl(
     const fml::jni::JavaObjectWeakGlobalRef& java_object)
-    : java_object_(java_object) {}
+    : java_object_(java_object) {
+  if (fml::MessageLoop::IsInitializedForCurrentThread()) {
+    platform_task_runner_ = fml::MessageLoop::GetCurrent().GetTaskRunner();
+  }
+}
 
 PlatformViewAndroidJNIImpl::~PlatformViewAndroidJNIImpl() = default;
 
@@ -1822,6 +1825,20 @@ void PlatformViewAndroidJNIImpl::FlutterViewUpdateCustomAccessibilityActions(
 }
 
 void PlatformViewAndroidJNIImpl::FlutterViewOnFirstFrame() {
+  if (platform_task_runner_ &&
+      !platform_task_runner_->RunsTasksOnCurrentThread()) {
+    auto java_object = java_object_;
+    platform_task_runner_->PostTask([java_object] {
+      JNIEnv* env = fml::jni::AttachCurrentThread();
+      auto obj = java_object.get(env);
+      if (!obj.is_null()) {
+        env->CallVoidMethod(obj.obj(), g_on_first_frame_method);
+        FML_CHECK(fml::jni::CheckException(env));
+      }
+    });
+    return;
+  }
+
   JNIEnv* env = fml::jni::AttachCurrentThread();
 
   auto java_object = java_object_.get(env);
@@ -1835,6 +1852,20 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnFirstFrame() {
 }
 
 void PlatformViewAndroidJNIImpl::FlutterViewOnPreEngineRestart() {
+  if (platform_task_runner_ &&
+      !platform_task_runner_->RunsTasksOnCurrentThread()) {
+    auto java_object = java_object_;
+    platform_task_runner_->PostTask([java_object] {
+      JNIEnv* env = fml::jni::AttachCurrentThread();
+      auto obj = java_object.get(env);
+      if (!obj.is_null()) {
+        env->CallVoidMethod(obj.obj(), g_on_engine_restart_method);
+        FML_CHECK(fml::jni::CheckException(env));
+      }
+    });
+    return;
+  }
+
   JNIEnv* env = fml::jni::AttachCurrentThread();
 
   auto java_object = java_object_.get(env);
