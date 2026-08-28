@@ -327,6 +327,9 @@ void FlutterMain::SetupDartVMServiceUriCallback(JNIEnv* env) {
 
   vm_service_uri_callback_ = DartServiceIsolate::AddServerStatusCallback(
       [platform_runner, set_uri](const std::string& uri) {
+        __android_log_print(ANDROID_LOG_INFO, "flutter",
+                            "The Dart VM service is listening on %s",
+                            uri.c_str());
         platform_runner->PostTask([uri, set_uri] { set_uri(uri); });
       });
 }
