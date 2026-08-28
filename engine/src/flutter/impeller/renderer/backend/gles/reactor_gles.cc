@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "flutter/fml/build_config.h"
 #include "flutter/fml/trace_event.h"
 #include "fml/closure.h"
 #include "fml/logging.h"
