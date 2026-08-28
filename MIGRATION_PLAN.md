@@ -34,19 +34,20 @@ Previous attempts incorrectly assumed the Android embedder only manages the grap
 4. **Extended Platform View Mutations**: E.g., `ClipPath` and `ClipRSE` (Rounded Superellipse).
 5. **Semantics/A11y Extensions**: `FlutterSemanticsNode2` for advanced string attributions.
 
-### 3. CI/CD, Dual-Pass Golden Validation & Adversarial Review
+### 3. CI/CD, Dual-Pass Golden Validation & Dual-Flag Matrix Testing
 You must not rely solely on unit tests. **EVERY SINGLE PR MUST VERIFY E2E CORRECTNESS AND UNDERGO ADVERSARIAL REVIEW.** 
 Before a PR is considered complete, the following loop MUST be executed:
-  1. **Run Unit Tests.**
-  2. **Run Integration Tests** (located in `dev/integration_tests`).
-  3. **Run Golden Tests (Dual-Pass)**: 
+  1. **Dual-Flag Matrix Testing:** Once the feature flag is introduced (Phase 2.4+), **ALL TESTS (Unit, Integration, and Goldens) MUST BE RUN AND PASS TWICE: once with the feature flag set to `true`, and once with the feature flag set to `false`.** You must prove backward compatibility and new functionality simultaneously.
+  2. **Run Unit Tests** (Under both flag states).
+  3. **Run Integration Tests** (located in `dev/integration_tests`, under both flag states).
+  4. **Run Golden Tests (Dual-Pass)**: 
      * **Pass 1 (Baseline Generation):** Run goldens via the **non-local engine build** with `UPDATE_GOLDENS=true`. (DO NOT COMPROMISE OR CHECK IN THESE IMAGES).
-     * **Pass 2 (Local Verification):** Run goldens via the **local engine build** WITHOUT `UPDATE_GOLDENS` to assert perfect match.
-  4. **Adversarial Review Loop**: 
+     * **Pass 2 (Local Verification):** Run goldens via the **local engine build** WITHOUT `UPDATE_GOLDENS` to assert perfect match (Under both flag states).
+  5. **Adversarial Review Loop**: 
      * You MUST summon an independent agent to perform an adversarial review of your PR.
      * You MUST address all architectural, style, and correctness feedback provided by the reviewer.
      * You MUST ensure tests continue to pass after addressing feedback.
-     * **Repeat steps 1-4** until the independent agent signs off with ZERO feedback or findings.
+     * **Repeat steps 1-5** until the independent agent signs off with ZERO feedback or findings.
 
 ### 4. GN Target Quarantine & Strict Dependency Rules
 During the migration, you MUST use `BUILD.gn` targets and visibility rules to completely quarantine existing legacy engine dependencies and guarantee the new implementation does not accidentally rely on internal engine components.

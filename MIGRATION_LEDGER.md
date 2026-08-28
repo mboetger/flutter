@@ -9,7 +9,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 ## Quality & Architectural Invariants (Enforced via Ledger)
 1. **The Struct-Size Invariant**: Every C API structural addition (`info`) MUST have `struct_size` validated.
-2. **The Flag-Gate Invariant**: Any change to rendering logic in Phase 2/3/4 must be gated behind the `FlutterMain::IsEmbedderAPIEnabled()` conditional.
+2. **The Flag-Gate Matrix Invariant**: Any change to rendering logic in Phase 2/3/4 must be gated behind the `FlutterMain::IsEmbedderAPIEnabled()` conditional. Furthermore, ALL testing (Unit, Integration, and Goldens) MUST be executed sequentially under BOTH flag states (`flag=true` AND `flag=false`) to prevent breaking the legacy canary path.
 3. **The Cleanup Invariant**: The migration is NOT complete until all `android_legacy_engine_holder` targets are deleted and NO polymorphic intermediate bridges remain.
 4. **Synchronous Surface Detach**: Must block the OS from destroying `ANativeWindow` until the rasterizer completes shutdown.
 5. **Thread-local EGL Isolation**: Prevent `EGL_BAD_ACCESS` collisions using thread local contexts for offscreen resource pooling.
@@ -47,15 +47,15 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [ ] 2.5: Decouple `flutter_main.cc` (Verified Tests & Adversarial Review)
 
 ### Phase 3: Abstractions & Architecture
-- [ ] 3.1: AndroidSurfaceManager (Verified Tests & Adversarial Review)
-- [ ] 3.2: AndroidCompositor (Verified Tests & Adversarial Review)
-- [ ] 3.3: Direct JNI Mutator Mapping (Verified Tests & Adversarial Review)
+- [ ] 3.1: AndroidSurfaceManager (Verified Dual-Flag Tests & Adversarial Review)
+- [ ] 3.2: AndroidCompositor (Verified Dual-Flag Tests & Adversarial Review)
+- [ ] 3.3: Direct JNI Mutator Mapping (Verified Dual-Flag Tests & Adversarial Review)
 
 ### Phase 4: JNI Routing & Dual-Stack Rollout
-- [ ] 4.1: AndroidEngine Implementation (Verified Tests & Adversarial Review)
-- [ ] 4.2: JNI Dispatch Routing / Inline if-statements (Verified Tests & Adversarial Review)
-- [ ] 4.3: Parameterized Multi-Backend Matrix Testing (Verified Tests & Adversarial Review)
+- [ ] 4.1: AndroidEngine Implementation (Verified Dual-Flag Tests & Adversarial Review)
+- [ ] 4.2: JNI Dispatch Routing / Inline if-statements (Verified Dual-Flag Tests & Adversarial Review)
+- [ ] 4.3: Parameterized Multi-Backend Matrix Testing (Verified Dual-Flag Tests & Adversarial Review)
 
 ### Phase 5: Emancipation & Final Purge
-- [ ] 5.1: Enable Embedder API Default (Verified Tests & Adversarial Review)
+- [ ] 5.1: Enable Embedder API Default (Verified Dual-Flag Tests & Adversarial Review)
 - [ ] 5.2: Legacy Bridge Removal & Total GN Pruning (Verified Tests & Adversarial Review)
