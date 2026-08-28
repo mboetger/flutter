@@ -2,7 +2,7 @@
 
 This document serves as the absolute source of truth and architectural guideline for migrating the Flutter Android Embedder to use the public C Embedder API (`embedder.h`).
 
-Multiple previous LLM migration attempts have been analyzed, and this plan synthesizes their successes while directly preventing their recurrent architectural mistakes. Adhere to this document strictly to ensure ABI stability, subsystem completeness, strict dependency isolation, and zero-debt code cleanup.
+Multiple previous LLM migration attempts have been analyzed, and this plan synthesizes their successes while directly preventing their recurrent architectural mistakes. Adhere to this document strictly to ensure ABI stability, subsystem completeness, strict dependency isolation, rigorous integration testing, and zero-debt code cleanup.
 
 ## Core Migration Rules (DO NOT DEVIATE)
 
@@ -32,7 +32,14 @@ Previous attempts incorrectly assumed the Android embedder only manages the grap
 4. **Extended Platform View Mutations**: E.g., `ClipPath` and `ClipRSE` (Rounded Superellipse).
 5. **Semantics/A11y Extensions**: `FlutterSemanticsNode2` for advanced string attributions.
 
-### 3. GN Target Quarantine & Strict Dependency Rules
+### 3. Integration & Golden Testing Workflow
+Relying solely on unit tests is insufficient. As the migration proceeds, you MUST use the integration tests located in `dev/integration_tests` to verify that end-to-end functionality remains intact.
+* **Golden Testing Procedure**: You must follow this exact methodology to prevent false positives:
+  1. Generate the golden baseline images using the **baseline (non-local) engine build**. Do this before running tests on the new code.
+  2. Run the golden tests **against the local engine build** (containing your migration changes) WITHOUT the `UPDATE_GOLDENS` flag (or equivalent).
+  3. The local engine build MUST perfectly match the non-local baseline goldens.
+
+### 4. GN Target Quarantine & Strict Dependency Rules
 During the migration, you MUST use `BUILD.gn` targets and visibility rules to completely quarantine existing legacy engine dependencies and guarantee the new implementation does not accidentally rely on internal engine components.
 
 1. **Quarantine Target**: Early in Phase 2, separate legacy components into an `android_legacy_engine_holder` GN target. Apply strict visibility rules to this target so NO new code can depend on it.
@@ -43,12 +50,12 @@ During the migration, you MUST use `BUILD.gn` targets and visibility rules to co
    * `//flutter/third_party` (OPTIONAL)
 3. **Prohibited Dependencies**: If your Android embedder GN target depends on `assets`, `common`, `flow`, `impeller`, `lib/ui`, `runtime`, `shell/common`, `skia`, `txt`, or `vulkan`, **you have failed the abstraction**.
 
-### 4. JNI Conditional Dispatch (Transition Phase)
+### 5. JNI Conditional Dispatch (Transition Phase)
 During the transition (Phase 4), you will need to dual-dispatch JNI calls to either the legacy `AndroidShellHolder` or the new `AndroidEngine` based on `FlutterMain::IsEmbedderAPIEnabled()`.
 * **DO NOT** introduce a lingering polymorphic C++ Facade abstraction (e.g., an `AndroidEngineBridge` interface that wraps both). This creates leftover pointer indirection that will rot in the codebase after the migration finishes.
 * **DO** modify `platform_view_android_jni_impl.cc` directly to use inline `if/else` checks. This localizes the transition mess to the JNI file, making Phase 5 cleanup perfectly clean by simply deleting the `else` blocks.
 
-### 5. Zero-Debt Surgical Cleanup (Phase 5)
+### 6. Zero-Debt Surgical Cleanup (Phase 5)
 When the feature flag is rolled out (Phase 5.2), your final cleanup branch must be absolute.
 * Delete the `android_legacy_engine_holder` GN target entirely.
 * Delete `AndroidShellHolder`, `PlatformViewAndroid`, legacy adapters, and old EGL/Surface wrapper implementations.
@@ -64,6 +71,7 @@ All PRs should be strictly prefixed with `android-migration/phase-X.Y-[descripti
 
 ### Phase 0: Baselining
 * **0.1**: Add extensive C++ unit tests to baseline rendering layers (GL/Vulkan/Software), message handlers, and isolate thread-safety *before* starting the C++ refactor.
+* **0.2**: Run `dev/integration_tests` using the non-local engine to generate and store Golden baseline images.
 
 ### Phase 1: API Gaps and Additions
 * **1.1**: Custom Asset Resolvers (`FlutterAssetResolver`)
@@ -94,6 +102,7 @@ All PRs should be strictly prefixed with `android-migration/phase-X.Y-[descripti
 * **4.1**: Implement `AndroidEngine` to orchestrate C-APIs
 * **4.2**: Implement JNI Dispatch Dual-Path Routing (Inline `if`-statements)
 * **4.3**: Add Parameterized Multi-Backend Matrix units tests (`flag=true`, `flag=false`)
+* **4.4**: Execute E2E Integration and Golden Matrix (Compare local engine runs against Phase 0 baselines)
 
 ### Phase 5: Emancipation
 * **5.1**: Enable Embedder API by default with negative rollback flags
