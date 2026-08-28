@@ -33,7 +33,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [x] 1.8: Embedder Screenshot / Raster Bitmap API (Verified Tests & Adversarial Review)
 - [x] 1.9: Dart Callback Information Lookup API (Verified Tests & Adversarial Review)
 - [x] 1.10: Platform View Multi-Mutations (`ClipPath`, `ClipRSE`) (Verified C-ABI & Tests & Adversarial Review)
-- [ ] 1.11: Platform Image Decoder / Generator (Verified Tests & Adversarial Review)
+- [x] 1.11: Platform Image Decoder / Generator (Verified Tests & Adversarial Review)
 
 ### Phase 2: Decoupling and Feature Flagging
 - [ ] 2.1: GN Quarantine Visibility (Verified Tests & Adversarial Review)
