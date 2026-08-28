@@ -13,6 +13,11 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 3. **The Cleanup Invariant**: The migration is NOT complete until all `android_legacy_engine_holder` targets are deleted and NO polymorphic intermediate bridges remain.
 4. **Synchronous Surface Detach**: Must block the OS from destroying `ANativeWindow` until the rasterizer completes shutdown.
 5. **Thread-local EGL Isolation**: Prevent `EGL_BAD_ACCESS` collisions using thread local contexts for offscreen resource pooling.
+6. **GN Target Isolation & Dependency Invariant**: The legacy implementation MUST be quarantined with strict `BUILD.gn` visibility rules starting in Phase 2.1. By the conclusion of Phase 5.2, the Android Embedder MUST depend EXCLUSIVELY on:
+   * `//flutter/shell/platform/embedder:embedder_as_internal_library` (REQUIRED)
+   * `//flutter/fml` (OPTIONAL)
+   * `//flutter/shell/platform/common` (OPTIONAL)
+   * `//flutter/third_party` (OPTIONAL)
 
 ## Live Phase Tracker
 
@@ -30,10 +35,10 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [ ] 1.8: Embedder Screenshot / Raster Bitmap API
 - [ ] 1.9: Dart Callback Information Lookup API
 - [ ] 1.10: Platform View Multi-Mutations (`ClipPath`, `ClipRSE`)
-- [ ] 1.11: Platform Image Decoder / Generator 
+- [ ] 1.11: Platform Image Decoder / Generator
 
 ### Phase 2: Decoupling and Feature Flagging
-- [ ] 2.1: Break PlatformViewAndroid Inheritance & GN Quarantine
+- [ ] 2.1: Break PlatformViewAndroid Inheritance & Set strict GN Quarantine Visibility
 - [ ] 2.2: Adapt APKAssetProvider
 - [ ] 2.3: Custom Task Runners & Priorities
 - [ ] 2.4: Feature Flag Switch & Test Harness
@@ -51,4 +56,4 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 ### Phase 5: Emancipation & Final Purge
 - [ ] 5.1: Enable Embedder API Default
-- [ ] 5.2: Legacy Bridge Removal & Total BUILD.gn Dependency Pruning (14,000+ Deletions Verified)
+- [ ] 5.2: Legacy Bridge Removal & Total BUILD.gn Dependency Pruning (Ensure ONLY permitted dependencies remain)
