@@ -88,11 +88,25 @@ TEST(SwitchesTest, RouteParsedFlag) {
 
 TEST(SwitchesTest, EnableEmbedderAPI) {
   {
-    // enable
+    // enable via presence
     fml::CommandLine command_line = fml::CommandLineFromInitializerList(
         {"command", "--enable-embedder-api"});
     Settings settings = SettingsFromCommandLine(command_line);
     EXPECT_EQ(settings.enable_embedder_api, true);
+  }
+  {
+    // enable via true value
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-embedder-api=true"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, true);
+  }
+  {
+    // disable via false value
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-embedder-api=false"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, false);
   }
   {
     // default

@@ -29,6 +29,18 @@ class FlutterMain {
       const flutter::Settings& settings,
       int api_level);
 
+  // Returns true if the Android Embedder C-API architecture is enabled.
+  static bool IsEmbedderAPIEnabled();
+  static bool IsEmbedderAPIEnabled(const flutter::Settings& settings);
+
+  // Test overrides for matrix testing of both legacy and embedder paths.
+  static void SetEmbedderAPIEnabledForTesting(bool enabled);
+  static void ResetEmbedderAPIEnabledForTesting();
+
+  // Test helpers to configure settings without JNI initialization.
+  static void SetSettingsForTesting(const flutter::Settings& settings);
+  static void ResetSettingsForTesting();
+
  private:
   const flutter::Settings settings_;
   const flutter::AndroidRenderingAPI android_rendering_api_;

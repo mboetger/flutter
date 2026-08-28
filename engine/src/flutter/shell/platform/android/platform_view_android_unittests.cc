@@ -109,7 +109,6 @@ TEST(AndroidPlatformView, SelectsRenderingAPIByApiLevel) {
 #endif  // !SLIMPELLER
 
 namespace {
-
 // Default implicit view ID for single-view Flutter Android applications.
 constexpr int64_t kImplicitViewId = 0;
 
@@ -348,6 +347,47 @@ TEST(PlatformViewAndroidTest, PlatformViewAndroidAdapterBridgesShell) {
   EXPECT_NE(holder->GetPlatformView()->GetAndroidContext().get(), nullptr);
   EXPECT_NE(holder->GetPlatformView()->GetPlatformMessageHandler().get(),
             nullptr);
+}
+
+TEST(FlutterMainTest, EmbedderAPIEnabledTestingOverrides) {
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  FlutterMain::ResetSettingsForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+}
+
+TEST(FlutterMainTest, EmbedderAPIEnabledSettingsFallback) {
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  FlutterMain::ResetSettingsForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  Settings settings_enabled;
+  settings_enabled.enable_embedder_api = true;
+  FlutterMain::SetSettingsForTesting(settings_enabled);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  Settings settings_disabled;
+  settings_disabled.enable_embedder_api = false;
+  FlutterMain::SetSettingsForTesting(settings_disabled);
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  // Test override takes precedence over settings
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetSettingsForTesting();
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
 }
 
 }  // namespace testing
