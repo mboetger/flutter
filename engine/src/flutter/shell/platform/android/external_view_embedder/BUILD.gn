@@ -6,6 +6,8 @@ import("//flutter/common/config.gni")
 import("//flutter/testing/testing.gni")
 
 source_set("external_view_embedder") {
+  visibility = [ "//flutter/shell/platform/android/*" ]
+
   sources = [
     "external_view_embedder.cc",
     "external_view_embedder.h",
@@ -57,4 +59,9 @@ executable("android_external_view_embedder_unittests") {
     "//flutter/testing:dart",
     "//flutter/testing:skia",
   ]
+
+  if (is_android) {
+    deps += [ "//flutter/shell/platform/android:icudtl_asm" ]
+    sources += [ "$root_build_dir/gen/flutter/shell/platform/android/flutter/third_party/icu/flutter/icudtl.dat.S" ]
+  }
 }

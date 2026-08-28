@@ -6,6 +6,8 @@ import("//flutter/common/config.gni")
 import("//flutter/testing/testing.gni")
 
 source_set("platform_view_android_delegate") {
+  visibility = [ "//flutter/shell/platform/android/*" ]
+
   sources = [
     "platform_view_android_delegate.cc",
     "platform_view_android_delegate.h",
@@ -40,4 +42,9 @@ executable("platform_view_android_delegate_unittests") {
     "//flutter/testing:dart",
     "//flutter/txt",
   ]
+
+  if (is_android) {
+    deps += [ "//flutter/shell/platform/android:icudtl_asm" ]
+    sources += [ "$root_build_dir/gen/flutter/shell/platform/android/flutter/third_party/icu/flutter/icudtl.dat.S" ]
+  }
 }

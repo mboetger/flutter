@@ -6,6 +6,8 @@ import("//flutter/common/config.gni")
 import("//flutter/shell/config.gni")
 
 source_set("context") {
+  visibility = [ "//flutter/shell/platform/android/*" ]
+
   sources = [
     "android_context.cc",
     "android_context.h",
