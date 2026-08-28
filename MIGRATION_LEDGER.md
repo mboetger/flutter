@@ -18,11 +18,13 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
    * `//flutter/fml` (OPTIONAL)
    * `//flutter/shell/platform/common` (OPTIONAL)
    * `//flutter/third_party` (OPTIONAL)
+7. **Integration & Golden Testing**: Unit tests are insufficient. The `dev/integration_tests` directory MUST be used to run tests against the local engine. Goldens MUST be generated via the baseline (non-local) engine build, and local engine tests MUST run against those goldens WITHOUT the `UPDATE_GOLDENS` flag.
 
 ## Live Phase Tracker
 
 ### Phase 0: Baselining
-- [ ] 0.1: Baseline & Thread-Safety Tests
+- [ ] 0.1: Baseline C++ Unit & Thread-Safety Tests
+- [ ] 0.2: Generate Baseline Golden Images (using non-local engine build via `dev/integration_tests`)
 
 ### Phase 1: API Gaps and Additions
 - [ ] 1.1: Custom Asset Resolvers
@@ -53,6 +55,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [ ] 4.1: AndroidEngine Implementation
 - [ ] 4.2: JNI Dispatch Dual-Path Routing (Inline if-statements verified)
 - [ ] 4.3: Parameterized Multi-Backend Matrix Testing
+- [ ] 4.4: Execute E2E Integration and Golden Matrix (Compare local engine runs without UPDATE_GOLDENS against Phase 0.2 baselines)
 
 ### Phase 5: Emancipation & Final Purge
 - [ ] 5.1: Enable Embedder API Default
