@@ -2,7 +2,9 @@
 
 This document serves as the absolute source of truth and architectural guideline for migrating the Flutter Android Embedder to use the public C Embedder API (`embedder.h`).
 
-Multiple previous LLM migration attempts have been analyzed, and this plan synthesizes their successes while directly preventing their recurrent architectural mistakes. Adhere to this document strictly to ensure ABI stability, subsystem completeness, strict dependency isolation, rigorous integration testing, and zero-debt code cleanup.
+Multiple previous LLM migration attempts have been analyzed, and this plan synthesizes their successes while directly preventing their recurrent architectural mistakes. Adhere to this document strictly to ensure ABI stability, subsystem completeness, strict dependency isolation, rigorous integration testing, and zero-debt code cleanup. 
+
+**The ultimate Goal State of this migration is that (1) all unit tests, integration tests, and golden tests MUST pass, and (2) the final Android Embedder API implementation exclusively uses only these permitted dependencies: `//flutter/shell/platform/embedder:embedder_as_internal_library`, `//flutter/fml`, `//flutter/shell/platform/common`, and `//flutter/third_party`.**
 
 ## Core Migration Rules (DO NOT DEVIATE)
 
