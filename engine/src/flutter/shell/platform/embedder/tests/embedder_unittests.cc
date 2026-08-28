@@ -4521,6 +4521,294 @@ TEST_F(EmbedderTest, EmbedderGetProcAddressesUpdateAssetResolver) {
   EXPECT_EQ(procs.UpdateAssetResolver, &FlutterEngineUpdateAssetResolver);
 }
 
+TEST_F(EmbedderTest, EmbedderSpawnInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterEngine spawned_engine = nullptr;
+
+  // Null parent engine.
+  EXPECT_EQ(FlutterEngineSpawn(nullptr, nullptr, &spawned_engine),
+            kInvalidArguments);
+
+  // Null config.
+  EXPECT_EQ(FlutterEngineSpawn(engine.get(), nullptr, &spawned_engine),
+            kInvalidArguments);
+
+  // Null out pointer.
+  FlutterEngineSpawnConfig valid_config = {};
+  valid_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  valid_config.renderer_config = &context.GetRendererConfig();
+  EXPECT_EQ(FlutterEngineSpawn(engine.get(), &valid_config, nullptr),
+            kInvalidArguments);
+
+  // Invalid struct_size.
+  FlutterEngineSpawnConfig invalid_size_config = {};
+  invalid_size_config.struct_size = sizeof(FlutterEngineSpawnConfig) - 1;
+  invalid_size_config.renderer_config = &context.GetRendererConfig();
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &invalid_size_config, &spawned_engine),
+      kInvalidArguments);
+
+  // Null renderer config.
+  FlutterEngineSpawnConfig null_renderer_config = {};
+  null_renderer_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  null_renderer_config.renderer_config = nullptr;
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &null_renderer_config, &spawned_engine),
+      kInvalidArguments);
+
+  // Invalid renderer config type.
+  FlutterRendererConfig invalid_renderer = {};
+  invalid_renderer.type = static_cast<FlutterRendererType>(999);
+  FlutterEngineSpawnConfig invalid_renderer_config = {};
+  invalid_renderer_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  invalid_renderer_config.renderer_config = &invalid_renderer;
+  EXPECT_EQ(FlutterEngineSpawn(engine.get(), &invalid_renderer_config,
+                               &spawned_engine),
+            kInvalidArguments);
+
+  // Invalid project_args struct_size.
+  FlutterProjectArgs invalid_project_args = {};
+  invalid_project_args.struct_size = sizeof(size_t) - 1;
+  FlutterEngineSpawnConfig invalid_args_config = {};
+  invalid_args_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  invalid_args_config.renderer_config = &context.GetRendererConfig();
+  invalid_args_config.project_args = &invalid_project_args;
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &invalid_args_config, &spawned_engine),
+      kInvalidArguments);
+
+  // Custom task runners in project_args are rejected.
+  FlutterCustomTaskRunners custom_runners = {};
+  custom_runners.struct_size = sizeof(FlutterCustomTaskRunners);
+  FlutterProjectArgs custom_runners_args = {};
+  custom_runners_args.struct_size = sizeof(FlutterProjectArgs);
+  custom_runners_args.custom_task_runners = &custom_runners;
+  FlutterEngineSpawnConfig custom_runners_config = {};
+  custom_runners_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  custom_runners_config.renderer_config = &context.GetRendererConfig();
+  custom_runners_config.project_args = &custom_runners_args;
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &custom_runners_config, &spawned_engine),
+      kInvalidArguments);
+
+  // Entrypoint argc > 0 with null argv.
+  FlutterEngineSpawnConfig null_argv_config = {};
+  null_argv_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  null_argv_config.renderer_config = &context.GetRendererConfig();
+  null_argv_config.entrypoint_argc = 1;
+  null_argv_config.entrypoint_argv = nullptr;
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &null_argv_config, &spawned_engine),
+      kInvalidArguments);
+
+  // Entrypoint argc > 0 with null element in argv.
+  const char* null_elem_argv[] = {nullptr};
+  FlutterEngineSpawnConfig null_elem_argv_config = {};
+  null_elem_argv_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  null_elem_argv_config.renderer_config = &context.GetRendererConfig();
+  null_elem_argv_config.entrypoint_argc = 1;
+  null_elem_argv_config.entrypoint_argv = null_elem_argv;
+  EXPECT_EQ(
+      FlutterEngineSpawn(engine.get(), &null_elem_argv_config, &spawned_engine),
+      kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderSpawnDirect) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  fml::AutoResetWaitableEvent latch;
+  context.AddIsolateCreateCallback([&latch]() { latch.Signal(); });
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  latch.Wait();
+
+  EmbedderTestContextSoftware context_spawned;
+  EmbedderConfigBuilder spawn_builder(context_spawned);
+  spawn_builder.SetSurface(DlISize(1, 1));
+
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  spawn_config.renderer_config = &context_spawned.GetRendererConfig();
+  spawn_config.project_args = &spawn_builder.GetProjectArgs();
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(engine.get(), &spawn_config, &spawned_engine),
+            kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  UniqueEngine unique_spawned(spawned_engine);
+
+  // Send a window metrics event to the spawned engine.
+  FlutterWindowMetricsEvent metrics = {};
+  metrics.struct_size = sizeof(FlutterWindowMetricsEvent);
+  metrics.width = 100;
+  metrics.height = 100;
+  metrics.pixel_ratio = 1.0;
+  EXPECT_EQ(FlutterEngineSendWindowMetricsEvent(spawned_engine, &metrics),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderSpawnCustomEntrypointAndArgs) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  static fml::AutoResetWaitableEvent spawn_latch;
+  auto entrypoint = []() { spawn_latch.Signal(); };
+  context.AddFfiNativeCallback("SayHiFromCustomEntrypoint",
+                               reinterpret_cast<void*>(+entrypoint));
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EmbedderTestContextSoftware context_spawned;
+  EmbedderConfigBuilder spawn_builder(context_spawned);
+  spawn_builder.SetSurface(DlISize(1, 1));
+
+  const char* argv[] = {"test_arg1"};
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  spawn_config.entrypoint = "customEntrypoint";
+  spawn_config.entrypoint_argc = 1;
+  spawn_config.entrypoint_argv = argv;
+  spawn_config.engine_id = 42;
+  spawn_config.renderer_config = &context_spawned.GetRendererConfig();
+  spawn_config.project_args = &spawn_builder.GetProjectArgs();
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(engine.get(), &spawn_config, &spawned_engine),
+            kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+  spawn_latch.Wait();
+
+  UniqueEngine unique_spawned(spawned_engine);
+}
+
+TEST_F(EmbedderTest, EmbedderSpawnCustomAssetResolver) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EmbedderTestContextSoftware context_spawned;
+  EmbedderConfigBuilder spawn_builder(context_spawned);
+  spawn_builder.SetSurface(DlISize(1, 1));
+
+  bool find_asset_called = false;
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = &find_asset_called;
+  resolver.find_asset_callback = [](void* user_data, const char* name,
+                                    FlutterAsset* asset_out) -> bool {
+    *reinterpret_cast<bool*>(user_data) = true;
+    return false;
+  };
+
+  const FlutterAssetResolver* resolvers[] = {&resolver};
+  spawn_builder.GetProjectArgs().asset_resolvers = resolvers;
+  spawn_builder.GetProjectArgs().asset_resolvers_count = 1;
+
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  spawn_config.renderer_config = &context_spawned.GetRendererConfig();
+  spawn_config.project_args = &spawn_builder.GetProjectArgs();
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(engine.get(), &spawn_config, &spawned_engine),
+            kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  UniqueEngine unique_spawned(spawned_engine);
+}
+
+TEST_F(EmbedderTest, EmbedderSpawnIndependentShutdown) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  EmbedderTestContextSoftware context_spawned;
+  EmbedderConfigBuilder spawn_builder(context_spawned);
+  spawn_builder.SetSurface(DlISize(1, 1));
+
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  spawn_config.renderer_config = &context_spawned.GetRendererConfig();
+  spawn_config.project_args = &spawn_builder.GetProjectArgs();
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_config, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  // Shutdown parent engine first while spawned engine remains running.
+  parent_engine.reset();
+
+  // Verify spawned engine can still handle events without crashing.
+  FlutterWindowMetricsEvent metrics = {};
+  metrics.struct_size = sizeof(FlutterWindowMetricsEvent);
+  metrics.width = 200;
+  metrics.height = 200;
+  metrics.pixel_ratio = 1.0;
+  EXPECT_EQ(FlutterEngineSendWindowMetricsEvent(spawned_engine, &metrics),
+            kSuccess);
+
+  // Shutdown spawned engine cleanly.
+  EXPECT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderSpawnChildFirstShutdown) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  EmbedderTestContextSoftware context_spawned;
+  EmbedderConfigBuilder spawn_builder(context_spawned);
+  spawn_builder.SetSurface(DlISize(1, 1));
+
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  spawn_config.renderer_config = &context_spawned.GetRendererConfig();
+  spawn_config.project_args = &spawn_builder.GetProjectArgs();
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_config, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  // Shutdown spawned engine first while parent engine remains running.
+  EXPECT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+
+  // Verify parent engine can still handle events without crashing.
+  FlutterWindowMetricsEvent metrics = {};
+  metrics.struct_size = sizeof(FlutterWindowMetricsEvent);
+  metrics.width = 200;
+  metrics.height = 200;
+  metrics.pixel_ratio = 1.0;
+  EXPECT_EQ(FlutterEngineSendWindowMetricsEvent(parent_engine.get(), &metrics),
+            kSuccess);
+
+  // Shutdown parent engine cleanly.
+  parent_engine.reset();
+}
+
+TEST_F(EmbedderTest, EmbedderGetProcAddressesSpawn) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  EXPECT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+  EXPECT_EQ(procs.Spawn, &FlutterEngineSpawn);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
