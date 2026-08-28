@@ -70,7 +70,17 @@ FlutterMain::FlutterMain(const flutter::Settings& settings,
 
 FlutterMain::~FlutterMain() = default;
 
+namespace {
+enum class OverrideState : int8_t {
+  kNotSet = -1,
+  kDisabled = 0,
+  kEnabled = 1,
+};
+}  // namespace
+
 static std::unique_ptr<FlutterMain> g_flutter_main;
+static std::atomic<int8_t> s_embedder_api_override_for_testing{
+    static_cast<int8_t>(OverrideState::kNotSet)};
 
 FlutterMain& FlutterMain::Get() {
   FML_CHECK(g_flutter_main) << "ensureInitializationComplete must have already "
@@ -84,6 +94,39 @@ const flutter::Settings& FlutterMain::GetSettings() const {
 
 flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() {
   return android_rendering_api_;
+}
+
+bool FlutterMain::IsEmbedderAPIEnabled() {
+  int8_t override_val =
+      s_embedder_api_override_for_testing.load(std::memory_order_relaxed);
+  if (override_val != static_cast<int8_t>(OverrideState::kNotSet)) {
+    return override_val == static_cast<int8_t>(OverrideState::kEnabled);
+  }
+  if (g_flutter_main) {
+    return g_flutter_main->GetSettings().enable_embedder_api;
+  }
+  return false;
+}
+
+void FlutterMain::SetEmbedderAPIEnabledForTesting(bool enabled) {
+  s_embedder_api_override_for_testing.store(
+      enabled ? static_cast<int8_t>(OverrideState::kEnabled)
+              : static_cast<int8_t>(OverrideState::kDisabled),
+      std::memory_order_relaxed);
+}
+
+void FlutterMain::ResetEmbedderAPIEnabledForTesting() {
+  s_embedder_api_override_for_testing.store(
+      static_cast<int8_t>(OverrideState::kNotSet), std::memory_order_relaxed);
+}
+
+void FlutterMain::SetSettingsForTesting(const flutter::Settings& settings) {
+  g_flutter_main.reset(
+      new FlutterMain(settings, AndroidRenderingAPI::kSoftware));
+}
+
+void FlutterMain::ResetSettingsForTesting() {
+  g_flutter_main.reset();
 }
 
 void FlutterMain::Init(JNIEnv* env,
