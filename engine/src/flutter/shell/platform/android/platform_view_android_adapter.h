@@ -130,7 +130,7 @@ class PlatformViewAndroidAdapter final : public PlatformView,
                                     const std::string error_message,
                                     bool transient) override {
     delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
-                                          transient);
+                                           transient);
   }
 
   void UpdateAssetResolverByType(
@@ -219,9 +219,8 @@ class PlatformViewAndroidAdapter final : public PlatformView,
   }
 
   std::shared_ptr<impeller::Context> GetImpellerContext() const override {
-    return platform_view_android_
-               ? platform_view_android_->GetImpellerContext()
-               : nullptr;
+    return platform_view_android_ ? platform_view_android_->GetImpellerContext()
+                                  : nullptr;
   }
 
   std::unique_ptr<std::vector<std::string>> ComputePlatformResolvedLocales(
@@ -240,10 +239,9 @@ class PlatformViewAndroidAdapter final : public PlatformView,
 
   double GetScaledFontSize(double unscaled_font_size,
                            int configuration_id) const override {
-    return platform_view_android_
-               ? platform_view_android_->GetScaledFontSize(unscaled_font_size,
-                                                           configuration_id)
-               : unscaled_font_size;
+    return platform_view_android_ ? platform_view_android_->GetScaledFontSize(
+                                        unscaled_font_size, configuration_id)
+                                  : unscaled_font_size;
   }
 
   void SetupImpellerContext() override {

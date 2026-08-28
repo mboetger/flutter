@@ -68,8 +68,7 @@ static FlutterImageAlphaType ConvertAlphaType(SkAlphaType alpha_type) {
 
 EmbedderImageGenerator::EmbedderImageGenerator(
     FlutterImageGeneratorCallbacks callbacks)
-    : callbacks_(callbacks),
-      image_info_(SkImageInfo::MakeUnknown(-1, -1)) {}
+    : callbacks_(callbacks), image_info_(SkImageInfo::MakeUnknown(-1, -1)) {}
 
 EmbedderImageGenerator::~EmbedderImageGenerator() {
   if (callbacks_.destroy != nullptr) {
@@ -85,11 +84,11 @@ void EmbedderImageGenerator::EnsureInfo() {
   flutter_info_.struct_size = sizeof(FlutterImageInfo);
   if (callbacks_.get_info != nullptr &&
       callbacks_.get_info(callbacks_.user_data, &flutter_info_)) {
-    image_info_ = SkImageInfo::Make(
-        static_cast<int>(flutter_info_.width),
-        static_cast<int>(flutter_info_.height),
-        ConvertColorType(flutter_info_.pixel_format),
-        ConvertAlphaType(flutter_info_.alpha_type));
+    image_info_ =
+        SkImageInfo::Make(static_cast<int>(flutter_info_.width),
+                          static_cast<int>(flutter_info_.height),
+                          ConvertColorType(flutter_info_.pixel_format),
+                          ConvertAlphaType(flutter_info_.alpha_type));
   } else {
     image_info_ = SkImageInfo::MakeUnknown(-1, -1);
   }
