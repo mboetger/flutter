@@ -96,10 +96,13 @@ EmbedderSurfaceGLImpeller::EmbedderSurfaceGLImpeller(
   // Certain GL backends need to made current before any GL
   // state can be accessed.
   gl_dispatch_table_.gl_make_current_callback();
+  worker_->SetReactionsAllowedOnCurrentThread(true);
 
   auto gl = std::make_unique<impeller::ProcTableGLES>(
       gl_dispatch_table_.gl_proc_resolver);
   if (!gl->IsValid()) {
+    worker_->SetReactionsAllowedOnCurrentThread(false);
+    gl_dispatch_table_.gl_clear_current_callback();
     return;
   }
 
@@ -109,19 +112,16 @@ EmbedderSurfaceGLImpeller::EmbedderSurfaceGLImpeller(
 
   impeller_context_ = impeller::ContextGLES::Create(
       impeller_flags, std::move(gl), shader_mappings,
-      /*enable_gpu_tracing=*/false, std::move(io_task_runner));
+      /*enable_gpu_tracing=*/false, std::move(io_task_runner), worker_);
 
   if (!impeller_context_) {
     FML_LOG(ERROR) << "Could not create Impeller context.";
+    worker_->SetReactionsAllowedOnCurrentThread(false);
+    gl_dispatch_table_.gl_clear_current_callback();
     return;
   }
 
-  auto worker_id = impeller_context_->AddReactorWorker(worker_);
-  if (!worker_id.has_value()) {
-    FML_LOG(ERROR) << "Could not add reactor worker.";
-    return;
-  }
-
+  worker_->SetReactionsAllowedOnCurrentThread(false);
   gl_dispatch_table_.gl_clear_current_callback();
   if (impeller_flags.use_sdfs) {
     FML_LOG(IMPORTANT) << "Using the Impeller rendering backend (OpenGLESSDF).";
@@ -141,9 +141,9 @@ bool EmbedderSurfaceGLImpeller::IsValid() const {
 // |GPUSurfaceGLDelegate|
 std::unique_ptr<GLContextResult>
 EmbedderSurfaceGLImpeller::GLContextMakeCurrent() {
-  worker_->SetReactionsAllowedOnCurrentThread(true);
-  return std::make_unique<GLContextDefaultResult>(
-      gl_dispatch_table_.gl_make_current_callback());
+  bool success = gl_dispatch_table_.gl_make_current_callback();
+  worker_->SetReactionsAllowedOnCurrentThread(success);
+  return std::make_unique<GLContextDefaultResult>(success);
 }
 
 // |GPUSurfaceGLDelegate|
