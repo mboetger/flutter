@@ -377,6 +377,7 @@ FlutterRendererConfig AndroidEngine::CreateRendererConfig() {
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerOpenGLES:
     case AndroidRenderingAPI::kImpellerAutoselect:
+    case AndroidRenderingAPI::kImpellerVulkan:
       config.type = kOpenGL;
       config.open_gl.struct_size = sizeof(FlutterOpenGLRendererConfig);
       config.open_gl.make_current = [](void* user_data) -> bool {
@@ -416,23 +417,6 @@ FlutterRendererConfig AndroidEngine::CreateRendererConfig() {
         if (engine && engine->GetSurfaceManager()) {
           engine->GetSurfaceManager()->ClearResourceCurrent();
         }
-      };
-      break;
-    case AndroidRenderingAPI::kImpellerVulkan:
-      config.type = kVulkan;
-      config.vulkan.struct_size = sizeof(FlutterVulkanRendererConfig);
-      config.vulkan.version = (1u << 22) | (1u << 12);  // 1.1.0
-      config.vulkan.get_instance_proc_address_callback =
-          [](void* user_data, FlutterVulkanInstanceHandle instance,
-             const char* name) -> void* { return nullptr; };
-      config.vulkan.get_next_image_callback =
-          [](void* user_data,
-             const FlutterFrameInfo* frame_info) -> FlutterVulkanImage {
-        return {};
-      };
-      config.vulkan.present_image_callback =
-          [](void* user_data, const FlutterVulkanImage* image) -> bool {
-        return true;
       };
       break;
   }
