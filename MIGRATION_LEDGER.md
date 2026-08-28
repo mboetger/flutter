@@ -31,7 +31,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [x] 1.6: Raster Context Setup & Teardown Hooks (Verified Tests & Adversarial Review)
 - [x] 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`) (Verified Tests & Adversarial Review)
 - [x] 1.8: Embedder Screenshot / Raster Bitmap API (Verified Tests & Adversarial Review)
-- [ ] 1.9: Dart Callback Information Lookup API (Verified Tests & Adversarial Review)
+- [x] 1.9: Dart Callback Information Lookup API (Verified Tests & Adversarial Review)
 - [ ] 1.10: Platform View Multi-Mutations (`ClipPath`, `ClipRSE`) (Verified C-ABI & Tests & Adversarial Review)
 - [ ] 1.11: Platform Image Decoder / Generator (Verified Tests & Adversarial Review)
 

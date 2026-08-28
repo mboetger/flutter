@@ -2861,6 +2861,27 @@ typedef struct {
   VoidCallback destruction_callback;
 } FlutterScreenshot;
 
+/// Information about a Dart callback function retrieved from or stored in the
+/// callback cache.
+///
+/// The string pointers (`name`, `class_name`, `library_path`) point to stable
+/// strings managed by the engine's internal callback cache that remain valid
+/// for the entire lifetime of the process. They must NOT be freed by the
+/// caller.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterCallbackInformation).
+  size_t struct_size;
+
+  /// The name of the callback function.
+  const char* name;
+
+  /// The class name if this is a static method, or NULL if top-level.
+  const char* class_name;
+
+  /// The library path/URI containing the callback function.
+  const char* library_path;
+} FlutterCallbackInformation;
+
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
@@ -4218,6 +4239,73 @@ FlutterEngineResult FlutterEngineScreenshot(
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineFreeScreenshot(FlutterScreenshot* screenshot);
 
+//------------------------------------------------------------------------------
+/// @brief      Retrieves information about a Dart callback function associated
+///             with a callback handle.
+///
+///             Callback handles are generated in Dart via
+///             `PluginUtilities.getCallbackHandle` and stored in a persistent
+///             cache on disk so background isolates or native plugins can
+///             discover entry points.
+///
+/// @param[in]  handle             The 64-bit integer callback handle.
+/// @param[out] callback_info_out  A pointer to a caller-allocated
+///                                `FlutterCallbackInformation` struct to
+///                                populate. Its `struct_size` field must be
+///                                initialized to
+///                                `sizeof(FlutterCallbackInformation)`.
+///
+/// @return     `kSuccess` if the callback information was found and populated,
+///             `kInvalidArguments` if `callback_info_out` is invalid, or
+///             `kInternalInconsistency` if the handle was not found in the
+///             cache.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineGetCallbackInformation(
+    int64_t handle,
+    FlutterCallbackInformation* callback_info_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Sets the directory path where the callback cache JSON file is
+///             persisted on disk.
+///
+/// @param[in]  path  The directory path where the callback cache should be
+///                   stored. Must be a null-terminated UTF-8 string.
+///
+/// @return     `kSuccess` on success, or `kInvalidArguments` if path is null.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSetCallbackCachePath(const char* path);
+
+//------------------------------------------------------------------------------
+/// @brief      Loads the callback cache from the previously configured cache
+///             path on disk.
+///
+/// @return     `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadCallbackCache(void);
+
+//------------------------------------------------------------------------------
+/// @brief      Computes and returns the 64-bit integer handle for a Dart
+///             callback given its callback information (name, class name, and
+///             library path).
+///
+/// @param[in]  callback_info The callback information containing name,
+/// class_name,
+///                           and library_path. Its struct_size field must be
+///                           initialized to sizeof(FlutterCallbackInformation).
+///                           `name` and `library_path` must be non-null.
+/// @param[out] handle_out    Pointer to an int64_t to receive the handle.
+///
+/// @return     `kSuccess` on success, or `kInvalidArguments` if arguments are
+///             invalid.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineGetCallbackHandle(
+    const FlutterCallbackInformation* callback_info,
+    int64_t* handle_out);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4376,6 +4464,15 @@ typedef FlutterEngineResult (*FlutterEngineScreenshotFnPtr)(
     FlutterScreenshot* screenshot_out);
 typedef FlutterEngineResult (*FlutterEngineFreeScreenshotFnPtr)(
     FlutterScreenshot* screenshot);
+typedef FlutterEngineResult (*FlutterEngineGetCallbackInformationFnPtr)(
+    int64_t handle,
+    FlutterCallbackInformation* callback_info_out);
+typedef FlutterEngineResult (*FlutterEngineSetCallbackCachePathFnPtr)(
+    const char* path);
+typedef FlutterEngineResult (*FlutterEngineLoadCallbackCacheFnPtr)(void);
+typedef FlutterEngineResult (*FlutterEngineGetCallbackHandleFnPtr)(
+    const FlutterCallbackInformation* callback_info,
+    int64_t* handle_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4435,6 +4532,10 @@ typedef struct {
   FlutterEngineNotifyDestroyedFnPtr NotifyDestroyed;
   FlutterEngineScreenshotFnPtr Screenshot;
   FlutterEngineFreeScreenshotFnPtr FreeScreenshot;
+  FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
+  FlutterEngineSetCallbackCachePathFnPtr SetCallbackCachePath;
+  FlutterEngineLoadCallbackCacheFnPtr LoadCallbackCache;
+  FlutterEngineGetCallbackHandleFnPtr GetCallbackHandle;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

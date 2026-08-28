@@ -5556,6 +5556,141 @@ TEST_F(EmbedderTest, EmbedderGetProcAddressesScreenshot) {
   EXPECT_EQ(table.FreeScreenshot, &FlutterEngineFreeScreenshot);
 }
 
+TEST_F(EmbedderTest, EmbedderCallbackInformationInvalidArguments) {
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(42, nullptr),
+            kInvalidArguments);
+
+  FlutterCallbackInformation invalid_size_info = {};
+  invalid_size_info.struct_size = sizeof(FlutterCallbackInformation) - 1;
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(42, &invalid_size_info),
+            kInvalidArguments);
+
+  EXPECT_EQ(FlutterEngineSetCallbackCachePath(nullptr), kInvalidArguments);
+
+  int64_t handle = 0;
+  EXPECT_EQ(FlutterEngineGetCallbackHandle(nullptr, &handle),
+            kInvalidArguments);
+
+  FlutterCallbackInformation null_name_info = {};
+  null_name_info.struct_size = sizeof(FlutterCallbackInformation);
+  null_name_info.name = nullptr;
+  null_name_info.library_path = "lib.dart";
+  EXPECT_EQ(FlutterEngineGetCallbackHandle(&null_name_info, &handle),
+            kInvalidArguments);
+
+  FlutterCallbackInformation null_lib_info = {};
+  null_lib_info.struct_size = sizeof(FlutterCallbackInformation);
+  null_lib_info.name = "name";
+  null_lib_info.library_path = nullptr;
+  EXPECT_EQ(FlutterEngineGetCallbackHandle(&null_lib_info, &handle),
+            kInvalidArguments);
+
+  FlutterCallbackInformation valid_info = {};
+  valid_info.struct_size = sizeof(FlutterCallbackInformation);
+  valid_info.name = "name";
+  valid_info.library_path = "lib.dart";
+  EXPECT_EQ(FlutterEngineGetCallbackHandle(&valid_info, nullptr),
+            kInvalidArguments);
+
+  FlutterCallbackInformation invalid_get_handle_size = {};
+  invalid_get_handle_size.struct_size = sizeof(FlutterCallbackInformation) - 1;
+  invalid_get_handle_size.name = "name";
+  invalid_get_handle_size.library_path = "lib.dart";
+  EXPECT_EQ(FlutterEngineGetCallbackHandle(&invalid_get_handle_size, &handle),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderCallbackInformationNotFound) {
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(999999999999LL, &info),
+            kInternalInconsistency);
+}
+
+TEST_F(EmbedderTest, EmbedderCallbackInformationTopLevelFunction) {
+  FlutterCallbackInformation reg_info = {};
+  reg_info.struct_size = sizeof(FlutterCallbackInformation);
+  reg_info.name = "myCallback";
+  reg_info.class_name = nullptr;
+  reg_info.library_path = "package:my_app/main.dart";
+
+  int64_t handle = 0;
+  ASSERT_EQ(FlutterEngineGetCallbackHandle(&reg_info, &handle), kSuccess);
+  EXPECT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(handle, &info), kSuccess);
+  EXPECT_EQ(info.struct_size, sizeof(FlutterCallbackInformation));
+  EXPECT_STREQ(info.name, "myCallback");
+  EXPECT_EQ(info.class_name, nullptr);
+  EXPECT_STREQ(info.library_path, "package:my_app/main.dart");
+}
+
+TEST_F(EmbedderTest, EmbedderCallbackInformationStaticMethod) {
+  FlutterCallbackInformation reg_info = {};
+  reg_info.struct_size = sizeof(FlutterCallbackInformation);
+  reg_info.name = "onNotification";
+  reg_info.class_name = "MyPlugin";
+  reg_info.library_path = "package:my_plugin/my_plugin.dart";
+
+  int64_t handle = 0;
+  ASSERT_EQ(FlutterEngineGetCallbackHandle(&reg_info, &handle), kSuccess);
+  EXPECT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(handle, &info), kSuccess);
+  EXPECT_EQ(info.struct_size, sizeof(FlutterCallbackInformation));
+  EXPECT_STREQ(info.name, "onNotification");
+  EXPECT_STREQ(info.class_name, "MyPlugin");
+  EXPECT_STREQ(info.library_path, "package:my_plugin/my_plugin.dart");
+}
+
+TEST_F(EmbedderTest, EmbedderCallbackCacheDiskPersistence) {
+  fml::ScopedTemporaryDirectory temp_dir;
+  ASSERT_TRUE(temp_dir.fd().is_valid());
+
+  ASSERT_EQ(FlutterEngineSetCallbackCachePath(temp_dir.path().c_str()),
+            kSuccess);
+
+  FlutterCallbackInformation reg_info = {};
+  reg_info.struct_size = sizeof(FlutterCallbackInformation);
+  reg_info.name = "persistedCallback";
+  reg_info.class_name = "PersistedClass";
+  reg_info.library_path = "package:test/test.dart";
+
+  int64_t handle = 0;
+  ASSERT_EQ(FlutterEngineGetCallbackHandle(&reg_info, &handle), kSuccess);
+  EXPECT_NE(handle, 0);
+
+  // Verify that the callback cache JSON was saved to the specified disk path.
+  std::string cache_file =
+      fml::paths::JoinPaths({temp_dir.path(), "flutter_callback_cache.json"});
+  EXPECT_TRUE(fml::IsFile(cache_file));
+
+  ASSERT_EQ(FlutterEngineLoadCallbackCache(), kSuccess);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(handle, &info), kSuccess);
+  EXPECT_STREQ(info.name, "persistedCallback");
+  EXPECT_STREQ(info.class_name, "PersistedClass");
+  EXPECT_STREQ(info.library_path, "package:test/test.dart");
+}
+
+TEST_F(EmbedderTest, EmbedderGetProcAddressesCallbackInformation) {
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  EXPECT_EQ(table.GetCallbackInformation, &FlutterEngineGetCallbackInformation);
+  EXPECT_EQ(table.SetCallbackCachePath, &FlutterEngineSetCallbackCachePath);
+  EXPECT_EQ(table.LoadCallbackCache, &FlutterEngineLoadCallbackCache);
+  EXPECT_EQ(table.GetCallbackHandle, &FlutterEngineGetCallbackHandle);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
