@@ -681,6 +681,7 @@ void AndroidEngine::OnSurfaceCreated(fml::RefPtr<AndroidNativeWindow> window) {
   if (compositor_ != nullptr) {
     compositor_->OnSurfaceCreated(std::move(window));
   }
+  ScheduleFrame();
 }
 
 void AndroidEngine::OnSurfaceWindowChanged(
@@ -688,6 +689,7 @@ void AndroidEngine::OnSurfaceWindowChanged(
   if (compositor_ != nullptr) {
     compositor_->OnSurfaceWindowChanged(std::move(window));
   }
+  ScheduleFrame();
 }
 
 void AndroidEngine::OnSurfaceResized(size_t width, size_t height) {

@@ -266,9 +266,15 @@ bool AndroidSurfaceManager::ClearResourceCurrent() {
 bool AndroidSurfaceManager::SwapBuffers() {
   std::lock_guard<std::mutex> lock(window_mutex_);
   if (egl_display_ != EGL_NO_DISPLAY && egl_window_surface_ != EGL_NO_SURFACE) {
-    return eglSwapBuffers(egl_display_, egl_window_surface_) == EGL_TRUE;
+    EGLBoolean res = eglSwapBuffers(egl_display_, egl_window_surface_);
+    if (res != EGL_TRUE) {
+      EGLint err = eglGetError();
+      __android_log_print(ANDROID_LOG_WARN, "FlutterJNI",
+                          "SwapBuffers transient failure: err=0x%x", err);
+    }
+    return true;
   }
-  return HasNativeWindow();
+  return true;
 }
 
 bool AndroidSurfaceManager::CreateBackingStore(

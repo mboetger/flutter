@@ -126,6 +126,7 @@ source_set("flutter_shell_native_src") {
 
   deps = [
     ":android_thread_config",
+    "//flutter/runtime",
   ]
 
   public_configs = [ "//flutter:config" ]

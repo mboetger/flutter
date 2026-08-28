@@ -20,6 +20,7 @@
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/flutter_main.h"
