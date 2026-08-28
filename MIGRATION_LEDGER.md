@@ -38,7 +38,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 ### Phase 2: Decoupling and Feature Flagging
 - [x] 2.1: GN Quarantine Visibility (Verified Tests & Adversarial Review)
 - [x] 2.2: Adapt APKAssetProvider (Verified Tests & Adversarial Review)
-- [ ] 2.3: Custom Task Runners (Verified Tests & Adversarial Review)
+- [x] 2.3: Custom Task Runners (Verified Tests & Adversarial Review)
 - [ ] 2.4: Feature Flag Switch (Verified Tests & Adversarial Review)
 - [ ] 2.5: Decouple `flutter_main.cc` (Verified Tests & Adversarial Review)
 
