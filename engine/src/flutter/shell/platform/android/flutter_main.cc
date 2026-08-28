@@ -106,48 +106,6 @@ flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() {
   return android_rendering_api_;
 }
 
-<<<<<<< HEAD
-bool FlutterMain::IsEmbedderAPIEnabled() {
-  int8_t override_val =
-      s_embedder_api_override_for_testing.load(std::memory_order_relaxed);
-  if (override_val != static_cast<int8_t>(OverrideState::kNotSet)) {
-    return override_val == static_cast<int8_t>(OverrideState::kEnabled);
-  }
-  if (g_flutter_main) {
-    return g_flutter_main->GetSettings().enable_embedder_api;
-  }
-  return false;
-}
-
-bool FlutterMain::IsEmbedderAPIEnabled(const flutter::Settings& settings) {
-  int8_t override_val =
-      s_embedder_api_override_for_testing.load(std::memory_order_relaxed);
-  if (override_val != static_cast<int8_t>(OverrideState::kNotSet)) {
-    return override_val == static_cast<int8_t>(OverrideState::kEnabled);
-  }
-  return settings.enable_embedder_api;
-}
-
-void FlutterMain::SetEmbedderAPIEnabledForTesting(bool enabled) {
-  s_embedder_api_override_for_testing.store(
-      enabled ? static_cast<int8_t>(OverrideState::kEnabled)
-              : static_cast<int8_t>(OverrideState::kDisabled),
-      std::memory_order_relaxed);
-}
-
-void FlutterMain::ResetEmbedderAPIEnabledForTesting() {
-  s_embedder_api_override_for_testing.store(
-      static_cast<int8_t>(OverrideState::kNotSet), std::memory_order_relaxed);
-}
-
-void FlutterMain::SetSettingsForTesting(const flutter::Settings& settings) {
-  g_flutter_main.reset(
-      new FlutterMain(settings, AndroidRenderingAPI::kSoftware));
-}
-
-void FlutterMain::ResetSettingsForTesting() {
-  g_flutter_main.reset();
-=======
 // static
 std::vector<std::string> FlutterMain::GetCommandLineArgs() {
   std::lock_guard<std::mutex> lock(g_command_line_args_mutex);
@@ -158,7 +116,6 @@ std::vector<std::string> FlutterMain::GetCommandLineArgs() {
     return g_flutter_main->command_line_args_;
   }
   return {"flutter"};
->>>>>>> c3568e9316a (feat(android): decouple flutter_main argument handling using common cpp switches)
 }
 
 void FlutterMain::Init(JNIEnv* env,
@@ -398,6 +355,14 @@ bool FlutterMain::IsEmbedderAPIEnabled() {
     return g_flutter_main->GetSettings().enable_embedder_api;
   }
   return false;
+}
+
+// static
+bool FlutterMain::IsEmbedderAPIEnabled(const flutter::Settings& settings) {
+  if (g_embedder_api_enabled_override.has_value()) {
+    return g_embedder_api_enabled_override.value();
+  }
+  return settings.enable_embedder_api;
 }
 
 // static

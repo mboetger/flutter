@@ -1,11 +1,11 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 2.3 (Standardize Thread Priority Setters on Custom Task Runners)
-- **Active Branch**: `android-embedder-v3/phase-2.3-custom-task-runners`
-- **Base Commit SHA**: `f7d7a1900e2` (Phase 2.2 commit)
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2]
-- **Adversarial Review Loop Status**: Complete (Phase 2.2 Approved with 0 findings)
+- **Active Phase**: Phase 3.1 (Android Surface Backing Store Manager `AndroidSurfaceManager`)
+- **Active Branch**: `android-embedder-v3/phase-3.1-android-surface-manager`
+- **Base Commit SHA**: `c3568e9316a` (Phase 2.5 commit)
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 2.3, 2.4, 2.5]
+- **Adversarial Review Loop Status**: Complete (Phase 2.5 Approved with 0 findings)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -26,9 +26,9 @@
 - [x] Phase 1.11: Platform Image Decoder / Generator Registration C API
 - [x] Phase 2.1: Break PlatformViewAndroid Inheritance & Establish GN Quarantine Target
 - [x] Phase 2.2: Adapt APKAssetProvider
-- [ ] Phase 2.3: Custom Task Runners & Thread Priorities
-- [ ] Phase 2.4: Runtime Feature Flag Switch & Test Harness Overrides
-- [ ] Phase 2.5: Decouple `flutter_main.cc` using `//flutter/shell/platform/common`
+- [x] Phase 2.3: Custom Task Runners & Thread Priorities
+- [x] Phase 2.4: Runtime Feature Flag Switch & Test Harness Overrides
+- [x] Phase 2.5: Decouple `flutter_main.cc` using `//flutter/shell/platform/common`
 - [ ] Phase 3.1: AndroidSurfaceManager Backing Store Pool (Gated: flag=true & false)
 - [ ] Phase 3.2: AndroidCompositor Layer Presentation & Surface Detach Barrier (Gated: flag=true & false)
 - [ ] Phase 3.3: Direct JNI Platform View Mutator Mapping & DPR Normalization (Gated: flag=true & false)
