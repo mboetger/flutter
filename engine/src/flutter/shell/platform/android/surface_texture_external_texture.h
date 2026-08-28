@@ -8,7 +8,7 @@
 #include <GLES/gl.h>
 
 #include "flutter/common/graphics/texture.h"
-#include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
+#include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/third_party/skia/include/core/SkM44.h"
 
 namespace flutter {
