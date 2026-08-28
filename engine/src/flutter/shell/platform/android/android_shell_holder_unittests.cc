@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <thread>
+#include <vector>
 
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "gmock/gmock.h"
@@ -226,6 +228,134 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
   EXPECT_NE(
       holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
       holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+}
+
+TEST(AndroidShellHolder, CreateSoftwareRendering) {
+  Settings settings;
+  settings.enable_software_rendering = true;
+  settings.enable_impeller = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kSoftware);
+  EXPECT_NE(holder.get(), nullptr);
+  EXPECT_TRUE(holder->IsValid());
+  EXPECT_NE(holder->GetPlatformView().get(), nullptr);
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window);
+  holder->GetPlatformView()->NotifyDestroyed();
+}
+
+TEST(AndroidShellHolder, CreateSkiaOpenGLES) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  settings.enable_impeller = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kSkiaOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+  EXPECT_TRUE(holder->IsValid());
+  EXPECT_NE(holder->GetPlatformView().get(), nullptr);
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window);
+  holder->GetPlatformView()->NotifyDestroyed();
+}
+
+TEST(AndroidShellHolder, HandlePlatformMessageWithDataResponse) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_NE(holder.get(), nullptr);
+  EXPECT_TRUE(holder->IsValid());
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window);
+
+  auto handler = holder->GetPlatformMessageHandler();
+  EXPECT_TRUE(handler);
+
+  std::vector<uint8_t> request_payload{0x10, 0x20, 0x30, 0x40,
+                                       0x50, 0x60, 0x70, 0x80};
+  fml::MallocMapping bytes =
+      fml::MallocMapping::Copy(request_payload.data(), request_payload.size());
+  auto response = MockPlatformMessageResponse::Create();
+  auto message = std::make_unique<PlatformMessage>("test_channel",
+                                                   std::move(bytes), response);
+
+  int captured_response_id = 0;
+  EXPECT_CALL(*jni,
+              FlutterViewHandlePlatformMessage(::testing::_, ::testing::_))
+      .WillOnce(::testing::SaveArg<1>(&captured_response_id));
+  EXPECT_CALL(*response, Complete(::testing::_))
+      .WillOnce([](std::unique_ptr<fml::Mapping> data) {
+        ASSERT_NE(data, nullptr);
+        ASSERT_EQ(data->GetSize(), 4u);
+        const uint8_t* payload = data->GetMapping();
+        EXPECT_EQ(payload[0], 1);
+        EXPECT_EQ(payload[1], 2);
+        EXPECT_EQ(payload[2], 3);
+        EXPECT_EQ(payload[3], 4);
+      });
+
+  handler->HandlePlatformMessage(std::move(message));
+
+  std::unique_ptr<fml::Mapping> reply_data =
+      std::make_unique<fml::DataMapping>(std::vector<uint8_t>{1, 2, 3, 4});
+  handler->InvokePlatformMessageResponseCallback(captured_response_id,
+                                                 std::move(reply_data));
+}
+
+TEST(AndroidShellHolder, SurfaceLifecycleTransitions) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  EXPECT_TRUE(holder->IsValid());
+
+  auto window1 = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window1);
+  holder->GetPlatformView()->NotifyChanged(DlISize{100, 100});
+  holder->GetPlatformView()->NotifyDestroyed();
+
+  auto window2 = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window2);
+  holder->GetPlatformView()->NotifyChanged(DlISize{200, 200});
+  holder->GetPlatformView()->NotifyDestroyed();
+}
+
+TEST(AndroidShellHolder, MultiInstanceThreadSafety) {
+  constexpr size_t kThreadCount = 4;
+  std::vector<std::thread> threads;
+  threads.reserve(kThreadCount);
+
+  for (size_t i = 0; i < kThreadCount; ++i) {
+    threads.emplace_back([i]() {
+      Settings settings;
+      settings.enable_software_rendering = (i % 2 == 0);
+      settings.enable_impeller = !(i % 2 == 0);
+      auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+      auto api = (i % 2 == 0) ? AndroidRenderingAPI::kSoftware
+                              : AndroidRenderingAPI::kImpellerOpenGLES;
+      auto holder = std::make_unique<AndroidShellHolder>(settings, jni, api);
+      EXPECT_NE(holder.get(), nullptr);
+      EXPECT_TRUE(holder->IsValid());
+
+      auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+          nullptr, /*is_fake_window=*/true);
+      holder->GetPlatformView()->NotifyCreated(window);
+      holder->GetPlatformView()->NotifyDestroyed();
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
 }
 
 }  // namespace testing

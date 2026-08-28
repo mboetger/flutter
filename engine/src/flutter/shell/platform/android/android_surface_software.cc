@@ -107,6 +107,10 @@ bool AndroidSurfaceSoftware::PresentBackingStore(
   if (!IsValid() || backing_store == nullptr) {
     return false;
   }
+  if (!native_window_ || native_window_->IsFakeWindow() ||
+      !native_window_->IsValid()) {
+    return false;
+  }
 
   SkPixmap pixmap;
   if (!backing_store->peekPixels(&pixmap)) {
@@ -154,8 +158,12 @@ bool AndroidSurfaceSoftware::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
   native_window_ = std::move(window);
-  if (!(native_window_ && native_window_->IsValid())) {
+  if (!(native_window_ &&
+        (native_window_->IsValid() || native_window_->IsFakeWindow()))) {
     return false;
+  }
+  if (native_window_->IsFakeWindow()) {
+    return true;
   }
   int32_t window_format = ANativeWindow_getFormat(native_window_->handle());
   if (window_format < 0) {

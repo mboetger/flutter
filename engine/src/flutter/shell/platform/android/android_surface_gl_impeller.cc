@@ -115,6 +115,7 @@ std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
 void AndroidSurfaceGLImpeller::TeardownOnScreenContext() {
   GLContextClearCurrent();
   onscreen_surface_.reset();
+  native_window_ = nullptr;
 }
 
 // |AndroidSurface|
@@ -253,8 +254,13 @@ bool AndroidSurfaceGLImpeller::
     return false;
   }
   onscreen_surface_.reset();
-  auto onscreen_surface =
-      android_context_->CreateOnscreenSurface(native_window_->handle());
+  std::unique_ptr<impeller::egl::Surface> onscreen_surface;
+  if (native_window_->IsFakeWindow()) {
+    onscreen_surface = android_context_->CreateOffscreenSurface();
+  } else {
+    onscreen_surface =
+        android_context_->CreateOnscreenSurface(native_window_->handle());
+  }
   if (!onscreen_surface) {
     FML_DLOG(ERROR) << "Could not create onscreen surface.";
     return false;

@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include <atomic>
 #include <memory>
 #include <optional>
 
@@ -86,7 +87,7 @@ AndroidShellHolder::AndroidShellHolder(
     : settings_(settings),
       jni_facade_(jni_facade),
       android_rendering_api_(android_rendering_api) {
-  static size_t thread_host_count = 1;
+  static std::atomic<size_t> thread_host_count{1};
   auto thread_label = std::to_string(thread_host_count++);
 
   auto mask = ThreadHost::Type::kRaster | ThreadHost::Type::kIo;

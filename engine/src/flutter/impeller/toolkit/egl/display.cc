@@ -172,6 +172,9 @@ std::unique_ptr<Config> Display::ChooseConfig(ConfigDescriptor config) const {
 std::unique_ptr<Surface> Display::CreateWindowSurface(
     const Config& config,
     EGLNativeWindowType window) {
+  if (!window) {
+    return nullptr;
+  }
   const EGLint attribs[] = {EGL_NONE};
   auto surface = ::eglCreateWindowSurface(display_,            // display
                                           config.GetHandle(),  // config

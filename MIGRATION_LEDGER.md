@@ -3,7 +3,7 @@
 ## Execution Status Constraints
 To enforce flawless execution across PR sequences, this ledger MUST be updated and verified at every checkpoint phase. Future LLM agents should read this ledger to understand the exact state of the rollout before proposing next steps.
 
-* **Base Tracking Commit SHA**: `[TBD: Insert SHA when starting]`
+* **Base Tracking Commit SHA**: `9f916ec0314dcee69a879f8f6c3a0f188019c43b`
 * **Target OS Environment**: Android (All rendering backends: GL, Vulkan, Software)
 * **Goal State**: Android Engine initializes completely independent of legacy engine internals, backed purely by public C APIs (`embedder.h`), with 0 legacy code remaining in `shell/platform/android`. All unit tests, integration tests, and golden tests MUST pass. Furthermore, the ONLY engine dependencies permitted are: `//flutter/shell/platform/embedder:embedder_as_internal_library` (required), `//flutter/fml` (optional), `//flutter/shell/platform/common` (optional), `//flutter/third_party` (optional), AND required NDK system libraries (e.g., `android`, `EGL`, `GLESv2`).
 
@@ -20,7 +20,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 ## Live Phase Tracker (Tick when tests & review are validated)
 
 ### Phase 0: Baselining
-- [ ] 0.1: Baseline C++ Unit & Thread-Safety Tests (Verified Tests & Adversarial Review)
+- [x] 0.1: Baseline C++ Unit & Thread-Safety Tests (Verified Tests & Adversarial Review)
 
 ### Phase 1: API Gaps and Additions
 - [ ] 1.1: Custom Asset Resolvers (Verified Tests & Adversarial Review)
