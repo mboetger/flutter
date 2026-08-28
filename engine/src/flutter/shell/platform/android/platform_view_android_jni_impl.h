@@ -165,6 +165,9 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewAndroidJNIImpl);
 };
 
+// Registers JNI methods for PlatformViewAndroid.
+bool RegisterApi(JNIEnv* env);
+
 }  // namespace flutter
 
 #endif  // FLUTTER_SHELL_PLATFORM_ANDROID_PLATFORM_VIEW_ANDROID_JNI_IMPL_H_

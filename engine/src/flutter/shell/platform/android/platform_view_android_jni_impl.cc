@@ -14,36 +14,39 @@
 #include "unicode/uchar.h"
 
 #include "flutter/common/constants.h"
-#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/mapping.h"
 #include "flutter/fml/native_library.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/shell/platform/android/android_engine.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
-
-#define ANDROID_SHELL_HOLDER \
-  (reinterpret_cast<AndroidShellHolder*>(shell_holder))
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
-static inline bool IsEmbedderAPI() {
-  return FlutterMain::IsEmbedderAPIEnabled();
-}
+static constexpr const char* kDartIsolateDataSymbol =
+    "_kDartIsolateSnapshotData";
+static constexpr const char* kDartIsolateInstructionsSymbol =
+    "_kDartIsolateSnapshotInstructions";
+
+// Sentinel error code returned when scaled font size cannot be resolved via
+// JNI. Matches FlutterJNI.kInvalidScaledFontSize (-3.0).
+static constexpr double kInvalidScaledFontSize = -3.0;
+
+// Sentinel value returned when display refresh rate cannot be queried via JNI.
+static constexpr double kUnknownDisplayRefreshRate = 0.0;
+
+// Sentinel value returned when display dimensions or density cannot be queried
+// via JNI.
+static constexpr double kUnknownDisplayDimension = -1.0;
 
 static inline AndroidEngine* AsAndroidEngine(jlong handle) {
   return reinterpret_cast<AndroidEngine*>(handle);
-}
-
-static inline AndroidShellHolder* AsLegacyShellHolder(jlong handle) {
-  return reinterpret_cast<AndroidShellHolder*>(handle);
 }
 
 static fml::jni::ScopedJavaGlobalRef<jclass>* g_flutter_callback_info_class =
@@ -199,37 +202,23 @@ static jlong AttachJNI(JNIEnv* env, jclass clazz, jobject flutterJNI) {
   fml::jni::JavaObjectWeakGlobalRef java_object(env, flutterJNI);
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade =
       std::make_shared<PlatformViewAndroidJNIImpl>(java_object);
-  if (IsEmbedderAPI()) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    fml::MessageLoop::EnsureInitializedForCurrentThread();
-    fml::RefPtr<fml::TaskRunner> platform_task_runner =
-        fml::MessageLoop::GetCurrent().GetTaskRunner();
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  fml::RefPtr<fml::TaskRunner> platform_task_runner =
+      fml::MessageLoop::GetCurrent().GetTaskRunner();
 #pragma clang diagnostic pop
-    auto engine = std::make_unique<AndroidEngine>(
-        FlutterMain::Get().GetSettings(), jni_facade,
-        FlutterMain::Get().GetAndroidRenderingAPI(), platform_task_runner);
-    if (engine->IsValid()) {
-      return reinterpret_cast<jlong>(engine.release());
-    }
-    return 0;
-  } else {
-    auto shell_holder = std::make_unique<AndroidShellHolder>(
-        FlutterMain::Get().GetSettings(), jni_facade,
-        FlutterMain::Get().GetAndroidRenderingAPI());
-    if (shell_holder->IsValid()) {
-      return reinterpret_cast<jlong>(shell_holder.release());
-    }
-    return 0;
+  auto engine = std::make_unique<AndroidEngine>(
+      FlutterMain::Get().GetSettings(), jni_facade,
+      FlutterMain::Get().GetAndroidRenderingAPI(), platform_task_runner);
+  if (engine->IsValid()) {
+    return reinterpret_cast<jlong>(engine.release());
   }
+  return 0;
 }
 
 static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  if (IsEmbedderAPI()) {
-    delete AsAndroidEngine(shell_holder);
-  } else {
-    delete AsLegacyShellHolder(shell_holder);
-  }
+  delete AsAndroidEngine(shell_holder);
 }
 
 // Signature is similar to RunBundleAndSnapshotFromLibrary but it can't change
@@ -237,8 +226,7 @@ static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
 // AOT.
 //
 // The shell_holder instance must be a pointer address to the current
-// AndroidShellHolder or AndroidEngine whose Shell/Engine will be used to spawn
-// a new Shell/Engine.
+// AndroidEngine whose Shell/Engine will be used to spawn a new Shell/Engine.
 //
 // This creates a Java Long that points to the newly created
 // instance's raw pointer, connects that Long to a newly created
@@ -266,34 +254,21 @@ static jobject SpawnJNI(JNIEnv* env,
   auto initial_route = fml::jni::JavaStringToString(env, jInitialRoute);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  jlong spawned_ptr = 0;
-  if (IsEmbedderAPI()) {
-    auto spawned_engine = AsAndroidEngine(shell_holder)
-                              ->Spawn(jni_facade, entrypoint, libraryUrl,
-                                      initial_route, entrypoint_args, engineId);
-    if (spawned_engine == nullptr || !spawned_engine->IsValid()) {
-      FML_LOG(ERROR) << "Could not spawn AndroidEngine";
-      return nullptr;
-    }
-    spawned_ptr = reinterpret_cast<jlong>(spawned_engine.release());
-  } else {
-    auto spawned_shell_holder =
-        AsLegacyShellHolder(shell_holder)
-            ->Spawn(jni_facade, entrypoint, libraryUrl, initial_route,
-                    entrypoint_args, engineId);
-    if (spawned_shell_holder == nullptr || !spawned_shell_holder->IsValid()) {
-      FML_LOG(ERROR) << "Could not spawn Shell";
-      return nullptr;
-    }
-    spawned_ptr = reinterpret_cast<jlong>(spawned_shell_holder.release());
+  auto spawned_engine = AsAndroidEngine(shell_holder)
+                            ->Spawn(jni_facade, entrypoint, libraryUrl,
+                                    initial_route, entrypoint_args, engineId);
+  if (spawned_engine == nullptr || !spawned_engine->IsValid()) {
+    FML_LOG(ERROR) << "Could not spawn AndroidEngine";
+    return nullptr;
   }
-
   jobject javaLong = env->CallStaticObjectMethod(
-      g_java_long_class->obj(), g_long_constructor, spawned_ptr);
+      g_java_long_class->obj(), g_long_constructor,
+      reinterpret_cast<jlong>(spawned_engine.get()));
   if (javaLong == nullptr) {
     FML_LOG(ERROR) << "Could not create a Long instance";
     return nullptr;
   }
+  spawned_engine.release();
 
   env->SetObjectField(jni, g_jni_shell_holder_field, javaLong);
 
@@ -310,13 +285,7 @@ static void SurfaceCreated(JNIEnv* env,
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->OnSurfaceCreated(std::move(window));
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->NotifyCreated(std::move(window));
-  }
+  AsAndroidEngine(shell_holder)->OnSurfaceCreated(std::move(window));
 }
 
 static void SurfaceWindowChanged(JNIEnv* env,
@@ -329,13 +298,7 @@ static void SurfaceWindowChanged(JNIEnv* env,
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->OnSurfaceWindowChanged(std::move(window));
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->NotifySurfaceWindowChanged(std::move(window));
-  }
+  AsAndroidEngine(shell_holder)->OnSurfaceWindowChanged(std::move(window));
 }
 
 static void SurfaceChanged(JNIEnv* env,
@@ -343,22 +306,12 @@ static void SurfaceChanged(JNIEnv* env,
                            jlong shell_holder,
                            jint width,
                            jint height) {
-  if (IsEmbedderAPI()) {
-    // Dynamic surface resizing is handled automatically by the embedder
-    // compositor backing store manager on frame submission.
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->NotifyChanged(DlISize(width, height));
-  }
+  // Dynamic surface resizing is handled automatically by the embedder
+  // compositor backing store manager on frame submission.
 }
 
 static void SurfaceDestroyed(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->OnSurfaceDestroyed();
-  } else {
-    AsLegacyShellHolder(shell_holder)->GetPlatformView()->NotifyDestroyed();
-  }
+  AsAndroidEngine(shell_holder)->OnSurfaceDestroyed();
 }
 
 static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
@@ -379,29 +332,25 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
   auto libraryUrl = fml::jni::JavaStringToString(env, jLibraryUrl);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)
-        ->Launch(std::move(apk_asset_provider), entrypoint, libraryUrl,
-                 entrypoint_args, engineId);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->Launch(std::move(apk_asset_provider), entrypoint, libraryUrl,
-                 entrypoint_args, engineId);
-  }
+  AsAndroidEngine(shell_holder)
+      ->Launch(std::move(apk_asset_provider), entrypoint, libraryUrl,
+               entrypoint_args, engineId);
 }
 
 static jobject LookupCallbackInformation(JNIEnv* env,
                                          /* unused */ jobject,
                                          jlong handle) {
-  auto cbInfo = flutter::DartCallbackCache::GetCallbackInformation(handle);
-  if (cbInfo == nullptr) {
+  FlutterCallbackInformation cb_info = {};
+  cb_info.struct_size = sizeof(FlutterCallbackInformation);
+  if (FlutterEngineGetCallbackInformation(static_cast<int64_t>(handle),
+                                          &cb_info) != kSuccess) {
     return nullptr;
   }
   return env->NewObject(g_flutter_callback_info_class->obj(),
                         g_flutter_callback_info_constructor,
-                        env->NewStringUTF(cbInfo->name.c_str()),
-                        env->NewStringUTF(cbInfo->class_name.c_str()),
-                        env->NewStringUTF(cbInfo->library_path.c_str()));
+                        env->NewStringUTF(cb_info.callback_name),
+                        env->NewStringUTF(cb_info.class_name),
+                        env->NewStringUTF(cb_info.library_path));
 }
 
 static void SetViewportMetrics(JNIEnv* env,
@@ -434,172 +383,78 @@ static void SetViewportMetrics(JNIEnv* env,
                                jint physicalDisplayCornerRadiusTopRight,
                                jint physicalDisplayCornerRadiusBottomRight,
                                jint physicalDisplayCornerRadiusBottomLeft) {
-  // Convert java->c++. javaDisplayFeaturesBounds, javaDisplayFeaturesType and
-  // javaDisplayFeaturesState cannot be null
-  jsize rectSize = env->GetArrayLength(javaDisplayFeaturesBounds);
-  std::vector<int> boundsIntVector(rectSize);
-  if (rectSize > 0) {
-    env->GetIntArrayRegion(javaDisplayFeaturesBounds, 0, rectSize,
-                           &boundsIntVector[0]);
-  }
-  std::vector<double> displayFeaturesBounds(boundsIntVector.begin(),
-                                            boundsIntVector.end());
-  jsize typeSize = env->GetArrayLength(javaDisplayFeaturesType);
-  std::vector<int> displayFeaturesType(typeSize);
-  if (typeSize > 0) {
-    env->GetIntArrayRegion(javaDisplayFeaturesType, 0, typeSize,
-                           &displayFeaturesType[0]);
-  }
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.width = static_cast<size_t>(physicalWidth);
+  event.height = static_cast<size_t>(physicalHeight);
+  event.pixel_ratio = static_cast<double>(devicePixelRatio);
+  event.left = 0;
+  event.top = 0;
+  event.physical_view_inset_top = static_cast<double>(physicalViewInsetTop);
+  event.physical_view_inset_right = static_cast<double>(physicalViewInsetRight);
+  event.physical_view_inset_bottom =
+      static_cast<double>(physicalViewInsetBottom);
+  event.physical_view_inset_left = static_cast<double>(physicalViewInsetLeft);
+  event.view_id = kFlutterImplicitViewId;
 
-  jsize stateSize = env->GetArrayLength(javaDisplayFeaturesState);
-  std::vector<int> displayFeaturesState(stateSize);
-  if (stateSize > 0) {
-    env->GetIntArrayRegion(javaDisplayFeaturesState, 0, stateSize,
-                           &displayFeaturesState[0]);
-  }
-
-  const flutter::ViewportMetrics metrics{
-      static_cast<double>(devicePixelRatio),  // p_device_pixel_ratio
-      static_cast<double>(physicalWidth),     // p_physical_width
-      static_cast<double>(physicalHeight),    // p_physical_height
-      static_cast<double>(physicalMinWidth),  // p_physical_min_width_constraint
-      static_cast<double>(physicalMaxWidth),  // p_physical_max_width_constraint
-      static_cast<double>(
-          physicalMinHeight),  // p_physical_min_height_constraint
-      static_cast<double>(
-          physicalMaxHeight),  // p_physical_max_height_constraint
-      static_cast<double>(physicalPaddingTop),     // p_physical_padding_top
-      static_cast<double>(physicalPaddingRight),   // p_physical_padding_right
-      static_cast<double>(physicalPaddingBottom),  // p_physical_padding_bottom
-      static_cast<double>(physicalPaddingLeft),    // p_physical_padding_left
-      static_cast<double>(physicalViewInsetTop),   // p_physical_view_inset_top
-      static_cast<double>(
-          physicalViewInsetRight),  // p_physical_view_inset_right
-      static_cast<double>(
-          physicalViewInsetBottom),  // p_physical_view_inset_bottom
-      static_cast<double>(physicalViewInsetLeft),  // p_physical_view_inset_left
-      static_cast<double>(
-          systemGestureInsetTop),  // p_physical_system_gesture_inset_top
-      static_cast<double>(
-          systemGestureInsetRight),  // p_physical_system_gesture_inset_right
-      static_cast<double>(
-          systemGestureInsetBottom),  // p_physical_system_gesture_inset_bottom
-      static_cast<double>(
-          systemGestureInsetLeft),  // p_physical_system_gesture_inset_left
-      static_cast<double>(physicalTouchSlop),  // p_physical_touch_slop
-      displayFeaturesBounds,  // p_physical_display_features_bounds
-      displayFeaturesType,    // p_physical_display_features_type
-      displayFeaturesState,   // p_physical_display_features_state
-      0,                      // p_display_id,
-      static_cast<double>(
-          physicalDisplayCornerRadiusTopLeft),  // p_physical_display_corner_radius_top_left
-      static_cast<double>(
-          physicalDisplayCornerRadiusTopRight),  // p_physical_display_corner_radius_top_right
-      static_cast<double>(
-          physicalDisplayCornerRadiusBottomRight),  // p_physical_display_corner_radius_bottom_right
-      static_cast<double>(
-          physicalDisplayCornerRadiusBottomLeft),  // p_physical_display_corner_radius_bottom_left
-  };
-
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)
-        ->SetViewportMetrics(kFlutterImplicitViewId, metrics);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->SetViewportMetrics(kFlutterImplicitViewId, metrics);
-  }
+  AsAndroidEngine(shell_holder)->SetViewportMetrics(event);
 }
 
 static void UpdateDisplayMetrics(JNIEnv* env,
                                  jobject jcaller,
                                  jlong shell_holder) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->UpdateDisplayMetrics();
-  } else {
-    AsLegacyShellHolder(shell_holder)->UpdateDisplayMetrics();
+  if (shell_holder == 0) {
+    return;
   }
+  AsAndroidEngine(shell_holder)->UpdateDisplayMetrics();
 }
 
 static bool IsSurfaceControlEnabled(JNIEnv* env,
                                     jobject jcaller,
                                     jlong shell_holder) {
-  if (IsEmbedderAPI()) {
-    return false;
-  }
-  return AsLegacyShellHolder(shell_holder)->IsSurfaceControlEnabled();
+  return false;
 }
 
 static jobject GetBitmap(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  if (IsEmbedderAPI()) {
-    FlutterEngineScreenshot screenshot =
-        AsAndroidEngine(shell_holder)
-            ->Screenshot(kFlutterEngineScreenshotTypeUncompressedImage, false);
-    if (screenshot.bytes == nullptr) {
-      return nullptr;
-    }
-
-    jstring argb = env->NewStringUTF("ARGB_8888");
-    if (argb == nullptr) {
-      AsAndroidEngine(shell_holder)->ReleaseScreenshot(&screenshot);
-      return nullptr;
-    }
-
-    jobject bitmap_config = env->CallStaticObjectMethod(
-        g_bitmap_config_class->obj(), g_bitmap_config_value_of, argb);
-    if (bitmap_config == nullptr) {
-      AsAndroidEngine(shell_holder)->ReleaseScreenshot(&screenshot);
-      return nullptr;
-    }
-
-    auto bitmap = env->CallStaticObjectMethod(
-        g_bitmap_class->obj(), g_bitmap_create_bitmap_method,
-        static_cast<jint>(screenshot.width),
-        static_cast<jint>(screenshot.height), bitmap_config);
-
-    fml::jni::ScopedJavaLocalRef<jobject> buffer(
-        env, env->NewDirectByteBuffer(const_cast<uint8_t*>(screenshot.bytes),
-                                      screenshot.bytes_size));
-
-    env->CallVoidMethod(bitmap, g_bitmap_copy_pixels_from_buffer_method,
-                        buffer.obj());
-
-    AsAndroidEngine(shell_holder)->ReleaseScreenshot(&screenshot);
-    return bitmap;
-  } else {
-    auto screenshot =
-        AsLegacyShellHolder(shell_holder)
-            ->Screenshot(Rasterizer::ScreenshotType::UncompressedImage, false);
-    if (screenshot.data == nullptr) {
-      return nullptr;
-    }
-
-    jstring argb = env->NewStringUTF("ARGB_8888");
-    if (argb == nullptr) {
-      return nullptr;
-    }
-
-    jobject bitmap_config = env->CallStaticObjectMethod(
-        g_bitmap_config_class->obj(), g_bitmap_config_value_of, argb);
-    if (bitmap_config == nullptr) {
-      return nullptr;
-    }
-
-    auto bitmap = env->CallStaticObjectMethod(
-        g_bitmap_class->obj(), g_bitmap_create_bitmap_method,
-        screenshot.frame_size.width, screenshot.frame_size.height,
-        bitmap_config);
-
-    fml::jni::ScopedJavaLocalRef<jobject> buffer(
-        env,
-        env->NewDirectByteBuffer(const_cast<uint8_t*>(screenshot.data->bytes()),
-                                 screenshot.data->size()));
-
-    env->CallVoidMethod(bitmap, g_bitmap_copy_pixels_from_buffer_method,
-                        buffer.obj());
-
-    return bitmap;
+  FlutterEngineScreenshot screenshot =
+      AsAndroidEngine(shell_holder)
+          ->Screenshot(kFlutterEngineScreenshotTypeUncompressedImage, false);
+  if (screenshot.bytes == nullptr) {
+    return nullptr;
   }
+
+  jstring argb = env->NewStringUTF("ARGB_8888");
+  if (argb == nullptr) {
+    AsAndroidEngine(shell_holder)->ReleaseScreenshot(&screenshot);
+    return nullptr;
+  }
+
+  jobject bitmap_config = env->CallStaticObjectMethod(
+      g_bitmap_config_class->obj(), g_bitmap_config_value_of, argb);
+  if (bitmap_config == nullptr) {
+    AsAndroidEngine(shell_holder)->ReleaseScreenshot(&screenshot);
+    return nullptr;
+  }
+
+  auto bitmap = env->CallStaticObjectMethod(
+      g_bitmap_class->obj(), g_bitmap_create_bitmap_method,
+      static_cast<jint>(screenshot.width), static_cast<jint>(screenshot.height),
+      bitmap_config);
+  if (bitmap == nullptr) {
+    FML_LOG(ERROR) << "Could not create Bitmap instance";
+    AsAndroidEngine(shell_holder)->ReleaseScreenshot(&screenshot);
+    return nullptr;
+  }
+
+  fml::jni::ScopedJavaLocalRef<jobject> buffer(
+      env, env->NewDirectByteBuffer(const_cast<uint8_t*>(screenshot.bytes),
+                                    screenshot.bytes_size));
+
+  env->CallVoidMethod(bitmap, g_bitmap_copy_pixels_from_buffer_method,
+                      buffer.obj());
+
+  AsAndroidEngine(shell_holder)->ReleaseScreenshot(&screenshot);
+  return bitmap;
 }
 
 static void DispatchPlatformMessage(JNIEnv* env,
@@ -609,27 +464,25 @@ static void DispatchPlatformMessage(JNIEnv* env,
                                     jobject message,
                                     jint position,
                                     jint responseId) {
-  if (IsEmbedderAPI()) {
-    std::string channel_str = fml::jni::JavaStringToString(env, channel);
-    uint8_t* data = nullptr;
-    size_t size = 0;
-    if (message != nullptr && position > 0) {
-      data = static_cast<uint8_t*>(env->GetDirectBufferAddress(message));
-      size = static_cast<size_t>(position);
+  std::string channel_str = fml::jni::JavaStringToString(env, channel);
+  uint8_t* data = nullptr;
+  size_t size = 0;
+  static uint8_t empty_byte = 0;
+  if (message != nullptr) {
+    data = static_cast<uint8_t*>(env->GetDirectBufferAddress(message));
+    if (data == nullptr && position == 0) {
+      data = &empty_byte;
+    } else if (data == nullptr && position > 0) {
+      FML_LOG(ERROR)
+          << "DispatchPlatformMessage: Received null direct buffer with "
+             "non-zero position: "
+          << position;
+      return;
     }
-    AsAndroidEngine(shell_holder)
-        ->SendPlatformMessage(channel_str.c_str(), data, size, responseId);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->DispatchPlatformMessage(
-            env,                                         //
-            fml::jni::JavaStringToString(env, channel),  //
-            message,                                     //
-            position,                                    //
-            responseId                                   //
-        );
+    size = static_cast<size_t>(position);
   }
+  AsAndroidEngine(shell_holder)
+      ->SendPlatformMessage(channel_str.c_str(), data, size, responseId);
 }
 
 static void DispatchEmptyPlatformMessage(JNIEnv* env,
@@ -637,19 +490,9 @@ static void DispatchEmptyPlatformMessage(JNIEnv* env,
                                          jlong shell_holder,
                                          jstring channel,
                                          jint responseId) {
-  if (IsEmbedderAPI()) {
-    std::string channel_str = fml::jni::JavaStringToString(env, channel);
-    AsAndroidEngine(shell_holder)
-        ->SendPlatformMessage(channel_str.c_str(), nullptr, 0, responseId);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->DispatchEmptyPlatformMessage(
-            env,                                         //
-            fml::jni::JavaStringToString(env, channel),  //
-            responseId                                   //
-        );
-  }
+  std::string channel_str = fml::jni::JavaStringToString(env, channel);
+  AsAndroidEngine(shell_holder)
+      ->SendPlatformMessage(channel_str.c_str(), nullptr, 0, responseId);
 }
 
 static void CleanupMessageData(JNIEnv* env,
@@ -665,14 +508,7 @@ static void DispatchPointerDataPacket(JNIEnv* env,
                                       jobject buffer,
                                       jint position) {
   uint8_t* data = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->DispatchPointerDataPacket(data, position);
-  } else {
-    auto packet = std::make_unique<flutter::PointerDataPacket>(data, position);
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->DispatchPointerDataPacket(std::move(packet));
-  }
+  AsAndroidEngine(shell_holder)->DispatchPointerDataPacket(data, position);
 }
 
 static void DispatchSemanticsAction(JNIEnv* env,
@@ -682,53 +518,30 @@ static void DispatchSemanticsAction(JNIEnv* env,
                                     jint action,
                                     jobject args,
                                     jint args_position) {
-  if (IsEmbedderAPI()) {
-    const uint8_t* data = nullptr;
-    size_t size = 0;
-    if (args != nullptr && args_position > 0) {
-      data = static_cast<const uint8_t*>(env->GetDirectBufferAddress(args));
-      size = static_cast<size_t>(args_position);
-    }
-    AsAndroidEngine(shell_holder)
-        ->DispatchSemanticsAction(kFlutterImplicitViewId, id,
-                                  static_cast<FlutterSemanticsAction>(action),
-                                  data, size);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->DispatchSemanticsAction(env,           //
-                                  id,            //
-                                  action,        //
-                                  args,          //
-                                  args_position  //
-        );
+  const uint8_t* data = nullptr;
+  size_t size = 0;
+  if (args != nullptr && args_position > 0) {
+    data = static_cast<const uint8_t*>(env->GetDirectBufferAddress(args));
+    size = static_cast<size_t>(args_position);
   }
+  AsAndroidEngine(shell_holder)
+      ->DispatchSemanticsAction(kFlutterImplicitViewId, id,
+                                static_cast<FlutterSemanticsAction>(action),
+                                data, size);
 }
 
 static void SetSemanticsEnabled(JNIEnv* env,
                                 jobject jcaller,
                                 jlong shell_holder,
                                 jboolean enabled) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->SetSemanticsEnabled(enabled);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->SetSemanticsEnabled(enabled);
-  }
+  AsAndroidEngine(shell_holder)->SetSemanticsEnabled(enabled);
 }
 
 static void SetAccessibilityFeatures(JNIEnv* env,
                                      jobject jcaller,
                                      jlong shell_holder,
                                      jint flags) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->SetAccessibilityFeatures(flags);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->SetAccessibilityFeatures(flags);
-  }
+  AsAndroidEngine(shell_holder)->SetAccessibilityFeatures(flags);
 }
 
 static jboolean GetIsSoftwareRendering(JNIEnv* env, jobject jcaller) {
@@ -740,16 +553,7 @@ static void RegisterTexture(JNIEnv* env,
                             jlong shell_holder,
                             jlong texture_id,
                             jobject surface_texture) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->RegisterExternalTexture(texture_id);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->RegisterExternalTexture(
-            static_cast<int64_t>(texture_id),                             //
-            fml::jni::ScopedJavaGlobalRef<jobject>(env, surface_texture)  //
-        );
-  }
+  AsAndroidEngine(shell_holder)->RegisterExternalTexture(texture_id);
 }
 
 static void RegisterImageTexture(JNIEnv* env,
@@ -758,56 +562,25 @@ static void RegisterImageTexture(JNIEnv* env,
                                  jlong texture_id,
                                  jobject image_texture_entry,
                                  jboolean reset_on_background) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->RegisterExternalTexture(texture_id);
-  } else {
-    ImageExternalTexture::ImageLifecycle lifecycle =
-        reset_on_background ? ImageExternalTexture::ImageLifecycle::kReset
-                            : ImageExternalTexture::ImageLifecycle::kKeepAlive;
-
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->RegisterImageTexture(static_cast<int64_t>(texture_id),  //
-                               fml::jni::ScopedJavaGlobalRef<jobject>(
-                                   env, image_texture_entry),  //
-                               lifecycle                       //
-        );
-  }
+  AsAndroidEngine(shell_holder)->RegisterExternalTexture(texture_id);
 }
 
 static void UnregisterTexture(JNIEnv* env,
                               jobject jcaller,
                               jlong shell_holder,
                               jlong texture_id) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->UnregisterExternalTexture(texture_id);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->UnregisterTexture(static_cast<int64_t>(texture_id));
-  }
+  AsAndroidEngine(shell_holder)->UnregisterExternalTexture(texture_id);
 }
 
 static void MarkTextureFrameAvailable(JNIEnv* env,
                                       jobject jcaller,
                                       jlong shell_holder,
                                       jlong texture_id) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)
-        ->MarkExternalTextureFrameAvailable(texture_id);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->MarkTextureFrameAvailable(static_cast<int64_t>(texture_id));
-  }
+  AsAndroidEngine(shell_holder)->MarkExternalTextureFrameAvailable(texture_id);
 }
 
 static void ScheduleFrame(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  if (IsEmbedderAPI()) {
-    // Frame scheduling on Android with the embedder API is managed via Vsync.
-  } else {
-    AsLegacyShellHolder(shell_holder)->GetPlatformView()->ScheduleFrame();
-  }
+  // Frame scheduling on Android with the embedder API is managed via Vsync.
 }
 
 static void InvokePlatformMessageResponseCallback(JNIEnv* env,
@@ -818,41 +591,32 @@ static void InvokePlatformMessageResponseCallback(JNIEnv* env,
                                                   jint position) {
   uint8_t* response_data =
       static_cast<uint8_t*>(env->GetDirectBufferAddress(message));
-  FML_DCHECK(response_data != nullptr);
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)
-        ->SendPlatformMessageResponse(responseId, response_data, position);
-  } else {
-    auto mapping = std::make_unique<fml::MallocMapping>(
-        fml::MallocMapping::Copy(response_data, response_data + position));
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformMessageHandler()
-        ->InvokePlatformMessageResponseCallback(responseId, std::move(mapping));
+  static uint8_t empty_byte = 0;
+  if (response_data == nullptr && position == 0) {
+    response_data = &empty_byte;
+  } else if (response_data == nullptr && position > 0) {
+    FML_LOG(ERROR)
+        << "InvokePlatformMessageResponseCallback: Received null direct buffer "
+           "with non-zero position: "
+        << position;
+    return;
   }
+  AsAndroidEngine(shell_holder)
+      ->SendPlatformMessageResponse(responseId, response_data, position);
 }
 
 static void InvokePlatformMessageEmptyResponseCallback(JNIEnv* env,
                                                        jobject jcaller,
                                                        jlong shell_holder,
                                                        jint responseId) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)
-        ->SendPlatformMessageResponse(responseId, nullptr, 0);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformMessageHandler()
-        ->InvokePlatformMessageEmptyResponseCallback(responseId);
-  }
+  AsAndroidEngine(shell_holder)
+      ->SendPlatformMessageResponse(responseId, nullptr, 0);
 }
 
 static void NotifyLowMemoryWarning(JNIEnv* env,
                                    jobject obj,
                                    jlong shell_holder) {
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)->NotifyLowMemoryWarning();
-  } else {
-    AsLegacyShellHolder(shell_holder)->NotifyLowMemoryWarning();
-  }
+  AsAndroidEngine(shell_holder)->NotifyLowMemoryWarning();
 }
 
 static jboolean FlutterTextUtilsIsEmoji(JNIEnv* env,
@@ -888,7 +652,8 @@ static jboolean FlutterTextUtilsIsRegionalIndicator(JNIEnv* env,
 static void LoadLoadingUnitFailure(intptr_t loading_unit_id,
                                    const std::string& message,
                                    bool transient) {
-  // TODO(garyq): Implement
+  FML_LOG(ERROR) << "Failed to load deferred loading unit " << loading_unit_id
+                 << " (transient=" << transient << "): " << message;
 }
 
 static void DeferredComponentInstallFailure(JNIEnv* env,
@@ -945,26 +710,18 @@ static void LoadDartDeferredLibrary(JNIEnv* env,
 
   // Resolve symbols.
   std::unique_ptr<const fml::SymbolMapping> data_mapping =
-      std::make_unique<const fml::SymbolMapping>(
-          native_lib, DartSnapshot::kIsolateDataSymbol);
+      std::make_unique<const fml::SymbolMapping>(native_lib,
+                                                 kDartIsolateDataSymbol);
   std::unique_ptr<const fml::SymbolMapping> instructions_mapping =
       std::make_unique<const fml::SymbolMapping>(
-          native_lib, DartSnapshot::kIsolateInstructionsSymbol);
+          native_lib, kDartIsolateInstructionsSymbol);
 
-  if (IsEmbedderAPI()) {
-    AsAndroidEngine(shell_holder)
-        ->LoadDartDeferredLibrary(
-            loading_unit_id,
-            data_mapping ? data_mapping->GetMapping() : nullptr,
-            data_mapping ? data_mapping->GetSize() : 0,
-            instructions_mapping ? instructions_mapping->GetMapping() : nullptr,
-            instructions_mapping ? instructions_mapping->GetSize() : 0);
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->LoadDartDeferredLibrary(loading_unit_id, std::move(data_mapping),
-                                  std::move(instructions_mapping));
-  }
+  AsAndroidEngine(shell_holder)
+      ->LoadDartDeferredLibrary(
+          loading_unit_id, data_mapping ? data_mapping->GetMapping() : nullptr,
+          data_mapping ? data_mapping->GetSize() : 0,
+          instructions_mapping ? instructions_mapping->GetMapping() : nullptr,
+          instructions_mapping ? instructions_mapping->GetSize() : 0);
 }
 
 static void UpdateJavaAssetManager(JNIEnv* env,
@@ -972,21 +729,8 @@ static void UpdateJavaAssetManager(JNIEnv* env,
                                    jlong shell_holder,
                                    jobject jAssetManager,
                                    jstring jAssetBundlePath) {
-  auto asset_resolver = std::make_unique<flutter::APKAssetProvider>(
-      env,                                                   // jni environment
-      jAssetManager,                                         // asset manager
-      fml::jni::JavaStringToString(env, jAssetBundlePath));  // apk asset dir
-
-  if (IsEmbedderAPI()) {
-    // Custom asset resolvers under Embedder API are updated during engine
-    // initialization.
-  } else {
-    AsLegacyShellHolder(shell_holder)
-        ->GetPlatformView()
-        ->UpdateAssetResolverByType(
-            std::move(asset_resolver),
-            AssetResolver::AssetResolverType::kApkAssetProvider);
-  }
+  // Custom asset resolvers under Embedder API are updated during engine
+  // initialization.
 }
 
 bool RegisterApi(JNIEnv* env) {
@@ -1318,7 +1062,7 @@ bool PlatformViewAndroid::Register(JNIEnv* env) {
       env,
       env->FindClass(
           "io/flutter/embedding/engine/mutatorsstack/FlutterMutatorsStack"));
-  if (g_mutators_stack_class == nullptr) {
+  if (g_mutators_stack_class->is_null()) {
     FML_LOG(ERROR) << "Could not locate FlutterMutatorsStack";
     return false;
   }
@@ -1609,7 +1353,8 @@ PlatformViewAndroidJNIImpl::PlatformViewAndroidJNIImpl(
 PlatformViewAndroidJNIImpl::~PlatformViewAndroidJNIImpl() = default;
 
 void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
-    std::unique_ptr<flutter::PlatformMessage> message,
+    const std::string& channel,
+    std::unique_ptr<fml::Mapping> message,
     int responseId) {
   // Called from any thread.
   JNIEnv* env = fml::jni::AttachCurrentThread();
@@ -1620,21 +1365,24 @@ void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
   }
 
   fml::jni::ScopedJavaLocalRef<jstring> java_channel =
-      fml::jni::StringToJavaString(env, message->channel());
+      fml::jni::StringToJavaString(env, channel);
 
-  if (message->hasData()) {
-    fml::jni::ScopedJavaLocalRef<jobject> message_array(
-        env, env->NewDirectByteBuffer(
-                 const_cast<uint8_t*>(message->data().GetMapping()),
-                 message->data().GetSize()));
+  if (message != nullptr) {
     // Message data is deleted in CleanupMessageData.
-    fml::MallocMapping mapping = message->releaseData();
+    uint8_t* raw_ptr = static_cast<uint8_t*>(malloc(message->GetSize()));
+    if (raw_ptr != nullptr && message->GetSize() > 0 &&
+        message->GetMapping() != nullptr) {
+      memcpy(raw_ptr, message->GetMapping(), message->GetSize());
+    }
+    fml::jni::ScopedJavaLocalRef<jobject> message_array(
+        env, env->NewDirectByteBuffer(raw_ptr, message->GetSize()));
     env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
                         java_channel.obj(), message_array.obj(), responseId,
-                        reinterpret_cast<jlong>(mapping.Release()));
+                        reinterpret_cast<jlong>(raw_ptr));
   } else {
     env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
-                        java_channel.obj(), nullptr, responseId, nullptr);
+                        java_channel.obj(), nullptr, responseId,
+                        static_cast<jlong>(0));
   }
 
   FML_CHECK(fml::jni::CheckException(env));
@@ -1711,7 +1459,7 @@ double PlatformViewAndroidJNIImpl::FlutterViewGetScaledFontSize(
 
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
-    return -3;
+    return kInvalidScaledFontSize;
   }
 
   const jfloat scaledSize = env->CallFloatMethod(
@@ -1863,19 +1611,21 @@ void PlatformViewAndroidJNIImpl::SurfaceTextureUpdateTexImage(
   FML_CHECK(fml::jni::CheckException(env));
 }
 
-SkM44 PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
+std::array<float, 16>
+PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
     JavaLocalRef surface_texture) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
 
+  std::array<float, 16> transform = {};
   if (surface_texture.is_null()) {
-    return {};
+    return transform;
   }
 
   fml::jni::ScopedJavaLocalRef<jobject> surface_texture_local_ref(
       env, env->CallObjectMethod(surface_texture.obj(),
                                  g_java_weak_reference_get_method));
   if (surface_texture_local_ref.is_null()) {
-    return {};
+    return transform;
   }
 
   fml::jni::ScopedJavaLocalRef<jfloatArray> transformMatrix(
@@ -1885,12 +1635,7 @@ SkM44 PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
                       g_get_transform_matrix_method, transformMatrix.obj());
   FML_CHECK(fml::jni::CheckException(env));
 
-  float* m = env->GetFloatArrayElements(transformMatrix.obj(), nullptr);
-
-  static_assert(sizeof(SkScalar) == sizeof(float));
-  const auto transform = SkM44::ColMajor(m);
-
-  env->ReleaseFloatArrayElements(transformMatrix.obj(), m, JNI_ABORT);
+  env->GetFloatArrayRegion(transformMatrix.obj(), 0, 16, transform.data());
 
   return transform;
 }
@@ -1992,7 +1737,7 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
     int height,
     int viewWidth,
     int viewHeight,
-    MutatorsStack mutators_stack) {
+    AndroidMutatorsStack mutators_stack) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
@@ -2002,92 +1747,44 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
   jobject mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
                                          g_mutators_stack_init_method);
 
-  std::vector<std::shared_ptr<Mutator>>::const_iterator iter =
-      mutators_stack.Begin();
-  while (iter != mutators_stack.End()) {
-    switch ((*iter)->GetType()) {
-      case MutatorType::kTransform: {
-        const DlMatrix& matrix = (*iter)->GetMatrix();
-        DlScalar matrix_array[9]{
-            matrix.m[0], matrix.m[4], matrix.m[12],  //
-            matrix.m[1], matrix.m[5], matrix.m[13],  //
-            matrix.m[3], matrix.m[7], matrix.m[15],
-        };
+  for (const auto& mutator : mutators_stack) {
+    switch (mutator.type) {
+      case AndroidMutatorType::kTransform: {
         fml::jni::ScopedJavaLocalRef<jfloatArray> transformMatrix(
             env, env->NewFloatArray(9));
-
-        env->SetFloatArrayRegion(transformMatrix.obj(), 0, 9, matrix_array);
+        env->SetFloatArrayRegion(transformMatrix.obj(), 0, 9,
+                                 mutator.matrix.data());
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_transform_method,
                             transformMatrix.obj());
         break;
       }
-      case MutatorType::kClipRect: {
-        const DlRect& rect = (*iter)->GetRect();
+      case AndroidMutatorType::kClipRect: {
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_cliprect_method,
-                            rect.GetLeft(),   //
-                            rect.GetTop(),    //
-                            rect.GetRight(),  //
-                            rect.GetBottom());
+                            mutator.rect_left,   //
+                            mutator.rect_top,    //
+                            mutator.rect_right,  //
+                            mutator.rect_bottom);
         break;
       }
-      case MutatorType::kClipRRect: {
-        const DlRoundRect& rrect = (*iter)->GetRRect();
-        const DlRect& rect = rrect.GetBounds();
-        const DlRoundingRadii radii = rrect.GetRadii();
-        SkScalar radiis[8] = {
-            radii.top_left.width,     radii.top_left.height,
-            radii.top_right.width,    radii.top_right.height,
-            radii.bottom_right.width, radii.bottom_right.height,
-            radii.bottom_left.width,  radii.bottom_left.height,
-        };
+      case AndroidMutatorType::kClipRRect:
+      case AndroidMutatorType::kClipRSE: {
         fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
             env, env->NewFloatArray(8));
-        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
+        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, mutator.radii.data());
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_cliprrect_method,
-                            rect.GetLeft(),    //
-                            rect.GetTop(),     //
-                            rect.GetRight(),   //
-                            rect.GetBottom(),  //
+                            mutator.rect_left,    //
+                            mutator.rect_top,     //
+                            mutator.rect_right,   //
+                            mutator.rect_bottom,  //
                             radiisArray.obj());
         break;
       }
-      case MutatorType::kClipRSE: {
-        const DlRoundRect& rrect = (*iter)->GetRSEApproximation();
-        const DlRect& rect = rrect.GetBounds();
-        const DlRoundingRadii radii = rrect.GetRadii();
-        SkScalar radiis[8] = {
-            radii.top_left.width,     radii.top_left.height,
-            radii.top_right.width,    radii.top_right.height,
-            radii.bottom_right.width, radii.bottom_right.height,
-            radii.bottom_left.width,  radii.bottom_left.height,
-        };
-        fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
-            env, env->NewFloatArray(8));
-        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
-        env->CallVoidMethod(mutatorsStack,
-                            g_mutators_stack_push_cliprrect_method,
-                            rect.GetLeft(),    //
-                            rect.GetTop(),     //
-                            rect.GetRight(),   //
-                            rect.GetBottom(),  //
-                            radiisArray.obj());
-        break;
-      }
-      // TODO(cyanglaz): Implement other mutators.
-      // https://github.com/flutter/flutter/issues/58426
-      case MutatorType::kClipPath:
-      case MutatorType::kOpacity:
-      case MutatorType::kBackdropFilter:
-      case MutatorType::kBackdropClipRect:
-      case MutatorType::kBackdropClipRRect:
-      case MutatorType::kBackdropClipRSuperellipse:
-      case MutatorType::kBackdropClipPath:
+      case AndroidMutatorType::kOpacity:
         break;
     }
-    ++iter;
   }
 
   env->CallVoidMethod(java_object.obj(), g_on_display_platform_view_method,
@@ -2230,6 +1927,10 @@ double PlatformViewAndroidJNIImpl::GetDisplayRefreshRate() {
   }
 
   jfieldID fid = env->GetStaticFieldID(clazz.obj(), "refreshRateFPS", "F");
+  if (fid == nullptr) {
+    fml::jni::ClearException(env, true);
+    return kUnknownDisplayRefreshRate;
+  }
   return static_cast<double>(env->GetStaticFloatField(clazz.obj(), fid));
 }
 
@@ -2238,16 +1939,20 @@ double PlatformViewAndroidJNIImpl::GetDisplayWidth() {
 
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
-    return -1;
+    return kUnknownDisplayDimension;
   }
 
   fml::jni::ScopedJavaLocalRef<jclass> clazz(
       env, env->GetObjectClass(java_object.obj()));
   if (clazz.is_null()) {
-    return -1;
+    return kUnknownDisplayDimension;
   }
 
   jfieldID fid = env->GetStaticFieldID(clazz.obj(), "displayWidth", "F");
+  if (fid == nullptr) {
+    fml::jni::ClearException(env, true);
+    return kUnknownDisplayDimension;
+  }
   return static_cast<double>(env->GetStaticFloatField(clazz.obj(), fid));
 }
 
@@ -2256,16 +1961,20 @@ double PlatformViewAndroidJNIImpl::GetDisplayHeight() {
 
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
-    return -1;
+    return kUnknownDisplayDimension;
   }
 
   fml::jni::ScopedJavaLocalRef<jclass> clazz(
       env, env->GetObjectClass(java_object.obj()));
   if (clazz.is_null()) {
-    return -1;
+    return kUnknownDisplayDimension;
   }
 
   jfieldID fid = env->GetStaticFieldID(clazz.obj(), "displayHeight", "F");
+  if (fid == nullptr) {
+    fml::jni::ClearException(env, true);
+    return kUnknownDisplayDimension;
+  }
   return static_cast<double>(env->GetStaticFloatField(clazz.obj(), fid));
 }
 
@@ -2274,16 +1983,20 @@ double PlatformViewAndroidJNIImpl::GetDisplayDensity() {
 
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
-    return -1;
+    return kUnknownDisplayDimension;
   }
 
   fml::jni::ScopedJavaLocalRef<jclass> clazz(
       env, env->GetObjectClass(java_object.obj()));
   if (clazz.is_null()) {
-    return -1;
+    return kUnknownDisplayDimension;
   }
 
   jfieldID fid = env->GetStaticFieldID(clazz.obj(), "displayDensity", "F");
+  if (fid == nullptr) {
+    fml::jni::ClearException(env, true);
+    return kUnknownDisplayDimension;
+  }
   return static_cast<double>(env->GetStaticFloatField(clazz.obj(), fid));
 }
 
@@ -2396,79 +2109,6 @@ void PlatformViewAndroidJNIImpl::destroyOverlaySurface2() {
   FML_CHECK(fml::jni::CheckException(env));
 }
 
-namespace {
-class AndroidPathReceiver final : public DlPathReceiver {
- public:
-  explicit AndroidPathReceiver(JNIEnv* env)
-      : env_(env),
-        android_path_(env->NewObject(path_class->obj(), path_constructor)) {}
-
-  void SetFillType(DlPathFillType type) {
-    jfieldID fill_type_field_id;
-    switch (type) {
-      case DlPathFillType::kOdd:
-        fill_type_field_id = g_path_fill_type_even_odd_field;
-        break;
-      case DlPathFillType::kNonZero:
-        fill_type_field_id = g_path_fill_type_winding_field;
-        break;
-      default:
-        // DlPathFillType does not have corresponding kInverseEvenOdd or
-        // kInverseWinding fill types.
-        return;
-    }
-
-    // Get the static enum field value (Path.FillType.WINDING or
-    // Path.FillType.EVEN_ODD)
-    fml::jni::ScopedJavaLocalRef<jobject> fill_type_enum =
-        fml::jni::ScopedJavaLocalRef<jobject>(
-            env_, env_->GetStaticObjectField(g_path_fill_type_class->obj(),
-                                             fill_type_field_id));
-    FML_CHECK(fml::jni::CheckException(env_));
-    FML_CHECK(!fill_type_enum.is_null());
-
-    // Call Path.setFillType(Path.FillType)
-    env_->CallVoidMethod(android_path_, path_set_fill_type_method,
-                         fill_type_enum.obj());
-    FML_CHECK(fml::jni::CheckException(env_));
-  }
-
-  void MoveTo(const DlPoint& p2, bool will_be_closed) override {
-    env_->CallVoidMethod(android_path_, path_move_to_method, p2.x, p2.y);
-  }
-  void LineTo(const DlPoint& p2) override {
-    env_->CallVoidMethod(android_path_, path_line_to_method, p2.x, p2.y);
-  }
-  void QuadTo(const DlPoint& cp, const DlPoint& p2) override {
-    env_->CallVoidMethod(android_path_, path_quad_to_method,  //
-                         cp.x, cp.y, p2.x, p2.y);
-  }
-  bool ConicTo(const DlPoint& cp, const DlPoint& p2, DlScalar weight) override {
-    if (!path_conic_to_method) {
-      return false;
-    }
-    env_->CallVoidMethod(android_path_, path_conic_to_method,  //
-                         cp.x, cp.y, p2.x, p2.y, weight);
-    return true;
-  };
-  void CubicTo(const DlPoint& cp1,
-               const DlPoint& cp2,
-               const DlPoint& p2) override {
-    env_->CallVoidMethod(android_path_, path_cubic_to_method,  //
-                         cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y);
-  }
-  void Close() override {
-    env_->CallVoidMethod(android_path_, path_close_method);
-  }
-
-  jobject TakePath() const { return android_path_; }
-
- private:
-  JNIEnv* env_;
-  jobject android_path_;
-};
-}  // namespace
-
 void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
     int32_t view_id,
     int32_t x,
@@ -2477,7 +2117,7 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
     int32_t height,
     int32_t viewWidth,
     int32_t viewHeight,
-    MutatorsStack mutators_stack) {
+    AndroidMutatorsStack mutators_stack) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
@@ -2487,120 +2127,51 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
   jobject mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
                                          g_mutators_stack_init_method);
 
-  std::vector<std::shared_ptr<Mutator>>::const_iterator iter =
-      mutators_stack.Begin();
-  while (iter != mutators_stack.End()) {
-    switch ((*iter)->GetType()) {
-      case MutatorType::kTransform: {
-        const DlMatrix& matrix = (*iter)->GetMatrix();
-        DlScalar matrix_array[9]{
-            matrix.m[0], matrix.m[4], matrix.m[12],  //
-            matrix.m[1], matrix.m[5], matrix.m[13],  //
-            matrix.m[3], matrix.m[7], matrix.m[15],
-        };
+  for (const auto& mutator : mutators_stack) {
+    switch (mutator.type) {
+      case AndroidMutatorType::kTransform: {
         fml::jni::ScopedJavaLocalRef<jfloatArray> transformMatrix(
             env, env->NewFloatArray(9));
-
-        env->SetFloatArrayRegion(transformMatrix.obj(), 0, 9, matrix_array);
+        env->SetFloatArrayRegion(transformMatrix.obj(), 0, 9,
+                                 mutator.matrix.data());
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_transform_method,
                             transformMatrix.obj());
         break;
       }
-      case MutatorType::kClipRect: {
-        const DlRect& rect = (*iter)->GetRect();
+      case AndroidMutatorType::kClipRect: {
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_cliprect_method,
-                            rect.GetLeft(),   //
-                            rect.GetTop(),    //
-                            rect.GetRight(),  //
-                            rect.GetBottom());
+                            mutator.rect_left,   //
+                            mutator.rect_top,    //
+                            mutator.rect_right,  //
+                            mutator.rect_bottom);
         break;
       }
-      case MutatorType::kClipRRect: {
-        const DlRoundRect& rrect = (*iter)->GetRRect();
-        const DlRect& rect = rrect.GetBounds();
-        const DlRoundingRadii& radii = rrect.GetRadii();
-        SkScalar radiis[8] = {
-            radii.top_left.width,     radii.top_left.height,
-            radii.top_right.width,    radii.top_right.height,
-            radii.bottom_right.width, radii.bottom_right.height,
-            radii.bottom_left.width,  radii.bottom_left.height,
-        };
+      case AndroidMutatorType::kClipRRect:
+      case AndroidMutatorType::kClipRSE: {
         fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
             env, env->NewFloatArray(8));
-        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
+        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, mutator.radii.data());
         env->CallVoidMethod(mutatorsStack,
                             g_mutators_stack_push_cliprrect_method,
-                            rect.GetLeft(),    //
-                            rect.GetTop(),     //
-                            rect.GetRight(),   //
-                            rect.GetBottom(),  //
+                            mutator.rect_left,    //
+                            mutator.rect_top,     //
+                            mutator.rect_right,   //
+                            mutator.rect_bottom,  //
                             radiisArray.obj());
         break;
       }
-      case MutatorType::kClipRSE: {
-        const DlRoundRect& rrect = (*iter)->GetRSEApproximation();
-        const DlRect& rect = rrect.GetBounds();
-        const DlRoundingRadii& radii = rrect.GetRadii();
-        SkScalar radiis[8] = {
-            radii.top_left.width,     radii.top_left.height,
-            radii.top_right.width,    radii.top_right.height,
-            radii.bottom_right.width, radii.bottom_right.height,
-            radii.bottom_left.width,  radii.bottom_left.height,
-        };
-        fml::jni::ScopedJavaLocalRef<jfloatArray> radiisArray(
-            env, env->NewFloatArray(8));
-        env->SetFloatArrayRegion(radiisArray.obj(), 0, 8, radiis);
-        env->CallVoidMethod(mutatorsStack,
-                            g_mutators_stack_push_cliprrect_method,
-                            rect.GetLeft(),    //
-                            rect.GetTop(),     //
-                            rect.GetRight(),   //
-                            rect.GetBottom(),  //
-                            radiisArray.obj());
-        break;
-      }
-      case MutatorType::kOpacity: {
-        float opacity = (*iter)->GetAlphaFloat();
+      case AndroidMutatorType::kOpacity: {
+        // Standard 8-bit alpha range [0, 255] converted to normalized
+        // [0.0, 1.0].
+        constexpr float kMaxAlpha = 255.0f;
+        float opacity = static_cast<float>(mutator.alpha) / kMaxAlpha;
         env->CallVoidMethod(mutatorsStack, g_mutators_stack_push_opacity_method,
                             opacity);
         break;
       }
-      case MutatorType::kClipPath: {
-        auto& dlPath = (*iter)->GetPath();
-        // The layer mutator mechanism should have already caught and
-        // redirected these simplified path cases, which is important because
-        // the conics they generate (in the case of oval and rrect) will
-        // not match the results of an impeller path conversion very closely.
-        FML_DCHECK(!dlPath.IsRect());
-        FML_DCHECK(!dlPath.IsOval());
-        FML_DCHECK(!dlPath.IsRoundRect());
-
-        // Define and populate an Android Path with data from the DlPath
-        AndroidPathReceiver receiver(env);
-        receiver.SetFillType(dlPath.GetFillType());
-
-        // TODO(flar): https://github.com/flutter/flutter/issues/164808
-        // Need to convert the fill type to the Android enum and
-        // call setFillType on the path...
-        dlPath.Dispatch(receiver);
-
-        env->CallVoidMethod(mutatorsStack,
-                            g_mutators_stack_push_clippath_method,
-                            receiver.TakePath());
-        break;
-      }
-      // TODO(cyanglaz): Implement other mutators.
-      // https://github.com/flutter/flutter/issues/58426
-      case MutatorType::kBackdropFilter:
-      case MutatorType::kBackdropClipRect:
-      case MutatorType::kBackdropClipRRect:
-      case MutatorType::kBackdropClipRSuperellipse:
-      case MutatorType::kBackdropClipPath:
-        break;
     }
-    ++iter;
   }
 
   env->CallVoidMethod(java_object.obj(), g_on_display_platform_view2_method,
