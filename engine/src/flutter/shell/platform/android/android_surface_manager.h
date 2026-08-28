@@ -5,6 +5,7 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_SURFACE_MANAGER_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_SURFACE_MANAGER_H_
 
+#include <EGL/egl.h>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -109,6 +110,16 @@ class AndroidSurfaceManager {
 
   mutable std::mutex window_mutex_;
   fml::RefPtr<AndroidNativeWindow> native_window_;
+
+  EGLDisplay egl_display_ = EGL_NO_DISPLAY;
+  EGLContext egl_context_ = EGL_NO_CONTEXT;
+  EGLContext egl_resource_context_ = EGL_NO_CONTEXT;
+  EGLConfig egl_config_ = nullptr;
+  EGLSurface egl_pbuffer_surface_ = EGL_NO_SURFACE;
+  EGLSurface egl_window_surface_ = EGL_NO_SURFACE;
+
+  void InitializeEGL();
+  void DestroyEGL();
 
   mutable std::mutex cache_mutex_;
   uint64_t next_backing_store_id_ = 1;

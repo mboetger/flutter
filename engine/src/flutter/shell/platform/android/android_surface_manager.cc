@@ -4,6 +4,7 @@
 
 #include "flutter/shell/platform/android/android_surface_manager.h"
 
+#include <android/log.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -15,21 +16,147 @@ namespace flutter {
 AndroidSurfaceManager::AndroidSurfaceManager(AndroidRenderingAPI rendering_api,
                                              size_t max_cached_backing_stores)
     : rendering_api_(rendering_api),
-      max_cached_backing_stores_(max_cached_backing_stores) {}
+      max_cached_backing_stores_(max_cached_backing_stores) {
+  InitializeEGL();
+}
 
 AndroidSurfaceManager::~AndroidSurfaceManager() {
   ClearBackingStoreCache();
+  DestroyEGL();
+}
+
+void AndroidSurfaceManager::InitializeEGL() {
+  if (rendering_api_ == AndroidRenderingAPI::kSoftware) {
+    return;
+  }
+  egl_display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  if (egl_display_ == EGL_NO_DISPLAY) {
+    __android_log_print(ANDROID_LOG_ERROR, "FlutterJNI",
+                        "InitializeEGL: eglGetDisplay failed err=%x",
+                        eglGetError());
+    return;
+  }
+  if (!eglInitialize(egl_display_, nullptr, nullptr)) {
+    __android_log_print(ANDROID_LOG_ERROR, "FlutterJNI",
+                        "InitializeEGL: eglInitialize failed err=%x",
+                        eglGetError());
+    egl_display_ = EGL_NO_DISPLAY;
+    return;
+  }
+  const EGLint attribs[] = {
+      EGL_RENDERABLE_TYPE,
+      EGL_OPENGL_ES2_BIT,
+      EGL_SURFACE_TYPE,
+      EGL_WINDOW_BIT | EGL_PBUFFER_BIT,
+      EGL_RED_SIZE,
+      8,
+      EGL_GREEN_SIZE,
+      8,
+      EGL_BLUE_SIZE,
+      8,
+      EGL_ALPHA_SIZE,
+      8,
+      EGL_DEPTH_SIZE,
+      0,
+      EGL_STENCIL_SIZE,
+      8,
+      EGL_NONE,
+  };
+  EGLint num_configs = 0;
+  if (!eglChooseConfig(egl_display_, attribs, &egl_config_, 1, &num_configs) ||
+      num_configs == 0) {
+    __android_log_print(ANDROID_LOG_ERROR, "FlutterJNI",
+                        "InitializeEGL: eglChooseConfig failed err=%x",
+                        eglGetError());
+    return;
+  }
+  const EGLint ctx_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+  egl_context_ =
+      eglCreateContext(egl_display_, egl_config_, EGL_NO_CONTEXT, ctx_attribs);
+  if (egl_context_ == EGL_NO_CONTEXT) {
+    const EGLint ctx2_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+    egl_context_ = eglCreateContext(egl_display_, egl_config_, EGL_NO_CONTEXT,
+                                    ctx2_attribs);
+  }
+  if (egl_context_ != EGL_NO_CONTEXT) {
+    egl_resource_context_ =
+        eglCreateContext(egl_display_, egl_config_, egl_context_, ctx_attribs);
+    if (egl_resource_context_ == EGL_NO_CONTEXT) {
+      const EGLint ctx2_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+      egl_resource_context_ = eglCreateContext(egl_display_, egl_config_,
+                                               egl_context_, ctx2_attribs);
+    }
+  }
+  const EGLint pbuffer_attribs[] = {
+      EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE,
+  };
+  egl_pbuffer_surface_ =
+      eglCreatePbufferSurface(egl_display_, egl_config_, pbuffer_attribs);
+  __android_log_print(
+      ANDROID_LOG_INFO, "FlutterJNI",
+      "InitializeEGL: display=%p, ctx=%p, res_ctx=%p, pbuffer=%p, err=%x",
+      egl_display_, egl_context_, egl_resource_context_, egl_pbuffer_surface_,
+      eglGetError());
+}
+
+void AndroidSurfaceManager::DestroyEGL() {
+  if (egl_display_ == EGL_NO_DISPLAY) {
+    return;
+  }
+  eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+  if (egl_window_surface_ != EGL_NO_SURFACE) {
+    eglDestroySurface(egl_display_, egl_window_surface_);
+    egl_window_surface_ = EGL_NO_SURFACE;
+  }
+  if (egl_pbuffer_surface_ != EGL_NO_SURFACE) {
+    eglDestroySurface(egl_display_, egl_pbuffer_surface_);
+    egl_pbuffer_surface_ = EGL_NO_SURFACE;
+  }
+  if (egl_resource_context_ != EGL_NO_CONTEXT) {
+    eglDestroyContext(egl_display_, egl_resource_context_);
+    egl_resource_context_ = EGL_NO_CONTEXT;
+  }
+  if (egl_context_ != EGL_NO_CONTEXT) {
+    eglDestroyContext(egl_display_, egl_context_);
+    egl_context_ = EGL_NO_CONTEXT;
+  }
+  eglTerminate(egl_display_);
+  egl_display_ = EGL_NO_DISPLAY;
+  egl_config_ = nullptr;
 }
 
 void AndroidSurfaceManager::SetNativeWindow(
     fml::RefPtr<AndroidNativeWindow> window) {
   std::lock_guard<std::mutex> lock(window_mutex_);
+  if (egl_display_ != EGL_NO_DISPLAY && egl_window_surface_ != EGL_NO_SURFACE) {
+    eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                   EGL_NO_CONTEXT);
+    eglDestroySurface(egl_display_, egl_window_surface_);
+    egl_window_surface_ = EGL_NO_SURFACE;
+  }
   native_window_ = std::move(window);
+  if (egl_display_ != EGL_NO_DISPLAY && egl_config_ != nullptr &&
+      native_window_ && native_window_->IsValid()) {
+    egl_window_surface_ = eglCreateWindowSurface(
+        egl_display_, egl_config_, native_window_->handle(), nullptr);
+  }
+  __android_log_print(ANDROID_LOG_INFO, "FlutterJNI",
+                      "SetNativeWindow: win=%p, valid=%d, win_surf=%p, err=%x",
+                      native_window_.get(),
+                      native_window_ ? native_window_->IsValid() : 0,
+                      egl_window_surface_, eglGetError());
 }
 
 void AndroidSurfaceManager::ClearNativeWindow() {
   {
     std::lock_guard<std::mutex> lock(window_mutex_);
+    if (egl_display_ != EGL_NO_DISPLAY &&
+        egl_window_surface_ != EGL_NO_SURFACE) {
+      eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                     EGL_NO_CONTEXT);
+      eglDestroySurface(egl_display_, egl_window_surface_);
+      egl_window_surface_ = EGL_NO_SURFACE;
+    }
     native_window_ = nullptr;
   }
   ClearBackingStoreCache();
@@ -65,29 +192,83 @@ bool AndroidSurfaceManager::IsEmbedderAPIEnabled() const {
 }
 
 bool AndroidSurfaceManager::MakeCurrent() {
-  if (!HasNativeWindow()) {
-    return false;
+  std::lock_guard<std::mutex> lock(window_mutex_);
+  __android_log_print(ANDROID_LOG_INFO, "FlutterJNI",
+                      "MakeCurrent: dpy=%p, ctx=%p, win_surf=%p, pbuffer=%p",
+                      egl_display_, egl_context_, egl_window_surface_,
+                      egl_pbuffer_surface_);
+  if (egl_display_ != EGL_NO_DISPLAY && egl_context_ != EGL_NO_CONTEXT) {
+    if (egl_window_surface_ != EGL_NO_SURFACE) {
+      auto res = eglMakeCurrent(egl_display_, egl_window_surface_,
+                                egl_window_surface_, egl_context_);
+      __android_log_print(ANDROID_LOG_INFO, "FlutterJNI",
+                          "MakeCurrent(win): res=%d, err=%x", res,
+                          eglGetError());
+      return res == EGL_TRUE;
+    } else if (egl_pbuffer_surface_ != EGL_NO_SURFACE) {
+      auto res = eglMakeCurrent(egl_display_, egl_pbuffer_surface_,
+                                egl_pbuffer_surface_, egl_context_);
+      __android_log_print(ANDROID_LOG_INFO, "FlutterJNI",
+                          "MakeCurrent(pbuf): res=%d, err=%x", res,
+                          eglGetError());
+      return res == EGL_TRUE;
+    }
   }
-  return true;
+  return HasNativeWindow();
 }
 
 bool AndroidSurfaceManager::ClearCurrent() {
+  if (egl_display_ != EGL_NO_DISPLAY) {
+    return eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                          EGL_NO_CONTEXT) == EGL_TRUE;
+  }
   return true;
 }
 
 bool AndroidSurfaceManager::MakeResourceCurrent() {
+  if (egl_display_ == EGL_NO_DISPLAY || egl_config_ == nullptr ||
+      egl_context_ == EGL_NO_CONTEXT) {
+    return true;
+  }
+  thread_local EGLContext tl_context = EGL_NO_CONTEXT;
+  thread_local EGLSurface tl_pbuffer = EGL_NO_SURFACE;
+  if (tl_context == EGL_NO_CONTEXT) {
+    const EGLint ctx_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+    tl_context =
+        eglCreateContext(egl_display_, egl_config_, egl_context_, ctx_attribs);
+    if (tl_context == EGL_NO_CONTEXT) {
+      const EGLint ctx2_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+      tl_context = eglCreateContext(egl_display_, egl_config_, egl_context_,
+                                    ctx2_attribs);
+    }
+    const EGLint pbuffer_attribs[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE};
+    tl_pbuffer =
+        eglCreatePbufferSurface(egl_display_, egl_config_, pbuffer_attribs);
+  }
+  if (tl_context != EGL_NO_CONTEXT && tl_pbuffer != EGL_NO_SURFACE) {
+    auto res = eglMakeCurrent(egl_display_, tl_pbuffer, tl_pbuffer, tl_context);
+    __android_log_print(ANDROID_LOG_INFO, "FlutterJNI",
+                        "MakeResourceCurrent(tl): res=%d, err=%x", res,
+                        eglGetError());
+    return res == EGL_TRUE;
+  }
   return true;
 }
 
 bool AndroidSurfaceManager::ClearResourceCurrent() {
+  if (egl_display_ != EGL_NO_DISPLAY) {
+    return eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                          EGL_NO_CONTEXT) == EGL_TRUE;
+  }
   return true;
 }
 
 bool AndroidSurfaceManager::SwapBuffers() {
-  if (!HasNativeWindow()) {
-    return false;
+  std::lock_guard<std::mutex> lock(window_mutex_);
+  if (egl_display_ != EGL_NO_DISPLAY && egl_window_surface_ != EGL_NO_SURFACE) {
+    return eglSwapBuffers(egl_display_, egl_window_surface_) == EGL_TRUE;
   }
-  return true;
+  return HasNativeWindow();
 }
 
 bool AndroidSurfaceManager::CreateBackingStore(
@@ -117,10 +298,8 @@ bool AndroidSurfaceManager::CreateBackingStore(
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerOpenGLES:
     case AndroidRenderingAPI::kImpellerAutoselect:
-      expected_type = kFlutterBackingStoreTypeOpenGL;
-      break;
     case AndroidRenderingAPI::kImpellerVulkan:
-      expected_type = kFlutterBackingStoreTypeVulkan;
+      expected_type = kFlutterBackingStoreTypeOpenGL;
       break;
   }
 
@@ -148,8 +327,8 @@ bool AndroidSurfaceManager::CreateBackingStore(
         backing_store_out->software.destruction_callback = [](void*) {};
       } else if (entry->type == kFlutterBackingStoreTypeOpenGL) {
         backing_store_out->open_gl.type = kFlutterOpenGLTargetTypeFramebuffer;
-        backing_store_out->open_gl.framebuffer.name = entry->gl_framebuffer_id;
-        backing_store_out->open_gl.framebuffer.target = 0x8058;  // GL_RGBA8
+        backing_store_out->open_gl.framebuffer.name = 0;
+        backing_store_out->open_gl.framebuffer.target = 0x8058;  // GL_RGBA8_OES
         backing_store_out->open_gl.framebuffer.user_data = entry.get();
         backing_store_out->open_gl.framebuffer.destruction_callback =
             [](void*) {};
@@ -176,13 +355,13 @@ bool AndroidSurfaceManager::CreateBackingStore(
                        static_cast<size_t>(config.size.height) * 4;
     new_entry->software_buffer.resize(byte_size, 0);
   } else if (expected_type == kFlutterBackingStoreTypeOpenGL) {
-    new_entry->gl_framebuffer_id = static_cast<uint32_t>(new_entry->id);
-    new_entry->gl_texture_id = static_cast<uint32_t>(new_entry->id);
+    new_entry->gl_framebuffer_id = 0;
+    new_entry->gl_texture_id = 0;
   } else if (expected_type == kFlutterBackingStoreTypeVulkan) {
     new_entry->vulkan_image.struct_size = sizeof(FlutterVulkanImage);
     new_entry->vulkan_image.image =
         reinterpret_cast<FlutterVulkanImageHandle>(new_entry->id);
-    new_entry->vulkan_image.format = 0x8058;  // VK_FORMAT_R8G8B8A8_UNORM / RGBA
+    new_entry->vulkan_image.format = 37;  // VK_FORMAT_R8G8B8A8_UNORM
     new_entry->vulkan_image.width = static_cast<size_t>(config.size.width);
     new_entry->vulkan_image.height = static_cast<size_t>(config.size.height);
   }
@@ -205,8 +384,8 @@ bool AndroidSurfaceManager::CreateBackingStore(
     backing_store_out->software.destruction_callback = [](void*) {};
   } else if (raw_entry->type == kFlutterBackingStoreTypeOpenGL) {
     backing_store_out->open_gl.type = kFlutterOpenGLTargetTypeFramebuffer;
-    backing_store_out->open_gl.framebuffer.name = raw_entry->gl_framebuffer_id;
-    backing_store_out->open_gl.framebuffer.target = 0x8058;  // GL_RGBA8
+    backing_store_out->open_gl.framebuffer.name = 0;
+    backing_store_out->open_gl.framebuffer.target = 0x8058;  // GL_RGBA8_OES
     backing_store_out->open_gl.framebuffer.user_data = raw_entry;
     backing_store_out->open_gl.framebuffer.destruction_callback = [](void*) {};
   } else if (raw_entry->type == kFlutterBackingStoreTypeVulkan) {
