@@ -3058,6 +3058,22 @@ typedef struct {
   /// call is made (the platform thread).
   FlutterDartDeferredLibraryLoadingUnitCallback
       dart_deferred_library_loader_callback;
+
+  /// The callback invoked by the engine on the raster task runner when the
+  /// raster context has been set up (for example, before/during surface
+  /// creation).
+  ///
+  /// The callback is passed the `user_data` pointer from
+  /// `FlutterEngineInitialize` or `FlutterEngineRun`.
+  VoidCallback raster_context_setup_callback;
+
+  /// The callback invoked by the engine on the raster task runner when the
+  /// raster context is about to be torn down (for example, during surface
+  /// destruction or engine shutdown).
+  ///
+  /// The callback is passed the `user_data` pointer from
+  /// `FlutterEngineInitialize` or `FlutterEngineRun`.
+  VoidCallback raster_context_teardown_callback;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3996,6 +4012,36 @@ FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibraryLoadError* error);
 
+//------------------------------------------------------------------------------
+/// @brief      Notify the engine that the render surface or native window was
+///             created or is ready for rendering.
+///
+///             This triggers the engine and rasterizer to create and set up
+///             the on-screen render surface and resume rendering.
+///
+/// @param[in]  engine  A running engine instance.
+///
+/// @return     The result of the call. Returns `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyCreated(FLUTTER_API_SYMBOL(FlutterEngine)
+                                                   engine);
+
+//------------------------------------------------------------------------------
+/// @brief      Notify the engine that the render surface or native window was
+///             destroyed.
+///
+///             This triggers the engine and rasterizer to tear down the
+///             on-screen render surface and suspend rendering.
+///
+/// @param[in]  engine  A running engine instance.
+///
+/// @return     The result of the call. Returns `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDestroyed(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4144,6 +4190,10 @@ typedef FlutterEngineResult (
     *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibraryLoadError* error);
+typedef FlutterEngineResult (*FlutterEngineNotifyCreatedFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+typedef FlutterEngineResult (*FlutterEngineNotifyDestroyedFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4199,6 +4249,8 @@ typedef struct {
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
       NotifyDartDeferredLibraryLoadError;
+  FlutterEngineNotifyCreatedFnPtr NotifyCreated;
+  FlutterEngineNotifyDestroyedFnPtr NotifyDestroyed;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

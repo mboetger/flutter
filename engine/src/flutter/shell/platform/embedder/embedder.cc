@@ -2141,6 +2141,10 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
         nullptr,  // on_pre_engine_restart_callback
         nullptr,  // channel_update_callback
         nullptr,  // view_focus_change_request_callback
+        nullptr,  // dart_deferred_library_loading_unit_callback
+        nullptr,  // raster_context_setup_callback
+        nullptr,  // raster_context_teardown_callback
+        nullptr,  // raster_context_user_data
     };
   }
 
@@ -2268,6 +2272,16 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
             int64_t loading_unit_id) { ptr(loading_unit_id, user_data); };
   }
 
+  VoidCallback raster_context_setup_callback = nullptr;
+  if (SAFE_ACCESS(args, raster_context_setup_callback, nullptr) != nullptr) {
+    raster_context_setup_callback = args->raster_context_setup_callback;
+  }
+
+  VoidCallback raster_context_teardown_callback = nullptr;
+  if (SAFE_ACCESS(args, raster_context_teardown_callback, nullptr) != nullptr) {
+    raster_context_teardown_callback = args->raster_context_teardown_callback;
+  }
+
   return {
       update_semantics_callback,                    //
       platform_message_response_callback,           //
@@ -2277,6 +2291,9 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
       channel_update_callback,                      //
       view_focus_change_request_callback,           //
       dart_deferred_library_loading_unit_callback,  //
+      raster_context_setup_callback,                //
+      raster_context_teardown_callback,             //
+      user_data,                                    //
   };
 }
 
@@ -4314,6 +4331,44 @@ FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineNotifyCreated(FLUTTER_API_SYMBOL(FlutterEngine)
+                                                   engine) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine handle was not running.");
+  }
+
+  return embedder_engine->NotifyCreated()
+             ? kSuccess
+             : LOG_EMBEDDER_ERROR(
+                   kInternalInconsistency,
+                   "Could not notify the engine that the surface was created.");
+}
+
+FlutterEngineResult FlutterEngineNotifyDestroyed(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine handle was not running.");
+  }
+
+  return embedder_engine->NotifyDestroyed()
+             ? kSuccess
+             : LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                                  "Could not notify the engine that the "
+                                  "surface was destroyed.");
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4375,6 +4430,8 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
   SET_PROC(NotifyDartDeferredLibraryLoadError,
            FlutterEngineNotifyDartDeferredLibraryLoadError);
+  SET_PROC(NotifyCreated, FlutterEngineNotifyCreated);
+  SET_PROC(NotifyDestroyed, FlutterEngineNotifyDestroyed);
 #undef SET_PROC
 
   return kSuccess;

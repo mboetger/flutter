@@ -64,6 +64,9 @@ class PlatformViewEmbedder final : public PlatformView {
         view_focus_change_request_callback;  // optional
     DartDeferredLibraryLoadingUnitCallback
         dart_deferred_library_loading_unit_callback;  // optional
+    VoidCallback raster_context_setup_callback;       // optional
+    VoidCallback raster_context_teardown_callback;    // optional
+    void* raster_context_user_data;                   // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -106,6 +109,12 @@ class PlatformViewEmbedder final : public PlatformView {
 #endif
 
   ~PlatformViewEmbedder() override;
+
+  // |PlatformView|
+  void NotifyCreated() override;
+
+  // |PlatformView|
+  void NotifyDestroyed() override;
 
   // |PlatformView|
   void UpdateSemantics(
