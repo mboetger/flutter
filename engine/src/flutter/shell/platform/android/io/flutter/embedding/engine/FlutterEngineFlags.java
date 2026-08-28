@@ -161,6 +161,9 @@ public final class FlutterEngineFlags {
   public static final Flag ENABLE_EMBEDDER_API =
       new Flag("--enable-embedder-api=", "EnableEmbedderAPI", true);
 
+  public static final Flag NO_ENABLE_EMBEDDER_API =
+      new Flag("--no-enable-embedder-api", "NoEnableEmbedderAPI", true);
+
   /**
    * Specifies the backend to use for Impeller rendering.
    *
@@ -231,7 +234,6 @@ public final class FlutterEngineFlags {
   private static final Flag ENABLE_HCPP =
       new Flag("--enable-hcpp-and-surface-control", "EnableHcpp", true);
 
-  /**
    * Enables the Flutter GPU backend.
    *
    * <p>Allowed in release for developers to use the Flutter GPU backend in production. Settable via
@@ -478,6 +480,7 @@ public final class FlutterEngineFlags {
               IMPELLER_LAZY_SHADER_MODER,
               IMPELLER_OPENGL_GPU_TRACING,
               IMPELLER_VULKAN_GPU_TRACING,
+              NO_ENABLE_EMBEDDER_API,
               ENABLE_HCPP));
 
   // Flags that have been turned off.

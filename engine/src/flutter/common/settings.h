@@ -357,8 +357,7 @@ struct Settings {
   size_t resource_cache_max_bytes_threshold = 0;
 
   /// Enable embedder API on platforms that support it (iOS and Android).
-  bool enable_embedder_api = false;
-
+  bool enable_embedder_api = true;
   /// Enable support for isolates that run on the platform thread.
   ///
   /// This is used by the runOnPlatformThread API.

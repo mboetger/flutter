@@ -113,10 +113,16 @@ TEST(SwitchesTest, EnableEmbedderAPI) {
     fml::CommandLine command_line =
         fml::CommandLineFromInitializerList({"command"});
     Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, true);
+  }
+  {
+    // negative flag
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--no-enable-embedder-api"});
+    Settings settings = SettingsFromCommandLine(command_line);
     EXPECT_EQ(settings.enable_embedder_api, false);
   }
 }
-
 TEST(SwitchesTest, NoEnableImpeller) {
   {
     // enable
