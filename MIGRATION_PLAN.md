@@ -32,12 +32,16 @@ Previous attempts incorrectly assumed the Android embedder only manages the grap
 4. **Extended Platform View Mutations**: E.g., `ClipPath` and `ClipRSE` (Rounded Superellipse).
 5. **Semantics/A11y Extensions**: `FlutterSemanticsNode2` for advanced string attributions.
 
-### 3. Integration & Golden Testing Workflow
-Relying solely on unit tests is insufficient. As the migration proceeds, you MUST use the integration tests located in `dev/integration_tests` to verify that end-to-end functionality remains intact.
-* **Golden Testing Procedure**: You must follow this exact methodology to prevent false positives:
-  1. Generate the golden baseline images using the **baseline (non-local) engine build**. Do this before running tests on the new code.
-  2. Run the golden tests **against the local engine build** (containing your migration changes) WITHOUT the `UPDATE_GOLDENS` flag (or equivalent).
-  3. The local engine build MUST perfectly match the non-local baseline goldens.
+### 3. CI/CD & Dual-Pass Golden Validation
+You must not rely solely on unit tests. ** EVERY SINGLE PR MUST VERIFY E2E CORRECTNESS.** 
+In every PR you create, you MUST run:
+  1. **Unit tests**
+  2. **Integration tests** (located in `dev/integration_tests`)
+  3. **Golden tests**
+
+**DO NOT CHECK IN GOLDEN IMAGES.** Instead, you will execute a dual-pass golden testing process on every PR:
+* **Pass 1 (Baseline Generation):** Run the golden tests using the **non-local engine build** with the `UPDATE_GOLDENS=true` flag. This will dynamically generate the source of truth for the device environment.
+* **Pass 2 (Local Engine Verification):** Run the golden tests again, but this time using the **local engine build** (containing your migration changes) and WITHOUT the `UPDATE_GOLDENS` flag. The local engine build MUST perfectly match the generated baselines.
 
 ### 4. GN Target Quarantine & Strict Dependency Rules
 During the migration, you MUST use `BUILD.gn` targets and visibility rules to completely quarantine existing legacy engine dependencies and guarantee the new implementation does not accidentally rely on internal engine components.
@@ -71,7 +75,6 @@ All PRs should be strictly prefixed with `android-migration/phase-X.Y-[descripti
 
 ### Phase 0: Baselining
 * **0.1**: Add extensive C++ unit tests to baseline rendering layers (GL/Vulkan/Software), message handlers, and isolate thread-safety *before* starting the C++ refactor.
-* **0.2**: Run `dev/integration_tests` using the non-local engine to generate and store Golden baseline images.
 
 ### Phase 1: API Gaps and Additions
 * **1.1**: Custom Asset Resolvers (`FlutterAssetResolver`)
@@ -102,7 +105,6 @@ All PRs should be strictly prefixed with `android-migration/phase-X.Y-[descripti
 * **4.1**: Implement `AndroidEngine` to orchestrate C-APIs
 * **4.2**: Implement JNI Dispatch Dual-Path Routing (Inline `if`-statements)
 * **4.3**: Add Parameterized Multi-Backend Matrix units tests (`flag=true`, `flag=false`)
-* **4.4**: Execute E2E Integration and Golden Matrix (Compare local engine runs against Phase 0 baselines)
 
 ### Phase 5: Emancipation
 * **5.1**: Enable Embedder API by default with negative rollback flags

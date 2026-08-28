@@ -18,45 +18,43 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
    * `//flutter/fml` (OPTIONAL)
    * `//flutter/shell/platform/common` (OPTIONAL)
    * `//flutter/third_party` (OPTIONAL)
-7. **Integration & Golden Testing**: Unit tests are insufficient. The `dev/integration_tests` directory MUST be used to run tests against the local engine. Goldens MUST be generated via the baseline (non-local) engine build, and local engine tests MUST run against those goldens WITHOUT the `UPDATE_GOLDENS` flag.
+7. **Every-PR Validation Invariant**: EVERY PR submitted during this migration MUST verify correctness by executing: (1) Unit tests, (2) Integration tests (`dev/integration_tests`), and (3) The Dual-Pass Golden methodology (Pass 1: non-local generation with `UPDATE_GOLDENS=true`, Pass 2: local engine verification with `UPDATE_GOLDENS=false`). **Goldens MUST NOT be checked into the repository.**
 
-## Live Phase Tracker
+## Live Phase Tracker (Tick when tests are validated)
 
 ### Phase 0: Baselining
-- [ ] 0.1: Baseline C++ Unit & Thread-Safety Tests
-- [ ] 0.2: Generate Baseline Golden Images (using non-local engine build via `dev/integration_tests`)
+- [ ] 0.1: Baseline C++ Unit & Thread-Safety Tests (Verified Unit/Integration/Dual-Pass Goldens)
 
 ### Phase 1: API Gaps and Additions
-- [ ] 1.1: Custom Asset Resolvers
-- [ ] 1.2: Vulkan Impeller Render Target
-- [ ] 1.3: AHardwareBuffer & Vulkan External Textures
-- [ ] 1.4: Multi-Engine Spawning
-- [ ] 1.5: Dart Deferred Library Loading (Verified ABI stability / struct-size layout)
-- [ ] 1.6: Raster Context Setup & Teardown Hooks
-- [ ] 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`)
-- [ ] 1.8: Embedder Screenshot / Raster Bitmap API
-- [ ] 1.9: Dart Callback Information Lookup API
-- [ ] 1.10: Platform View Multi-Mutations (`ClipPath`, `ClipRSE`)
-- [ ] 1.11: Platform Image Decoder / Generator
+- [ ] 1.1: Custom Asset Resolvers (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.2: Vulkan Impeller Render Target (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.3: AHardwareBuffer & Vulkan External Textures (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.4: Multi-Engine Spawning (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.5: Dart Deferred Library Loading (Verified ABI & Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.6: Raster Context Setup & Teardown Hooks (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`) (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.8: Embedder Screenshot / Raster Bitmap API (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.9: Dart Callback Information Lookup API (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.10: Platform View Multi-Mutations (`ClipPath`, `ClipRSE`) (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 1.11: Platform Image Decoder / Generator (Verified Unit/Integration/Dual-Pass Goldens)
 
 ### Phase 2: Decoupling and Feature Flagging
-- [ ] 2.1: Break PlatformViewAndroid Inheritance & Set strict GN Quarantine Visibility
-- [ ] 2.2: Adapt APKAssetProvider
-- [ ] 2.3: Custom Task Runners & Priorities
-- [ ] 2.4: Feature Flag Switch & Test Harness
-- [ ] 2.5: Decouple `flutter_main.cc`
+- [ ] 2.1: GN Quarantine Visibility (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 2.2: Adapt APKAssetProvider (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 2.3: Custom Task Runners (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 2.4: Feature Flag Switch (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 2.5: Decouple `flutter_main.cc` (Verified Unit/Integration/Dual-Pass Goldens)
 
 ### Phase 3: Abstractions & Architecture
-- [ ] 3.1: AndroidSurfaceManager Backing Store Pool
-- [ ] 3.2: AndroidCompositor & Surface Detach Barrier
-- [ ] 3.3: Direct JNI Platform View Mutator Mapping
+- [ ] 3.1: AndroidSurfaceManager (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 3.2: AndroidCompositor (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 3.3: Direct JNI Mutator Mapping (Verified Unit/Integration/Dual-Pass Goldens)
 
 ### Phase 4: JNI Routing & Dual-Stack Rollout
-- [ ] 4.1: AndroidEngine Implementation
-- [ ] 4.2: JNI Dispatch Dual-Path Routing (Inline if-statements verified)
-- [ ] 4.3: Parameterized Multi-Backend Matrix Testing
-- [ ] 4.4: Execute E2E Integration and Golden Matrix (Compare local engine runs without UPDATE_GOLDENS against Phase 0.2 baselines)
+- [ ] 4.1: AndroidEngine Implementation (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 4.2: JNI Dispatch Routing / Inline if-statements (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 4.3: Parameterized Multi-Backend Matrix Testing (Verified Unit/Integration/Dual-Pass Goldens)
 
 ### Phase 5: Emancipation & Final Purge
-- [ ] 5.1: Enable Embedder API Default
-- [ ] 5.2: Legacy Bridge Removal & Total BUILD.gn Dependency Pruning (Ensure ONLY permitted dependencies remain)
+- [ ] 5.1: Enable Embedder API Default (Verified Unit/Integration/Dual-Pass Goldens)
+- [ ] 5.2: Legacy Bridge Removal & Total GN Pruning (Verified Unit/Integration/Dual-Pass Goldens)
