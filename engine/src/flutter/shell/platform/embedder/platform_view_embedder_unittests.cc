@@ -16,6 +16,7 @@ namespace flutter {
 namespace testing {
 namespace {
 class MockDelegate : public PlatformView::Delegate {
+ public:
   MOCK_METHOD(void,
               OnPlatformViewCreated,
               (std::unique_ptr<Surface>),
@@ -225,6 +226,90 @@ TEST(PlatformViewEmbedderTest, DeletionDisabledDispatch) {
   }
 
   EXPECT_FALSE(did_call);
+}
+
+TEST(PlatformViewEmbedderTest, RequestDartDeferredLibrary) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "RequestDartDeferredLibrary",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  int64_t received_loading_unit_id = -1;
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask(
+      [&latch, task_runners, &received_loading_unit_id] {
+        MockDelegate delegate;
+        EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+        PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+        platform_dispatch_table.dart_deferred_library_loading_unit_callback =
+            [&received_loading_unit_id](int64_t loading_unit_id) {
+              received_loading_unit_id = loading_unit_id;
+            };
+        std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+        auto embedder = std::make_unique<PlatformViewEmbedder>(
+            delegate, task_runners, software_dispatch_table,
+            platform_dispatch_table, external_view_embedder);
+
+        embedder->RequestDartDeferredLibrary(42);
+        latch.Signal();
+      });
+  latch.Wait();
+
+  EXPECT_EQ(received_loading_unit_id, 42);
+}
+
+TEST(PlatformViewEmbedderTest, LoadDartDeferredLibrary) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "LoadDartDeferredLibrary", thread_host.platform_thread->GetTaskRunner(),
+      nullptr, nullptr, nullptr);
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask([&latch, task_runners] {
+    MockDelegate delegate;
+    EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+    PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+    auto embedder = std::make_unique<PlatformViewEmbedder>(
+        delegate, task_runners, software_dispatch_table,
+        platform_dispatch_table, external_view_embedder);
+
+    EXPECT_CALL(delegate,
+                LoadDartDeferredLibrary(42, ::testing::_, ::testing::_))
+        .Times(1);
+
+    const uint8_t data[] = {1, 2, 3};
+    auto data_mapping = std::make_unique<const fml::NonOwnedMapping>(data, 3);
+    embedder->LoadDartDeferredLibrary(42, std::move(data_mapping), nullptr);
+    latch.Signal();
+  });
+  latch.Wait();
+}
+
+TEST(PlatformViewEmbedderTest, LoadDartDeferredLibraryError) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "LoadDartDeferredLibraryError",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask([&latch, task_runners] {
+    MockDelegate delegate;
+    EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+    PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+    auto embedder = std::make_unique<PlatformViewEmbedder>(
+        delegate, task_runners, software_dispatch_table,
+        platform_dispatch_table, external_view_embedder);
+
+    EXPECT_CALL(delegate,
+                LoadDartDeferredLibraryError(42, "Failed to load", true))
+        .Times(1);
+
+    embedder->LoadDartDeferredLibraryError(42, "Failed to load", true);
+    latch.Signal();
+  });
+  latch.Wait();
 }
 
 }  // namespace testing

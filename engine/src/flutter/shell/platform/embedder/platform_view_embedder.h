@@ -48,6 +48,8 @@ class PlatformViewEmbedder final : public PlatformView {
   using ChanneUpdateCallback = std::function<void(const std::string&, bool)>;
   using ViewFocusChangeRequestCallback =
       std::function<void(const ViewFocusChangeRequest&)>;
+  using DartDeferredLibraryLoadingUnitCallback =
+      std::function<void(int64_t loading_unit_id)>;
 
   struct PlatformDispatchTable {
     UpdateSemanticsCallback update_semantics_callback;  // optional
@@ -60,6 +62,8 @@ class PlatformViewEmbedder final : public PlatformView {
     ChanneUpdateCallback on_channel_update;                     // optional
     ViewFocusChangeRequestCallback
         view_focus_change_request_callback;  // optional
+    DartDeferredLibraryLoadingUnitCallback
+        dart_deferred_library_loading_unit_callback;  // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -115,6 +119,20 @@ class PlatformViewEmbedder final : public PlatformView {
   // |PlatformView|
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override;
+
+  // |PlatformView|
+  void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
+
+  // |PlatformView|
+  void LoadDartDeferredLibrary(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions) override;
+
+  // |PlatformView|
+  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
+                                    const std::string error_message,
+                                    bool transient) override;
 
  private:
   class EmbedderPlatformMessageHandler;

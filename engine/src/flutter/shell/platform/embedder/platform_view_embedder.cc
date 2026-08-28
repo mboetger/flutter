@@ -224,6 +224,34 @@ void PlatformViewEmbedder::RequestViewFocusChange(
   }
 }
 
+// |PlatformView|
+void PlatformViewEmbedder::RequestDartDeferredLibrary(
+    intptr_t loading_unit_id) {
+  if (platform_dispatch_table_.dart_deferred_library_loading_unit_callback !=
+      nullptr) {
+    platform_dispatch_table_.dart_deferred_library_loading_unit_callback(
+        static_cast<int64_t>(loading_unit_id));
+  }
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::LoadDartDeferredLibrary(
+    intptr_t loading_unit_id,
+    std::unique_ptr<const fml::Mapping> snapshot_data,
+    std::unique_ptr<const fml::Mapping> snapshot_instructions) {
+  delegate_.LoadDartDeferredLibrary(loading_unit_id, std::move(snapshot_data),
+                                    std::move(snapshot_instructions));
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::LoadDartDeferredLibraryError(
+    intptr_t loading_unit_id,
+    const std::string error_message,
+    bool transient) {
+  delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
+                                         transient);
+}
+
 std::shared_ptr<PlatformMessageHandler>
 PlatformViewEmbedder::GetPlatformMessageHandler() const {
   return platform_message_handler_;

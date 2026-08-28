@@ -2654,6 +2654,75 @@ typedef struct {
   const FlutterAssetResolver* resolver;
 } FlutterAssetResolverRegistrationInfo;
 
+/// A callback invoked by the engine in order to give the embedder the chance
+/// to load a Dart deferred library (loading unit).
+///
+/// The callback will be invoked on the thread on which the `FlutterEngineRun`
+/// call is made (the platform thread).
+/// `loading_unit_id` is the ID of the loading unit to be loaded.
+/// `user_data` is the user data baton provided to the engine.
+typedef void (*FlutterDartDeferredLibraryLoadingUnitCallback)(
+    int64_t /* loading_unit_id */,
+    void* /* user_data */);
+
+/// This struct specifies the data buffers or mappings for loading a Dart
+/// deferred library (loading unit).
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDartDeferredLibrary).
+  size_t struct_size;
+
+  /// The loading unit identifier.
+  int64_t loading_unit_id;
+
+  /// Pointer to the isolate snapshot data buffer for this loading unit.
+  /// Optional if this loading unit has no separate data snapshot.
+  const uint8_t* data;
+
+  /// The size of the isolate snapshot data buffer in bytes.
+  size_t data_size;
+
+  /// Pointer to the isolate snapshot instructions buffer for this loading
+  /// unit. Optional if this loading unit has no separate instructions snapshot.
+  const uint8_t* instructions;
+
+  /// The size of the isolate snapshot instructions buffer in bytes.
+  size_t instructions_size;
+
+  /// User data baton passed back to the embedder when the destruction
+  /// callback is invoked.
+  void* user_data;
+
+  /// An optional callback invoked when the engine is done with the data and
+  /// instructions buffers (for example, when the isolate is shut down or when
+  /// loading completes). Embedders can use this to free memory or close dynamic
+  /// libraries.
+  ///
+  /// This callback may be invoked on internal engine threads (such as the UI
+  /// thread or background worker threads) when the Dart isolate tears down its
+  /// snapshot mappings. Embedders must ensure thread safety and attach the
+  /// calling thread if needed (e.g. JNIEnv on Android).
+  VoidCallback destruction_callback;
+} FlutterDartDeferredLibrary;
+
+/// This struct specifies error details when loading a Dart deferred library
+/// fails.
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterDartDeferredLibraryLoadError).
+  size_t struct_size;
+
+  /// The loading unit identifier that failed to load.
+  int64_t loading_unit_id;
+
+  /// A human-readable error message explaining why the load failed. Must be
+  /// non-null.
+  const char* error_message;
+
+  /// Whether the failure is transient (i.e. retryable, such as a network
+  /// failure) or permanent (e.g. file not found or corrupted data).
+  bool transient;
+} FlutterDartDeferredLibraryLoadError;
+
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
@@ -2981,6 +3050,14 @@ typedef struct {
 
   /// The number of asset resolvers in the `asset_resolvers` array.
   size_t asset_resolvers_count;
+
+  /// The callback invoked by the engine in order to give the embedder the
+  /// chance to load a Dart deferred library (loading unit).
+  ///
+  /// The callback will be invoked on the thread on which the `FlutterEngineRun`
+  /// call is made (the platform thread).
+  FlutterDartDeferredLibraryLoadingUnitCallback
+      dart_deferred_library_loader_callback;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3882,6 +3959,43 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                                        FLUTTER_API_SYMBOL(FlutterEngine) *
                                            spawned_engine_out);
 
+//------------------------------------------------------------------------------
+/// @brief      Loads a Dart deferred library (loading unit) into the running
+///             isolate.
+///
+///             Embedders should invoke this method when requested by the engine
+///             via `dart_deferred_library_loader_callback` in
+///             `FlutterProjectArgs`.
+///
+/// @param[in]  engine            A running engine instance.
+/// @param[in]  deferred_library  The deferred library data and instructions
+///                               buffers.
+///
+/// @return     The result of the call. Returns `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* deferred_library);
+
+//------------------------------------------------------------------------------
+/// @brief      Notifies the engine that a Dart deferred library (loading unit)
+///             failed to load.
+///
+///             Embedders should invoke this method when loading fails (for
+///             example, download failure or missing file) to complete the
+///             waiting Dart Future with an error rather than hanging.
+///
+/// @param[in]  engine            A running engine instance.
+/// @param[in]  error             The error details describing the failure.
+///
+/// @return     The result of the call. Returns `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4023,6 +4137,13 @@ typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterEngineSpawnConfig* config,
     FLUTTER_API_SYMBOL(FlutterEngine) * spawned_engine_out);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* deferred_library);
+typedef FlutterEngineResult (
+    *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4075,6 +4196,9 @@ typedef struct {
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
   FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
   FlutterEngineSpawnFnPtr Spawn;
+  FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
+  FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
+      NotifyDartDeferredLibraryLoadError;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

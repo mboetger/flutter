@@ -4809,6 +4809,191 @@ TEST_F(EmbedderTest, EmbedderGetProcAddressesSpawn) {
   EXPECT_EQ(procs.Spawn, &FlutterEngineSpawn);
 }
 
+TEST_F(EmbedderTest, EmbedderLoadDartDeferredLibraryInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Null engine.
+  FlutterDartDeferredLibrary valid_lib = {};
+  valid_lib.struct_size = sizeof(FlutterDartDeferredLibrary);
+  const uint8_t dummy_data[] = {0x01, 0x02};
+  valid_lib.data = dummy_data;
+  valid_lib.data_size = sizeof(dummy_data);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(nullptr, &valid_lib),
+            kInvalidArguments);
+
+  // Null deferred library.
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), nullptr),
+            kInvalidArguments);
+
+  // Invalid struct_size.
+  FlutterDartDeferredLibrary invalid_size_lib = {};
+  invalid_size_lib.struct_size = sizeof(FlutterDartDeferredLibrary) - 1;
+  invalid_size_lib.data = dummy_data;
+  invalid_size_lib.data_size = sizeof(dummy_data);
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibrary(engine.get(), &invalid_size_lib),
+      kInvalidArguments);
+
+  // Missing data and instructions.
+  FlutterDartDeferredLibrary empty_lib = {};
+  empty_lib.struct_size = sizeof(FlutterDartDeferredLibrary);
+  empty_lib.loading_unit_id = 1;
+  empty_lib.data = nullptr;
+  empty_lib.instructions = nullptr;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &empty_lib),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest,
+       EmbedderNotifyDartDeferredLibraryLoadErrorInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterDartDeferredLibraryLoadError valid_error = {};
+  valid_error.struct_size = sizeof(FlutterDartDeferredLibraryLoadError);
+  valid_error.loading_unit_id = 1;
+  valid_error.error_message = "Test error";
+  valid_error.transient = true;
+
+  // Null engine.
+  EXPECT_EQ(
+      FlutterEngineNotifyDartDeferredLibraryLoadError(nullptr, &valid_error),
+      kInvalidArguments);
+
+  // Null error.
+  EXPECT_EQ(
+      FlutterEngineNotifyDartDeferredLibraryLoadError(engine.get(), nullptr),
+      kInvalidArguments);
+
+  // Invalid struct_size.
+  FlutterDartDeferredLibraryLoadError invalid_size_error = {};
+  invalid_size_error.struct_size =
+      sizeof(FlutterDartDeferredLibraryLoadError) - 1;
+  invalid_size_error.loading_unit_id = 1;
+  invalid_size_error.error_message = "Test error";
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(
+                engine.get(), &invalid_size_error),
+            kInvalidArguments);
+
+  // Null error message.
+  FlutterDartDeferredLibraryLoadError null_msg_error = {};
+  null_msg_error.struct_size = sizeof(FlutterDartDeferredLibraryLoadError);
+  null_msg_error.loading_unit_id = 1;
+  null_msg_error.error_message = nullptr;
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(engine.get(),
+                                                            &null_msg_error),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderLoadDartDeferredLibraryDirect) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  bool destruction_called = false;
+  const uint8_t dummy_data[] = {0x00, 0x01, 0x02, 0x03};
+  const uint8_t dummy_instructions[] = {0x10, 0x11, 0x12, 0x13};
+
+  FlutterDartDeferredLibrary deferred_library = {};
+  deferred_library.struct_size = sizeof(FlutterDartDeferredLibrary);
+  deferred_library.loading_unit_id = 42;
+  deferred_library.data = dummy_data;
+  deferred_library.data_size = sizeof(dummy_data);
+  deferred_library.instructions = dummy_instructions;
+  deferred_library.instructions_size = sizeof(dummy_instructions);
+  deferred_library.user_data = &destruction_called;
+  deferred_library.destruction_callback = [](void* user_data) {
+    *reinterpret_cast<bool*>(user_data) = true;
+  };
+
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibrary(engine.get(), &deferred_library),
+      kSuccess);
+
+  // Mappings are retained while engine is running.
+  EXPECT_FALSE(destruction_called);
+
+  // Shutdown engine to release snapshot mappings and trigger destruction
+  // callback.
+  engine.reset();
+  EXPECT_TRUE(destruction_called);
+}
+
+TEST_F(EmbedderTest, EmbedderNotifyDartDeferredLibraryLoadErrorDirect) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterDartDeferredLibraryLoadError error = {};
+  error.struct_size = sizeof(FlutterDartDeferredLibraryLoadError);
+  error.loading_unit_id = 99;
+  error.error_message = "Module failed to download from network.";
+  error.transient = true;
+
+  EXPECT_EQ(
+      FlutterEngineNotifyDartDeferredLibraryLoadError(engine.get(), &error),
+      kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderDartDeferredLibraryRequestCallback) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  struct CallbackPayload {
+    int64_t loading_unit_id = -1;
+    void* user_data = nullptr;
+  };
+
+  CallbackPayload payload;
+  EmbedderConfigBuilder builder(
+      context, EmbedderConfigBuilder::InitializationPreference::kNoInitialize);
+  builder.SetAssetsPath();
+  builder.SetSnapshots();
+  builder.SetSurface(DlISize(1, 1));
+  builder.GetProjectArgs().platform_message_callback = nullptr;
+  builder.GetProjectArgs().dart_deferred_library_loader_callback =
+      [](int64_t loading_unit_id, void* user_data) {
+        auto* data = reinterpret_cast<CallbackPayload*>(user_data);
+        data->loading_unit_id = loading_unit_id;
+        data->user_data = user_data;
+      };
+
+  FlutterEngine engine = nullptr;
+  auto renderer_config = context.GetRendererConfig();
+  auto project_args = builder.GetProjectArgs();
+  ASSERT_EQ(FlutterEngineInitialize(FLUTTER_ENGINE_VERSION, &renderer_config,
+                                    &project_args, &payload, &engine),
+            kSuccess);
+  ASSERT_EQ(FlutterEngineRunInitialized(engine), kSuccess);
+
+  flutter::Shell& shell = ToEmbedderEngine(engine)->GetShell();
+  shell.GetPlatformView()->RequestDartDeferredLibrary(77);
+
+  EXPECT_EQ(payload.loading_unit_id, 77);
+  EXPECT_EQ(payload.user_data, &payload);
+
+  EXPECT_EQ(FlutterEngineShutdown(engine), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderGetProcAddressesDeferredLibrary) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  EXPECT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+  EXPECT_EQ(procs.LoadDartDeferredLibrary,
+            &FlutterEngineLoadDartDeferredLibrary);
+  EXPECT_EQ(procs.NotifyDartDeferredLibraryLoadError,
+            &FlutterEngineNotifyDartDeferredLibraryLoadError);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
