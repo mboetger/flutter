@@ -26,7 +26,7 @@
 - [x] Phase 1.11: Platform Image Decoder / Generator Registration C API
 - [x] Phase 2.1: Break PlatformViewAndroid Inheritance & Establish GN Quarantine Target
 - [x] Phase 2.2: Adapt APKAssetProvider
-- [ ] Phase 2.3: Custom Task Runners & Thread Priorities
+- [x] Phase 2.3: Custom Task Runners & Thread Priorities
 - [ ] Phase 2.4: Runtime Feature Flag Switch & Test Harness Overrides
 - [ ] Phase 2.5: Decouple `flutter_main.cc` using `//flutter/shell/platform/common`
 - [ ] Phase 3.1: AndroidSurfaceManager Backing Store Pool (Gated: flag=true & false)
@@ -37,7 +37,6 @@
 - [ ] Phase 4.3: Parameterized Multi-Backend Matrix (`TEST_P`) & Scenario Validation
 - [ ] Phase 5.1: Enable Embedder API by Default (with negative rollback flags)
 - [ ] Phase 5.2: Legacy Bridge Removal & Total BUILD.gn Dependency Pruning
-
 ## Quality & Review Invariants
 1. **Rendering Feature Flag Gating**: Any PR touching rendering logic must be feature-flag gated and tested under BOTH states (`flag=true` AND `flag=false`).
 2. **Adversarial Review Loop**: Every PR must undergo iterative review by an independent agent (`reidbaker-agent`) until 0 findings remain.
@@ -46,3 +45,4 @@
 5. **Surface Lifecycle Defense**: Handle early `make_current` calls gracefully before `nativeSurfaceCreated`.
 6. **JIT Assets Defense**: Route `kernel_blob.bin` queries through `FlutterAssetResolver` instead of file paths.
 7. **GN Target Isolation & Visibility Ratchet**: Quarantine all legacy engine dependencies into `android_legacy_engine_holder` with strict visibility, keeping `flutter_shell_native_src` clean from Day 1.
+
