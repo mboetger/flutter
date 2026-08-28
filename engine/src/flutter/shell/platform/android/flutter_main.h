@@ -25,6 +25,16 @@ class FlutterMain {
   const flutter::Settings& GetSettings() const;
   flutter::AndroidRenderingAPI GetAndroidRenderingAPI();
 
+  /// Returns the complete array of command line arguments configured for the
+  /// engine instance, suitable for passing to
+  /// `FlutterProjectArgs.command_line_argv`.
+  ///
+  /// The argument vector starts with the synthetic executable name `"flutter"`
+  /// at index 0, followed by any shell arguments supplied via JNI / Android
+  /// manifest metadata, followed by environment switches
+  /// (`GetSwitchesFromEnvironment`).
+  static std::vector<std::string> GetCommandLineArgs();
+
   static AndroidRenderingAPI SelectedRenderingAPI(
       const flutter::Settings& settings,
       int api_level);
@@ -41,13 +51,22 @@ class FlutterMain {
   static void SetSettingsForTesting(const flutter::Settings& settings);
   static void ResetSettingsForTesting();
 
+  // Overrides the command line args for testing purposes.
+  static void SetCommandLineArgsForTesting(
+      std::optional<std::vector<std::string>> args);
+
+  // Resets any testing overrides for the command line args.
+  static void ResetCommandLineArgsForTesting();
+
  private:
   const flutter::Settings settings_;
   const flutter::AndroidRenderingAPI android_rendering_api_;
+  const std::vector<std::string> command_line_args_;
   DartServiceIsolate::CallbackHandle vm_service_uri_callback_ = 0;
 
   explicit FlutterMain(const flutter::Settings& settings,
-                       flutter::AndroidRenderingAPI android_rendering_api);
+                       flutter::AndroidRenderingAPI android_rendering_api,
+                       std::vector<std::string> command_line_args);
 
   static void Init(JNIEnv* env,
                    jclass clazz,

@@ -390,5 +390,36 @@ TEST(FlutterMainTest, EmbedderAPIEnabledSettingsFallback) {
   EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
 }
 
+struct ScopedCommandLineArgsOverrideReset {
+  ~ScopedCommandLineArgsOverrideReset() {
+    FlutterMain::ResetCommandLineArgsForTesting();
+  }
+};
+
+TEST(PlatformViewAndroidTest, FlutterMainCommandLineArgsTestingOverride) {
+  ScopedCommandLineArgsOverrideReset reset_on_exit;
+  FlutterMain::ResetCommandLineArgsForTesting();
+
+  // Initial state without override or singleton returns default synthetic
+  // executable.
+  const std::vector<std::string> default_args = {"flutter"};
+  EXPECT_EQ(FlutterMain::GetCommandLineArgs(), default_args);
+
+  const std::vector<std::string> test_args = {
+      "flutter", "--enable-android-embedder-api", "--enable-impeller=true"};
+  FlutterMain::SetCommandLineArgsForTesting(test_args);
+  EXPECT_EQ(FlutterMain::GetCommandLineArgs(), test_args);
+
+  // Clear with nullopt reverts to default args.
+  FlutterMain::SetCommandLineArgsForTesting(std::nullopt);
+  EXPECT_EQ(FlutterMain::GetCommandLineArgs(), default_args);
+
+  // Set again, then reset explicitly.
+  FlutterMain::SetCommandLineArgsForTesting(test_args);
+  EXPECT_EQ(FlutterMain::GetCommandLineArgs(), test_args);
+  FlutterMain::ResetCommandLineArgsForTesting();
+  EXPECT_EQ(FlutterMain::GetCommandLineArgs(), default_args);
+}
+
 }  // namespace testing
 }  // namespace flutter

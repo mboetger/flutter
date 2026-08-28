@@ -7,6 +7,7 @@
 #include <android/log.h>
 #include <sys/system_properties.h>
 #include <cstring>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,6 +26,7 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/flutter_main.h"
+#include "flutter/shell/platform/common/engine_switches.h"
 #include "impeller/base/validation.h"
 #include "impeller/toolkit/android/proc_table.h"
 #include "txt/platform.h"
@@ -65,8 +67,11 @@ bool IsVivante() {
 }  // anonymous namespace
 
 FlutterMain::FlutterMain(const flutter::Settings& settings,
-                         flutter::AndroidRenderingAPI android_rendering_api)
-    : settings_(settings), android_rendering_api_(android_rendering_api) {}
+                         flutter::AndroidRenderingAPI android_rendering_api,
+                         std::vector<std::string> command_line_args)
+    : settings_(settings),
+      android_rendering_api_(android_rendering_api),
+      command_line_args_(std::move(command_line_args)) {}
 
 FlutterMain::~FlutterMain() = default;
 
@@ -82,6 +87,11 @@ static std::unique_ptr<FlutterMain> g_flutter_main;
 static std::atomic<int8_t> s_embedder_api_override_for_testing{
     static_cast<int8_t>(OverrideState::kNotSet)};
 
+namespace {
+std::mutex g_command_line_args_mutex;
+std::optional<std::vector<std::string>> g_command_line_args_override;
+}  // namespace
+
 FlutterMain& FlutterMain::Get() {
   FML_CHECK(g_flutter_main) << "ensureInitializationComplete must have already "
                                "been called.";
@@ -96,6 +106,7 @@ flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() {
   return android_rendering_api_;
 }
 
+<<<<<<< HEAD
 bool FlutterMain::IsEmbedderAPIEnabled() {
   int8_t override_val =
       s_embedder_api_override_for_testing.load(std::memory_order_relaxed);
@@ -136,6 +147,18 @@ void FlutterMain::SetSettingsForTesting(const flutter::Settings& settings) {
 
 void FlutterMain::ResetSettingsForTesting() {
   g_flutter_main.reset();
+=======
+// static
+std::vector<std::string> FlutterMain::GetCommandLineArgs() {
+  std::lock_guard<std::mutex> lock(g_command_line_args_mutex);
+  if (g_command_line_args_override.has_value()) {
+    return g_command_line_args_override.value();
+  }
+  if (g_flutter_main != nullptr) {
+    return g_flutter_main->command_line_args_;
+  }
+  return {"flutter"};
+>>>>>>> c3568e9316a (feat(android): decouple flutter_main argument handling using common cpp switches)
 }
 
 void FlutterMain::Init(JNIEnv* env,
@@ -152,6 +175,9 @@ void FlutterMain::Init(JNIEnv* env,
   for (auto& arg : fml::jni::StringArrayToVector(env, jargs)) {
     args.push_back(std::move(arg));
   }
+  std::vector<std::string> env_switches = flutter::GetSwitchesFromEnvironment();
+  args.insert(args.end(), env_switches.begin(), env_switches.end());
+
   auto command_line = fml::CommandLineFromIterators(args.begin(), args.end());
 
   auto settings = SettingsFromCommandLine(command_line, true);
@@ -254,7 +280,8 @@ void FlutterMain::Init(JNIEnv* env,
 
   // Not thread safe. Will be removed when FlutterMain is refactored to no
   // longer be a singleton.
-  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api));
+  g_flutter_main.reset(
+      new FlutterMain(settings, android_rendering_api, std::move(args)));
   g_flutter_main->SetupDartVMServiceUriCallback(env);
 }
 
@@ -354,4 +381,55 @@ AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
 #endif  // !SLIMPELLER
 }
 
+namespace {
+std::optional<bool> g_embedder_api_enabled_override;
+std::optional<flutter::Settings> g_testing_settings;
+}  // namespace
+
+// static
+bool FlutterMain::IsEmbedderAPIEnabled() {
+  if (g_embedder_api_enabled_override.has_value()) {
+    return g_embedder_api_enabled_override.value();
+  }
+  if (g_testing_settings.has_value()) {
+    return g_testing_settings->enable_embedder_api;
+  }
+  if (g_flutter_main != nullptr) {
+    return g_flutter_main->GetSettings().enable_embedder_api;
+  }
+  return false;
+}
+
+// static
+void FlutterMain::SetEmbedderAPIEnabledForTesting(bool enabled) {
+  g_embedder_api_enabled_override = enabled;
+}
+
+// static
+void FlutterMain::ResetEmbedderAPIEnabledForTesting() {
+  g_embedder_api_enabled_override = std::nullopt;
+}
+
+// static
+void FlutterMain::SetSettingsForTesting(const flutter::Settings& settings) {
+  g_testing_settings = settings;
+}
+
+// static
+void FlutterMain::ResetSettingsForTesting() {
+  g_testing_settings = std::nullopt;
+}
+
+// static
+void FlutterMain::SetCommandLineArgsForTesting(
+    std::optional<std::vector<std::string>> args) {
+  std::lock_guard<std::mutex> lock(g_command_line_args_mutex);
+  g_command_line_args_override = std::move(args);
+}
+
+// static
+void FlutterMain::ResetCommandLineArgsForTesting() {
+  std::lock_guard<std::mutex> lock(g_command_line_args_mutex);
+  g_command_line_args_override = std::nullopt;
+}
 }  // namespace flutter
