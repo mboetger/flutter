@@ -28,14 +28,16 @@ EmbedderEngine::EmbedderEngine(
     RunConfiguration run_configuration,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
-    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver)
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    std::vector<ImageGeneratorFactoryRegistration> image_generators)
     : thread_host_(std::move(thread_host)),
       task_runners_(task_runners),
       run_configuration_(std::move(run_configuration)),
       shell_args_(std::make_unique<ShellArgs>(settings,
                                               on_create_platform_view,
                                               on_create_rasterizer)),
-      external_texture_resolver_(std::move(external_texture_resolver)) {}
+      external_texture_resolver_(std::move(external_texture_resolver)),
+      image_generators_(std::move(image_generators)) {}
 
 EmbedderEngine::EmbedderEngine(
     std::shared_ptr<EmbedderThreadHost> thread_host,
@@ -63,6 +65,12 @@ bool EmbedderEngine::LaunchShell() {
   shell_ = Shell::Create(
       flutter::PlatformData(), task_runners_, shell_args_->settings,
       shell_args_->on_create_platform_view, shell_args_->on_create_rasterizer);
+
+  for (auto& image_generator : image_generators_) {
+    RegisterImageGenerator(std::move(image_generator.factory),
+                           image_generator.priority);
+  }
+  image_generators_.clear();
 
   // Reset the args no matter what. They will never be used to initialize a
   // shell again.
@@ -447,6 +455,25 @@ bool EmbedderEngine::LoadDartDeferredLibraryError(
 
   platform_view->LoadDartDeferredLibraryError(loading_unit_id, error_message,
                                               transient);
+  return true;
+}
+
+bool EmbedderEngine::RegisterImageGenerator(ImageGeneratorFactory factory,
+                                            int32_t priority) {
+  if (!IsValid() || !shell_) {
+    return false;
+  }
+
+  if (task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread()) {
+    shell_->RegisterImageDecoder(std::move(factory), priority);
+  } else {
+    task_runners_.GetPlatformTaskRunner()->PostTask(
+        [this, factory = std::move(factory), priority]() {
+          if (IsValid()) {
+            shell_->RegisterImageDecoder(std::move(factory), priority);
+          }
+        });
+  }
   return true;
 }
 

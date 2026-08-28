@@ -59,6 +59,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/platform/embedder/embedder_asset_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
+#include "flutter/shell/platform/embedder/embedder_image_generator.h"
 #include "flutter/shell/platform/embedder/embedder_platform_message_response.h"
 #include "flutter/shell/platform/embedder/embedder_render_target.h"
 #include "flutter/shell/platform/embedder/embedder_render_target_skia.h"
@@ -2707,6 +2708,35 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   }
 
+  std::vector<flutter::ImageGeneratorFactoryRegistration> image_generators;
+  bool has_custom_image_generators =
+      SAFE_ACCESS(args, image_generators, nullptr) != nullptr &&
+      SAFE_ACCESS(args, image_generators_count, 0) > 0;
+  if (has_custom_image_generators) {
+    size_t count = args->image_generators_count;
+    for (size_t i = 0; i < count; ++i) {
+      const FlutterImageGeneratorRegistrationInfo* info =
+          args->image_generators[i];
+      if (info != nullptr) {
+        if (info->struct_size < sizeof(FlutterImageGeneratorRegistrationInfo)) {
+          return LOG_EMBEDDER_ERROR(
+              kInvalidArguments,
+              "FlutterImageGeneratorRegistrationInfo struct_size is invalid.");
+        }
+        if (info->create_generator == nullptr) {
+          return LOG_EMBEDDER_ERROR(
+              kInvalidArguments,
+              "FlutterImageGeneratorRegistrationInfo create_generator callback "
+              "is required.");
+        }
+        image_generators.push_back({
+            .factory = flutter::CreateEmbedderImageGeneratorFactory(*info),
+            .priority = info->priority,
+        });
+      }
+    }
+  }
+
   if (!run_configuration.IsValid()) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
@@ -2715,13 +2745,14 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   // Create the engine but don't launch the shell or run the root isolate.
   auto embedder_engine = std::make_unique<flutter::EmbedderEngine>(
-      std::move(thread_host),               //
-      std::move(task_runners),              //
-      std::move(settings),                  //
-      std::move(run_configuration),         //
-      on_create_platform_view,              //
-      on_create_rasterizer,                 //
-      std::move(external_texture_resolver)  //
+      std::move(thread_host),                //
+      std::move(task_runners),               //
+      std::move(settings),                   //
+      std::move(run_configuration),          //
+      on_create_platform_view,               //
+      on_create_rasterizer,                  //
+      std::move(external_texture_resolver),  //
+      std::move(image_generators)            //
   );
 
   // Release the ownership of the embedder engine to the caller.
@@ -4182,6 +4213,7 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
     run_configuration.SetEngineId(config->engine_id);
   }
 
+  bool has_custom_image_generators = false;
   if (args != nullptr) {
     bool has_custom_asset_resolvers =
         SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
@@ -4204,6 +4236,32 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
           auto asset_resolver =
               std::make_unique<flutter::EmbedderAssetResolver>(*resolver);
           run_configuration.AddAssetResolver(std::move(asset_resolver));
+        }
+      }
+    }
+
+    has_custom_image_generators =
+        SAFE_ACCESS(args, image_generators, nullptr) != nullptr &&
+        SAFE_ACCESS(args, image_generators_count, 0) > 0;
+    if (has_custom_image_generators) {
+      size_t count = args->image_generators_count;
+      for (size_t i = 0; i < count; ++i) {
+        const FlutterImageGeneratorRegistrationInfo* info =
+            args->image_generators[i];
+        if (info != nullptr) {
+          if (info->struct_size <
+              sizeof(FlutterImageGeneratorRegistrationInfo)) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterImageGeneratorRegistrationInfo struct_size is "
+                "invalid.");
+          }
+          if (info->create_generator == nullptr) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterImageGeneratorRegistrationInfo create_generator "
+                "callback is required.");
+          }
         }
       }
     }
@@ -4234,6 +4292,19 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
     return LOG_EMBEDDER_ERROR(
         kInternalInconsistency,
         "Could not notify platform view of spawned engine creation.");
+  }
+
+  if (args != nullptr && has_custom_image_generators) {
+    size_t count = args->image_generators_count;
+    for (size_t i = 0; i < count; ++i) {
+      const FlutterImageGeneratorRegistrationInfo* info =
+          args->image_generators[i];
+      if (info != nullptr) {
+        spawned_engine->RegisterImageGenerator(
+            flutter::CreateEmbedderImageGeneratorFactory(*info),
+            info->priority);
+      }
+    }
   }
 
   *spawned_engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
@@ -4582,6 +4653,49 @@ FlutterEngineResult FlutterEngineGetCallbackHandle(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineRegisterImageGenerator(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterImageGeneratorRegistrationInfo* info) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (!info) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Image generator registration info was null.");
+  }
+
+  if (SAFE_ACCESS(info, struct_size, 0) <
+      sizeof(FlutterImageGeneratorRegistrationInfo)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Image generator registration info struct_size is invalid.");
+  }
+
+  if (SAFE_ACCESS(info, create_generator, nullptr) == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Image generator create_generator callback is required.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine is not in a valid running state.");
+  }
+
+  flutter::ImageGeneratorFactory factory =
+      flutter::CreateEmbedderImageGeneratorFactory(*info);
+
+  if (!embedder_engine->RegisterImageGenerator(std::move(factory),
+                                               info->priority)) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not register image generator factory.");
+  }
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4651,6 +4765,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(SetCallbackCachePath, FlutterEngineSetCallbackCachePath);
   SET_PROC(LoadCallbackCache, FlutterEngineLoadCallbackCache);
   SET_PROC(GetCallbackHandle, FlutterEngineGetCallbackHandle);
+  SET_PROC(RegisterImageGenerator, FlutterEngineRegisterImageGenerator);
 #undef SET_PROC
 
   return kSuccess;

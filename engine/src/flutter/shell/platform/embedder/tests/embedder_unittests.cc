@@ -11,6 +11,7 @@
 #include "embedder.h"
 #include "embedder_asset_resolver.h"
 #include "embedder_engine.h"
+#include "embedder_image_generator.h"
 #include "embedder_layers.h"
 #include "embedder_semantics_update.h"
 #include "flutter/common/constants.h"
@@ -5943,6 +5944,424 @@ TEST_F(EmbedderTest, EmbedderPlatformViewMutationsComplexMixedStack) {
         return true;
       });
   EXPECT_TRUE(callback_invoked);
+}
+
+TEST_F(EmbedderTest, EmbedderRegisterImageGeneratorInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.InitializeEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterImageGeneratorRegistrationInfo info = {};
+  info.struct_size = sizeof(FlutterImageGeneratorRegistrationInfo);
+  info.create_generator = [](const uint8_t*, size_t, void*,
+                             FlutterImageGenerator*) -> bool { return false; };
+
+  // Null engine.
+  EXPECT_EQ(FlutterEngineRegisterImageGenerator(nullptr, &info),
+            kInvalidArguments);
+
+  // Null info.
+  EXPECT_EQ(FlutterEngineRegisterImageGenerator(engine.get(), nullptr),
+            kInvalidArguments);
+
+  // Invalid struct_size.
+  FlutterImageGeneratorRegistrationInfo invalid_size_info = info;
+  invalid_size_info.struct_size =
+      sizeof(FlutterImageGeneratorRegistrationInfo) - 1;
+  EXPECT_EQ(
+      FlutterEngineRegisterImageGenerator(engine.get(), &invalid_size_info),
+      kInvalidArguments);
+
+  // Null create_generator callback.
+  FlutterImageGeneratorRegistrationInfo null_callback_info = info;
+  null_callback_info.create_generator = nullptr;
+  EXPECT_EQ(
+      FlutterEngineRegisterImageGenerator(engine.get(), &null_callback_info),
+      kInvalidArguments);
+
+  // Engine not in running state.
+  EXPECT_EQ(FlutterEngineRegisterImageGenerator(engine.get(), &info),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderImageGeneratorDirectSingleFrame) {
+  struct TestContext {
+    uint32_t width = 64;
+    uint32_t height = 48;
+    bool destruction_called = false;
+  };
+
+  TestContext ctx;
+  FlutterImageGenerator generator = {};
+  generator.struct_size = sizeof(FlutterImageGenerator);
+  generator.user_data = &ctx;
+  generator.destruction_callback = [](void* user_data) {
+    static_cast<TestContext*>(user_data)->destruction_called = true;
+  };
+  generator.get_info = [](void* user_data,
+                          FlutterImageGeneratorInfo* info_out) -> bool {
+    auto* c = static_cast<TestContext*>(user_data);
+    info_out->width = c->width;
+    info_out->height = c->height;
+    info_out->color_type = kFlutterImageGeneratorColorTypeRGBA8888;
+    info_out->alpha_type = kFlutterImageGeneratorAlphaTypePremul;
+    return true;
+  };
+  generator.get_pixels =
+      [](void* user_data, const FlutterImageGeneratorInfo* info, void* pixels,
+         size_t row_bytes, uint32_t frame_index, int64_t prior_frame) -> bool {
+    auto* c = static_cast<TestContext*>(user_data);
+    EXPECT_EQ(info->width, c->width);
+    EXPECT_EQ(info->height, c->height);
+    EXPECT_EQ(frame_index, 0u);
+    EXPECT_EQ(prior_frame, -1);
+    auto* byte_ptr = static_cast<uint8_t*>(pixels);
+    for (size_t y = 0; y < info->height; ++y) {
+      uint8_t* row = byte_ptr + (y * row_bytes);
+      for (size_t x = 0; x < info->width; ++x) {
+        row[x * 4 + 0] = 0x11;
+        row[x * 4 + 1] = 0x22;
+        row[x * 4 + 2] = 0x33;
+        row[x * 4 + 3] = 0x44;
+      }
+    }
+    return true;
+  };
+  generator.get_scaled_dimensions = [](void* user_data, float scale,
+                                       uint32_t* scaled_width_out,
+                                       uint32_t* scaled_height_out) -> bool {
+    auto* c = static_cast<TestContext*>(user_data);
+    *scaled_width_out = static_cast<uint32_t>(c->width * scale);
+    *scaled_height_out = static_cast<uint32_t>(c->height * scale);
+    return true;
+  };
+
+  {
+    auto img_gen = MakeEmbedderImageGenerator(generator);
+    ASSERT_NE(img_gen, nullptr);
+
+    EXPECT_EQ(img_gen->GetInfo().width(), 64);
+    EXPECT_EQ(img_gen->GetInfo().height(), 48);
+    EXPECT_EQ(img_gen->GetInfo().colorType(), kRGBA_8888_SkColorType);
+    EXPECT_EQ(img_gen->GetInfo().alphaType(), kPremul_SkAlphaType);
+
+    EXPECT_EQ(img_gen->GetFrameCount(), 1u);
+    EXPECT_EQ(img_gen->GetPlayCount(), 1u);
+
+    auto frame_info = img_gen->GetFrameInfo(0);
+    EXPECT_EQ(frame_info.duration, 0u);
+    EXPECT_EQ(frame_info.disposal_method,
+              SkCodecAnimation::DisposalMethod::kKeep);
+    EXPECT_FALSE(frame_info.required_frame.has_value());
+    EXPECT_FALSE(frame_info.disposal_rect.has_value());
+    EXPECT_EQ(frame_info.blend_mode, SkCodecAnimation::Blend::kSrcOver);
+
+    SkISize scaled = img_gen->GetScaledDimensions(0.5f);
+    EXPECT_EQ(scaled.width(), 32);
+    EXPECT_EQ(scaled.height(), 24);
+
+    std::vector<uint8_t> pixel_buffer(64 * 48 * 4, 0);
+    EXPECT_TRUE(img_gen->GetPixels(img_gen->GetInfo(), pixel_buffer.data(),
+                                   64 * 4, 0, std::nullopt));
+    EXPECT_EQ(pixel_buffer[0], 0x11);
+    EXPECT_EQ(pixel_buffer[1], 0x22);
+    EXPECT_EQ(pixel_buffer[2], 0x33);
+    EXPECT_EQ(pixel_buffer[3], 0x44);
+
+    EXPECT_FALSE(ctx.destruction_called);
+  }
+
+  EXPECT_TRUE(ctx.destruction_called);
+}
+
+TEST_F(EmbedderTest, EmbedderImageGeneratorAnimatedMultiFrame) {
+  struct MultiFrameContext {
+    uint32_t width = 32;
+    uint32_t height = 32;
+    uint32_t decoded_frame = 0;
+  };
+
+  MultiFrameContext ctx;
+  FlutterImageGenerator generator = {};
+  generator.struct_size = sizeof(FlutterImageGenerator);
+  generator.user_data = &ctx;
+  generator.get_info = [](void* user_data,
+                          FlutterImageGeneratorInfo* info_out) -> bool {
+    auto* c = static_cast<MultiFrameContext*>(user_data);
+    info_out->width = c->width;
+    info_out->height = c->height;
+    info_out->color_type = kFlutterImageGeneratorColorTypeRGBA8888;
+    info_out->alpha_type = kFlutterImageGeneratorAlphaTypePremul;
+    return true;
+  };
+  generator.get_frame_count = [](void*) -> uint32_t { return 3; };
+  generator.get_play_count = [](void*) -> uint32_t {
+    return 0;
+  };  // Infinite loop
+  generator.get_frame_info =
+      [](void*, uint32_t frame_index,
+         FlutterImageGeneratorFrameInfo* frame_info_out) -> bool {
+    if (frame_index == 0) {
+      frame_info_out->required_frame = -1;
+      frame_info_out->duration_ms = 100;
+      frame_info_out->disposal_method =
+          kFlutterImageGeneratorDisposalMethodKeep;
+      frame_info_out->has_disposal_rect = false;
+      frame_info_out->blend_mode = kFlutterImageGeneratorBlendModeSrcOver;
+      return true;
+    } else if (frame_index == 1) {
+      frame_info_out->required_frame = 0;
+      frame_info_out->duration_ms = 200;
+      frame_info_out->disposal_method =
+          kFlutterImageGeneratorDisposalMethodRestoreBackground;
+      frame_info_out->has_disposal_rect = true;
+      frame_info_out->disposal_rect = {
+          .left = 5.0, .top = 5.0, .right = 25.0, .bottom = 25.0};
+      frame_info_out->blend_mode = kFlutterImageGeneratorBlendModeSrc;
+      return true;
+    } else if (frame_index == 2) {
+      frame_info_out->required_frame = 1;
+      frame_info_out->duration_ms = 150;
+      frame_info_out->disposal_method =
+          kFlutterImageGeneratorDisposalMethodRestorePrevious;
+      frame_info_out->has_disposal_rect = false;
+      frame_info_out->blend_mode = kFlutterImageGeneratorBlendModeSrcOver;
+      return true;
+    }
+    return false;
+  };
+  generator.get_pixels =
+      [](void* user_data, const FlutterImageGeneratorInfo* info, void* pixels,
+         size_t row_bytes, uint32_t frame_index, int64_t prior_frame) -> bool {
+    auto* c = static_cast<MultiFrameContext*>(user_data);
+    c->decoded_frame = frame_index;
+    auto* byte_ptr = static_cast<uint8_t*>(pixels);
+    std::memset(byte_ptr, static_cast<int>(frame_index + 1),
+                info->height * row_bytes);
+    return true;
+  };
+
+  auto img_gen = MakeEmbedderImageGenerator(generator);
+  ASSERT_NE(img_gen, nullptr);
+
+  EXPECT_EQ(img_gen->GetFrameCount(), 3u);
+  EXPECT_EQ(img_gen->GetPlayCount(), ImageGenerator::kInfinitePlayCount);
+
+  auto f0 = img_gen->GetFrameInfo(0);
+  EXPECT_EQ(f0.duration, 100u);
+  EXPECT_EQ(f0.disposal_method, SkCodecAnimation::DisposalMethod::kKeep);
+  EXPECT_FALSE(f0.required_frame.has_value());
+  EXPECT_FALSE(f0.disposal_rect.has_value());
+  EXPECT_EQ(f0.blend_mode, SkCodecAnimation::Blend::kSrcOver);
+
+  auto f1 = img_gen->GetFrameInfo(1);
+  EXPECT_EQ(f1.duration, 200u);
+  EXPECT_EQ(f1.disposal_method,
+            SkCodecAnimation::DisposalMethod::kRestoreBGColor);
+  ASSERT_TRUE(f1.required_frame.has_value());
+  EXPECT_EQ(f1.required_frame.value(), 0u);
+  ASSERT_TRUE(f1.disposal_rect.has_value());
+  EXPECT_EQ(f1.disposal_rect.value(), SkIRect::MakeLTRB(5, 5, 25, 25));
+  EXPECT_EQ(f1.blend_mode, SkCodecAnimation::Blend::kSrc);
+
+  auto f2 = img_gen->GetFrameInfo(2);
+  EXPECT_EQ(f2.duration, 150u);
+  EXPECT_EQ(f2.disposal_method,
+            SkCodecAnimation::DisposalMethod::kRestorePrevious);
+  ASSERT_TRUE(f2.required_frame.has_value());
+  EXPECT_EQ(f2.required_frame.value(), 1u);
+  EXPECT_FALSE(f2.disposal_rect.has_value());
+  EXPECT_EQ(f2.blend_mode, SkCodecAnimation::Blend::kSrcOver);
+
+  std::vector<uint8_t> buffer(32 * 32 * 4);
+  EXPECT_TRUE(
+      img_gen->GetPixels(img_gen->GetInfo(), buffer.data(), 32 * 4, 1, 0));
+  EXPECT_EQ(ctx.decoded_frame, 1u);
+  EXPECT_EQ(buffer[0], 2);
+}
+
+TEST_F(EmbedderTest, EmbedderImageGeneratorDestructionCallbacks) {
+  struct LifecycleContext {
+    bool factory_destroyed = false;
+    bool generator_destroyed = false;
+  };
+
+  LifecycleContext ctx;
+
+  {
+    FlutterImageGeneratorRegistrationInfo reg_info = {};
+    reg_info.struct_size = sizeof(FlutterImageGeneratorRegistrationInfo);
+    reg_info.user_data = &ctx;
+    reg_info.destruction_callback = [](void* user_data) {
+      static_cast<LifecycleContext*>(user_data)->factory_destroyed = true;
+    };
+    reg_info.create_generator =
+        [](const uint8_t* buffer, size_t size, void* user_data,
+           FlutterImageGenerator* generator_out) -> bool {
+      generator_out->struct_size = sizeof(FlutterImageGenerator);
+      generator_out->user_data = user_data;
+      generator_out->destruction_callback = [](void* ud) {
+        static_cast<LifecycleContext*>(ud)->generator_destroyed = true;
+      };
+      generator_out->get_info =
+          [](void*, FlutterImageGeneratorInfo* info_out) -> bool {
+        info_out->width = 16;
+        info_out->height = 16;
+        info_out->color_type = kFlutterImageGeneratorColorTypeRGBA8888;
+        info_out->alpha_type = kFlutterImageGeneratorAlphaTypePremul;
+        return true;
+      };
+      generator_out->get_pixels = [](void*, const FlutterImageGeneratorInfo*,
+                                     void*, size_t, uint32_t,
+                                     int64_t) -> bool { return true; };
+      return true;
+    };
+
+    ImageGeneratorFactory factory =
+        CreateEmbedderImageGeneratorFactory(reg_info);
+    ASSERT_TRUE(factory);
+
+    const uint8_t dummy_data[] = {0x01, 0x02, 0x03};
+    sk_sp<SkData> data = SkData::MakeWithCopy(dummy_data, sizeof(dummy_data));
+
+    {
+      std::shared_ptr<ImageGenerator> gen = factory(data);
+      ASSERT_NE(gen, nullptr);
+      EXPECT_FALSE(ctx.generator_destroyed);
+    }
+    EXPECT_TRUE(ctx.generator_destroyed);
+    EXPECT_FALSE(ctx.factory_destroyed);
+  }
+
+  EXPECT_TRUE(ctx.factory_destroyed);
+}
+
+TEST_F(EmbedderTest, EmbedderCustomImageGeneratorInProjectArgs) {
+  FlutterImageGeneratorRegistrationInfo reg_info = {};
+  reg_info.struct_size = sizeof(FlutterImageGeneratorRegistrationInfo);
+  reg_info.priority = 10;
+  reg_info.create_generator = [](const uint8_t*, size_t, void*,
+                                 FlutterImageGenerator*) -> bool {
+    return false;
+  };
+
+  const FlutterImageGeneratorRegistrationInfo* image_generators[] = {&reg_info};
+
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.GetProjectArgs().image_generators = image_generators;
+  builder.GetProjectArgs().image_generators_count = 1;
+  auto engine = builder.InitializeEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_EQ(FlutterEngineRunInitialized(engine.get()), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderRegisterImageGeneratorDynamic) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.InitializeEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_EQ(FlutterEngineRunInitialized(engine.get()), kSuccess);
+
+  FlutterImageGeneratorRegistrationInfo reg_info = {};
+  reg_info.struct_size = sizeof(FlutterImageGeneratorRegistrationInfo);
+  reg_info.priority = 5;
+  reg_info.create_generator = [](const uint8_t*, size_t, void*,
+                                 FlutterImageGenerator*) -> bool {
+    return false;
+  };
+
+  EXPECT_EQ(FlutterEngineRegisterImageGenerator(engine.get(), &reg_info),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderImageGeneratorDestructionCallbackNullUserData) {
+  static bool g_factory_destroyed = false;
+  static bool g_generator_destroyed = false;
+  g_factory_destroyed = false;
+  g_generator_destroyed = false;
+
+  {
+    FlutterImageGeneratorRegistrationInfo reg_info = {};
+    reg_info.struct_size = sizeof(FlutterImageGeneratorRegistrationInfo);
+    reg_info.user_data = nullptr;
+    reg_info.destruction_callback = [](void* user_data) {
+      EXPECT_EQ(user_data, nullptr);
+      g_factory_destroyed = true;
+    };
+    reg_info.create_generator =
+        [](const uint8_t* buffer, size_t size, void* user_data,
+           FlutterImageGenerator* generator_out) -> bool {
+      generator_out->struct_size = sizeof(FlutterImageGenerator);
+      generator_out->user_data = nullptr;
+      generator_out->destruction_callback = [](void* ud) {
+        EXPECT_EQ(ud, nullptr);
+        g_generator_destroyed = true;
+      };
+      generator_out->get_info =
+          [](void*, FlutterImageGeneratorInfo* info_out) -> bool {
+        info_out->width = 16;
+        info_out->height = 16;
+        info_out->color_type = kFlutterImageGeneratorColorTypeRGBA8888;
+        info_out->alpha_type = kFlutterImageGeneratorAlphaTypePremul;
+        return true;
+      };
+      generator_out->get_pixels = [](void*, const FlutterImageGeneratorInfo*,
+                                     void*, size_t, uint32_t,
+                                     int64_t) -> bool { return true; };
+      return true;
+    };
+
+    ImageGeneratorFactory factory =
+        CreateEmbedderImageGeneratorFactory(reg_info);
+    ASSERT_TRUE(factory);
+
+    const uint8_t dummy_data[] = {0x01, 0x02, 0x03};
+    sk_sp<SkData> data = SkData::MakeWithCopy(dummy_data, sizeof(dummy_data));
+
+    {
+      std::shared_ptr<ImageGenerator> gen = factory(data);
+      ASSERT_NE(gen, nullptr);
+      EXPECT_FALSE(g_generator_destroyed);
+    }
+    EXPECT_TRUE(g_generator_destroyed);
+    EXPECT_FALSE(g_factory_destroyed);
+  }
+
+  EXPECT_TRUE(g_factory_destroyed);
+}
+
+TEST_F(EmbedderTest, EmbedderImageGeneratorDimensionOverflow) {
+  FlutterImageGenerator generator = {};
+  generator.struct_size = sizeof(FlutterImageGenerator);
+  generator.get_info = [](void*, FlutterImageGeneratorInfo* info_out) -> bool {
+    info_out->width =
+        static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) + 100u;
+    info_out->height = 100;
+    info_out->color_type = kFlutterImageGeneratorColorTypeRGBA8888;
+    info_out->alpha_type = kFlutterImageGeneratorAlphaTypePremul;
+    return true;
+  };
+  generator.get_pixels = [](void*, const FlutterImageGeneratorInfo*, void*,
+                            size_t, uint32_t,
+                            int64_t) -> bool { return false; };
+
+  auto img_gen = MakeEmbedderImageGenerator(generator);
+  EXPECT_EQ(img_gen, nullptr);
+}
+
+TEST_F(EmbedderTest, EmbedderGetProcAddressesImageGenerator) {
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  EXPECT_EQ(table.RegisterImageGenerator, &FlutterEngineRegisterImageGenerator);
 }
 
 }  // namespace testing
