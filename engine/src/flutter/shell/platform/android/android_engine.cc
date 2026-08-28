@@ -1207,136 +1207,142 @@ bool AndroidEngine::LoadDartDeferredLibrary(
   if (!is_running_.load() || engine_ == nullptr ||
       embedder_api_.LoadDartDeferredLibrary == nullptr) {
     return false;
-    FlutterDeferredLibraryInfo info = {};
-    info.struct_size = sizeof(FlutterDeferredLibraryInfo);
-    info.loading_unit_id = loading_unit_id;
-    info.snapshot_data = snapshot_data ? snapshot_data->GetMapping() : nullptr;
-    info.snapshot_data_size = snapshot_data ? snapshot_data->GetSize() : 0;
-    info.snapshot_instructions =
-        snapshot_instructions ? snapshot_instructions->GetMapping() : nullptr;
-    info.snapshot_instructions_size =
-        snapshot_instructions ? snapshot_instructions->GetSize() : 0;
-
-    auto result = embedder_api_.LoadDartDeferredLibrary(engine_, &info);
-    return result == kSuccess;
   }
 
-  bool AndroidEngine::LoadDartDeferredLibraryError(
-      intptr_t loading_unit_id, const std::string& error_message,
-      bool transient) {
-    std::lock_guard engine_lock(engine_mutex_);
-    if (!is_running_.load() || engine_ == nullptr ||
-        embedder_api_.LoadDartDeferredLibraryError == nullptr) {
-      return false;
-    }
+  FlutterDeferredLibraryInfo info = {};
+  info.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  info.loading_unit_id = loading_unit_id;
+  info.snapshot_data = snapshot_data ? snapshot_data->GetMapping() : nullptr;
+  info.snapshot_data_size = snapshot_data ? snapshot_data->GetSize() : 0;
+  info.snapshot_instructions =
+      snapshot_instructions ? snapshot_instructions->GetMapping() : nullptr;
+  info.snapshot_instructions_size =
+      snapshot_instructions ? snapshot_instructions->GetSize() : 0;
 
-    FlutterDeferredLibraryErrorInfo error_info = {};
-    error_info.struct_size = sizeof(FlutterDeferredLibraryErrorInfo);
-    error_info.loading_unit_id = loading_unit_id;
-    error_info.error_message = error_message.c_str();
-    error_info.transient = transient;
+  auto result = embedder_api_.LoadDartDeferredLibrary(engine_, &info);
+  return result == kSuccess;
+}
 
-    auto result =
-        embedder_api_.LoadDartDeferredLibraryError(engine_, &error_info);
-    return result == kSuccess;
+bool AndroidEngine::LoadDartDeferredLibraryError(
+    intptr_t loading_unit_id,
+    const std::string& error_message,
+    bool transient) {
+  std::lock_guard engine_lock(engine_mutex_);
+  if (!is_running_.load() || engine_ == nullptr ||
+      embedder_api_.LoadDartDeferredLibraryError == nullptr) {
+    return false;
   }
 
-  void AndroidEngine::HandleRequestDartDeferredLibrary(
-      intptr_t loading_unit_id) {
-    if (jni_facade_ != nullptr) {
-      jni_facade_->RequestDartDeferredLibrary(loading_unit_id);
-    }
-  }
+  FlutterDeferredLibraryErrorInfo error_info = {};
+  error_info.struct_size = sizeof(FlutterDeferredLibraryErrorInfo);
+  error_info.loading_unit_id = loading_unit_id;
+  error_info.error_message = error_message.c_str();
+  error_info.transient = transient;
 
-  void AndroidEngine::RegisterExternalTexture(int64_t texture_id) {
-    std::lock_guard engine_lock(engine_mutex_);
-    if (is_running_.load() && engine_ != nullptr &&
-        embedder_api_.RegisterExternalTexture != nullptr) {
-      embedder_api_.RegisterExternalTexture(engine_, texture_id);
-    }
-  }
+  auto result =
+      embedder_api_.LoadDartDeferredLibraryError(engine_, &error_info);
+  return result == kSuccess;
+}
 
-  void AndroidEngine::RegisterImageTexture(int64_t texture_id,
-                                           JavaLocalRef image_texture_entry) {
-    RegisterExternalTexture(texture_id);
+void AndroidEngine::HandleRequestDartDeferredLibrary(intptr_t loading_unit_id) {
+  if (jni_facade_ != nullptr) {
+    jni_facade_->RequestDartDeferredLibrary(loading_unit_id);
   }
+}
 
-  void AndroidEngine::UnregisterTexture(int64_t texture_id) {
-    std::lock_guard engine_lock(engine_mutex_);
-    if (is_running_.load() && engine_ != nullptr &&
-        embedder_api_.UnregisterExternalTexture != nullptr) {
-      embedder_api_.UnregisterExternalTexture(engine_, texture_id);
-    }
+void AndroidEngine::RegisterExternalTexture(int64_t texture_id) {
+  std::lock_guard engine_lock(engine_mutex_);
+  if (is_running_.load() && engine_ != nullptr &&
+      embedder_api_.RegisterExternalTexture != nullptr) {
+    embedder_api_.RegisterExternalTexture(engine_, texture_id);
   }
+}
 
-  void AndroidEngine::MarkTextureFrameAvailable(int64_t texture_id) {
-    std::lock_guard engine_lock(engine_mutex_);
-    if (!is_running_.load() || engine_ == nullptr ||
-        embedder_api_.MarkExternalTextureFrameAvailable == nullptr) {
-      return;
-    }
-    embedder_api_.MarkExternalTextureFrameAvailable(engine_, texture_id);
+void AndroidEngine::RegisterImageTexture(int64_t texture_id,
+                                         JavaLocalRef image_texture_entry) {
+  RegisterExternalTexture(texture_id);
+}
+
+void AndroidEngine::UnregisterTexture(int64_t texture_id) {
+  std::lock_guard engine_lock(engine_mutex_);
+  if (is_running_.load() && engine_ != nullptr &&
+      embedder_api_.UnregisterExternalTexture != nullptr) {
+    embedder_api_.UnregisterExternalTexture(engine_, texture_id);
   }
+}
 
-  void AndroidEngine::ScheduleFrame() {
-    std::lock_guard engine_lock(engine_mutex_);
-    if (is_running_.load() && engine_ != nullptr &&
-        embedder_api_.ScheduleFrame != nullptr) {
-      embedder_api_.ScheduleFrame(engine_);
-    }
+void AndroidEngine::MarkTextureFrameAvailable(int64_t texture_id) {
+  std::lock_guard engine_lock(engine_mutex_);
+  if (!is_running_.load() || engine_ == nullptr ||
+      embedder_api_.MarkExternalTextureFrameAvailable == nullptr) {
+    return;
   }
+  embedder_api_.MarkExternalTextureFrameAvailable(engine_, texture_id);
+}
 
-  void AndroidEngine::NotifyLowMemoryWarning() {
-    std::lock_guard engine_lock(engine_mutex_);
-    if (is_running_.load() && engine_ != nullptr &&
-        embedder_api_.NotifyLowMemoryWarning != nullptr) {
-      embedder_api_.NotifyLowMemoryWarning(engine_);
-    }
+void AndroidEngine::ScheduleFrame() {
+  std::lock_guard engine_lock(engine_mutex_);
+  if (is_running_.load() && engine_ != nullptr &&
+      embedder_api_.ScheduleFrame != nullptr) {
+    embedder_api_.ScheduleFrame(engine_);
   }
+}
 
-  bool AndroidEngine::Screenshot(
-      FlutterEngineScreenshotType type, bool base64_encode,
-      FlutterEngineScreenshotCallback callback, void* user_data) {
-    std::lock_guard engine_lock(engine_mutex_);
-    if (!is_running_.load() || engine_ == nullptr ||
-        embedder_api_.Screenshot == nullptr || callback == nullptr) {
-      return false;
-    }
-    return embedder_api_.Screenshot(engine_, type, base64_encode, callback,
-                                    user_data) == kSuccess;
+void AndroidEngine::NotifyLowMemoryWarning() {
+  std::lock_guard engine_lock(engine_mutex_);
+  if (is_running_.load() && engine_ != nullptr &&
+      embedder_api_.NotifyLowMemoryWarning != nullptr) {
+    embedder_api_.NotifyLowMemoryWarning(engine_);
   }
+}
 
-  //------------------------------------------------------------------------------
-  // Static Callbacks
-  //------------------------------------------------------------------------------
-
-  void AndroidEngine::OnPlatformMessageCallback(
-      const FlutterPlatformMessage* message, void* user_data) {
-    auto* engine = static_cast<AndroidEngine*>(user_data);
-    if (engine != nullptr) {
-      engine->HandlePlatformMessage(message);
-    }
+bool AndroidEngine::Screenshot(FlutterEngineScreenshotType type,
+                               bool base64_encode,
+                               FlutterEngineScreenshotCallback callback,
+                               void* user_data) {
+  std::lock_guard engine_lock(engine_mutex_);
+  if (!is_running_.load() || engine_ == nullptr ||
+      embedder_api_.Screenshot == nullptr || callback == nullptr) {
+    return false;
   }
+  return embedder_api_.Screenshot(engine_, type, base64_encode, callback,
+                                  user_data) == kSuccess;
+}
 
-  void AndroidEngine::OnRootIsolateCreatedCallback(void* user_data) {
-    // Root isolate creation hook. First frame notification is triggered on
-    // actual presentation in AndroidCompositor.
-  }
+//------------------------------------------------------------------------------
+// Static Callbacks
+//------------------------------------------------------------------------------
 
-  void AndroidEngine::OnUpdateSemantics2Callback(
-      const FlutterSemanticsUpdate2* update, void* user_data) {
-    auto* engine = static_cast<AndroidEngine*>(user_data);
-    if (engine != nullptr) {
-      engine->HandleSemanticsUpdate(update);
-    }
+void AndroidEngine::OnPlatformMessageCallback(
+    const FlutterPlatformMessage* message,
+    void* user_data) {
+  auto* engine = static_cast<AndroidEngine*>(user_data);
+  if (engine != nullptr) {
+    engine->HandlePlatformMessage(message);
   }
+}
 
-  void AndroidEngine::OnRequestDartDeferredLibraryCallback(
-      intptr_t loading_unit_id, void* user_data) {
-    auto* engine = static_cast<AndroidEngine*>(user_data);
-    if (engine != nullptr) {
-      engine->HandleRequestDartDeferredLibrary(loading_unit_id);
-    }
+void AndroidEngine::OnRootIsolateCreatedCallback(void* user_data) {
+  // Root isolate creation hook. First frame notification is triggered on
+  // actual presentation in AndroidCompositor.
+}
+
+void AndroidEngine::OnUpdateSemantics2Callback(
+    const FlutterSemanticsUpdate2* update,
+    void* user_data) {
+  auto* engine = static_cast<AndroidEngine*>(user_data);
+  if (engine != nullptr) {
+    engine->HandleSemanticsUpdate(update);
   }
+}
+
+void AndroidEngine::OnRequestDartDeferredLibraryCallback(
+    intptr_t loading_unit_id,
+    void* user_data) {
+  auto* engine = static_cast<AndroidEngine*>(user_data);
+  if (engine != nullptr) {
+    engine->HandleRequestDartDeferredLibrary(loading_unit_id);
+  }
+}
 
 }  // namespace flutter
