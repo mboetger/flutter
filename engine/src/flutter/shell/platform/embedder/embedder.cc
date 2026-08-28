@@ -52,6 +52,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -4511,6 +4512,76 @@ FlutterEngineResult FlutterEngineFreeScreenshot(FlutterScreenshot* screenshot) {
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineGetCallbackInformation(
+    int64_t handle,
+    FlutterCallbackInformation* callback_info_out) {
+  if (callback_info_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "callback_info_out was null.");
+  }
+
+  if (callback_info_out->struct_size < sizeof(FlutterCallbackInformation)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "FlutterCallbackInformation struct_size was invalid.");
+  }
+
+  const char* name = nullptr;
+  const char* class_name = nullptr;
+  const char* library_path = nullptr;
+  if (!flutter::DartCallbackCache::GetCallbackStrings(
+          handle, &name, &class_name, &library_path)) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not find callback information for the specified handle.");
+  }
+
+  callback_info_out->name = name;
+  callback_info_out->class_name = class_name;
+  callback_info_out->library_path = library_path;
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineSetCallbackCachePath(const char* path) {
+  if (path == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Path was null.");
+  }
+  flutter::DartCallbackCache::SetCachePath(path);
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineLoadCallbackCache(void) {
+  flutter::DartCallbackCache::LoadCacheFromDisk();
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineGetCallbackHandle(
+    const FlutterCallbackInformation* callback_info,
+    int64_t* handle_out) {
+  if (callback_info == nullptr || handle_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid arguments for GetCallbackHandle.");
+  }
+
+  if (callback_info->struct_size < sizeof(FlutterCallbackInformation)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "FlutterCallbackInformation struct_size was invalid.");
+  }
+
+  if (callback_info->name == nullptr ||
+      callback_info->library_path == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "name and library_path must be non-null for GetCallbackHandle.");
+  }
+
+  *handle_out = flutter::DartCallbackCache::GetCallbackHandle(
+      callback_info->name,
+      callback_info->class_name ? callback_info->class_name : "",
+      callback_info->library_path);
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4576,6 +4647,10 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(NotifyDestroyed, FlutterEngineNotifyDestroyed);
   SET_PROC(Screenshot, FlutterEngineScreenshot);
   SET_PROC(FreeScreenshot, FlutterEngineFreeScreenshot);
+  SET_PROC(GetCallbackInformation, FlutterEngineGetCallbackInformation);
+  SET_PROC(SetCallbackCachePath, FlutterEngineSetCallbackCachePath);
+  SET_PROC(LoadCallbackCache, FlutterEngineLoadCallbackCache);
+  SET_PROC(GetCallbackHandle, FlutterEngineGetCallbackHandle);
 #undef SET_PROC
 
   return kSuccess;
