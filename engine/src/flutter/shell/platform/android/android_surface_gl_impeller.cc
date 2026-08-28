@@ -102,14 +102,6 @@ bool AndroidSurfaceGLImpeller::IsValid() const {
 // |AndroidSurface|
 std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
     GrDirectContext* gr_context) {
-  // Ensure that the GL context is current before creating the GPU surface.
-  // GPUSurfaceGLImpeller initialization sets up graphics state and the current
-  // thread must be able to execute reactor operations.
-  if (!OnGLContextMakeCurrent()) {
-    FML_DLOG(ERROR)
-        << "Could not make context current for GPU surface creation.";
-    return nullptr;
-  }
   auto surface = std::make_unique<GPUSurfaceGLImpeller>(
       this,                                    // delegate
       android_context_->GetImpellerContext(),  // context

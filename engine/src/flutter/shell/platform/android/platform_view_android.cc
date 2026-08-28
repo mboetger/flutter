@@ -188,21 +188,27 @@ fml::WeakPtr<PlatformViewAndroid> PlatformViewAndroid::GetWeakPtr() {
 
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
+  std::unique_ptr<Surface> rendering_surface;
   if (android_surface_) {
     InstallFirstFrameCallback();
 
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
+        [&latch, this, surface = android_surface_.get(),
+         native_window = std::move(native_window), jni_facade = jni_facade_,
+         &rendering_surface]() {
           surface->SetNativeWindow(native_window, jni_facade);
+          rendering_surface = CreateRenderingSurface();
+          if (rendering_surface && !rendering_surface->IsValid()) {
+            rendering_surface.reset();
+          }
           latch.Signal();
         });
     latch.Wait();
   }
 
-  delegate_.OnPlatformViewCreated(CreateRenderingSurface());
+  delegate_.OnPlatformViewCreated(std::move(rendering_surface));
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
