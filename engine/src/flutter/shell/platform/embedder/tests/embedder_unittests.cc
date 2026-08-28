@@ -6356,12 +6356,70 @@ TEST_F(EmbedderTest, EmbedderImageGeneratorDimensionOverflow) {
   EXPECT_EQ(img_gen, nullptr);
 }
 
+TEST_F(EmbedderTest, EmbedderPrefetchDefaultFontManager) {
+  EXPECT_EQ(FlutterEnginePrefetchDefaultFontManager(), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderVMServiceUriCallbackInvalidArguments) {
+  intptr_t handle = 0;
+  EXPECT_EQ(FlutterEngineRegisterVMServiceUriCallback(nullptr, &handle),
+            kInvalidArguments);
+
+  FlutterVMServiceUriCallbackConfig invalid_size_config = {};
+  invalid_size_config.struct_size = sizeof(size_t) - 1;
+  invalid_size_config.callback = [](const char*, void*) {};
+  EXPECT_EQ(
+      FlutterEngineRegisterVMServiceUriCallback(&invalid_size_config, &handle),
+      kInvalidArguments);
+
+  FlutterVMServiceUriCallbackConfig null_callback_config = {};
+  null_callback_config.struct_size = sizeof(FlutterVMServiceUriCallbackConfig);
+  null_callback_config.callback = nullptr;
+  EXPECT_EQ(
+      FlutterEngineRegisterVMServiceUriCallback(&null_callback_config, &handle),
+      kInvalidArguments);
+
+  EXPECT_EQ(FlutterEngineDeregisterVMServiceUriCallback(0), kInvalidArguments);
+  EXPECT_EQ(FlutterEngineDeregisterVMServiceUriCallback(999999),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderVMServiceUriCallbackLifecycle) {
+  intptr_t handle = 0;
+  int user_data_val = 42;
+  FlutterVMServiceUriCallbackConfig config = {};
+  config.struct_size = sizeof(FlutterVMServiceUriCallbackConfig);
+  config.callback = [](const char* uri, void* user_data) {
+    auto* val = static_cast<int*>(user_data);
+    EXPECT_EQ(*val, 42);
+  };
+  config.user_data = &user_data_val;
+
+  ASSERT_EQ(FlutterEngineRegisterVMServiceUriCallback(&config, &handle),
+            kSuccess);
+  EXPECT_NE(handle, 0);
+
+  ASSERT_EQ(FlutterEngineDeregisterVMServiceUriCallback(handle), kSuccess);
+  EXPECT_EQ(FlutterEngineDeregisterVMServiceUriCallback(handle),
+            kInvalidArguments);
+
+  // handle_out can be null if embedder doesn't need to deregister
+  EXPECT_EQ(FlutterEngineRegisterVMServiceUriCallback(&config, nullptr),
+            kSuccess);
+}
+
 TEST_F(EmbedderTest, EmbedderGetProcAddressesImageGenerator) {
   FlutterEngineProcTable table = {};
   table.struct_size = sizeof(FlutterEngineProcTable);
 
   ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
   EXPECT_EQ(table.RegisterImageGenerator, &FlutterEngineRegisterImageGenerator);
+  EXPECT_EQ(table.PrefetchDefaultFontManager,
+            &FlutterEnginePrefetchDefaultFontManager);
+  EXPECT_EQ(table.RegisterVMServiceUriCallback,
+            &FlutterEngineRegisterVMServiceUriCallback);
+  EXPECT_EQ(table.DeregisterVMServiceUriCallback,
+            &FlutterEngineDeregisterVMServiceUriCallback);
 }
 
 }  // namespace testing

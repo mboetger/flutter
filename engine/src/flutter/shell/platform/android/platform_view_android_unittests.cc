@@ -5,6 +5,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "shell/platform/android/flutter_main.h"
+#include "shell/platform/embedder/embedder.h"
 #include "third_party/googletest/googlemock/include/gmock/gmock-nice-strict.h"
 
 namespace flutter {
@@ -68,6 +69,15 @@ TEST(FlutterMainTest, EmbedderAPIEnabledSettingsFallback) {
 
   FlutterMain::ResetSettingsForTesting();
   EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+}
+
+TEST(FlutterMainTest, PrefetchDefaultFontManagerRunsSuccessfully) {
+  EXPECT_EQ(FlutterEnginePrefetchDefaultFontManager(), kSuccess);
+}
+
+TEST(FlutterMainTest, CallbackCacheConfigRoundtrip) {
+  EXPECT_EQ(FlutterEngineSetCallbackCachePath("/data/local/tmp"), kSuccess);
+  EXPECT_EQ(FlutterEngineLoadCallbackCache(), kSuccess);
 }
 
 }  // namespace testing
