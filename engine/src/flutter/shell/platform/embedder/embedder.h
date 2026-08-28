@@ -2795,6 +2795,72 @@ typedef struct {
   bool transient;
 } FlutterDartDeferredLibraryLoadError;
 
+/// The type of screenshot to capture of the previously rendered layer tree.
+typedef enum {
+  /// Uncompressed image data (e.g. RGBA 32-bit raw pixel buffer).
+  kFlutterScreenshotTypeUncompressedImage,
+  /// Compressed image data (PNG format).
+  kFlutterScreenshotTypeCompressedImage,
+  /// Reads raw pixel data directly from the rasterizer's surface.
+  kFlutterScreenshotTypeSurfaceData,
+} FlutterScreenshotType;
+
+/// Specifies the format of pixel data in a `FlutterScreenshot`.
+typedef enum {
+  /// Unknown format, or Skia default.
+  kFlutterScreenshotFormatUnknown,
+  /// RGBA 8 bits per channel (RGBA8888).
+  kFlutterScreenshotFormatR8G8B8A8UNormInt,
+  /// BGRA 8 bits per channel (BGRA8888).
+  kFlutterScreenshotFormatB8G8R8A8UNormInt,
+  /// RGBA 16-bit floating point per channel.
+  kFlutterScreenshotFormatR16G16B16A16Float,
+} FlutterScreenshotFormat;
+
+/// Request parameters for capturing a screenshot.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterScreenshotRequest).
+  size_t struct_size;
+
+  /// The type of screenshot to capture.
+  FlutterScreenshotType type;
+
+  /// Whether the output data should be base64-encoded.
+  bool base64_encode;
+} FlutterScreenshotRequest;
+
+/// Describes a screenshot captured from the engine.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterScreenshot).
+  size_t struct_size;
+
+  /// Pointer to the screenshot bytes buffer.
+  const uint8_t* data;
+
+  /// Length of the screenshot bytes buffer in bytes.
+  size_t data_length;
+
+  /// Width of the frame in pixels.
+  size_t width;
+
+  /// Height of the frame in pixels.
+  size_t height;
+
+  /// The pixel format of the returned screenshot buffer.
+  FlutterScreenshotFormat format;
+
+  /// Characterization string describing the screenshot format (e.g. "PNG",
+  /// "ScreenshotType::UncompressedImage").
+  const char* format_description;
+
+  /// User data to be passed to `destruction_callback`.
+  void* user_data;
+
+  /// Callback to release the screenshot memory. Embedders can invoke this
+  /// callback directly or call `FlutterEngineFreeScreenshot`.
+  VoidCallback destruction_callback;
+} FlutterScreenshot;
+
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
@@ -4114,6 +4180,44 @@ FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineNotifyDestroyed(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
+//------------------------------------------------------------------------------
+/// @brief      Captures a screenshot of the last rendered layer tree.
+///
+///             This captures the most recently rasterized frame. If no frame
+///             has been rasterized yet or if screenshot capture fails, this
+///             method returns `kInternalInconsistency`.
+///
+/// @param[in]  engine          A running engine instance.
+/// @param[in]  request         A pointer to the screenshot request
+/// configuration.
+/// @param[out] screenshot_out  A pointer to a caller-allocated
+/// `FlutterScreenshot`
+///                             struct to populate. Its `struct_size` field must
+///                             be initialized to `sizeof(FlutterScreenshot)`.
+///
+/// @return     The result of the call. Returns `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineScreenshot(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterScreenshotRequest* request,
+    FlutterScreenshot* screenshot_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Frees the resources associated with a screenshot returned by
+///             `FlutterEngineScreenshot`.
+///
+///             Embedders must invoke this function or call the
+///             `destruction_callback` in `FlutterScreenshot` once they are
+///             finished with the screenshot buffer.
+///
+/// @param[in]  screenshot  A pointer to the screenshot struct to release.
+///
+/// @return     The result of the call. Returns `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineFreeScreenshot(FlutterScreenshot* screenshot);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4266,6 +4370,12 @@ typedef FlutterEngineResult (*FlutterEngineNotifyCreatedFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 typedef FlutterEngineResult (*FlutterEngineNotifyDestroyedFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
+typedef FlutterEngineResult (*FlutterEngineScreenshotFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterScreenshotRequest* request,
+    FlutterScreenshot* screenshot_out);
+typedef FlutterEngineResult (*FlutterEngineFreeScreenshotFnPtr)(
+    FlutterScreenshot* screenshot);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4323,6 +4433,8 @@ typedef struct {
       NotifyDartDeferredLibraryLoadError;
   FlutterEngineNotifyCreatedFnPtr NotifyCreated;
   FlutterEngineNotifyDestroyedFnPtr NotifyDestroyed;
+  FlutterEngineScreenshotFnPtr Screenshot;
+  FlutterEngineFreeScreenshotFnPtr FreeScreenshot;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

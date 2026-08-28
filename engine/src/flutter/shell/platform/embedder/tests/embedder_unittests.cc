@@ -5318,6 +5318,244 @@ TEST_F(EmbedderTest, EmbedderSendSemanticsActionValidation) {
             kSuccess);
 }
 
+TEST_F(EmbedderTest, EmbedderScreenshotInvalidArguments) {
+  FlutterScreenshotRequest request = {};
+  request.struct_size = sizeof(FlutterScreenshotRequest);
+  request.type = kFlutterScreenshotTypeUncompressedImage;
+
+  FlutterScreenshot screenshot = {};
+  screenshot.struct_size = sizeof(FlutterScreenshot);
+
+  EXPECT_EQ(FlutterEngineScreenshot(nullptr, &request, &screenshot),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineScreenshot(nullptr, nullptr, &screenshot),
+            kInvalidArguments);
+
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_EQ(FlutterEngineScreenshot(engine.get(), nullptr, &screenshot),
+            kInvalidArguments);
+
+  FlutterScreenshotRequest invalid_request_size = {};
+  invalid_request_size.struct_size = sizeof(FlutterScreenshotRequest) - 1;
+  invalid_request_size.type = kFlutterScreenshotTypeUncompressedImage;
+  EXPECT_EQ(
+      FlutterEngineScreenshot(engine.get(), &invalid_request_size, &screenshot),
+      kInvalidArguments);
+
+  FlutterScreenshotRequest invalid_request_type = {};
+  invalid_request_type.struct_size = sizeof(FlutterScreenshotRequest);
+  invalid_request_type.type = static_cast<FlutterScreenshotType>(999);
+  EXPECT_EQ(
+      FlutterEngineScreenshot(engine.get(), &invalid_request_type, &screenshot),
+      kInvalidArguments);
+
+  EXPECT_EQ(FlutterEngineScreenshot(engine.get(), &request, nullptr),
+            kInvalidArguments);
+
+  FlutterScreenshot invalid_screenshot_size = {};
+  invalid_screenshot_size.struct_size = sizeof(FlutterScreenshot) - 1;
+  EXPECT_EQ(
+      FlutterEngineScreenshot(engine.get(), &request, &invalid_screenshot_size),
+      kInvalidArguments);
+
+  EXPECT_EQ(FlutterEngineFreeScreenshot(nullptr), kInvalidArguments);
+
+  FlutterScreenshot invalid_free_size = {};
+  invalid_free_size.struct_size = sizeof(FlutterScreenshot) - 1;
+  EXPECT_EQ(FlutterEngineFreeScreenshot(&invalid_free_size), kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderScreenshotBeforeRender) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterScreenshotRequest request = {};
+  request.struct_size = sizeof(FlutterScreenshotRequest);
+  request.type = kFlutterScreenshotTypeUncompressedImage;
+
+  FlutterScreenshot screenshot = {};
+  screenshot.struct_size = sizeof(FlutterScreenshot);
+
+  EXPECT_EQ(FlutterEngineScreenshot(engine.get(), &request, &screenshot),
+            kInternalInconsistency);
+}
+
+TEST_F(EmbedderTest, EmbedderScreenshotUncompressed) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("draw_solid_red");
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  fml::AutoResetWaitableEvent callback_latch;
+  VoidCallback callback = [](void* user_data) {
+    auto* latch = static_cast<fml::AutoResetWaitableEvent*>(user_data);
+    latch->Signal();
+  };
+
+  ASSERT_EQ(FlutterEngineSetNextFrameCallback(engine.get(), callback,
+                                              &callback_latch),
+            kSuccess);
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  callback_latch.Wait();
+
+  FlutterScreenshotRequest request = {};
+  request.struct_size = sizeof(FlutterScreenshotRequest);
+  request.type = kFlutterScreenshotTypeUncompressedImage;
+  request.base64_encode = false;
+
+  FlutterScreenshot screenshot = {};
+  screenshot.struct_size = sizeof(FlutterScreenshot);
+
+  ASSERT_EQ(FlutterEngineScreenshot(engine.get(), &request, &screenshot),
+            kSuccess);
+  EXPECT_NE(screenshot.data, nullptr);
+  EXPECT_GT(screenshot.data_length, 0u);
+  EXPECT_EQ(screenshot.width, 800u);
+  EXPECT_EQ(screenshot.height, 600u);
+  EXPECT_NE(screenshot.format_description, nullptr);
+  EXPECT_NE(screenshot.destruction_callback, nullptr);
+
+  EXPECT_EQ(FlutterEngineFreeScreenshot(&screenshot), kSuccess);
+  EXPECT_EQ(screenshot.data, nullptr);
+  EXPECT_EQ(screenshot.data_length, 0u);
+  EXPECT_EQ(screenshot.format_description, nullptr);
+  EXPECT_EQ(screenshot.destruction_callback, nullptr);
+
+  // Calling free again safely no-ops.
+  EXPECT_EQ(FlutterEngineFreeScreenshot(&screenshot), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderScreenshotCompressedPng) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("draw_solid_red");
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  fml::AutoResetWaitableEvent callback_latch;
+  VoidCallback callback = [](void* user_data) {
+    auto* latch = static_cast<fml::AutoResetWaitableEvent*>(user_data);
+    latch->Signal();
+  };
+
+  ASSERT_EQ(FlutterEngineSetNextFrameCallback(engine.get(), callback,
+                                              &callback_latch),
+            kSuccess);
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 400;
+  event.height = 300;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  callback_latch.Wait();
+
+  FlutterScreenshotRequest request = {};
+  request.struct_size = sizeof(FlutterScreenshotRequest);
+  request.type = kFlutterScreenshotTypeCompressedImage;
+  request.base64_encode = false;
+
+  FlutterScreenshot screenshot = {};
+  screenshot.struct_size = sizeof(FlutterScreenshot);
+
+  ASSERT_EQ(FlutterEngineScreenshot(engine.get(), &request, &screenshot),
+            kSuccess);
+  ASSERT_NE(screenshot.data, nullptr);
+  ASSERT_GT(screenshot.data_length, 8u);
+  EXPECT_EQ(screenshot.width, 400u);
+  EXPECT_EQ(screenshot.height, 300u);
+
+  // Verify PNG magic header: 0x89 'P' 'N' 'G' 0x0D 0x0A 0x1A 0x0A
+  EXPECT_EQ(screenshot.data[0], 0x89);
+  EXPECT_EQ(screenshot.data[1], 'P');
+  EXPECT_EQ(screenshot.data[2], 'N');
+  EXPECT_EQ(screenshot.data[3], 'G');
+  EXPECT_EQ(screenshot.data[4], 0x0D);
+  EXPECT_EQ(screenshot.data[5], 0x0A);
+  EXPECT_EQ(screenshot.data[6], 0x1A);
+  EXPECT_EQ(screenshot.data[7], 0x0A);
+
+  ASSERT_NE(screenshot.destruction_callback, nullptr);
+  screenshot.destruction_callback(screenshot.user_data);
+}
+
+TEST_F(EmbedderTest, EmbedderScreenshotBase64Encoded) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("draw_solid_red");
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  fml::AutoResetWaitableEvent callback_latch;
+  VoidCallback callback = [](void* user_data) {
+    auto* latch = static_cast<fml::AutoResetWaitableEvent*>(user_data);
+    latch->Signal();
+  };
+
+  ASSERT_EQ(FlutterEngineSetNextFrameCallback(engine.get(), callback,
+                                              &callback_latch),
+            kSuccess);
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 100;
+  event.height = 100;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  callback_latch.Wait();
+
+  FlutterScreenshotRequest request = {};
+  request.struct_size = sizeof(FlutterScreenshotRequest);
+  request.type = kFlutterScreenshotTypeCompressedImage;
+  request.base64_encode = true;
+
+  FlutterScreenshot screenshot = {};
+  screenshot.struct_size = sizeof(FlutterScreenshot);
+
+  ASSERT_EQ(FlutterEngineScreenshot(engine.get(), &request, &screenshot),
+            kSuccess);
+  ASSERT_NE(screenshot.data, nullptr);
+  EXPECT_GT(screenshot.data_length, 0u);
+
+  EXPECT_EQ(FlutterEngineFreeScreenshot(&screenshot), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderGetProcAddressesScreenshot) {
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  EXPECT_EQ(table.Screenshot, &FlutterEngineScreenshot);
+  EXPECT_EQ(table.FreeScreenshot, &FlutterEngineFreeScreenshot);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
