@@ -450,4 +450,13 @@ bool EmbedderEngine::LoadDartDeferredLibraryError(
   return true;
 }
 
+Rasterizer::Screenshot EmbedderEngine::Screenshot(
+    Rasterizer::ScreenshotType type,
+    bool base64_encode) const {
+  if (!IsValid()) {
+    return {};
+  }
+  return shell_->Screenshot(type, base64_encode);
+}
+
 }  // namespace flutter
