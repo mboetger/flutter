@@ -349,4 +349,21 @@ Shell& EmbedderEngine::GetShell() {
   return *shell_.get();
 }
 
+bool EmbedderEngine::UpdateAssetResolver(
+    std::unique_ptr<AssetResolver> updated_asset_resolver,
+    AssetResolver::AssetResolverType type) {
+  if (!IsValid()) {
+    return false;
+  }
+
+  auto platform_view = shell_->GetPlatformView();
+  if (!platform_view) {
+    return false;
+  }
+
+  platform_view->UpdateAssetResolverByType(std::move(updated_asset_resolver),
+                                           type);
+  return true;
+}
+
 }  // namespace flutter

@@ -2520,6 +2520,86 @@ typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
                                           const char* /* message */,
                                           void* /* user_data */);
 
+/// An asset buffer resolved by a custom asset resolver.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAsset).
+  size_t struct_size;
+  /// Pointer to the byte buffer containing the asset contents.
+  const uint8_t* data;
+  /// Size of the asset data buffer in bytes.
+  size_t size;
+  /// An opaque baton passed back to the embedder when the asset_free_callback
+  /// is invoked. The engine does not interpret this field in any way.
+  void* user_data;
+  /// An optional callback invoked by the engine when the asset data is no
+  /// longer needed. If null, the engine will assume the buffer is static or
+  /// managed by the embedder. The argument passed to this callback is the
+  /// `user_data` pointer.
+  ///
+  /// This callback may be invoked on any internal engine or worker thread
+  /// when the corresponding asset mapping is destructed. Embedders must ensure
+  /// thread safety and attach the calling thread if needed (e.g. JNIEnv on
+  /// Android).
+  VoidCallback asset_free_callback;
+} FlutterAsset;
+
+/// Callback to resolve an asset by name.
+/// Return true if the asset was found and populate `asset_out`.
+/// Return false if the asset was not found.
+///
+/// This callback may be invoked concurrently on any internal engine thread
+/// (such as UI, IO, raster, or background worker threads). Embedders must
+/// ensure thread safety and attach the calling thread if needed (e.g. JNIEnv on
+/// Android).
+typedef bool (*FlutterAssetResolverFindAssetCallback)(
+    void* /* user_data */,
+    const char* /* asset_name */,
+    FlutterAsset* /* asset_out */);
+
+/// Callback to query if the asset resolver is currently valid.
+/// Return true if the resolver is valid, false otherwise.
+///
+/// This callback may be invoked concurrently on any engine thread.
+typedef bool (*FlutterAssetResolverIsValidCallback)(void* /* user_data */);
+
+/// Callback to query if the resolver remains valid after an asset manager
+/// change (e.g. hot reload or hot restart). Return true if valid after change,
+/// false otherwise.
+///
+/// This callback may be invoked concurrently on any engine thread.
+typedef bool (*FlutterAssetResolverIsValidAfterChangeCallback)(
+    void* /* user_data */);
+
+/// A custom asset resolver description.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAssetResolver).
+  size_t struct_size;
+  /// User data baton passed to the callbacks.
+  void* user_data;
+  /// Callback to resolve an asset by name. Required.
+  FlutterAssetResolverFindAssetCallback find_asset_callback;
+  /// Callback to query if the asset resolver is valid. Optional (defaults to
+  /// true if null).
+  FlutterAssetResolverIsValidCallback is_valid_callback;
+  /// Callback to query if the asset resolver remains valid after asset manager
+  /// change. Optional (defaults to true if null).
+  FlutterAssetResolverIsValidAfterChangeCallback is_valid_after_change_callback;
+  /// Callback invoked when the asset resolver is destroyed. Optional.
+  /// This callback is invoked when the resolver is replaced via
+  /// `FlutterEngineUpdateAssetResolver` or when the engine is shutdown.
+  VoidCallback destruction_callback;
+} FlutterAssetResolver;
+
+/// This struct specifies arguments to initialize or update custom asset
+/// resolvers.
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterAssetResolverRegistrationInfo).
+  size_t struct_size;
+  /// The custom asset resolver to register or update.
+  const FlutterAssetResolver* resolver;
+} FlutterAssetResolverRegistrationInfo;
+
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
@@ -2838,6 +2918,15 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// An optional list of custom asset resolvers.
+  ///
+  /// Embedders can supply custom asset resolvers to locate and load assets
+  /// (e.g. from APKs, asset bundles, or in-memory stores).
+  const FlutterAssetResolver** asset_resolvers;
+
+  /// The number of asset resolvers in the `asset_resolvers` array.
+  size_t asset_resolvers_count;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3332,6 +3421,25 @@ FlutterEngineResult FlutterEngineSendSemanticsAction(
     const FlutterSendSemanticsActionInfo* info);
 
 //------------------------------------------------------------------------------
+/// @brief      Updates or registers a custom asset resolver with the engine.
+///
+///             If a custom asset resolver is already present, the first
+///             registered custom asset resolver is updated with the new
+///             resolver. Otherwise, the new resolver is registered with the
+///             engine's asset manager.
+///
+/// @param[in]  engine  A running engine instance.
+/// @param[in]  info    The registration info containing the asset resolver.
+///
+/// @return     Returns kSuccess if the asset resolver was successfully
+///             updated or registered.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineUpdateAssetResolver(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolverRegistrationInfo* info);
+
+//------------------------------------------------------------------------------
 /// @brief      Notify the engine that a vsync event occurred. A baton passed to
 ///             the platform via the vsync callback must be returned. This call
 ///             must be made on the thread on which the call to
@@ -3774,6 +3882,9 @@ typedef FlutterEngineResult (*FlutterEngineRemoveViewFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterViewFocusEvent* event);
+typedef FlutterEngineResult (*FlutterEngineUpdateAssetResolverFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolverRegistrationInfo* info);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3824,6 +3935,7 @@ typedef struct {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

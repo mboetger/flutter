@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "embedder.h"
+#include "embedder_asset_resolver.h"
 #include "embedder_engine.h"
 #include "flutter/common/constants.h"
 #include "flutter/flow/raster_cache.h"
@@ -4314,6 +4315,210 @@ TEST_F(EmbedderTest, PlatformThreadIsolatesWithCustomPlatformTaskRunner) {
 
   // Check that the FFI call was executed on the platform thread.
   ASSERT_EQ(platform_thread_id, ffi_call_thread_id);
+}
+
+TEST_F(EmbedderTest, EmbedderAssetResolverDirect) {
+  std::string test_data = "Hello Flutter Assets!";
+
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = &test_data;
+  resolver.find_asset_callback = [](void* user_data, const char* name,
+                                    FlutterAsset* asset_out) -> bool {
+    auto* str = static_cast<std::string*>(user_data);
+    if (std::string(name) == "test_asset.txt") {
+      asset_out->struct_size = sizeof(FlutterAsset);
+      asset_out->data = reinterpret_cast<const uint8_t*>(str->data());
+      asset_out->size = str->size();
+      asset_out->user_data = nullptr;
+      asset_out->asset_free_callback = nullptr;
+      return true;
+    }
+    return false;
+  };
+  resolver.is_valid_callback = [](void* user_data) { return true; };
+  resolver.is_valid_after_change_callback = [](void* user_data) {
+    return true;
+  };
+  resolver.destruction_callback = [](void* user_data) {};
+
+  {
+    EmbedderAssetResolver embedder_resolver(resolver);
+    EXPECT_TRUE(embedder_resolver.IsValid());
+    EXPECT_TRUE(embedder_resolver.IsValidAfterAssetManagerChange());
+    EXPECT_EQ(embedder_resolver.GetType(),
+              AssetResolver::AssetResolverType::kCustomResolver);
+
+    auto mapping = embedder_resolver.GetAsMapping("test_asset.txt");
+    ASSERT_NE(mapping, nullptr);
+    EXPECT_EQ(mapping->GetSize(), test_data.size());
+    EXPECT_EQ(std::string(reinterpret_cast<const char*>(mapping->GetMapping()),
+                          mapping->GetSize()),
+              test_data);
+
+    auto missing_mapping = embedder_resolver.GetAsMapping("missing.txt");
+    EXPECT_EQ(missing_mapping, nullptr);
+
+    EmbedderAssetResolver identical_resolver(resolver);
+    EXPECT_TRUE(embedder_resolver == identical_resolver);
+
+    FlutterAssetResolver different_destructor_resolver = resolver;
+    different_destructor_resolver.destruction_callback = [](void*) {};
+    EmbedderAssetResolver different_resolver(different_destructor_resolver);
+    EXPECT_FALSE(embedder_resolver == different_resolver);
+  }
+}
+
+TEST_F(EmbedderTest, EmbedderAssetResolverFreeCallback) {
+  bool asset_freed = false;
+
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = &asset_freed;
+  resolver.find_asset_callback = [](void* user_data, const char* name,
+                                    FlutterAsset* asset_out) -> bool {
+    static const char kStaticData[] = "Resource To Free";
+    asset_out->struct_size = sizeof(FlutterAsset);
+    asset_out->data = reinterpret_cast<const uint8_t*>(kStaticData);
+    asset_out->size = sizeof(kStaticData);
+    asset_out->user_data = user_data;
+    asset_out->asset_free_callback = [](void* baton) {
+      *static_cast<bool*>(baton) = true;
+    };
+    return true;
+  };
+
+  {
+    EmbedderAssetResolver embedder_resolver(resolver);
+    auto mapping = embedder_resolver.GetAsMapping("test.txt");
+    ASSERT_NE(mapping, nullptr);
+    EXPECT_FALSE(asset_freed);
+  }
+  EXPECT_TRUE(asset_freed);
+}
+
+TEST_F(EmbedderTest, EmbedderAssetResolverNullDataFreeCallback) {
+  bool asset_freed = false;
+
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = &asset_freed;
+  resolver.find_asset_callback = [](void* user_data, const char* name,
+                                    FlutterAsset* asset_out) -> bool {
+    asset_out->struct_size = sizeof(FlutterAsset);
+    asset_out->data = nullptr;
+    asset_out->size = 0;
+    asset_out->user_data = user_data;
+    asset_out->asset_free_callback = [](void* baton) {
+      *static_cast<bool*>(baton) = true;
+    };
+    return true;
+  };
+
+  {
+    EmbedderAssetResolver embedder_resolver(resolver);
+    auto mapping = embedder_resolver.GetAsMapping("test.txt");
+    EXPECT_EQ(mapping, nullptr);
+  }
+  EXPECT_TRUE(asset_freed);
+}
+
+TEST_F(EmbedderTest, EmbedderAssetResolverDestructionCallback) {
+  bool resolver_destroyed = false;
+
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = &resolver_destroyed;
+  resolver.find_asset_callback = [](void* user_data, const char* name,
+                                    FlutterAsset* asset_out) -> bool {
+    return false;
+  };
+  resolver.destruction_callback = [](void* user_data) {
+    *static_cast<bool*>(user_data) = true;
+  };
+
+  {
+    EmbedderAssetResolver embedder_resolver(resolver);
+    EXPECT_FALSE(resolver_destroyed);
+  }
+  EXPECT_TRUE(resolver_destroyed);
+}
+
+TEST_F(EmbedderTest, EmbedderCustomAssetResolversInProjectArgs) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  FlutterAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterAssetResolver);
+  resolver.user_data = nullptr;
+  resolver.find_asset_callback = [](void* user_data, const char* name,
+                                    FlutterAsset* asset_out) -> bool {
+    return false;
+  };
+
+  const FlutterAssetResolver* resolvers[] = {&resolver};
+  builder.GetProjectArgs().asset_resolvers = resolvers;
+  builder.GetProjectArgs().asset_resolvers_count = 1;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
+TEST_F(EmbedderTest, EmbedderUpdateAssetResolver) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Test invalid arguments.
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(nullptr, nullptr),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), nullptr),
+            kInvalidArguments);
+
+  FlutterAssetResolverRegistrationInfo invalid_info = {};
+  invalid_info.struct_size = sizeof(FlutterAssetResolverRegistrationInfo) - 1;
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &invalid_info),
+            kInvalidArguments);
+
+  FlutterAssetResolverRegistrationInfo info = {};
+  info.struct_size = sizeof(FlutterAssetResolverRegistrationInfo);
+  info.resolver = nullptr;
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &info),
+            kInvalidArguments);
+
+  FlutterAssetResolver invalid_resolver = {};
+  invalid_resolver.struct_size = sizeof(FlutterAssetResolver) - 1;
+  info.resolver = &invalid_resolver;
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &info),
+            kInvalidArguments);
+
+  FlutterAssetResolver missing_callback_resolver = {};
+  missing_callback_resolver.struct_size = sizeof(FlutterAssetResolver);
+  missing_callback_resolver.find_asset_callback = nullptr;
+  info.resolver = &missing_callback_resolver;
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &info),
+            kInvalidArguments);
+
+  // Test valid update.
+  FlutterAssetResolver valid_resolver = {};
+  valid_resolver.struct_size = sizeof(FlutterAssetResolver);
+  valid_resolver.user_data = nullptr;
+  valid_resolver.find_asset_callback = [](void* user_data, const char* name,
+                                          FlutterAsset* asset_out) -> bool {
+    return false;
+  };
+  info.resolver = &valid_resolver;
+  EXPECT_EQ(FlutterEngineUpdateAssetResolver(engine.get(), &info), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderGetProcAddressesUpdateAssetResolver) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  EXPECT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+  EXPECT_EQ(procs.UpdateAssetResolver, &FlutterEngineUpdateAssetResolver);
 }
 
 }  // namespace testing
