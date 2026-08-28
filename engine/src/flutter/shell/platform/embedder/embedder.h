@@ -675,6 +675,78 @@ typedef struct {
   FlutterSize lower_left_corner_radius;
 } FlutterRoundedRect;
 
+/// A structure to represent a rounded superellipse.
+typedef struct {
+  FlutterRect rect;
+  FlutterSize upper_left_corner_radius;
+  FlutterSize upper_right_corner_radius;
+  FlutterSize lower_right_corner_radius;
+  FlutterSize lower_left_corner_radius;
+} FlutterRoundSuperellipse;
+
+/// Fill rule for 2D vector path operations.
+typedef enum {
+  /// The non-zero winding rule.
+  kFlutterPathFillTypeNonZero,
+  /// The even-odd winding rule.
+  kFlutterPathFillTypeEvenOdd,
+} FlutterPathFillType;
+
+/// Verbs describing path segment operations within a \ref FlutterPath.
+typedef enum {
+  /// Moves the current point to `points[0]` without drawing a line. (1 point)
+  kFlutterPathVerbMove,
+  /// Draws a straight line from the current point to `points[0]`. (1 point)
+  kFlutterPathVerbLine,
+  /// Draws a quadratic Bezier curve using `points[0]` as control point and
+  /// `points[1]` as end point. (2 points)
+  kFlutterPathVerbQuad,
+  /// Draws a conic (rational quadratic Bezier) curve using `points[0]` as
+  /// control point, `points[1]` as end point, and `conic_weight`. (2 points)
+  kFlutterPathVerbConic,
+  /// Draws a cubic Bezier curve using `points[0]` as first control point,
+  /// `points[1]` as second control point, and `points[2]` as end point. (3
+  /// points)
+  kFlutterPathVerbCubic,
+  /// Closes the current contour by drawing a straight line to the starting
+  /// point of the contour. (0 points)
+  kFlutterPathVerbClose,
+} FlutterPathVerb;
+
+/// Represents a single verb segment within a \ref FlutterPath.
+typedef struct {
+  /// The operation verb for this segment.
+  FlutterPathVerb verb;
+  /// The points associated with this verb:
+  /// - `kFlutterPathVerbMove`: points[0] = destination point.
+  /// - `kFlutterPathVerbLine`: points[0] = end point.
+  /// - `kFlutterPathVerbQuad`: points[0] = control point, points[1] = end
+  /// point.
+  /// - `kFlutterPathVerbConic`: points[0] = control point, points[1] = end
+  /// point.
+  /// - `kFlutterPathVerbCubic`: points[0] = control point 1, points[1] =
+  /// control point 2, points[2] = end point.
+  /// - `kFlutterPathVerbClose`: unused.
+  FlutterPoint points[3];
+  /// Weight parameter for rational quadratic curve when `verb` is
+  /// `kFlutterPathVerbConic`.
+  double conic_weight;
+} FlutterPathSegment;
+
+/// A structure to represent a 2D vector path for platform view clipping and
+/// geometry.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterPath).
+  size_t struct_size;
+  /// The fill rule for this path.
+  FlutterPathFillType fill_type;
+  /// The number of segments in `segments`.
+  size_t segments_count;
+  /// Array of segments describing the contours of the path.
+  /// The memory is valid for the duration of the frame presentation callback.
+  const FlutterPathSegment* segments;
+} FlutterPath;
+
 /// A structure to represent a damage region.
 ///
 // Frozen because adding members would break the ABI of `FlutterPresentInfo`.
@@ -2204,6 +2276,12 @@ typedef enum {
   /// Indicates that the Flutter application requested that the platform view be
   /// transformed before composition.
   kFlutterPlatformViewMutationTypeTransformation,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using a rounded superellipse.
+  kFlutterPlatformViewMutationTypeClipRoundSuperellipse,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using a vector path.
+  kFlutterPlatformViewMutationTypeClipPath,
 } FlutterPlatformViewMutationType;
 
 typedef struct {
@@ -2214,6 +2292,8 @@ typedef struct {
     FlutterRect clip_rect;
     FlutterRoundedRect clip_rounded_rect;
     FlutterTransformation transformation;
+    FlutterRoundSuperellipse clip_round_superellipse;
+    FlutterPath clip_path;
   };
 } FlutterPlatformViewMutation;
 
