@@ -608,5 +608,255 @@ TEST(FindFirstLoadableLibraryTest, EmptyReturnsNull) {
             nullptr);
 }
 
+struct JNIMatrixConfig {
+  AndroidRenderingAPI rendering_api;
+  bool embedder_api_enabled;
+};
+
+class PlatformViewAndroidJNIMatrixTest
+    : public ::testing::TestWithParam<JNIMatrixConfig> {
+ public:
+  static void SetUpTestSuite() {
+    static std::once_flag jvm_init_flag;
+    std::call_once(jvm_init_flag, SetUpJVM);
+  }
+
+  static void* GetNativeMethod(const std::string& name) {
+    auto it = native_methods_.find(name);
+    return it != native_methods_.end() ? it->second : nullptr;
+  }
+
+ protected:
+  void SetUp() override {
+    FlutterMain::SetEmbedderAPIEnabledForTesting(
+        GetParam().embedder_api_enabled);
+  }
+
+  void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
+
+ private:
+  friend class MockJNIEnvProvider;
+  static MockJavaVM jvm_;
+  static std::map<std::string, void*> native_methods_;
+  static void SetUpJVM();
+};
+
+MockJavaVM PlatformViewAndroidJNIMatrixTest::jvm_;
+std::map<std::string, void*> PlatformViewAndroidJNIMatrixTest::native_methods_;
+
+void PlatformViewAndroidJNIMatrixTest::SetUpJVM() {
+  fml::jni::InitJavaVM(&jvm_);
+
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
+  const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
+  const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
+
+  EXPECT_CALL(mock_env, GetObjectRefType(_))
+      .WillRepeatedly(Return(JNILocalRefType));
+  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
+  EXPECT_CALL(mock_env, GetFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
+  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
+      .WillRepeatedly(
+          [&](jclass clazz, const JNINativeMethod* methods, jint nMethods) {
+            for (jint i = 0; i < nMethods; ++i) {
+              native_methods_[methods[i].name] = methods[i].fnPtr;
+            }
+            return 0;
+          });
+
+  PlatformViewAndroid::Register(&mock_env);
+}
+
+TEST_P(PlatformViewAndroidJNIMatrixTest, MatrixAttachDestroyAndLifecycle) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using SurfaceChangedFn = void (*)(JNIEnv*, jobject, jlong, jint, jint);
+  using SurfaceDestroyedFn = void (*)(JNIEnv*, jobject, jlong);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto native_surface_changed = reinterpret_cast<SurfaceChangedFn>(
+      GetNativeMethod("nativeSurfaceChanged"));
+  auto native_surface_destroyed = reinterpret_cast<SurfaceDestroyedFn>(
+      GetNativeMethod("nativeSurfaceDestroyed"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(native_surface_changed, nullptr);
+  ASSERT_NE(native_surface_destroyed, nullptr);
+
+  // Rationale: Standard 1080x1920 test viewport dimensions.
+  constexpr jint kWidth = 1080;
+  constexpr jint kHeight = 1920;
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+
+  jlong handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(handle, 0);
+
+  native_surface_changed(&mock_env, nullptr, handle, kWidth, kHeight);
+  native_surface_destroyed(&mock_env, nullptr, handle);
+  native_destroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIMatrixTest, MatrixViewportAndInputPipeline) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using SetViewportMetricsFn = void (*)(
+      JNIEnv*, jobject, jlong, jfloat, jint, jint, jint, jint, jint, jint, jint,
+      jint, jint, jint, jint, jint, jint, jint, jint, jintArray, jintArray,
+      jintArray, jint, jint, jint, jint, jint, jint, jint, jint);
+  using DispatchPointerDataPacketFn =
+      void (*)(JNIEnv*, jobject, jlong, jobject, jint);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto set_viewport_metrics = reinterpret_cast<SetViewportMetricsFn>(
+      GetNativeMethod("nativeSetViewportMetrics"));
+  auto dispatch_pointer = reinterpret_cast<DispatchPointerDataPacketFn>(
+      GetNativeMethod("nativeDispatchPointerDataPacket"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(set_viewport_metrics, nullptr);
+  ASSERT_NE(dispatch_pointer, nullptr);
+
+  EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
+
+  // Rationale: 288 bytes per PointerData record.
+  constexpr size_t kPointerPacketSize = 288;
+  std::vector<uint8_t> packet_data(kPointerPacketSize, 0);
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(_))
+      .WillRepeatedly(Return(packet_data.data()));
+
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+  jlong handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(handle, 0);
+
+  // Rationale: 1080x1920 with 2.0x DPR, 48px top padding, 96px bottom padding.
+  set_viewport_metrics(&mock_env, nullptr, handle, 2.0f, 1080, 1920, 48, 96, 0,
+                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr, nullptr, nullptr,
+                       0, 0, 0, 0, 0, 0, 0, 0);
+
+  dispatch_pointer(&mock_env, nullptr, handle, nullptr, kPointerPacketSize);
+  native_destroy(&mock_env, nullptr, handle);
+}
+
+TEST_P(PlatformViewAndroidJNIMatrixTest, MatrixMessagingAndAccessibility) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  using AttachFn = jlong (*)(JNIEnv*, jclass, jobject);
+  using DestroyFn = void (*)(JNIEnv*, jobject, jlong);
+  using DispatchPlatformMessageFn =
+      void (*)(JNIEnv*, jobject, jlong, jstring, jobject, jint, jint);
+  using SetSemanticsEnabledFn = void (*)(JNIEnv*, jobject, jlong, jboolean);
+  using SetAccessibilityFeaturesFn = void (*)(JNIEnv*, jobject, jlong, jint);
+  using DispatchSemanticsActionFn =
+      void (*)(JNIEnv*, jobject, jlong, jint, jint, jobject, jint);
+
+  auto native_attach =
+      reinterpret_cast<AttachFn>(GetNativeMethod("nativeAttach"));
+  auto native_destroy =
+      reinterpret_cast<DestroyFn>(GetNativeMethod("nativeDestroy"));
+  auto dispatch_msg = reinterpret_cast<DispatchPlatformMessageFn>(
+      GetNativeMethod("nativeDispatchPlatformMessage"));
+  auto set_semantics = reinterpret_cast<SetSemanticsEnabledFn>(
+      GetNativeMethod("nativeSetSemanticsEnabled"));
+  auto set_a11y = reinterpret_cast<SetAccessibilityFeaturesFn>(
+      GetNativeMethod("nativeSetAccessibilityFeatures"));
+  auto semantics_action = reinterpret_cast<DispatchSemanticsActionFn>(
+      GetNativeMethod("nativeDispatchSemanticsAction"));
+
+  ASSERT_NE(native_attach, nullptr);
+  ASSERT_NE(native_destroy, nullptr);
+  ASSERT_NE(dispatch_msg, nullptr);
+  ASSERT_NE(set_semantics, nullptr);
+  ASSERT_NE(set_a11y, nullptr);
+  ASSERT_NE(semantics_action, nullptr);
+
+  EXPECT_CALL(mock_env, GetStringUTFChars(_, _))
+      .WillRepeatedly(Return("flutter/matrix_channel"));
+  EXPECT_CALL(mock_env, ReleaseStringUTFChars(_, _)).WillRepeatedly(Return());
+
+  // Rationale: 4-byte payload and response ID 99.
+  constexpr jint kResponseId = 99;
+  constexpr jint kPayloadSize = 4;
+  uint8_t payload[kPayloadSize] = {0xAA, 0xBB, 0xCC, 0xDD};
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(_))
+      .WillRepeatedly(Return(payload));
+
+  jobject dummy_flutter_jni = reinterpret_cast<jobject>(0x1234);
+  jlong handle = native_attach(&mock_env, nullptr, dummy_flutter_jni);
+  ASSERT_NE(handle, 0);
+
+  dispatch_msg(&mock_env, nullptr, handle, nullptr, nullptr, kPayloadSize,
+               kResponseId);
+  set_semantics(&mock_env, nullptr, handle, JNI_TRUE);
+  // Rationale: Accessibility feature flag 1.
+  set_a11y(&mock_env, nullptr, handle, 1);
+  // Rationale: Node ID 0, tap action ID 1.
+  semantics_action(&mock_env, nullptr, handle, 0, 1, nullptr, 0);
+
+  native_destroy(&mock_env, nullptr, handle);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    JNIDispatchMatrix,
+    PlatformViewAndroidJNIMatrixTest,
+    ::testing::Values(
+        JNIMatrixConfig{AndroidRenderingAPI::kImpellerOpenGLES, true},
+        JNIMatrixConfig{AndroidRenderingAPI::kImpellerOpenGLES, false},
+        JNIMatrixConfig{AndroidRenderingAPI::kImpellerVulkan, true},
+        JNIMatrixConfig{AndroidRenderingAPI::kImpellerVulkan, false},
+        JNIMatrixConfig{AndroidRenderingAPI::kSoftware, true},
+        JNIMatrixConfig{AndroidRenderingAPI::kSoftware, false}),
+    [](const ::testing::TestParamInfo<JNIMatrixConfig>& info) {
+      std::string api_name;
+      switch (info.param.rendering_api) {
+        case AndroidRenderingAPI::kImpellerOpenGLES:
+          api_name = "OpenGLES";
+          break;
+        case AndroidRenderingAPI::kImpellerVulkan:
+          api_name = "Vulkan";
+          break;
+        case AndroidRenderingAPI::kSoftware:
+          api_name = "Software";
+          break;
+        case AndroidRenderingAPI::kSkiaOpenGLES:
+          api_name = "SkiaOpenGLES";
+          break;
+        case AndroidRenderingAPI::kImpellerAutoselect:
+          api_name = "ImpellerAutoselect";
+          break;
+      }
+      return api_name + (info.param.embedder_api_enabled ? "_EmbedderAPI"
+                                                         : "_LegacyShell");
+    });
+
 }  // namespace testing
 }  // namespace flutter
