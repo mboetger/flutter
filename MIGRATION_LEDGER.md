@@ -43,7 +43,21 @@
 1. **Rendering Feature Flag Gating**: Any PR touching rendering logic must be feature-flag gated and tested under BOTH states (`flag=true` AND `flag=false`).
 2. **Adversarial Review Loop**: Every PR must undergo iterative review by an independent agent (`reidbaker-agent`) until 0 findings remain.
 3. **Synchronous Surface Detach Barrier**: Block on rasterizer during `nativeSurfaceDestroyed` before OS destroys `ANativeWindow`.
-4. **EGL_BAD_ACCESS Defense**: Ensure IO thread has isolated offscreen PBuffer context.
+4. **EGL_BAD_ACCESS Defense**: Ensure IO thread and worker threads have isolated offscreen PBuffer contexts (`thread_local EGLContext` sharing with primary context).
 5. **Surface Lifecycle Defense**: Handle early `make_current` calls gracefully before `nativeSurfaceCreated`.
 6. **JIT Assets Defense**: Route `kernel_blob.bin` queries through `FlutterAssetResolver` instead of file paths.
 7. **GN Target Isolation & Visibility Ratchet**: Quarantine all legacy engine dependencies into `android_legacy_engine_holder` with strict visibility, keeping `flutter_shell_native_src` clean from Day 1.
+
+## Physical Device Integration & Golden Testing Matrix (Pixel Tablet • API 36)
+- **Target Device**: `Pixel Tablet (mobile) • 48171HFH80D9S7 • android-arm64 • Android 16 (API 36)`
+- **Local Engine Build**: `ninja -C out/android_debug_unopt_arm64 flutter_shell_native flutter/shell/platform/android:android_jar flutter/shell/platform/android:abi_jars flutter/shell/platform/android:flutter_jar_zip`
+- **Host Unit Tests**: `out/host_debug_unopt_arm64/embedder_unittests` (173 Passed, 0 Failed).
+- **Integration & Golden Test Results**:
+  - `flutter_rendered_blue_rectangle_main_test.dart`: **PASSED** (Baseline generated and verified with local engine build).
+  - `platform_view_tap_color_change_main_test.dart`: **PASSED** (Verified golden match with local engine build).
+  - `external_texture/surface_producer_smiley_face_main_test.dart`: **PASSED** (Verified external texture rendering, backgrounding, memory trimming, and resume surface recreation).
+- **Core Runtime Hardening Implemented**:
+  1. Thread-local EGL resource contexts in `AndroidSurfaceManager::MakeResourceCurrent()` eliminating multi-threaded `EGL_BAD_ACCESS` (0x3002).
+  2. Main-thread dispatch of `@UiThread` methods (`onFirstFrame`, `onPreEngineRestart`) via `platform_task_runner_`.
+  3. VM Service URL broadcast registration in `FlutterMain::SetupDartVMServiceUriCallback()` for seamless FlutterDriver discovery.
+  4. OpenGL backing store FBO 0 configuration in `AndroidSurfaceManager::CreateBackingStore()`.
