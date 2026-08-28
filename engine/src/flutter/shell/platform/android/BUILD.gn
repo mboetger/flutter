@@ -29,8 +29,7 @@ source_set("image_generator") {
 
   deps = [
     "//flutter/fml",
-    "//flutter/lib/ui",
-    "//flutter/skia",
+    "//flutter/shell/platform/embedder:embedder_as_internal_library",
   ]
 
   libs = [
@@ -57,7 +56,6 @@ executable("flutter_shell_native_unittests") {
   sources = [
     "android_compositor_unittests.cc",
     "android_engine_unittests.cc",
-    "android_image_generator_unittests.cc",
     "android_surface_manager_unittests.cc",
     "android_thread_config_unittests.cc",
     "apk_asset_provider_unittests.cc",
@@ -126,7 +124,6 @@ source_set("flutter_shell_native_src") {
 
   deps = [
     ":android_thread_config",
-    "//flutter/runtime",
   ]
 
   public_configs = [ "//flutter:config" ]

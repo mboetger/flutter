@@ -13,8 +13,8 @@
 
 #include "flutter/common/settings.h"
 #include "flutter/fml/macros.h"
-#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -64,7 +64,7 @@ class FlutterMain {
   const std::string kernel_path_;
   const int64_t init_time_millis_ = 0;
   const int api_level_ = 0;
-  DartServiceIsolate::CallbackHandle vm_service_uri_callback_ = 0;
+  intptr_t vm_service_uri_callback_ = 0;
 
   explicit FlutterMain(const flutter::Settings& settings,
                        flutter::AndroidRenderingAPI android_rendering_api,

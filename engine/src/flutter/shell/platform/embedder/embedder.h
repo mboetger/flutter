@@ -3287,6 +3287,10 @@ typedef struct {
   bool transient;
 } FlutterDeferredLibraryErrorInfo;
 
+/// Callback invoked when the Dart VM service server publishes a status URI.
+typedef void (*FlutterEngineServerStatusCallback)(const char* uri,
+                                                  void* user_data);
+
 typedef struct {
   /// The size of this struct. Must be
   /// sizeof(FlutterSendSemanticsActionInfo).
@@ -4114,6 +4118,33 @@ FlutterEngineResult FlutterEnginePostCallbackOnAllNativeThreads(
     void* user_data);
 
 //------------------------------------------------------------------------------
+/// @brief      Registers a callback to receive notifications when the Dart VM
+///             service isolate publishes a new server status URI.
+///
+/// @param[in]  callback    The callback to invoke when the VM service URI is
+///                         ready.
+/// @param[in]  user_data   A baton passed by the engine to the callback.
+/// @param[out] handle_out  Pointer to receive the registration handle.
+///
+/// @return     `kSuccess` if the callback was registered successfully.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineAddServerStatusCallback(
+    FlutterEngineServerStatusCallback callback,
+    void* user_data,
+    intptr_t* handle_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Unregisters a server status callback previously registered with
+///             `FlutterEngineAddServerStatusCallback`.
+///
+/// @param[in]  handle      The handle returned by
+/// `FlutterEngineAddServerStatusCallback`.
+///
+/// @return     `kSuccess` if the callback was removed.
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineRemoveServerStatusCallback(intptr_t handle);
+
+//------------------------------------------------------------------------------
 /// @brief    Posts updates corresponding to display changes to a running engine
 ///           instance.
 ///
@@ -4465,6 +4496,12 @@ typedef FlutterEngineResult (*FlutterEngineRegisterImageDecoderFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterImageDecoder* decoder,
     int32_t priority);
+typedef FlutterEngineResult (*FlutterEngineAddServerStatusCallbackFnPtr)(
+    FlutterEngineServerStatusCallback callback,
+    void* user_data,
+    intptr_t* handle_out);
+typedef FlutterEngineResult (*FlutterEngineRemoveServerStatusCallbackFnPtr)(
+    intptr_t handle);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4522,6 +4559,8 @@ typedef struct {
   FlutterEngineScreenshotFnPtr Screenshot;
   FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
   FlutterEngineRegisterImageDecoderFnPtr RegisterImageDecoder;
+  FlutterEngineAddServerStatusCallbackFnPtr AddServerStatusCallback;
+  FlutterEngineRemoveServerStatusCallbackFnPtr RemoveServerStatusCallback;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

@@ -53,6 +53,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
 #include "flutter/lib/ui/plugins/callback_cache.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -4617,6 +4618,29 @@ FlutterEngineResult FlutterEngineRegisterImageDecoder(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineAddServerStatusCallback(
+    FlutterEngineServerStatusCallback callback,
+    void* user_data,
+    intptr_t* handle_out) {
+  if (callback == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Callback was null.");
+  }
+  auto handle = flutter::DartServiceIsolate::AddServerStatusCallback(
+      [callback, user_data](const std::string& uri) {
+        callback(uri.c_str(), user_data);
+      });
+  if (handle_out != nullptr) {
+    *handle_out = static_cast<intptr_t>(handle);
+  }
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineRemoveServerStatusCallback(intptr_t handle) {
+  flutter::DartServiceIsolate::RemoveServerStatusCallback(
+      static_cast<flutter::DartServiceIsolate::CallbackHandle>(handle));
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4681,6 +4705,8 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(Screenshot, FlutterEngineScreenshot);
   SET_PROC(GetCallbackInformation, FlutterEngineGetCallbackInformation);
   SET_PROC(RegisterImageDecoder, FlutterEngineRegisterImageDecoder);
+  SET_PROC(AddServerStatusCallback, FlutterEngineAddServerStatusCallback);
+  SET_PROC(RemoveServerStatusCallback, FlutterEngineRemoveServerStatusCallback);
 #undef SET_PROC
 
   return kSuccess;

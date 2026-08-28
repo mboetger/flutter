@@ -1694,7 +1694,8 @@ void PlatformViewAndroidJNIImpl::SurfaceTextureUpdateTexImage(
   FML_CHECK(fml::jni::CheckException(env));
 }
 
-DlMatrix PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
+std::array<float, 16>
+PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
     JavaLocalRef surface_texture) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
 
@@ -1718,9 +1719,10 @@ DlMatrix PlatformViewAndroidJNIImpl::SurfaceTextureGetTransformMatrix(
 
   float* m = env->GetFloatArrayElements(transformMatrix.obj(), nullptr);
 
-  const auto transform =
-      DlMatrix::MakeColumn(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8],
-                           m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+  std::array<float, 16> transform = {};
+  if (m != nullptr) {
+    std::copy(m, m + 16, transform.begin());
+  }
 
   env->ReleaseFloatArrayElements(transformMatrix.obj(), m, JNI_ABORT);
 

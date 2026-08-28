@@ -20,13 +20,14 @@
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
-#include "flutter/runtime/dart_service_isolate.h"
-#include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/common/engine_switches.h"
 
 namespace flutter {
+
+Settings SettingsFromCommandLine(const fml::CommandLine& command_line,
+                                 bool validate = false);
 
 constexpr int kMinimumAndroidApiLevelForImpeller = 29;
 
@@ -315,13 +316,27 @@ void FlutterMain::SetupDartVMServiceUriCallback(JNIEnv* env) {
   fml::RefPtr<fml::TaskRunner> platform_runner =
       fml::MessageLoop::GetCurrent().GetTaskRunner();
 
-  vm_service_uri_callback_ = DartServiceIsolate::AddServerStatusCallback(
-      [platform_runner, set_uri](const std::string& uri) {
-        __android_log_print(ANDROID_LOG_INFO, "flutter",
-                            "The Dart VM service is listening on %s",
-                            uri.c_str());
-        platform_runner->PostTask([uri, set_uri] { set_uri(uri); });
-      });
+  FlutterEngineAddServerStatusCallback(
+      [](const char* uri, void* user_data) {
+        auto* runner_and_setter =
+            static_cast<std::pair<fml::RefPtr<fml::TaskRunner>,
+                                  std::function<void(const std::string&)>>*>(
+                user_data);
+        if (runner_and_setter) {
+          std::string uri_str = uri ? uri : "";
+          __android_log_print(ANDROID_LOG_INFO, "flutter",
+                              "The Dart VM service is listening on %s",
+                              uri_str.c_str());
+          runner_and_setter->first->PostTask(
+              [uri_str, set_fn = runner_and_setter->second] {
+                set_fn(uri_str);
+              });
+        }
+      },
+      new std::pair<fml::RefPtr<fml::TaskRunner>,
+                    std::function<void(const std::string&)>>(platform_runner,
+                                                             set_uri),
+      &vm_service_uri_callback_);
 }
 
 static void PrefetchDefaultFontManager(JNIEnv* env, jclass jcaller) {

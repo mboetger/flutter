@@ -6,55 +6,27 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_IMAGE_GENERATOR_H_
 
 #include <jni.h>
+#include <memory>
+#include <vector>
 
-#include "flutter/fml/memory/ref_ptr.h"
+#include "flutter/fml/macros.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/task_runner.h"
-#include "flutter/lib/ui/painting/image_generator.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
-namespace testing {
-FML_TEST_CLASS(AndroidImageGenerator, HeaderDecodeDimensionMismatch);
-}
-
-class AndroidImageGenerator : public ImageGenerator {
- private:
-  explicit AndroidImageGenerator(sk_sp<SkData> buffer);
-
+class AndroidImageGenerator {
  public:
+  explicit AndroidImageGenerator(std::vector<uint8_t> data);
   ~AndroidImageGenerator();
 
-  // |ImageGenerator|
-  const SkImageInfo& GetInfo() override;
-
-  // |ImageGenerator|
-  unsigned int GetFrameCount() const override;
-
-  // |ImageGenerator|
-  unsigned int GetPlayCount() const override;
-
-  // |ImageGenerator|
-  const ImageGenerator::FrameInfo GetFrameInfo(
-      unsigned int frame_index) override;
-
-  // |ImageGenerator|
-  SkISize GetScaledDimensions(float desired_scale) override;
-
-  // |ImageGenerator|
-  bool GetPixels(const SkImageInfo& info,
-                 void* pixels,
-                 size_t row_bytes,
-                 unsigned int frame_index,
-                 std::optional<unsigned int> prior_frame) override;
+  bool GetImageInfo(FlutterImageInfo* info_out);
+  bool GetPixels(const FlutterImageInfo* info, void* pixels, size_t row_bytes);
 
   void DecodeImage();
 
   static bool Register(JNIEnv* env);
-
-  static std::shared_ptr<ImageGenerator> MakeFromData(
-      sk_sp<SkData> data,
-      const fml::RefPtr<fml::TaskRunner>& task_runner);
 
   static void NativeImageHeaderCallback(JNIEnv* env,
                                         jclass jcaller,
@@ -63,28 +35,15 @@ class AndroidImageGenerator : public ImageGenerator {
                                         int height);
 
  private:
-  FML_FRIEND_TEST(testing::AndroidImageGenerator,
-                  HeaderDecodeDimensionMismatch);
+  std::vector<uint8_t> data_;
+  std::vector<uint8_t> software_decoded_data_;
+  int width_ = -1;
+  int height_ = -1;
 
-  sk_sp<SkData> data_;
-  sk_sp<SkData> software_decoded_data_;
-
-  SkImageInfo image_info_;
-
-  /// Blocks until the header of the image has been decoded and the image
-  /// dimensions have been determined.
   fml::ManualResetWaitableEvent header_decoded_latch_;
-
-  /// Blocks until the image has been fully decoded.
   fml::ManualResetWaitableEvent fully_decoded_latch_;
 
-  static std::shared_ptr<AndroidImageGenerator> MakeForTesting(
-      const SkImageInfo& header_info,
-      sk_sp<SkData> decoded_data);
-
   void DoDecodeImage();
-
-  bool IsValidImageData();
 
   FML_DISALLOW_COPY_ASSIGN_AND_MOVE(AndroidImageGenerator);
 };

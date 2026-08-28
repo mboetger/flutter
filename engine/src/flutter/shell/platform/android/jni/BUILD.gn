@@ -14,7 +14,6 @@ source_set("jni") {
   public_configs = [ "//flutter:config" ]
 
   deps = [
-    "//flutter/display_list",
     "//flutter/fml",
     "//flutter/shell/platform/android/surface:native_window",
   ]

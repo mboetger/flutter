@@ -5,12 +5,12 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 
+#include <array>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "flutter/display_list/geometry/dl_geometry_types.h"
 #include "flutter/fml/mapping.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 
@@ -123,7 +123,7 @@ class PlatformViewAndroidJNI {
   ///             Then, it updates the `transform` matrix, so it fill the canvas
   ///             and preserve the aspect ratio.
   ///
-  virtual DlMatrix SurfaceTextureGetTransformMatrix(
+  virtual std::array<float, 16> SurfaceTextureGetTransformMatrix(
       JavaLocalRef surface_texture) = 0;
 
   //----------------------------------------------------------------------------

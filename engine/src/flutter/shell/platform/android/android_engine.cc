@@ -5,6 +5,7 @@
 #include "flutter/shell/platform/android/android_engine.h"
 
 #include <EGL/egl.h>
+#include <android/log.h>
 #include <cstring>
 #include <utility>
 
@@ -570,6 +571,13 @@ bool AndroidEngine::Launch(std::unique_ptr<APKAssetProvider> apk_asset_provider,
     args.command_line_argc = static_cast<int>(cmd_ptrs.size());
     args.command_line_argv = cmd_ptrs.data();
   }
+
+  args.log_tag = "flutter";
+  args.log_message_callback = [](const char* tag, const char* message,
+                                 void* user_data) {
+    __android_log_print(ANDROID_LOG_INFO, tag ? tag : "flutter", "%s",
+                        message ? message : "");
+  };
 
   if (embedder_api_.Initialize == nullptr) {
     FML_LOG(ERROR) << "Embedder API Initialize pointer is null.";
