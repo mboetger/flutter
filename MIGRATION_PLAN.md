@@ -79,7 +79,7 @@ When the feature flag is rolled out (Phase 5.1), your final cleanup branch (Phas
 
 ## The 5-Phase Execution Sequence
 
-All PRs should be strictly prefixed with `android-migration/phase-X.Y-[description]` to provide sequential reviewability.
+All PRs should be strictly prefixed with `android-migration-3/phase-X.Y-[description]` to provide sequential reviewability.
 
 ### Phase 0: Baselining
 * **0.1**: Add extensive C++ unit tests to baseline rendering layers (GL/Vulkan/Software), message handlers, and isolate thread-safety *before* starting the C++ refactor.
