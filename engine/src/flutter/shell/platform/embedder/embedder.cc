@@ -103,6 +103,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #endif  // SHELL_ENABLE_METAL
 
 #ifdef SHELL_ENABLE_VULKAN
+#include "flutter/shell/platform/embedder/embedder_external_texture_vk.h"
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkTypes.h"
 #ifdef IMPELLER_SUPPORTS_RENDERING
@@ -2513,6 +2514,29 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
       };
       external_texture_resolver = std::make_unique<ExternalTextureResolver>(
           external_texture_metal_callback);
+    }
+  }
+#endif
+#ifdef SHELL_ENABLE_VULKAN
+  flutter::EmbedderExternalTextureVK::ExternalTextureCallback
+      external_texture_vk_callback;
+  if (config->type == kVulkan) {
+    const FlutterVulkanRendererConfig* vulkan_config = &config->vulkan;
+    if (SAFE_ACCESS(vulkan_config, external_texture_frame_callback, nullptr)) {
+      external_texture_vk_callback =
+          [ptr = vulkan_config->external_texture_frame_callback, user_data](
+              int64_t texture_identifier, size_t width,
+              size_t height) -> std::unique_ptr<FlutterVulkanExternalTexture> {
+        std::unique_ptr<FlutterVulkanExternalTexture> texture =
+            std::make_unique<FlutterVulkanExternalTexture>();
+        texture->struct_size = sizeof(FlutterVulkanExternalTexture);
+        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
+          return nullptr;
+        }
+        return texture;
+      };
+      external_texture_resolver = std::make_unique<ExternalTextureResolver>(
+          external_texture_vk_callback);
     }
   }
 #endif
