@@ -3491,11 +3491,33 @@ FlutterEngineResult FlutterEngineSendSemanticsAction(
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
+  if (info == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "FlutterSendSemanticsActionInfo was null.");
+  }
+  if (info->struct_size != sizeof(FlutterSendSemanticsActionInfo)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "FlutterSendSemanticsActionInfo struct_size was invalid.");
+  }
+  if (info->data_length > 0 && info->data == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "FlutterSendSemanticsActionInfo data buffer was null with non-zero "
+        "data_length.");
+  }
+  auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
   auto engine_action = static_cast<flutter::SemanticsAction>(info->action);
-  if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)
-           ->DispatchSemanticsAction(
-               info->view_id, info->node_id, engine_action,
-               fml::MallocMapping::Copy(info->data, info->data_length))) {
+  fml::MallocMapping data_mapping =
+      (info->data != nullptr && info->data_length > 0)
+          ? fml::MallocMapping::Copy(info->data, info->data_length)
+          : fml::MallocMapping();
+  if (!embedder_engine->DispatchSemanticsAction(info->view_id, info->node_id,
+                                                engine_action,
+                                                std::move(data_mapping))) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                               "Could not dispatch semantics action.");
   }

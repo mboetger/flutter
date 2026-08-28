@@ -11,6 +11,7 @@
 #include "embedder.h"
 #include "embedder_asset_resolver.h"
 #include "embedder_engine.h"
+#include "embedder_semantics_update.h"
 #include "flutter/common/constants.h"
 #include "flutter/flow/raster_cache.h"
 #include "flutter/fml/file.h"
@@ -5071,6 +5072,250 @@ TEST_F(EmbedderTest, EmbedderGetProcAddressesRasterContext) {
   EXPECT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
   EXPECT_EQ(procs.NotifyCreated, &FlutterEngineNotifyCreated);
   EXPECT_EQ(procs.NotifyDestroyed, &FlutterEngineNotifyDestroyed);
+}
+
+TEST_F(EmbedderTest, EmbedderSemanticsNode2ExtendedFieldsDirect) {
+  SemanticsNode node;
+  node.id = 42;
+  node.label = "Submit Form";
+  node.hint = "Double tap to submit";
+  node.value = "Active";
+  node.increasedValue = "More";
+  node.decreasedValue = "Less";
+  node.tooltip = "Submission Tooltip";
+  node.identifier = "submit_button_unique_id";
+  node.headingLevel = 2;
+  node.textDirection = 2;  // LTR
+  node.maxValueLength = 100;
+  node.currentValueLength = 25;
+  node.traversalParent = 10;
+  node.minValue = "1.0";
+  node.maxValue = "10.0";
+  node.linkUrl = "https://flutter.dev";
+  node.role = SemanticsRole::kTab;
+  node.validationResult = SemanticsValidationResult::kValid;
+  node.locale = "en-US";
+  node.rect = SkRect::MakeXYWH(10.0f, 20.0f, 100.0f, 50.0f);
+  node.transform = SkM44(1.0f, 0.0f, 0.0f, 15.0f,         //
+                         0.0f, 1.0f, 0.0f, 25.0f,         //
+                         0.0f, 0.0f, 1.0f, 0.0f,          //
+                         0.0f, 0.0f, 0.0f, 1.0f);         //
+  node.hitTestTransform = SkM44(2.0f, 0.0f, 0.0f, 30.0f,  //
+                                0.0f, 2.0f, 0.0f, 50.0f,  //
+                                0.0f, 0.0f, 1.0f, 0.0f,   //
+                                0.0f, 0.0f, 0.0f, 1.0f);  //
+  node.childrenInTraversalOrder = {43, 44};
+  node.childrenInHitTestOrder = {44, 43};
+  node.customAccessibilityActions = {101};
+
+  CustomAccessibilityAction custom_action;
+  custom_action.id = 101;
+  custom_action.overrideId = -1;
+  custom_action.label = "Custom Swipe";
+  custom_action.hint = "Performs custom swipe";
+
+  SemanticsNodeUpdates node_updates;
+  node_updates[node.id] = node;
+
+  CustomAccessibilityActionUpdates action_updates;
+  action_updates[custom_action.id] = custom_action;
+
+  const int64_t kTestViewId = 12345;
+  EmbedderSemanticsUpdate2 update(kTestViewId, node_updates, action_updates);
+  FlutterSemanticsUpdate2* raw_update = update.get();
+
+  ASSERT_NE(raw_update, nullptr);
+  EXPECT_EQ(raw_update->struct_size, sizeof(FlutterSemanticsUpdate2));
+  EXPECT_EQ(raw_update->view_id, kTestViewId);
+  EXPECT_EQ(raw_update->node_count, 1u);
+  EXPECT_EQ(raw_update->custom_action_count, 1u);
+
+  const FlutterSemanticsNode2* node2 = raw_update->nodes[0];
+  ASSERT_NE(node2, nullptr);
+  EXPECT_EQ(node2->struct_size, sizeof(FlutterSemanticsNode2));
+  EXPECT_EQ(node2->id, 42);
+  EXPECT_STREQ(node2->label, "Submit Form");
+  EXPECT_STREQ(node2->hint, "Double tap to submit");
+  EXPECT_STREQ(node2->value, "Active");
+  EXPECT_STREQ(node2->increased_value, "More");
+  EXPECT_STREQ(node2->decreased_value, "Less");
+  EXPECT_STREQ(node2->tooltip, "Submission Tooltip");
+  EXPECT_STREQ(node2->identifier, "submit_button_unique_id");
+  EXPECT_EQ(node2->heading_level, 2);
+  EXPECT_EQ(node2->text_direction, kFlutterTextDirectionLTR);
+  EXPECT_EQ(node2->rect.left, 10.0);
+  EXPECT_EQ(node2->rect.top, 20.0);
+  EXPECT_EQ(node2->rect.right, 110.0);
+  EXPECT_EQ(node2->rect.bottom, 70.0);
+
+  // Extended semantics fields
+  EXPECT_EQ(node2->max_value_length, 100);
+  EXPECT_EQ(node2->current_value_length, 25);
+  EXPECT_EQ(node2->traversal_parent, 10);
+  EXPECT_STREQ(node2->min_value, "1.0");
+  EXPECT_STREQ(node2->max_value, "10.0");
+  EXPECT_STREQ(node2->link_url, "https://flutter.dev");
+  EXPECT_EQ(node2->role, kFlutterSemanticsRoleTab);
+  EXPECT_EQ(node2->validation_result, kFlutterSemanticsValidationResultValid);
+  EXPECT_STREQ(node2->locale, "en-US");
+
+  // Transform check
+  EXPECT_DOUBLE_EQ(node2->transform.scaleX, 1.0);
+  EXPECT_DOUBLE_EQ(node2->transform.transX, 15.0);
+  EXPECT_DOUBLE_EQ(node2->transform.scaleY, 1.0);
+  EXPECT_DOUBLE_EQ(node2->transform.transY, 25.0);
+
+  // Hit test transform check
+  EXPECT_DOUBLE_EQ(node2->hit_test_transform.scaleX, 2.0);
+  EXPECT_DOUBLE_EQ(node2->hit_test_transform.transX, 30.0);
+  EXPECT_DOUBLE_EQ(node2->hit_test_transform.scaleY, 2.0);
+  EXPECT_DOUBLE_EQ(node2->hit_test_transform.transY, 50.0);
+
+  // Children order
+  EXPECT_EQ(node2->child_count, 2u);
+  EXPECT_EQ(node2->children_in_traversal_order[0], 43);
+  EXPECT_EQ(node2->children_in_traversal_order[1], 44);
+  EXPECT_EQ(node2->children_in_hit_test_order[0], 44);
+  EXPECT_EQ(node2->children_in_hit_test_order[1], 43);
+
+  // Custom actions
+  EXPECT_EQ(node2->custom_accessibility_actions_count, 1u);
+  EXPECT_EQ(node2->custom_accessibility_actions[0], 101);
+
+  const FlutterSemanticsCustomAction2* action2 = raw_update->custom_actions[0];
+  ASSERT_NE(action2, nullptr);
+  EXPECT_EQ(action2->struct_size, sizeof(FlutterSemanticsCustomAction2));
+  EXPECT_EQ(action2->id, 101);
+  EXPECT_EQ(action2->override_action, static_cast<FlutterSemanticsAction>(-1));
+  EXPECT_STREQ(action2->label, "Custom Swipe");
+  EXPECT_STREQ(action2->hint, "Performs custom swipe");
+}
+
+TEST_F(EmbedderTest, EmbedderSemanticsNode2DefaultValues) {
+  SemanticsNode node;
+  node.id = 1;
+
+  SemanticsNodeUpdates node_updates;
+  node_updates[node.id] = node;
+
+  CustomAccessibilityActionUpdates action_updates;
+
+  EmbedderSemanticsUpdate2 update(0, node_updates, action_updates);
+  FlutterSemanticsUpdate2* raw_update = update.get();
+
+  ASSERT_NE(raw_update, nullptr);
+  EXPECT_EQ(raw_update->node_count, 1u);
+  const FlutterSemanticsNode2* node2 = raw_update->nodes[0];
+  ASSERT_NE(node2, nullptr);
+  EXPECT_EQ(node2->struct_size, sizeof(FlutterSemanticsNode2));
+  EXPECT_EQ(node2->max_value_length, -1);
+  EXPECT_EQ(node2->current_value_length, -1);
+  EXPECT_EQ(node2->traversal_parent, 0);
+  EXPECT_STREQ(node2->min_value, "");
+  EXPECT_STREQ(node2->max_value, "");
+  EXPECT_STREQ(node2->link_url, "");
+  EXPECT_EQ(node2->role, kFlutterSemanticsRoleNone);
+  EXPECT_EQ(node2->validation_result, kFlutterSemanticsValidationResultNone);
+  EXPECT_STREQ(node2->locale, "");
+}
+
+TEST_F(EmbedderTest, EmbedderSemanticsNode2StringAttributes) {
+  SemanticsNode node;
+  node.id = 1;
+  node.label = "Spell out this text";
+
+  auto locale_attr = std::make_shared<LocaleStringAttribute>();
+  locale_attr->start = 0;
+  locale_attr->end = 5;
+  locale_attr->type = StringAttributeType::kLocale;
+  locale_attr->locale = "en-GB";
+
+  auto spell_out_attr = std::make_shared<SpellOutStringAttribute>();
+  spell_out_attr->start = 6;
+  spell_out_attr->end = 9;
+  spell_out_attr->type = StringAttributeType::kSpellOut;
+
+  node.labelAttributes = {locale_attr, spell_out_attr};
+
+  SemanticsNodeUpdates node_updates;
+  node_updates[node.id] = node;
+  CustomAccessibilityActionUpdates action_updates;
+
+  EmbedderSemanticsUpdate2 update(0, node_updates, action_updates);
+  FlutterSemanticsUpdate2* raw_update = update.get();
+
+  ASSERT_NE(raw_update, nullptr);
+  ASSERT_EQ(raw_update->node_count, 1u);
+  const FlutterSemanticsNode2* node2 = raw_update->nodes[0];
+  ASSERT_NE(node2, nullptr);
+  EXPECT_EQ(node2->label_attribute_count, 2u);
+  ASSERT_NE(node2->label_attributes, nullptr);
+
+  const FlutterStringAttribute* attr0 = node2->label_attributes[0];
+  ASSERT_NE(attr0, nullptr);
+  EXPECT_EQ(attr0->struct_size, sizeof(FlutterStringAttribute));
+  EXPECT_EQ(attr0->start, 0u);
+  EXPECT_EQ(attr0->end, 5u);
+  EXPECT_EQ(attr0->type, FlutterStringAttributeType::kLocale);
+  ASSERT_NE(attr0->locale, nullptr);
+  EXPECT_EQ(attr0->locale->struct_size, sizeof(FlutterLocaleStringAttribute));
+  EXPECT_STREQ(attr0->locale->locale, "en-GB");
+
+  const FlutterStringAttribute* attr1 = node2->label_attributes[1];
+  ASSERT_NE(attr1, nullptr);
+  EXPECT_EQ(attr1->struct_size, sizeof(FlutterStringAttribute));
+  EXPECT_EQ(attr1->start, 6u);
+  EXPECT_EQ(attr1->end, 9u);
+  EXPECT_EQ(attr1->type, FlutterStringAttributeType::kSpellOut);
+  ASSERT_NE(attr1->spell_out, nullptr);
+  EXPECT_EQ(attr1->spell_out->struct_size,
+            sizeof(FlutterSpellOutStringAttribute));
+}
+
+TEST_F(EmbedderTest, EmbedderSendSemanticsActionValidation) {
+  EXPECT_EQ(FlutterEngineSendSemanticsAction(nullptr, nullptr),
+            kInvalidArguments);
+
+  FlutterSendSemanticsActionInfo info = {};
+  info.struct_size = sizeof(FlutterSendSemanticsActionInfo);
+  info.node_id = 0;
+  info.action = kFlutterSemanticsActionTap;
+
+  EXPECT_EQ(FlutterEngineSendSemanticsAction(nullptr, &info),
+            kInvalidArguments);
+
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterSendSemanticsActionInfo invalid_size_info = {};
+  invalid_size_info.struct_size = sizeof(FlutterSendSemanticsActionInfo) - 1;
+  EXPECT_EQ(FlutterEngineSendSemanticsAction(engine.get(), &invalid_size_info),
+            kInvalidArguments);
+
+  FlutterSendSemanticsActionInfo null_data_with_length = {};
+  null_data_with_length.struct_size = sizeof(FlutterSendSemanticsActionInfo);
+  null_data_with_length.node_id = 0;
+  null_data_with_length.action = kFlutterSemanticsActionTap;
+  null_data_with_length.data = nullptr;
+  null_data_with_length.data_length = 16;
+  EXPECT_EQ(
+      FlutterEngineSendSemanticsAction(engine.get(), &null_data_with_length),
+      kInvalidArguments);
+
+  EXPECT_EQ(FlutterEngineSendSemanticsAction(engine.get(), &info), kSuccess);
+
+  uint8_t payload[] = {0x01, 0x02, 0x03, 0x04};
+  FlutterSendSemanticsActionInfo data_info = {};
+  data_info.struct_size = sizeof(FlutterSendSemanticsActionInfo);
+  data_info.node_id = 0;
+  data_info.action = kFlutterSemanticsActionSetSelection;
+  data_info.data = payload;
+  data_info.data_length = sizeof(payload);
+  EXPECT_EQ(FlutterEngineSendSemanticsAction(engine.get(), &data_info),
+            kSuccess);
 }
 
 }  // namespace testing
