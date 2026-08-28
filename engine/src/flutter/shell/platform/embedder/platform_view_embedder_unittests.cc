@@ -4,6 +4,7 @@
 
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
+#include "flutter/fml/make_copyable.h"
 #include "flutter/shell/common/thread_host.h"
 #include "flutter/testing/testing.h"
 
@@ -310,6 +311,121 @@ TEST(PlatformViewEmbedderTest, LoadDartDeferredLibraryError) {
     latch.Signal();
   });
   latch.Wait();
+}
+
+TEST(PlatformViewEmbedderTest,
+     NotifyCreatedRunsRasterContextSetupCallbackOnRasterThread) {
+  ThreadHost thread_host(
+      "io.flutter.test." + GetCurrentTestName() + ".",
+      ThreadHost::Type::kPlatform | ThreadHost::Type::kRaster);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "NotifyCreatedRunsRasterContextSetupCallbackOnRasterThread",
+      thread_host.platform_thread->GetTaskRunner(),
+      thread_host.raster_thread->GetTaskRunner(), nullptr, nullptr);
+
+  struct TestContext {
+    bool setup_called = false;
+    bool setup_on_raster_thread = false;
+    void* received_user_data = nullptr;
+    flutter::TaskRunners task_runners;
+  };
+
+  TestContext test_context{
+      .task_runners = task_runners,
+  };
+
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask([&]() {
+    MockDelegate delegate;
+    EXPECT_CALL(delegate, OnPlatformViewCreated(::testing::_))
+        .WillOnce([&task_runners](std::unique_ptr<Surface> surface) {
+          task_runners.GetRasterTaskRunner()->PostTask(
+              fml::MakeCopyable([surface = std::move(surface)]() {}));
+        });
+
+    EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+    software_dispatch_table.software_present_backing_store =
+        [](const void* allocation, size_t row_bytes, size_t height) {
+          return true;
+        };
+
+    PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+    platform_dispatch_table.raster_context_user_data = &test_context;
+    platform_dispatch_table
+        .raster_context_setup_callback = [](void* user_data) {
+      auto* ctx = reinterpret_cast<TestContext*>(user_data);
+      ctx->setup_called = true;
+      ctx->setup_on_raster_thread =
+          ctx->task_runners.GetRasterTaskRunner()->RunsTasksOnCurrentThread();
+      ctx->received_user_data = user_data;
+    };
+
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+    auto embedder = std::make_unique<PlatformViewEmbedder>(
+        delegate, task_runners, software_dispatch_table,
+        platform_dispatch_table, external_view_embedder);
+
+    embedder->NotifyCreated();
+    latch.Signal();
+  });
+  latch.Wait();
+
+  EXPECT_TRUE(test_context.setup_called);
+  EXPECT_TRUE(test_context.setup_on_raster_thread);
+  EXPECT_EQ(test_context.received_user_data, &test_context);
+}
+
+TEST(PlatformViewEmbedderTest,
+     NotifyDestroyedRunsRasterContextTeardownCallbackOnRasterThread) {
+  ThreadHost thread_host(
+      "io.flutter.test." + GetCurrentTestName() + ".",
+      ThreadHost::Type::kPlatform | ThreadHost::Type::kRaster);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "NotifyDestroyedRunsRasterContextTeardownCallbackOnRasterThread",
+      thread_host.platform_thread->GetTaskRunner(),
+      thread_host.raster_thread->GetTaskRunner(), nullptr, nullptr);
+
+  struct TestContext {
+    bool teardown_called = false;
+    bool teardown_on_raster_thread = false;
+    void* received_user_data = nullptr;
+    flutter::TaskRunners task_runners;
+  };
+
+  TestContext test_context{
+      .task_runners = task_runners,
+  };
+
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask([&]() {
+    MockDelegate delegate;
+    EXPECT_CALL(delegate, OnPlatformViewDestroyed()).Times(1);
+
+    EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+    PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+    platform_dispatch_table.raster_context_user_data = &test_context;
+    platform_dispatch_table
+        .raster_context_teardown_callback = [](void* user_data) {
+      auto* ctx = reinterpret_cast<TestContext*>(user_data);
+      ctx->teardown_called = true;
+      ctx->teardown_on_raster_thread =
+          ctx->task_runners.GetRasterTaskRunner()->RunsTasksOnCurrentThread();
+      ctx->received_user_data = user_data;
+    };
+
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+    auto embedder = std::make_unique<PlatformViewEmbedder>(
+        delegate, task_runners, software_dispatch_table,
+        platform_dispatch_table, external_view_embedder);
+
+    embedder->NotifyDestroyed();
+    latch.Signal();
+  });
+  latch.Wait();
+
+  EXPECT_TRUE(test_context.teardown_called);
+  EXPECT_TRUE(test_context.teardown_on_raster_thread);
+  EXPECT_EQ(test_context.received_user_data, &test_context);
 }
 
 }  // namespace testing

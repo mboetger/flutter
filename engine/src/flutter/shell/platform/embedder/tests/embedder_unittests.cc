@@ -4994,6 +4994,85 @@ TEST_F(EmbedderTest, EmbedderGetProcAddressesDeferredLibrary) {
             &FlutterEngineNotifyDartDeferredLibraryLoadError);
 }
 
+TEST_F(EmbedderTest, EmbedderNotifyCreatedInvalidArguments) {
+  EXPECT_EQ(FlutterEngineNotifyCreated(nullptr), kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderNotifyDestroyedInvalidArguments) {
+  EXPECT_EQ(FlutterEngineNotifyDestroyed(nullptr), kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, EmbedderNotifyCreatedAndDestroyedDirect) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_EQ(FlutterEngineNotifyDestroyed(engine.get()), kSuccess);
+  EXPECT_EQ(FlutterEngineNotifyCreated(engine.get()), kSuccess);
+}
+
+TEST_F(EmbedderTest, EmbedderRasterContextSetupAndTeardownCallbacks) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  struct RasterContextState {
+    int setup_count = 0;
+    int teardown_count = 0;
+  };
+
+  RasterContextState state;
+  EmbedderConfigBuilder builder(
+      context, EmbedderConfigBuilder::InitializationPreference::kNoInitialize);
+  builder.SetAssetsPath();
+  builder.SetSnapshots();
+  builder.SetSurface(DlISize(1, 1));
+  builder.GetProjectArgs().platform_message_callback = nullptr;
+  builder.GetProjectArgs().raster_context_setup_callback = [](void* user_data) {
+    auto* s = reinterpret_cast<RasterContextState*>(user_data);
+    s->setup_count++;
+  };
+  builder.GetProjectArgs().raster_context_teardown_callback =
+      [](void* user_data) {
+        auto* s = reinterpret_cast<RasterContextState*>(user_data);
+        s->teardown_count++;
+      };
+
+  FlutterEngine engine = nullptr;
+  auto renderer_config = context.GetRendererConfig();
+  auto project_args = builder.GetProjectArgs();
+  ASSERT_EQ(FlutterEngineInitialize(FLUTTER_ENGINE_VERSION, &renderer_config,
+                                    &project_args, &state, &engine),
+            kSuccess);
+  ASSERT_EQ(FlutterEngineRunInitialized(engine), kSuccess);
+
+  // Initial engine start should have triggered setup callback once.
+  EXPECT_EQ(state.setup_count, 1);
+  EXPECT_EQ(state.teardown_count, 0);
+
+  // Destroying surface should trigger teardown callback.
+  EXPECT_EQ(FlutterEngineNotifyDestroyed(engine), kSuccess);
+  EXPECT_EQ(state.setup_count, 1);
+  EXPECT_EQ(state.teardown_count, 1);
+
+  // Recreating surface should trigger setup callback.
+  EXPECT_EQ(FlutterEngineNotifyCreated(engine), kSuccess);
+  EXPECT_EQ(state.setup_count, 2);
+  EXPECT_EQ(state.teardown_count, 1);
+
+  // Engine shutdown triggers final teardown callback.
+  EXPECT_EQ(FlutterEngineShutdown(engine), kSuccess);
+  EXPECT_EQ(state.setup_count, 2);
+  EXPECT_EQ(state.teardown_count, 2);
+}
+
+TEST_F(EmbedderTest, EmbedderGetProcAddressesRasterContext) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  EXPECT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+  EXPECT_EQ(procs.NotifyCreated, &FlutterEngineNotifyCreated);
+  EXPECT_EQ(procs.NotifyDestroyed, &FlutterEngineNotifyDestroyed);
+}
+
 }  // namespace testing
 }  // namespace flutter
 
