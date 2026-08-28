@@ -54,7 +54,8 @@ bool AndroidSurfaceManager::HasNativeWindow() const {
   return native_window_.get() != nullptr && native_window_->IsValid();
 }
 
-fml::RefPtr<AndroidNativeWindow> AndroidSurfaceManager::GetNativeWindow() const {
+fml::RefPtr<AndroidNativeWindow> AndroidSurfaceManager::GetNativeWindow()
+    const {
   std::lock_guard<std::mutex> lock(mutex_);
   return native_window_;
 }
@@ -63,17 +64,19 @@ bool AndroidSurfaceManager::CreateBackingStore(
     const FlutterBackingStoreConfig* config,
     FlutterBackingStore* backing_store_out) {
   if (config == nullptr) {
-    FML_LOG(ERROR) << "AndroidSurfaceManager::CreateBackingStore: config is null.";
+    FML_LOG(ERROR)
+        << "AndroidSurfaceManager::CreateBackingStore: config is null.";
     return false;
   }
   if (config->struct_size < sizeof(FlutterBackingStoreConfig)) {
-    FML_LOG(ERROR) << "AndroidSurfaceManager::CreateBackingStore: invalid struct_size: "
-                   << config->struct_size;
+    FML_LOG(ERROR)
+        << "AndroidSurfaceManager::CreateBackingStore: invalid struct_size: "
+        << config->struct_size;
     return false;
   }
   if (backing_store_out == nullptr) {
-    FML_LOG(ERROR)
-        << "AndroidSurfaceManager::CreateBackingStore: backing_store_out is null.";
+    FML_LOG(ERROR) << "AndroidSurfaceManager::CreateBackingStore: "
+                      "backing_store_out is null.";
     return false;
   }
 
@@ -107,9 +110,8 @@ bool AndroidSurfaceManager::CreateBackingStore(
 #if !SLIMPELLER
       case AndroidRenderingAPI::kSoftware: {
         store_data->type = kFlutterBackingStoreTypeSoftware;
-        if (height > 0 &&
-            width > std::numeric_limits<size_t>::max() /
-                        (height * kBytesPerPixelRGBA8888)) {
+        if (height > 0 && width > std::numeric_limits<size_t>::max() /
+                                      (height * kBytesPerPixelRGBA8888)) {
           FML_LOG(ERROR)
               << "AndroidSurfaceManager: Dimensions overflow buffer size.";
           return false;
@@ -146,8 +148,7 @@ bool AndroidSurfaceManager::CreateBackingStore(
     case kFlutterBackingStoreTypeSoftware:
       backing_store_out->software.allocation =
           store_data->software_buffer.data();
-      backing_store_out->software.row_bytes =
-          width * kBytesPerPixelRGBA8888;
+      backing_store_out->software.row_bytes = width * kBytesPerPixelRGBA8888;
       backing_store_out->software.height = height;
       backing_store_out->software.user_data = store_data.get();
       backing_store_out->software.destruction_callback = nullptr;
@@ -155,8 +156,7 @@ bool AndroidSurfaceManager::CreateBackingStore(
 
     case kFlutterBackingStoreTypeOpenGL:
       backing_store_out->open_gl.type = kFlutterOpenGLTargetTypeFramebuffer;
-      backing_store_out->open_gl.framebuffer.target =
-          kGLFramebufferFormatRGBA8;
+      backing_store_out->open_gl.framebuffer.target = kGLFramebufferFormatRGBA8;
       backing_store_out->open_gl.framebuffer.name =
           store_data->gl_framebuffer_id;
       backing_store_out->open_gl.framebuffer.user_data = store_data.get();
@@ -164,8 +164,7 @@ bool AndroidSurfaceManager::CreateBackingStore(
       break;
 
     case kFlutterBackingStoreTypeVulkan:
-      backing_store_out->vulkan.struct_size =
-          sizeof(FlutterVulkanBackingStore);
+      backing_store_out->vulkan.struct_size = sizeof(FlutterVulkanBackingStore);
       backing_store_out->vulkan.image = &store_data->vulkan_image;
       backing_store_out->vulkan.user_data = store_data.get();
       backing_store_out->vulkan.destruction_callback = nullptr;
@@ -174,7 +173,8 @@ bool AndroidSurfaceManager::CreateBackingStore(
     case kFlutterBackingStoreTypeSoftware2:
     case kFlutterBackingStoreTypeMetal:
     default:
-      FML_LOG(ERROR) << "AndroidSurfaceManager: Unsupported backing store type.";
+      FML_LOG(ERROR)
+          << "AndroidSurfaceManager: Unsupported backing store type.";
       return false;
   }
 
@@ -192,7 +192,8 @@ bool AndroidSurfaceManager::CreateBackingStore(
 bool AndroidSurfaceManager::CollectBackingStore(
     const FlutterBackingStore* backing_store) {
   if (backing_store == nullptr) {
-    FML_LOG(ERROR) << "AndroidSurfaceManager::CollectBackingStore: backing_store is null.";
+    FML_LOG(ERROR)
+        << "AndroidSurfaceManager::CollectBackingStore: backing_store is null.";
     return false;
   }
   if (backing_store->struct_size < sizeof(FlutterBackingStore)) {
@@ -202,8 +203,8 @@ bool AndroidSurfaceManager::CollectBackingStore(
     return false;
   }
   if (backing_store->user_data == nullptr) {
-    FML_LOG(ERROR)
-        << "AndroidSurfaceManager::CollectBackingStore: backing_store->user_data is null.";
+    FML_LOG(ERROR) << "AndroidSurfaceManager::CollectBackingStore: "
+                      "backing_store->user_data is null.";
     return false;
   }
 
@@ -213,8 +214,8 @@ bool AndroidSurfaceManager::CollectBackingStore(
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = in_flight_.find(data);
   if (it == in_flight_.end()) {
-    FML_LOG(ERROR)
-        << "AndroidSurfaceManager::CollectBackingStore: backing store was not in-flight (double collection?).";
+    FML_LOG(ERROR) << "AndroidSurfaceManager::CollectBackingStore: backing "
+                      "store was not in-flight (double collection?).";
     return false;
   }
   in_flight_.erase(it);

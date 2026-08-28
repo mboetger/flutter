@@ -294,7 +294,7 @@ TEST(AndroidSurfaceManager, FeatureFlagGatingDualPathValidation) {
 
   // Path 1: Feature flag enabled.
   FlutterMain::SetEmbedderAPIEnabledForTesting(true);
-  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled(settings));
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
   {
     AndroidSurfaceManager manager(AndroidRenderingAPI::kImpellerOpenGLES);
     FlutterBackingStoreConfig config = {
@@ -309,7 +309,7 @@ TEST(AndroidSurfaceManager, FeatureFlagGatingDualPathValidation) {
 
   // Path 2: Feature flag disabled.
   FlutterMain::SetEmbedderAPIEnabledForTesting(false);
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled(settings));
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
   {
     AndroidSurfaceManager manager(AndroidRenderingAPI::kImpellerOpenGLES);
     FlutterBackingStoreConfig config = {

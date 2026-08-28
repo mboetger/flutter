@@ -46,12 +46,8 @@ executable("flutter_shell_native_unittests") {
     "android_context_gl_impeller_unittests.cc",
     "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
-<<<<<<< HEAD
-    "android_task_runners_unittests.cc",
-=======
     "android_surface_manager_unittests.cc",
-    "android_thread_config_unittests.cc",
->>>>>>> 1ad37801b21 (feat(android): implement AndroidSurfaceManager backing store pool and cache)
+    "android_task_runners_unittests.cc",
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
     "image_lru_unittests.cc",

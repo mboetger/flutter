@@ -27,8 +27,10 @@ namespace flutter {
 /// Features:
 /// - Size-matched backing store caching to eliminate buffer churn during frame
 ///   rendering.
-/// - Thread safety across platform and raster threads via internal mutex synchronization.
-/// - Resource cleanup on window destruction, memory pressure, or engine teardown.
+/// - Thread safety across platform and raster threads via internal mutex
+/// synchronization.
+/// - Resource cleanup on window destruction, memory pressure, or engine
+/// teardown.
 class AndroidSurfaceManager {
  public:
   /// Retains front and back buffers for double buffering by default.
@@ -71,26 +73,31 @@ class AndroidSurfaceManager {
   /// Returns the currently attached native window, or nullptr if none attached.
   fml::RefPtr<AndroidNativeWindow> GetNativeWindow() const;
 
-  /// Creates or recycles a size-matched backing store for the specified configuration.
+  /// Creates or recycles a size-matched backing store for the specified
+  /// configuration.
   ///
-  /// Returns true on success and populates `backing_store_out`. Returns false on
-  /// failure or invalid arguments.
+  /// Returns true on success and populates `backing_store_out`. Returns false
+  /// on failure or invalid arguments.
   bool CreateBackingStore(const FlutterBackingStoreConfig* config,
                           FlutterBackingStore* backing_store_out);
 
   /// Collects and recycles a backing store back into the pool for future reuse.
   ///
-  /// Returns true on success, false if the backing store pointer or metadata is invalid.
+  /// Returns true on success, false if the backing store pointer or metadata is
+  /// invalid.
   bool CollectBackingStore(const FlutterBackingStore* backing_store);
 
-  /// Clears all cached backing stores in the pool, releasing associated GPU/RAM memory.
+  /// Clears all cached backing stores in the pool, releasing associated GPU/RAM
+  /// memory.
   void ClearBackingStorePool();
 
   /// Trims excess backing stores from the pool so each size key retains at most
   /// `max_cached_per_size` entries.
-  void TrimBackingStorePool(size_t max_cached_per_size = kDefaultMaxCachedPerSize);
+  void TrimBackingStorePool(
+      size_t max_cached_per_size = kDefaultMaxCachedPerSize);
 
-  /// Returns the total number of cached backing stores currently retained in the pool.
+  /// Returns the total number of cached backing stores currently retained in
+  /// the pool.
   size_t GetCachedBackingStoreCount() const;
 
  private:

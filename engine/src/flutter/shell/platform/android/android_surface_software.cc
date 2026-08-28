@@ -108,6 +108,10 @@ bool AndroidSurfaceSoftware::PresentBackingStore(
     return false;
   }
 
+  if (native_window_ && native_window_->IsFakeWindow()) {
+    return true;
+  }
+
   SkPixmap pixmap;
   if (!backing_store->peekPixels(&pixmap)) {
     return false;
@@ -156,6 +160,9 @@ bool AndroidSurfaceSoftware::SetNativeWindow(
   native_window_ = std::move(window);
   if (!(native_window_ && native_window_->IsValid())) {
     return false;
+  }
+  if (native_window_->IsFakeWindow()) {
+    return true;
   }
   int32_t window_format = ANativeWindow_getFormat(native_window_->handle());
   if (window_format < 0) {
