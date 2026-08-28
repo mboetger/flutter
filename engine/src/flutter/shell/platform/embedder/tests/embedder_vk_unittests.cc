@@ -129,6 +129,64 @@ TEST_F(EmbedderTest, CanSwapOutVulkanCalls) {
   EXPECT_TRUE(g_vulkan_proc_info.did_call_queue_submit);
 }
 
+TEST_F(EmbedderTest, CanRenderSceneWithVulkanCompositorSkia) {
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+  builder.SetDartEntrypoint("render_gradient");
+
+  auto rendered_scene_future = context.GetNextSceneImage();
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  auto rendered_scene = rendered_scene_future.get();
+  ASSERT_NE(rendered_scene, nullptr);
+  EXPECT_EQ(rendered_scene->width(), 800);
+  EXPECT_EQ(rendered_scene->height(), 600);
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, CreateInvalidBackingstoreVulkanImage) {
+  fml::AutoResetWaitableEvent latch;
+  auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
+  context.AddIsolateCreateCallback([&latch]() { latch.Signal(); });
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kVulkanImage);
+  builder.SetDartEntrypoint("invalid_backingstore");
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+  engine.reset();
+}
+
 }  // namespace testing
 }  // namespace flutter
 

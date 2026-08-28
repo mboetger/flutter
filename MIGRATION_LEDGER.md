@@ -24,7 +24,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 ### Phase 1: API Gaps and Additions
 - [x] 1.1: Custom Asset Resolvers (Verified Tests & Adversarial Review)
-- [ ] 1.2: Vulkan Impeller Render Target (Verified Tests & Adversarial Review)
+- [x] 1.2: Vulkan Impeller Render Target (Verified Tests & Adversarial Review)
 - [ ] 1.3: AHardwareBuffer & Vulkan External Textures (Verified Tests & Adversarial Review)
 - [ ] 1.4: Multi-Engine Spawning (Verified Tests & Adversarial Review)
 - [ ] 1.5: Dart Deferred Library Loading (Verified ABI & Tests & Adversarial Review)
