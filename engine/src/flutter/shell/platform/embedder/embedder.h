@@ -3004,6 +3004,63 @@ typedef struct {
   size_t data_length;
 } FlutterSendSemanticsActionInfo;
 
+/// Configuration arguments for spawning a new FlutterEngine from an existing
+/// running FlutterEngine instance.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineSpawnConfig).
+  size_t struct_size;
+
+  /// The name of a custom Dart entrypoint for the spawned engine. This is
+  /// optional and specifying null or empty makes the spawned engine look for
+  /// a method named "main" in the root library of the application.
+  const char* entrypoint;
+
+  /// The URI of the Dart library containing the entrypoint. This is optional
+  /// and specifying null or empty makes the spawned engine look for the
+  /// entrypoint in the root library of the application.
+  const char* library_uri;
+
+  /// The initial route for the spawned engine. This is optional and
+  /// specifying null or empty defaults to "/".
+  const char* initial_route;
+
+  /// The command line argument count for arguments passed through to the Dart
+  /// entrypoint of the spawned engine.
+  int entrypoint_argc;
+
+  /// The command line arguments passed through to the Dart entrypoint of the
+  /// spawned engine. The strings must be NULL terminated.
+  const char* const* entrypoint_argv;
+
+  /// Opaque identifier for the spawned engine. Accessible in Dart code through
+  /// `PlatformDispatcher.instance.engineId`.
+  int64_t engine_id;
+
+  /// The user data baton passed back to embedders in callbacks for the
+  /// spawned engine.
+  void* user_data;
+
+  /// The renderer configuration for the spawned engine. Must be non-null and
+  /// valid.
+  const FlutterRendererConfig* renderer_config;
+
+  /// Optional project args for the spawned engine.
+  ///
+  /// The spawned engine shares the Dart VM, isolate group, task runners,
+  /// snapshots, and engine settings with the parent engine. Therefore, fields
+  /// specifying VM/AOT data, snapshots, assets path, ICU data, or custom task
+  /// runners in `project_args` are not applicable to the spawned engine (and
+  /// specifying `custom_task_runners` will cause `FlutterEngineSpawn` to return
+  /// `kInvalidArguments`).
+  ///
+  /// Callbacks (such as `platform_message_callback`, `vsync_callback`,
+  /// `update_semantics_callback`, `compute_platform_resolved_locale_callback`,
+  /// `channel_update_callback`, `view_focus_change_request_callback`),
+  /// `compositor`, and `asset_resolvers` specified in `project_args` will be
+  /// applied to the spawned engine.
+  const FlutterProjectArgs* project_args;
+} FlutterEngineSpawnConfig;
+
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 // NOLINTBEGIN(google-objc-function-naming)
@@ -3802,6 +3859,29 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Spawns a new Flutter engine instance that shares internal
+///             components (such as the Dart VM and Isolate group) with an
+///             existing running engine instance.
+///
+///             This results in a spawned engine with significantly lower memory
+///             footprint and near-instant startup time. The spawned engine is
+///             returned in a running state. Once running, the spawned engine is
+///             mostly independent from the parent engine; shutting down either
+///             engine does not affect the other.
+///
+/// @param[in]  engine              A running engine instance to spawn from.
+/// @param[in]  config              The spawn configuration.
+/// @param[out] spawned_engine_out  The spawned engine handle on success.
+///
+/// @return     The result of the call to spawn the engine.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                       const FlutterEngineSpawnConfig* config,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           spawned_engine_out);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3939,6 +4019,10 @@ typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineUpdateAssetResolverFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterAssetResolverRegistrationInfo* info);
+typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineSpawnConfig* config,
+    FLUTTER_API_SYMBOL(FlutterEngine) * spawned_engine_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3990,6 +4074,7 @@ typedef struct {
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
   FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
+  FlutterEngineSpawnFnPtr Spawn;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

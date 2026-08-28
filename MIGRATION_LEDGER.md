@@ -26,7 +26,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [x] 1.1: Custom Asset Resolvers (Verified Tests & Adversarial Review)
 - [x] 1.2: Vulkan Impeller Render Target (Verified Tests & Adversarial Review)
 - [x] 1.3: AHardwareBuffer & Vulkan External Textures (Verified Tests & Adversarial Review)
-- [ ] 1.4: Multi-Engine Spawning (Verified Tests & Adversarial Review)
+- [x] 1.4: Multi-Engine Spawning (Verified Tests & Adversarial Review)
 - [ ] 1.5: Dart Deferred Library Loading (Verified ABI & Tests & Adversarial Review)
 - [ ] 1.6: Raster Context Setup & Teardown Hooks (Verified Tests & Adversarial Review)
 - [ ] 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`) (Verified Tests & Adversarial Review)
