@@ -428,6 +428,24 @@ static void SetViewportMetrics(JNIEnv* env,
   ANDROID_ENGINE->SetViewportMetrics(0 /* kFlutterImplicitViewId */, metrics);
 }
 
+static void UpdateRefreshRate(JNIEnv* env,
+                              jobject jcaller,
+                              jfloat refreshRateFPS) {
+  // Refresh rate is managed by Android display system / vsync waiter.
+}
+
+static void OnVsync(JNIEnv* env,
+                    jobject jcaller,
+                    jlong frameDelayNanos,
+                    jlong refreshPeriodNanos,
+                    jlong cookie) {
+  // Vsync callbacks are handled by the embedder vsync waiter.
+}
+
+static jboolean GetIsSoftwareRenderingEnabled(JNIEnv* env, jclass jcaller) {
+  return JNI_FALSE;
+}
+
 static void UpdateDisplayMetrics(JNIEnv* env,
                                  jobject jcaller,
                                  jlong shell_holder) {
@@ -940,6 +958,31 @@ bool RegisterApi(JNIEnv* env) {
           .name = "nativeUpdateDisplayMetrics",
           .signature = "(J)V",
           .fnPtr = reinterpret_cast<void*>(&UpdateDisplayMetrics),
+      },
+      {
+          .name = "nativeGetIsSoftwareRenderingEnabled",
+          .signature = "()Z",
+          .fnPtr = reinterpret_cast<void*>(&GetIsSoftwareRenderingEnabled),
+      },
+      {
+          .name = "nativeUpdateRefreshRate",
+          .signature = "(F)V",
+          .fnPtr = reinterpret_cast<void*>(&UpdateRefreshRate),
+      },
+      {
+          .name = "nativeOnVsync",
+          .signature = "(JJJ)V",
+          .fnPtr = reinterpret_cast<void*>(&OnVsync),
+      },
+      {
+          .name = "nativeNotifyLowMemoryWarning",
+          .signature = "(J)V",
+          .fnPtr = reinterpret_cast<void*>(&NotifyLowMemoryWarning),
+      },
+      {
+          .name = "nativeGetBitmap",
+          .signature = "(J)Landroid/graphics/Bitmap;",
+          .fnPtr = reinterpret_cast<void*>(&GetBitmap),
       },
       {
           .name = "nativeIsSurfaceControlEnabled",
