@@ -108,17 +108,16 @@ class AndroidEngineTest : public ::testing::Test {
            size_t data_length) -> FlutterEngineResult { return kSuccess; };
 
     mock_proc_table_.LoadDartDeferredLibrary =
-        [](FLUTTER_API_SYMBOL(FlutterEngine) engine, intptr_t loading_unit_id,
-           const uint8_t* snapshot_data, size_t snapshot_data_size,
-           const uint8_t* snapshot_instructions,
-           size_t snapshot_instructions_size) -> FlutterEngineResult {
+        [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+           const FlutterDeferredLibraryInfo* info) -> FlutterEngineResult {
       return kSuccess;
     };
 
     mock_proc_table_.LoadDartDeferredLibraryError =
-        [](FLUTTER_API_SYMBOL(FlutterEngine) engine, intptr_t loading_unit_id,
-           const char* error_message,
-           bool transient) -> FlutterEngineResult { return kSuccess; };
+        [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+           const FlutterDeferredLibraryErrorInfo* info) -> FlutterEngineResult {
+      return kSuccess;
+    };
 
     mock_proc_table_.RegisterExternalTexture =
         [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
@@ -531,24 +530,32 @@ TEST_F(AndroidEngineTest, DartDeferredLibrariesForwarding) {
   static bool s_error_called = false;
 
   mock_proc_table_.LoadDartDeferredLibrary =
-      [](FLUTTER_API_SYMBOL(FlutterEngine) engine, intptr_t loading_unit_id,
-         const uint8_t* snapshot_data, size_t snapshot_data_size,
-         const uint8_t* snapshot_instructions,
-         size_t snapshot_instructions_size) -> FlutterEngineResult {
+      [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+         const FlutterDeferredLibraryInfo* info) -> FlutterEngineResult {
     s_load_called = true;
-    EXPECT_EQ(loading_unit_id, 42);
-    EXPECT_EQ(snapshot_data_size, 10u);
-    EXPECT_EQ(snapshot_instructions_size, 20u);
+    EXPECT_NE(info, nullptr);
+    if (info != nullptr) {
+      EXPECT_EQ(info->struct_size, sizeof(FlutterDeferredLibraryInfo));
+      EXPECT_EQ(info->loading_unit_id, 42);
+      EXPECT_EQ(info->snapshot_data_size, 10u);
+      EXPECT_EQ(info->snapshot_instructions_size, 20u);
+    }
     return kSuccess;
   };
 
   mock_proc_table_.LoadDartDeferredLibraryError =
-      [](FLUTTER_API_SYMBOL(FlutterEngine) engine, intptr_t loading_unit_id,
-         const char* error_message, bool transient) -> FlutterEngineResult {
+      [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+         const FlutterDeferredLibraryErrorInfo* error_info)
+      -> FlutterEngineResult {
     s_error_called = true;
-    EXPECT_EQ(loading_unit_id, 42);
-    EXPECT_STREQ(error_message, "Download failed");
-    EXPECT_TRUE(transient);
+    EXPECT_NE(error_info, nullptr);
+    if (error_info != nullptr) {
+      EXPECT_EQ(error_info->struct_size,
+                sizeof(FlutterDeferredLibraryErrorInfo));
+      EXPECT_EQ(error_info->loading_unit_id, 42);
+      EXPECT_STREQ(error_info->error_message, "Download failed");
+      EXPECT_TRUE(error_info->transient);
+    }
     return kSuccess;
   };
 
