@@ -4621,6 +4621,79 @@ FlutterEngineResult FlutterEngineGetCallbackHandle(
     int64_t* handle_out);
 
 //------------------------------------------------------------------------------
+/// @brief      Prefetches and initializes the default system font manager in
+///             the process.
+///
+///             This warms up the system font collection on background or
+///             startup threads ahead of rendering.
+///
+/// @return     `kSuccess` on success.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void);
+
+//------------------------------------------------------------------------------
+/// @brief      A callback invoked when the Dart VM Service URI is available.
+///
+///             This callback may be invoked on an arbitrary background isolate
+///             or Dart VM service thread. The provided `uri` string pointer is
+///             only guaranteed to remain valid for the duration of this
+///             callback invocation; callees must make a copy if they need to
+///             retain it.
+///
+/// @param[in]  uri        The null-terminated VM Service URI string.
+/// @param[in]  user_data  User data provided when the callback was registered.
+///
+typedef void (*FlutterEngineVMServiceUriCallback)(const char* uri,
+                                                  void* user_data);
+
+//------------------------------------------------------------------------------
+/// @brief      Configuration for registering a Dart VM Service URI callback.
+///
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterVMServiceUriCallbackConfig).
+  size_t struct_size;
+  /// The callback to invoke when the VM Service URI is available.
+  FlutterEngineVMServiceUriCallback callback;
+  /// User-defined data passed to the callback.
+  void* user_data;
+} FlutterVMServiceUriCallbackConfig;
+
+//------------------------------------------------------------------------------
+/// @brief      Registers a callback to receive notifications when the Dart VM
+///             Service starts up and its URI becomes available.
+///
+///             If the VM Service has already started when this is called, the
+///             callback will be invoked immediately.
+///
+/// @param[in]  config      The callback configuration. Must not be null and
+///                         struct_size must be initialized properly.
+/// @param[out] handle_out  Optional pointer to receive a registration handle
+///                         that can later be passed to
+///                         `FlutterEngineDeregisterVMServiceUriCallback`. May
+///                         be null if the caller does not need to deregister.
+///
+/// @return     `kSuccess` on success, or `kInvalidArguments` if invalid.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineRegisterVMServiceUriCallback(
+    const FlutterVMServiceUriCallbackConfig* config,
+    intptr_t* handle_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Deregisters a previously registered VM Service URI callback.
+///
+/// @param[in]  handle  The registration handle returned from
+///                     `FlutterEngineRegisterVMServiceUriCallback`.
+///
+/// @return     `kSuccess` on success, or `kInvalidArguments` if not found.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineDeregisterVMServiceUriCallback(
+    intptr_t handle);
+
+//------------------------------------------------------------------------------
 /// @brief      Registers a custom image generator (decoder) factory with the
 ///             engine.
 ///
@@ -4812,6 +4885,13 @@ typedef FlutterEngineResult (*FlutterEngineGetCallbackHandleFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineRegisterImageGeneratorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterImageGeneratorRegistrationInfo* info);
+typedef FlutterEngineResult (*FlutterEnginePrefetchDefaultFontManagerFnPtr)(
+    void);
+typedef FlutterEngineResult (*FlutterEngineRegisterVMServiceUriCallbackFnPtr)(
+    const FlutterVMServiceUriCallbackConfig* config,
+    intptr_t* handle_out);
+typedef FlutterEngineResult (*FlutterEngineDeregisterVMServiceUriCallbackFnPtr)(
+    intptr_t handle);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4876,6 +4956,10 @@ typedef struct {
   FlutterEngineLoadCallbackCacheFnPtr LoadCallbackCache;
   FlutterEngineGetCallbackHandleFnPtr GetCallbackHandle;
   FlutterEngineRegisterImageGeneratorFnPtr RegisterImageGenerator;
+  FlutterEnginePrefetchDefaultFontManagerFnPtr PrefetchDefaultFontManager;
+  FlutterEngineRegisterVMServiceUriCallbackFnPtr RegisterVMServiceUriCallback;
+  FlutterEngineDeregisterVMServiceUriCallbackFnPtr
+      DeregisterVMServiceUriCallback;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

@@ -6,10 +6,10 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_FLUTTER_MAIN_H_
 
 #include <jni.h>
+#include <cstdint>
 
 #include "flutter/common/settings.h"
 #include "flutter/fml/macros.h"
-#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 
 namespace flutter {
@@ -43,7 +43,7 @@ class FlutterMain {
  private:
   const flutter::Settings settings_;
   const flutter::AndroidRenderingAPI android_rendering_api_;
-  DartServiceIsolate::CallbackHandle vm_service_uri_callback_ = 0;
+  intptr_t vm_service_uri_callback_ = 0;
 
   explicit FlutterMain(const flutter::Settings& settings,
                        flutter::AndroidRenderingAPI android_rendering_api);

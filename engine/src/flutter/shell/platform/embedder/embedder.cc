@@ -53,6 +53,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
 #include "flutter/lib/ui/plugins/callback_cache.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -71,6 +72,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "rapidjson/rapidjson.h"
 #include "rapidjson/writer.h"
+#include "txt/platform.h"
 
 // Note: the IMPELLER_SUPPORTS_RENDERING may be defined even when the
 // embedder/BUILD.gn variable impeller_supports_rendering is disabled.
@@ -4696,6 +4698,62 @@ FlutterEngineResult FlutterEngineRegisterImageGenerator(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void) {
+  txt::GetDefaultFontManager();
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineRegisterVMServiceUriCallback(
+    const FlutterVMServiceUriCallbackConfig* config,
+    intptr_t* handle_out) {
+  if (config == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Config was null.");
+  }
+
+  if (config->struct_size < sizeof(FlutterVMServiceUriCallbackConfig)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid config struct_size.");
+  }
+
+  if (config->callback == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Callback was null.");
+  }
+
+  FlutterEngineVMServiceUriCallback callback = config->callback;
+  void* user_data = config->user_data;
+
+  flutter::DartServiceIsolate::CallbackHandle handle =
+      flutter::DartServiceIsolate::AddServerStatusCallback(
+          [callback, user_data](const std::string& uri) {
+            callback(uri.c_str(), user_data);
+          });
+
+  if (handle == 0) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not register VM service URI callback.");
+  }
+
+  if (handle_out != nullptr) {
+    *handle_out = static_cast<intptr_t>(handle);
+  }
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineDeregisterVMServiceUriCallback(
+    intptr_t handle) {
+  if (handle == 0) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid callback handle.");
+  }
+
+  if (flutter::DartServiceIsolate::RemoveServerStatusCallback(
+          static_cast<flutter::DartServiceIsolate::CallbackHandle>(handle))) {
+    return kSuccess;
+  }
+
+  return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                            "Could not deregister VM service URI callback.");
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4766,6 +4824,11 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(LoadCallbackCache, FlutterEngineLoadCallbackCache);
   SET_PROC(GetCallbackHandle, FlutterEngineGetCallbackHandle);
   SET_PROC(RegisterImageGenerator, FlutterEngineRegisterImageGenerator);
+  SET_PROC(PrefetchDefaultFontManager, FlutterEnginePrefetchDefaultFontManager);
+  SET_PROC(RegisterVMServiceUriCallback,
+           FlutterEngineRegisterVMServiceUriCallback);
+  SET_PROC(DeregisterVMServiceUriCallback,
+           FlutterEngineDeregisterVMServiceUriCallback);
 #undef SET_PROC
 
   return kSuccess;
