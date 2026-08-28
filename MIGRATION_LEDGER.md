@@ -5,21 +5,17 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 * **Base Tracking Commit SHA**: `[TBD: Insert SHA when starting]`
 * **Target OS Environment**: Android (All rendering backends: GL, Vulkan, Software)
-* **Goal State**: Android Engine initializes completely independent of legacy engine internals, backed purely by public C APIs (`embedder.h`), with 0 legacy code remaining in `shell/platform/android`. All unit tests, integration tests, and golden tests MUST pass. Furthermore, the ONLY engine dependencies permitted are: `//flutter/shell/platform/embedder:embedder_as_internal_library` (required), `//flutter/fml` (optional), `//flutter/shell/platform/common` (optional), and `//flutter/third_party` (optional).
+* **Goal State**: Android Engine initializes completely independent of legacy engine internals, backed purely by public C APIs (`embedder.h`), with 0 legacy code remaining in `shell/platform/android`. All unit tests, integration tests, and golden tests MUST pass. Furthermore, the ONLY engine dependencies permitted are: `//flutter/shell/platform/embedder:embedder_as_internal_library` (required), `//flutter/fml` (optional), `//flutter/shell/platform/common` (optional), `//flutter/third_party` (optional), AND required NDK system libraries (e.g., `android`, `EGL`, `GLESv2`).
 
 ## Quality & Architectural Invariants (Enforced via Ledger)
-1. **The Struct-Size Invariant**: Every C API structural addition (`info`) MUST have `struct_size` validated.
-2. **The Flag-Gate Matrix Invariant**: Any change to rendering logic in Phase 2/3/4 must be gated behind the `FlutterMain::IsEmbedderAPIEnabled()` conditional. Furthermore, ALL testing (Unit, Integration, and Goldens) MUST be executed sequentially under BOTH flag states (`flag=true` AND `flag=false`) to prevent breaking the legacy canary path.
+1. **The Struct-Size & C-ABI Invariant**: Every C API structural addition (`info`) MUST have `struct_size` validated. C++ headers (like Skia's `SkPath.h`) MUST NOT be `#include`d in `embedder.h` under any circumstances to preserve the C-ABI.
+2. **The Flag-Gate Matrix Invariant**: Any change to rendering logic in Phase 2/3/4 must be gated behind the `FlutterMain::IsEmbedderAPIEnabled()` conditional. Furthermore, STARTING IN PHASE 2.4, ALL testing (Unit, Integration, and Goldens) MUST be executed sequentially under BOTH flag states (`flag=true` AND `flag=false`) to prevent breaking the legacy canary path.
 3. **The Cleanup Invariant**: The migration is NOT complete until all `android_legacy_engine_holder` targets are deleted and NO polymorphic intermediate bridges remain.
-4. **Synchronous Surface Detach**: Must block the OS from destroying `ANativeWindow` until the rasterizer completes shutdown.
+4. **Thread-Safe Surface Detach**: Must prevent the OS from destroying `ANativeWindow` until the rasterizer completes shutdown, but MUST execute this asynchronously or with safe timeouts to prevent ANRs (Application Not Responding) on the Main/JNI thread.
 5. **Thread-local EGL Isolation**: Prevent `EGL_BAD_ACCESS` collisions using thread local contexts for offscreen resource pooling.
-6. **GN Target Isolation & Dependency Invariant**: The legacy implementation MUST be quarantined with strict `BUILD.gn` visibility rules starting in Phase 2.1. By the conclusion of Phase 5.2, the Android Embedder MUST depend EXCLUSIVELY on:
-   * `//flutter/shell/platform/embedder:embedder_as_internal_library` (REQUIRED)
-   * `//flutter/fml` (OPTIONAL)
-   * `//flutter/shell/platform/common` (OPTIONAL)
-   * `//flutter/third_party` (OPTIONAL)
+6. **GN Target Isolation & Dependency Invariant**: The legacy implementation MUST be quarantined with strict `BUILD.gn` visibility rules starting in Phase 2.1 (JNI routing layers are granted cross-visibility to compile). By the conclusion of Phase 5.2, the Android Embedder MUST depend EXCLUSIVELY on the permitted targets & NDK libraries.
 7. **Every-PR Validation Invariant**: EVERY PR submitted during this migration MUST verify correctness by executing: (1) Unit tests, (2) Integration tests (`dev/integration_tests`), and (3) The Dual-Pass Golden methodology (Pass 1: non-local generation with `UPDATE_GOLDENS=true`, Pass 2: local engine verification with `UPDATE_GOLDENS=false`). **Goldens MUST NOT be checked into the repository.**
-8. **The Adversarial Review Invariant**: EVERY PR MUST be submitted for independent adversarial review. You cannot mark a PR complete until all reviewer feedback is addressed, tests re-verify successfully, and the reviewer signs off with zero remaining findings.
+8. **The Adversarial Review Invariant**: EVERY PR MUST be submitted for independent adversarial review. You cannot mark a PR complete until all reviewer feedback is addressed and tests re-verify successfully (capped at a maximum of 3 iterations to prevent infinite algorithmic stalling).
 
 ## Live Phase Tracker (Tick when tests & review are validated)
 
@@ -36,7 +32,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [ ] 1.7: Extended Semantics Completeness (`FlutterSemanticsNode2`) (Verified Tests & Adversarial Review)
 - [ ] 1.8: Embedder Screenshot / Raster Bitmap API (Verified Tests & Adversarial Review)
 - [ ] 1.9: Dart Callback Information Lookup API (Verified Tests & Adversarial Review)
-- [ ] 1.10: Platform View Multi-Mutations (`ClipPath`, `ClipRSE`) (Verified Tests & Adversarial Review)
+- [ ] 1.10: Platform View Multi-Mutations (`ClipPath`, `ClipRSE`) (Verified C-ABI & Tests & Adversarial Review)
 - [ ] 1.11: Platform Image Decoder / Generator (Verified Tests & Adversarial Review)
 
 ### Phase 2: Decoupling and Feature Flagging
@@ -48,7 +44,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 ### Phase 3: Abstractions & Architecture
 - [ ] 3.1: AndroidSurfaceManager (Verified Dual-Flag Tests & Adversarial Review)
-- [ ] 3.2: AndroidCompositor (Verified Dual-Flag Tests & Adversarial Review)
+- [ ] 3.2: AndroidCompositor (Verified ANR-Safe & Dual-Flag Tests & Adversarial Review)
 - [ ] 3.3: Direct JNI Mutator Mapping (Verified Dual-Flag Tests & Adversarial Review)
 
 ### Phase 4: JNI Routing & Dual-Stack Rollout
@@ -58,4 +54,4 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 ### Phase 5: Emancipation & Final Purge
 - [ ] 5.1: Enable Embedder API Default (Verified Dual-Flag Tests & Adversarial Review)
-- [ ] 5.2: Legacy Bridge Removal & Total GN Pruning (Verified Tests & Adversarial Review)
+- [ ] 5.2: (Waited for Rollout Window) Legacy Bridge Removal & Total GN Pruning (Verified Tests & Adversarial Review)
