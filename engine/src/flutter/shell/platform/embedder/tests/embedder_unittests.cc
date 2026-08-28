@@ -5281,53 +5281,104 @@ TEST_F(EmbedderTest, DartDeferredLoadingInvalidArguments) {
   uint8_t dummy_data[] = {1, 2, 3, 4};
   uint8_t dummy_instructions[] = {5, 6, 7, 8};
 
+  FlutterDeferredLibraryInfo valid_info = {};
+  valid_info.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  valid_info.loading_unit_id = 2;
+  valid_info.snapshot_data = dummy_data;
+  valid_info.snapshot_data_size = sizeof(dummy_data);
+
   // Null engine
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
-                nullptr, 2, dummy_data, sizeof(dummy_data), nullptr, 0),
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(nullptr, &valid_info),
+            kInvalidArguments);
+
+  // Null info pointer
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), nullptr),
+            kInvalidArguments);
+
+  // Struct size mismatch
+  FlutterDeferredLibraryInfo bad_size_info = valid_info;
+  bad_size_info.struct_size = sizeof(FlutterDeferredLibraryInfo) - 1;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &bad_size_info),
             kInvalidArguments);
 
   // loading_unit_id <= 0
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
-                engine.get(), 0, dummy_data, sizeof(dummy_data), nullptr, 0),
+  FlutterDeferredLibraryInfo bad_id_info = valid_info;
+  bad_id_info.loading_unit_id = 0;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &bad_id_info),
             kInvalidArguments);
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
-                engine.get(), -1, dummy_data, sizeof(dummy_data), nullptr, 0),
+  bad_id_info.loading_unit_id = -1;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &bad_id_info),
             kInvalidArguments);
 
   // Both data and instructions empty
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 0,
-                                                 nullptr, 0),
+  FlutterDeferredLibraryInfo empty_info = {};
+  empty_info.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  empty_info.loading_unit_id = 2;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &empty_info),
             kInvalidArguments);
 
   // Non-null pointer with zero size
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, dummy_data, 0,
-                                                 nullptr, 0),
+  FlutterDeferredLibraryInfo zero_size_info = valid_info;
+  zero_size_info.snapshot_data_size = 0;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &zero_size_info),
             kInvalidArguments);
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 0,
-                                                 dummy_instructions, 0),
+  zero_size_info = {};
+  zero_size_info.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  zero_size_info.loading_unit_id = 2;
+  zero_size_info.snapshot_instructions = dummy_instructions;
+  zero_size_info.snapshot_instructions_size = 0;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &zero_size_info),
             kInvalidArguments);
 
   // Null pointer with non-zero size
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 10,
-                                                 nullptr, 0),
+  FlutterDeferredLibraryInfo null_ptr_info = {};
+  null_ptr_info.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  null_ptr_info.loading_unit_id = 2;
+  null_ptr_info.snapshot_data = nullptr;
+  null_ptr_info.snapshot_data_size = 10;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &null_ptr_info),
             kInvalidArguments);
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 2, nullptr, 0,
-                                                 nullptr, 10),
+  null_ptr_info = {};
+  null_ptr_info.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  null_ptr_info.loading_unit_id = 2;
+  null_ptr_info.snapshot_instructions = nullptr;
+  null_ptr_info.snapshot_instructions_size = 10;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &null_ptr_info),
             kInvalidArguments);
 
   // Load error invalid arguments
+  FlutterDeferredLibraryErrorInfo valid_error = {};
+  valid_error.struct_size = sizeof(FlutterDeferredLibraryErrorInfo);
+  valid_error.loading_unit_id = 2;
+  valid_error.error_message = "error";
+  valid_error.transient = false;
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(nullptr, &valid_error),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), nullptr),
+            kInvalidArguments);
+
+  FlutterDeferredLibraryErrorInfo bad_size_error = valid_error;
+  bad_size_error.struct_size = sizeof(FlutterDeferredLibraryErrorInfo) - 1;
   EXPECT_EQ(
-      FlutterEngineLoadDartDeferredLibraryError(nullptr, 2, "error", false),
+      FlutterEngineLoadDartDeferredLibraryError(engine.get(), &bad_size_error),
       kInvalidArguments);
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), 0, "error",
-                                                      false),
-            kInvalidArguments);
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), -1, "error",
-                                                      false),
-            kInvalidArguments);
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), 2, nullptr,
-                                                      false),
-            kInvalidArguments);
+
+  FlutterDeferredLibraryErrorInfo bad_id_error = valid_error;
+  bad_id_error.loading_unit_id = 0;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibraryError(engine.get(), &bad_id_error),
+      kInvalidArguments);
+  bad_id_error.loading_unit_id = -1;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibraryError(engine.get(), &bad_id_error),
+      kInvalidArguments);
+
+  FlutterDeferredLibraryErrorInfo null_msg_error = valid_error;
+  null_msg_error.error_message = nullptr;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibraryError(engine.get(), &null_msg_error),
+      kInvalidArguments);
 }
 
 TEST_F(EmbedderTest, DartDeferredLoadingSuccess) {
@@ -5341,20 +5392,32 @@ TEST_F(EmbedderTest, DartDeferredLoadingSuccess) {
   uint8_t dummy_instructions[] = {5, 6, 7, 8};
 
   // Both data and instructions
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
-                engine.get(), 2, dummy_data, sizeof(dummy_data),
-                dummy_instructions, sizeof(dummy_instructions)),
+  FlutterDeferredLibraryInfo info1 = {};
+  info1.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  info1.loading_unit_id = 2;
+  info1.snapshot_data = dummy_data;
+  info1.snapshot_data_size = sizeof(dummy_data);
+  info1.snapshot_instructions = dummy_instructions;
+  info1.snapshot_instructions_size = sizeof(dummy_instructions);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &info1),
             kSuccess);
 
   // Data only
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(
-                engine.get(), 3, dummy_data, sizeof(dummy_data), nullptr, 0),
+  FlutterDeferredLibraryInfo info2 = {};
+  info2.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  info2.loading_unit_id = 3;
+  info2.snapshot_data = dummy_data;
+  info2.snapshot_data_size = sizeof(dummy_data);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &info2),
             kSuccess);
 
   // Instructions only
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), 4, nullptr, 0,
-                                                 dummy_instructions,
-                                                 sizeof(dummy_instructions)),
+  FlutterDeferredLibraryInfo info3 = {};
+  info3.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  info3.loading_unit_id = 4;
+  info3.snapshot_instructions = dummy_instructions;
+  info3.snapshot_instructions_size = sizeof(dummy_instructions);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &info3),
             kSuccess);
 }
 
@@ -5365,12 +5428,20 @@ TEST_F(EmbedderTest, DartDeferredLoadingError) {
   auto engine = builder.LaunchEngine();
   ASSERT_TRUE(engine.is_valid());
 
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(
-                engine.get(), 2, "Download failed", /*transient=*/true),
+  FlutterDeferredLibraryErrorInfo error1 = {};
+  error1.struct_size = sizeof(FlutterDeferredLibraryErrorInfo);
+  error1.loading_unit_id = 2;
+  error1.error_message = "Download failed";
+  error1.transient = true;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), &error1),
             kSuccess);
 
-  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(
-                engine.get(), 3, "Permanent load failure", /*transient=*/false),
+  FlutterDeferredLibraryErrorInfo error2 = {};
+  error2.struct_size = sizeof(FlutterDeferredLibraryErrorInfo);
+  error2.loading_unit_id = 3;
+  error2.error_message = "Permanent load failure";
+  error2.transient = false;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), &error2),
             kSuccess);
 }
 
@@ -5389,13 +5460,21 @@ TEST_F(EmbedderTest, DartDeferredLoadingViaProcTable) {
   ASSERT_NE(table.LoadDartDeferredLibraryError, nullptr);
 
   uint8_t dummy_data[] = {1, 2, 3, 4};
-  EXPECT_EQ(table.LoadDartDeferredLibrary(engine.get(), 2, dummy_data,
-                                          sizeof(dummy_data), nullptr, 0),
-            kSuccess);
+  FlutterDeferredLibraryInfo info = {};
+  info.struct_size = sizeof(FlutterDeferredLibraryInfo);
+  info.loading_unit_id = 2;
+  info.snapshot_data = dummy_data;
+  info.snapshot_data_size = sizeof(dummy_data);
 
-  EXPECT_EQ(table.LoadDartDeferredLibraryError(engine.get(), 2,
-                                               "Proc table error", false),
-            kSuccess);
+  EXPECT_EQ(table.LoadDartDeferredLibrary(engine.get(), &info), kSuccess);
+
+  FlutterDeferredLibraryErrorInfo error = {};
+  error.struct_size = sizeof(FlutterDeferredLibraryErrorInfo);
+  error.loading_unit_id = 2;
+  error.error_message = "Proc table error";
+  error.transient = false;
+
+  EXPECT_EQ(table.LoadDartDeferredLibraryError(engine.get(), &error), kSuccess);
 }
 
 TEST_F(EmbedderTest, DartDeferredLoadingCallbackSetup) {

@@ -4140,56 +4140,64 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
 
 FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    intptr_t loading_unit_id,
-    const uint8_t* snapshot_data,
-    size_t snapshot_data_size,
-    const uint8_t* snapshot_instructions,
-    size_t snapshot_instructions_size) {
+    const FlutterDeferredLibraryInfo* info) {
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
+  if (info == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Deferred library info was null.");
+  }
+  if (info->struct_size != sizeof(FlutterDeferredLibraryInfo)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Deferred library info struct size mismatch.");
+  }
 
-  if (loading_unit_id <= 0) {
+  if (info->loading_unit_id <= 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Invalid loading unit ID specified.");
   }
 
-  if ((snapshot_data == nullptr || snapshot_data_size == 0) &&
-      (snapshot_instructions == nullptr || snapshot_instructions_size == 0)) {
+  if ((info->snapshot_data == nullptr || info->snapshot_data_size == 0) &&
+      (info->snapshot_instructions == nullptr ||
+       info->snapshot_instructions_size == 0)) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "At least one valid snapshot buffer (data or instructions) must be "
         "provided.");
   }
 
-  if (snapshot_data != nullptr && snapshot_data_size == 0) {
+  if (info->snapshot_data != nullptr && info->snapshot_data_size == 0) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "Snapshot data pointer was provided with zero size.");
   }
 
-  if (snapshot_data == nullptr && snapshot_data_size > 0) {
+  if (info->snapshot_data == nullptr && info->snapshot_data_size > 0) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "Snapshot data size was non-zero but pointer was null.");
   }
 
-  if (snapshot_instructions != nullptr && snapshot_instructions_size == 0) {
+  if (info->snapshot_instructions != nullptr &&
+      info->snapshot_instructions_size == 0) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "Snapshot instructions pointer was provided with zero size.");
   }
 
-  if (snapshot_instructions == nullptr && snapshot_instructions_size > 0) {
+  if (info->snapshot_instructions == nullptr &&
+      info->snapshot_instructions_size > 0) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "Snapshot instructions size was non-zero but pointer was null.");
   }
 
   std::unique_ptr<fml::Mapping> data_mapping;
-  if (snapshot_data != nullptr && snapshot_data_size > 0) {
-    data_mapping = std::make_unique<fml::MallocMapping>(
-        fml::MallocMapping::Copy(snapshot_data, snapshot_data_size));
+  if (info->snapshot_data != nullptr && info->snapshot_data_size > 0) {
+    data_mapping =
+        std::make_unique<fml::MallocMapping>(fml::MallocMapping::Copy(
+            info->snapshot_data, info->snapshot_data_size));
     if (!data_mapping || data_mapping->GetMapping() == nullptr) {
       return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                                 "Could not allocate copy of snapshot data.");
@@ -4197,10 +4205,11 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
   }
 
   std::unique_ptr<fml::Mapping> instructions_mapping;
-  if (snapshot_instructions != nullptr && snapshot_instructions_size > 0) {
+  if (info->snapshot_instructions != nullptr &&
+      info->snapshot_instructions_size > 0) {
     instructions_mapping =
         std::make_unique<fml::MallocMapping>(fml::MallocMapping::Copy(
-            snapshot_instructions, snapshot_instructions_size));
+            info->snapshot_instructions, info->snapshot_instructions_size));
     if (!instructions_mapping ||
         instructions_mapping->GetMapping() == nullptr) {
       return LOG_EMBEDDER_ERROR(
@@ -4211,7 +4220,7 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
 
   auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
   if (!embedder_engine->LoadDartDeferredLibrary(
-          loading_unit_id, std::move(data_mapping),
+          info->loading_unit_id, std::move(data_mapping),
           std::move(instructions_mapping))) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
@@ -4223,26 +4232,33 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
 
 FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    intptr_t loading_unit_id,
-    const char* error_message,
-    bool transient) {
+    const FlutterDeferredLibraryErrorInfo* info) {
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
+  if (info == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Deferred library error info was null.");
+  }
+  if (info->struct_size != sizeof(FlutterDeferredLibraryErrorInfo)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments, "Deferred library error info struct size mismatch.");
+  }
 
-  if (loading_unit_id <= 0) {
+  if (info->loading_unit_id <= 0) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Invalid loading unit ID specified.");
   }
 
-  if (error_message == nullptr) {
+  if (info->error_message == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Error message cannot be null.");
   }
 
   auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
   if (!embedder_engine->LoadDartDeferredLibraryError(
-          loading_unit_id, std::string(error_message), transient)) {
+          info->loading_unit_id, std::string(info->error_message),
+          info->transient)) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "Could not report Dart deferred library error to the engine.");

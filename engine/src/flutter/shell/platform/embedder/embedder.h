@@ -2967,6 +2967,47 @@ typedef struct {
   int64_t engine_id;
 } FlutterEngineSpawnInfo;
 
+/// Information passed to `FlutterEngineLoadDartDeferredLibrary` when a
+/// deferred library loading unit has been loaded.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDeferredLibraryInfo).
+  size_t struct_size;
+
+  /// The unique identifier of the loading unit to load.
+  intptr_t loading_unit_id;
+
+  /// The snapshot data buffer containing serialized Dart data/code for this
+  /// loading unit. May be null if snapshot_instructions are provided.
+  const uint8_t* snapshot_data;
+
+  /// The size of the snapshot_data buffer in bytes.
+  size_t snapshot_data_size;
+
+  /// The snapshot instructions buffer containing compiled machine code for
+  /// this loading unit. May be null if snapshot_data is provided.
+  const uint8_t* snapshot_instructions;
+
+  /// The size of the snapshot_instructions buffer in bytes.
+  size_t snapshot_instructions_size;
+} FlutterDeferredLibraryInfo;
+
+/// Information passed to `FlutterEngineLoadDartDeferredLibraryError` when a
+/// deferred library loading unit has failed to load.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDeferredLibraryErrorInfo).
+  size_t struct_size;
+
+  /// The unique identifier of the loading unit that failed to load.
+  intptr_t loading_unit_id;
+
+  /// A human-readable null-terminated error message describing why loading
+  /// failed.
+  const char* error_message;
+
+  /// Whether the failure is transient and can be retried.
+  bool transient;
+} FlutterDeferredLibraryErrorInfo;
+
 typedef struct {
   /// The size of this struct. Must be
   /// sizeof(FlutterSendSemanticsActionInfo).
@@ -3801,50 +3842,36 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
 
 //------------------------------------------------------------------------------
 /// @brief      Notifies the engine that a requested Dart deferred library
-/// loading
-///             unit has been loaded and provides the snapshot data and/or
-///             instructions mapping buffers.
+///             loading unit has been loaded and provides the snapshot data
+///             and/or instructions mapping buffers.
 ///
-/// @param[in]  engine                     The engine handle.
-/// @param[in]  loading_unit_id            The loading unit ID that was
-/// requested.
-/// @param[in]  snapshot_data              Pointer to the snapshot data bytes
-/// (or null).
-/// @param[in]  snapshot_data_size         Size in bytes of snapshot data.
-/// @param[in]  snapshot_instructions      Pointer to the snapshot instructions
-/// bytes (or null).
-/// @param[in]  snapshot_instructions_size Size in bytes of snapshot
-/// instructions.
+/// @param[in]  engine  The engine handle.
+/// @param[in]  info    Pointer to a `FlutterDeferredLibraryInfo` struct
+///                     containing the loading unit configuration. Must not be
+///                     null and `struct_size` must be set to
+///                     `sizeof(FlutterDeferredLibraryInfo)`.
 ///
 /// @return     The result of providing the deferred library to the engine.
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    intptr_t loading_unit_id,
-    const uint8_t* snapshot_data,
-    size_t snapshot_data_size,
-    const uint8_t* snapshot_instructions,
-    size_t snapshot_instructions_size);
+    const FlutterDeferredLibraryInfo* info);
 
 //------------------------------------------------------------------------------
 /// @brief      Notifies the engine of a failure to load a requested Dart
-/// deferred
-///             library loading unit.
+///             deferred library loading unit.
 ///
-/// @param[in]  engine          The engine handle.
-/// @param[in]  loading_unit_id The loading unit ID that failed to load.
-/// @param[in]  error_message   A null-terminated error message describing the
-/// failure.
-/// @param[in]  transient       Whether the error is transient (can be retried)
-/// or permanent.
+/// @param[in]  engine  The engine handle.
+/// @param[in]  info    Pointer to a `FlutterDeferredLibraryErrorInfo` struct
+///                     containing the error details. Must not be null and
+///                     `struct_size` must be set to
+///                     `sizeof(FlutterDeferredLibraryErrorInfo)`.
 ///
 /// @return     The result of notifying the engine of the failure.
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    intptr_t loading_unit_id,
-    const char* error_message,
-    bool transient);
+    const FlutterDeferredLibraryErrorInfo* info);
 
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
@@ -3990,16 +4017,10 @@ typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    intptr_t loading_unit_id,
-    const uint8_t* snapshot_data,
-    size_t snapshot_data_size,
-    const uint8_t* snapshot_instructions,
-    size_t snapshot_instructions_size);
+    const FlutterDeferredLibraryInfo* info);
 typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    intptr_t loading_unit_id,
-    const char* error_message,
-    bool transient);
+    const FlutterDeferredLibraryErrorInfo* info);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
