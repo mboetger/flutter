@@ -86,20 +86,15 @@ static std::shared_ptr<impeller::Context> CreateImpellerContext(
   auto context = impeller::ContextGLES::Create(
       impeller::Flags{}, std::move(proc_table),
       is_gles3 ? gles3_shader_mappings : gles2_shader_mappings,
-      enable_gpu_tracing, std::move(io_task_runner));
+      enable_gpu_tracing, std::move(io_task_runner), worker);
 #else
   auto context = impeller::ContextGLES::Create(
       impeller::Flags{}, std::move(proc_table), gles2_shader_mappings,
-      enable_gpu_tracing, std::move(io_task_runner));
+      enable_gpu_tracing, std::move(io_task_runner), worker);
 #endif  // !SLIMPELLER
 
   if (!context) {
     FML_LOG(ERROR) << "Could not create OpenGLES Impeller Context.";
-    return nullptr;
-  }
-
-  if (!context->AddReactorWorker(worker).has_value()) {
-    FML_LOG(ERROR) << "Could not add reactor worker.";
     return nullptr;
   }
   FML_LOG(IMPORTANT) << "Using the Impeller rendering backend (OpenGLES).";
@@ -176,19 +171,23 @@ AndroidContextGLImpeller::AndroidContextGLImpeller(
     FML_LOG(ERROR) << "Could not make offscreen context current.";
     return;
   }
+  reactor_worker_->SetReactionsAllowedOnCurrentThread(true);
 
   auto impeller_context = CreateImpellerContext(
       reactor_worker_, enable_gpu_tracing, io_task_runner_);
 
   if (!impeller_context) {
     FML_LOG(ERROR) << "Could not create Impeller context.";
+    reactor_worker_->SetReactionsAllowedOnCurrentThread(false);
     return;
   }
 
   if (!offscreen_context->ClearCurrent()) {
     FML_LOG(ERROR) << "Could not clear offscreen context.";
+    reactor_worker_->SetReactionsAllowedOnCurrentThread(false);
     return;
   }
+  reactor_worker_->SetReactionsAllowedOnCurrentThread(false);
   // Setup context listeners.
   impeller::egl::Context::LifecycleListener listener =
       [worker =

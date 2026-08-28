@@ -64,7 +64,9 @@ class AndroidSwitchableGLContextImpeller : public SwitchableGLContext {
 
   bool RemoveCurrent() override {
     if (auto context = android_context_.lock()) {
-      return context->OnscreenContextClearCurrent();
+      bool onscreen_cleared = context->OnscreenContextClearCurrent();
+      bool resource_cleared = context->ResourceContextClearCurrent();
+      return onscreen_cleared || resource_cleared;
     }
     return false;
   }
@@ -100,6 +102,14 @@ bool AndroidSurfaceGLImpeller::IsValid() const {
 // |AndroidSurface|
 std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
     GrDirectContext* gr_context) {
+  // Ensure that the GL context is current before creating the GPU surface.
+  // GPUSurfaceGLImpeller initialization sets up graphics state and the current
+  // thread must be able to execute reactor operations.
+  if (!OnGLContextMakeCurrent()) {
+    FML_DLOG(ERROR)
+        << "Could not make context current for GPU surface creation.";
+    return nullptr;
+  }
   auto surface = std::make_unique<GPUSurfaceGLImpeller>(
       this,                                    // delegate
       android_context_->GetImpellerContext(),  // context
@@ -147,17 +157,22 @@ bool AndroidSurfaceGLImpeller::SetNativeWindow(
 
 // |AndroidSurface|
 std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateSnapshotSurface() {
-  if (!onscreen_surface_ || !onscreen_surface_->IsValid()) {
-    onscreen_surface_ = android_context_->CreateOffscreenSurface();
-    if (!onscreen_surface_) {
-      FML_DLOG(ERROR) << "Could not create offscreen surface for snapshot.";
+  if (onscreen_surface_ && onscreen_surface_->IsValid()) {
+    if (!android_context_->OnscreenContextMakeCurrent(
+            onscreen_surface_.get())) {
+      FML_DLOG(ERROR)
+          << "Could not make onscreen surface current for snapshot.";
       return nullptr;
     }
-  }
-  // Make the snapshot surface current because constucting a
-  // GPUSurfaceGLImpeller and its AiksContext may invoke graphics APIs.
-  if (!android_context_->OnscreenContextMakeCurrent(onscreen_surface_.get())) {
-    FML_DLOG(ERROR) << "Could not make snapshot surface current.";
+  } else if (offscreen_surface_ && offscreen_surface_->IsValid()) {
+    if (!android_context_->ResourceContextMakeCurrent(
+            offscreen_surface_.get())) {
+      FML_DLOG(ERROR)
+          << "Could not make offscreen surface current for snapshot.";
+      return nullptr;
+    }
+  } else {
+    FML_DLOG(ERROR) << "No valid surface available for snapshot.";
     return nullptr;
   }
   return std::make_unique<GPUSurfaceGLImpeller>(
@@ -191,20 +206,22 @@ AndroidSurfaceGLImpeller::GLContextMakeCurrent() {
 }
 
 bool AndroidSurfaceGLImpeller::OnGLContextMakeCurrent() {
-  if (!onscreen_surface_) {
-    return false;
+  if (onscreen_surface_ && onscreen_surface_->IsValid()) {
+    return android_context_->OnscreenContextMakeCurrent(
+        onscreen_surface_.get());
   }
-
-  return android_context_->OnscreenContextMakeCurrent(onscreen_surface_.get());
+  if (offscreen_surface_ && offscreen_surface_->IsValid()) {
+    return android_context_->ResourceContextMakeCurrent(
+        offscreen_surface_.get());
+  }
+  return false;
 }
 
 // |GPUSurfaceGLDelegate|
 bool AndroidSurfaceGLImpeller::GLContextClearCurrent() {
-  if (!onscreen_surface_) {
-    return false;
-  }
-
-  return android_context_->OnscreenContextClearCurrent();
+  bool onscreen_cleared = android_context_->OnscreenContextClearCurrent();
+  bool resource_cleared = android_context_->ResourceContextClearCurrent();
+  return onscreen_cleared || resource_cleared;
 }
 
 // |GPUSurfaceGLDelegate|
