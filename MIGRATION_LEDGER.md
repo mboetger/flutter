@@ -1,11 +1,11 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 5.2 (Legacy Bridge Deletion & Total Dependency Pruning in BUILD.gn)
+- **Active Phase**: Migration Completed (All Phases 0.1 through 5.2)
 - **Active Branch**: `android-embedder-v3/phase-5.2-legacy-bridge-removal`
-- **Base Commit SHA**: `c603b4b76bb` (Phase 5.1 commit)
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 5.1]
-- **Adversarial Review Loop Status**: Complete (Phase 5.1 Approved with 0 findings)
+- **Base Commit SHA**: `a5b33188fd7` (Phase 5.2 commit)
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 5.1, 5.2]
+- **Adversarial Review Loop Status**: Complete (Phase 5.2 Approved with 0 findings)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -36,7 +36,7 @@
 - [x] Phase 4.2: JNI Dispatch Dual-Path Routing (Gated: flag=true & false)
 - [x] Phase 4.3: Parameterized Multi-Backend Matrix (`TEST_P`) & Scenario Validation
 - [x] Phase 5.1: Enable Embedder API by Default (with negative rollback flags)
-- [ ] Phase 5.2: Legacy Bridge Removal & Total BUILD.gn Dependency Pruning
+- [x] Phase 5.2: Legacy Bridge Removal & Total BUILD.gn Dependency Pruning
 
 ## Quality & Review Invariants
 1. **Rendering Feature Flag Gating**: Any PR touching rendering logic must be feature-flag gated and tested under BOTH states (`flag=true` AND `flag=false`).
