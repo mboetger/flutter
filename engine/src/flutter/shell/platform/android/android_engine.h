@@ -17,8 +17,6 @@
 #include "flutter/fml/mapping.h"
 #include "flutter/fml/memory/weak_ptr.h"
 #include "flutter/fml/task_runner.h"
-#include "flutter/lib/ui/window/pointer_data.h"
-#include "flutter/lib/ui/window/viewport_metrics.h"
 #include "flutter/shell/platform/android/android_compositor.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_surface_manager.h"
@@ -77,9 +75,9 @@ class AndroidEngine {
   void OnSurfaceWindowChanged(fml::RefPtr<AndroidNativeWindow> native_window);
   void OnSurfaceDestroyed();
 
-  // Viewport metrics.
-  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
+  // Viewport metrics and display updates.
   void SetViewportMetrics(const FlutterWindowMetricsEvent& event);
+  void UpdateDisplayMetrics();
 
   // Pointer input events.
   void DispatchPointerDataPacket(const uint8_t* data, size_t size);
