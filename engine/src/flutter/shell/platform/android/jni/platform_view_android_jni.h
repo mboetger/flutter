@@ -5,21 +5,53 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 
-#include <utility>
+#include <memory>
+#include <string>
+#include <vector>
 
+#include "flutter/fml/build_config.h"
+#include "flutter/fml/macros.h"
 #include "flutter/fml/mapping.h"
 
-#include "flutter/flow/embedded_views.h"
-#include "flutter/lib/ui/window/platform_message.h"
-#include "flutter/shell/platform/android/surface/android_native_window.h"
-
 #if FML_OS_ANDROID
+#include <android/native_window.h>
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+#else
+typedef void ANativeWindow;
 #endif
 
 struct ASurfaceTransaction;
 
 namespace flutter {
+
+class PlatformMessage {
+ public:
+  PlatformMessage(std::string channel,
+                  fml::MallocMapping data,
+                  void* response = nullptr)
+      : channel_(std::move(channel)), data_(std::move(data)) {}
+
+  PlatformMessage(std::string channel, void* response = nullptr)
+      : channel_(std::move(channel)), data_() {}
+
+  ~PlatformMessage() = default;
+
+  const std::string& channel() const { return channel_; }
+  bool hasData() const {
+    return data_.GetMapping() != nullptr && data_.GetSize() > 0;
+  }
+  const fml::Mapping& data() const { return data_; }
+  fml::MallocMapping releaseData() { return std::move(data_); }
+
+ private:
+  std::string channel_;
+  fml::MallocMapping data_;
+};
+
+class MutatorsStack {
+ public:
+  MutatorsStack() = default;
+};
 
 #if FML_OS_ANDROID
 using JavaLocalRef = fml::jni::ScopedJavaLocalRef<jobject>;
@@ -121,7 +153,7 @@ class PlatformViewAndroidJNI {
   ///             Then, it updates the `transform` matrix, so it fill the canvas
   ///             and preserve the aspect ratio.
   ///
-  virtual SkM44 SurfaceTextureGetTransformMatrix(
+  virtual std::vector<float> SurfaceTextureGetTransformMatrix(
       JavaLocalRef surface_texture) = 0;
 
   //----------------------------------------------------------------------------
@@ -199,17 +231,22 @@ class PlatformViewAndroidJNI {
   /// by |SurfacePool|.
   ///
   struct OverlayMetadata {
-    OverlayMetadata(int id, fml::RefPtr<AndroidNativeWindow> window)
-        : id(id), window(std::move(window)) {};
+    OverlayMetadata(int id, ANativeWindow* window) : id(id), window(window) {}
 
-    ~OverlayMetadata() = default;
+    ~OverlayMetadata() {
+#if FML_OS_ANDROID
+      if (window != nullptr) {
+        ANativeWindow_release(window);
+      }
+#endif
+    }
 
     // A unique id to identify the overlay when it gets recycled.
     const int id;
 
     // Holds a reference to the native window. That is, an `ANativeWindow`,
     // which is the C counterpart of the `android.view.Surface` object in Java.
-    const fml::RefPtr<AndroidNativeWindow> window;
+    ANativeWindow* const window;
   };
 
   //----------------------------------------------------------------------------

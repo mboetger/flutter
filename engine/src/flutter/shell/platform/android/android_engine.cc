@@ -11,10 +11,6 @@
 #include <cstring>
 #include <utility>
 
-#include "flutter/display_list/geometry/dl_geometry_types.h"
-#include "flutter/display_list/geometry/dl_path.h"
-#include "flutter/display_list/geometry/dl_path_builder.h"
-#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/logging.h"
 #include "flutter/shell/platform/android/android_mutators_mapper.h"
 
@@ -275,7 +271,7 @@ class AndroidEngine::CompositorDelegate
   AndroidEngine* engine_;
 };
 
-AndroidEngine::AndroidEngine(const flutter::Settings& settings,
+AndroidEngine::AndroidEngine(const flutter::AndroidSettings& settings,
                              std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
                              AndroidRenderingAPI android_rendering_api)
     : settings_(settings),
@@ -289,7 +285,7 @@ AndroidEngine::AndroidEngine(const flutter::Settings& settings,
                                                     compositor_delegate_);
 }
 
-AndroidEngine::AndroidEngine(const flutter::Settings& settings,
+AndroidEngine::AndroidEngine(const flutter::AndroidSettings& settings,
                              std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
                              std::shared_ptr<AndroidTaskRunners> task_runners,
                              AndroidRenderingAPI android_rendering_api)
@@ -319,6 +315,9 @@ AndroidEngine::~AndroidEngine() {
     }
     FlutterEngineShutdown(engine_);
     engine_ = nullptr;
+  } else if (asset_resolver_.destruction_callback != nullptr) {
+    asset_resolver_.destruction_callback(asset_resolver_.user_data);
+    asset_resolver_.destruction_callback = nullptr;
   }
 
   std::lock_guard<std::mutex> lock(pending_responses_mutex_);
@@ -885,15 +884,11 @@ std::unique_ptr<AndroidEngine> AndroidEngine::Spawn(
   return child;
 }
 
-void AndroidEngine::NotifySurfaceCreated(
-    fml::RefPtr<AndroidNativeWindow> native_window) {
+void AndroidEngine::NotifySurfaceCreated(ANativeWindow* native_window,
+                                         bool is_fake_window) {
   if (surface_manager_ != nullptr) {
-    ANativeWindow* handle =
-        native_window.get() != nullptr ? native_window->handle() : nullptr;
-    bool is_fake =
-        native_window.get() != nullptr && native_window->IsFakeWindow();
-    surface_manager_->SetNativeWindow(handle, is_fake);
-    bool valid = (native_window.get() != nullptr && native_window->IsValid());
+    surface_manager_->SetNativeWindow(native_window, is_fake_window);
+    bool valid = (native_window != nullptr || is_fake_window);
     if (valid && !surface_attached_) {
       surface_attached_ = true;
       if (engine_ != nullptr) {
@@ -903,15 +898,11 @@ void AndroidEngine::NotifySurfaceCreated(
   }
 }
 
-void AndroidEngine::NotifySurfaceWindowChanged(
-    fml::RefPtr<AndroidNativeWindow> native_window) {
+void AndroidEngine::NotifySurfaceWindowChanged(ANativeWindow* native_window,
+                                               bool is_fake_window) {
   if (surface_manager_ != nullptr) {
-    ANativeWindow* handle =
-        native_window.get() != nullptr ? native_window->handle() : nullptr;
-    bool is_fake =
-        native_window.get() != nullptr && native_window->IsFakeWindow();
-    surface_manager_->SetNativeWindow(handle, is_fake);
-    bool valid = (native_window.get() != nullptr && native_window->IsValid());
+    surface_manager_->SetNativeWindow(native_window, is_fake_window);
+    bool valid = (native_window != nullptr || is_fake_window);
     if (valid && !surface_attached_) {
       surface_attached_ = true;
       if (engine_ != nullptr) {
@@ -1379,156 +1370,17 @@ void AndroidEngine::OnPlatformViewPresented(
     return;
   }
 
-  MutatorsStack stack;
-  if (mutations != nullptr && mutations_count > 0) {
-    for (size_t i = 0; i < mutations_count; ++i) {
-      const FlutterPlatformViewMutation* m = mutations[i];
-      if (m == nullptr) {
-        continue;
-      }
-      switch (m->type) {
-        case kFlutterPlatformViewMutationTypeTransformation: {
-          const auto& t = m->transformation;
-          DlMatrix matrix = DlMatrix::MakeRow(
-              static_cast<DlScalar>(t.scaleX), static_cast<DlScalar>(t.skewX),
-              0.0f, static_cast<DlScalar>(t.transX),
-              static_cast<DlScalar>(t.skewY), static_cast<DlScalar>(t.scaleY),
-              0.0f, static_cast<DlScalar>(t.transY), 0.0f, 0.0f, 1.0f, 0.0f,
-              static_cast<DlScalar>(t.pers0), static_cast<DlScalar>(t.pers1),
-              0.0f, static_cast<DlScalar>(t.pers2));
-          stack.PushTransform(matrix);
-          break;
-        }
-        case kFlutterPlatformViewMutationTypeOpacity: {
-          uint8_t alpha =
-              static_cast<uint8_t>(std::clamp(m->opacity * 255.0, 0.0, 255.0));
-          stack.PushOpacity(alpha);
-          break;
-        }
-        case kFlutterPlatformViewMutationTypeClipRect: {
-          const auto& r = m->clip_rect;
-          stack.PushClipRect(DlRect::MakeLTRB(
-              static_cast<DlScalar>(r.left), static_cast<DlScalar>(r.top),
-              static_cast<DlScalar>(r.right), static_cast<DlScalar>(r.bottom)));
-          break;
-        }
-        case kFlutterPlatformViewMutationTypeClipRoundedRect: {
-          const auto& rr = m->clip_rounded_rect;
-          DlRect bounds =
-              DlRect::MakeLTRB(static_cast<DlScalar>(rr.rect.left),
-                               static_cast<DlScalar>(rr.rect.top),
-                               static_cast<DlScalar>(rr.rect.right),
-                               static_cast<DlScalar>(rr.rect.bottom));
-          DlRoundingRadii radii = {
-              .top_left = DlSize(
-                  static_cast<DlScalar>(rr.upper_left_corner_radius.width),
-                  static_cast<DlScalar>(rr.upper_left_corner_radius.height)),
-              .top_right = DlSize(
-                  static_cast<DlScalar>(rr.upper_right_corner_radius.width),
-                  static_cast<DlScalar>(rr.upper_right_corner_radius.height)),
-              .bottom_left = DlSize(
-                  static_cast<DlScalar>(rr.lower_left_corner_radius.width),
-                  static_cast<DlScalar>(rr.lower_left_corner_radius.height)),
-              .bottom_right = DlSize(
-                  static_cast<DlScalar>(rr.lower_right_corner_radius.width),
-                  static_cast<DlScalar>(rr.lower_right_corner_radius.height)),
-          };
-          stack.PushClipRRect(DlRoundRect::MakeRectRadii(bounds, radii));
-          break;
-        }
-        case kFlutterPlatformViewMutationTypeClipRoundSuperellipse: {
-          const auto& rse = m->clip_round_superellipse;
-          DlRect bounds =
-              DlRect::MakeLTRB(static_cast<DlScalar>(rse.rect.left),
-                               static_cast<DlScalar>(rse.rect.top),
-                               static_cast<DlScalar>(rse.rect.right),
-                               static_cast<DlScalar>(rse.rect.bottom));
-          DlRoundingRadii radii = {
-              .top_left = DlSize(
-                  static_cast<DlScalar>(rse.upper_left_corner_radius.width),
-                  static_cast<DlScalar>(rse.upper_left_corner_radius.height)),
-              .top_right = DlSize(
-                  static_cast<DlScalar>(rse.upper_right_corner_radius.width),
-                  static_cast<DlScalar>(rse.upper_right_corner_radius.height)),
-              .bottom_left = DlSize(
-                  static_cast<DlScalar>(rse.lower_left_corner_radius.width),
-                  static_cast<DlScalar>(rse.lower_left_corner_radius.height)),
-              .bottom_right = DlSize(
-                  static_cast<DlScalar>(rse.lower_right_corner_radius.width),
-                  static_cast<DlScalar>(rse.lower_right_corner_radius.height)),
-          };
-          stack.PushClipRSE(DlRoundSuperellipse::MakeRectRadii(bounds, radii));
-          break;
-        }
-        case kFlutterPlatformViewMutationTypeClipPath: {
-          DlPathBuilder builder;
-          const auto& path = m->clip_path;
-          if (path.fill_type == kFlutterPathFillTypeEvenOdd) {
-            builder.SetFillType(DlPathFillType::kOdd);
-          } else {
-            builder.SetFillType(DlPathFillType::kNonZero);
-          }
-          if (path.segments != nullptr && path.segments_count > 0) {
-            for (size_t s = 0; s < path.segments_count; ++s) {
-              const auto& seg = path.segments[s];
-              switch (seg.verb) {
-                case kFlutterPathVerbMove:
-                  builder.MoveTo(
-                      DlPoint(static_cast<DlScalar>(seg.points[0].x),
-                              static_cast<DlScalar>(seg.points[0].y)));
-                  break;
-                case kFlutterPathVerbLine:
-                  builder.LineTo(
-                      DlPoint(static_cast<DlScalar>(seg.points[1].x),
-                              static_cast<DlScalar>(seg.points[1].y)));
-                  break;
-                case kFlutterPathVerbQuad:
-                  builder.QuadraticCurveTo(
-                      DlPoint(static_cast<DlScalar>(seg.points[1].x),
-                              static_cast<DlScalar>(seg.points[1].y)),
-                      DlPoint(static_cast<DlScalar>(seg.points[2].x),
-                              static_cast<DlScalar>(seg.points[2].y)));
-                  break;
-                case kFlutterPathVerbConic:
-                  builder.ConicCurveTo(
-                      DlPoint(static_cast<DlScalar>(seg.points[1].x),
-                              static_cast<DlScalar>(seg.points[1].y)),
-                      DlPoint(static_cast<DlScalar>(seg.points[2].x),
-                              static_cast<DlScalar>(seg.points[2].y)),
-                      static_cast<DlScalar>(seg.conic_weight));
-                  break;
-                case kFlutterPathVerbCubic:
-                  builder.CubicCurveTo(
-                      DlPoint(static_cast<DlScalar>(seg.points[1].x),
-                              static_cast<DlScalar>(seg.points[1].y)),
-                      DlPoint(static_cast<DlScalar>(seg.points[2].x),
-                              static_cast<DlScalar>(seg.points[2].y)),
-                      DlPoint(static_cast<DlScalar>(seg.points[3].x),
-                              static_cast<DlScalar>(seg.points[3].y)));
-                  break;
-                case kFlutterPathVerbClose:
-                  builder.Close();
-                  break;
-              }
-            }
-          }
-          stack.PushClipPath(builder.TakePath());
-          break;
-        }
-      }
-    }
-  }
-
   int x = static_cast<int>(std::round(offset.x));
   int y = static_cast<int>(std::round(offset.y));
   int width = static_cast<int>(std::round(size.width));
   int height = static_cast<int>(std::round(size.height));
 
   task_runners_->GetPlatformTaskRunner()->PostTask(
-      [jni = jni_facade_, view_id, x, y, width, height,
-       stack = std::move(stack)]() mutable {
-        jni->FlutterViewOnDisplayPlatformView(view_id, x, y, width, height,
-                                              width, height, std::move(stack));
+      [jni = jni_facade_, view_id, x, y, width, height]() {
+        MutatorsStack mutators_stack;
+        jni->FlutterViewOnDisplayPlatformView(static_cast<int>(view_id), x, y,
+                                              width, height, width, height,
+                                              mutators_stack);
       });
 }
 

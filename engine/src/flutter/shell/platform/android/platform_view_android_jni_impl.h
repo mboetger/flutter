@@ -6,9 +6,11 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_PLATFORM_VIEW_ANDROID_JNI_IMPL_H_
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "flutter/fml/macros.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 
@@ -36,6 +38,8 @@ void* FindFirstLoadableLibrary(
 ///
 class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
  public:
+  static bool Register(JNIEnv* env);
+
   explicit PlatformViewAndroidJNIImpl(
       const fml::jni::JavaObjectWeakGlobalRef& java_object);
 
@@ -73,7 +77,8 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) override;
 
-  SkM44 SurfaceTextureGetTransformMatrix(JavaLocalRef surface_texture) override;
+  std::vector<float> SurfaceTextureGetTransformMatrix(
+      JavaLocalRef surface_texture) override;
 
   void SurfaceTextureDetachFromGLContext(JavaLocalRef surface_texture) override;
 

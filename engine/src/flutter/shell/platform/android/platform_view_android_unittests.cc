@@ -19,7 +19,7 @@ namespace testing {
 // the test, or remove it.
 #if !SLIMPELLER
 TEST(AndroidPlatformView, DISABLED_SelectsVulkanBasedOnApiLevel) {
-  Settings settings;
+  AndroidSettings settings;
   settings.enable_software_rendering = false;
   settings.enable_impeller = true;
 
@@ -50,12 +50,12 @@ TEST(FlutterMainTest, EmbedderAPIEnabledSettingsFallback) {
   FlutterMain::ResetSettingsForTesting();
   EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 
-  Settings settings_disabled;
+  AndroidSettings settings_disabled;
   settings_disabled.enable_embedder_api = false;
   FlutterMain::SetSettingsForTesting(settings_disabled);
   EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
 
-  Settings settings_enabled;
+  AndroidSettings settings_enabled;
   settings_enabled.enable_embedder_api = true;
   FlutterMain::SetSettingsForTesting(settings_enabled);
   EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
