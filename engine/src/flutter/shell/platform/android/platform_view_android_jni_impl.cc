@@ -22,6 +22,7 @@
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
 #include "flutter/lib/ui/plugins/callback_cache.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
@@ -186,18 +187,29 @@ static jlong AttachJNI(JNIEnv* env, jclass clazz, jobject flutterJNI) {
   fml::jni::JavaObjectWeakGlobalRef java_object(env, flutterJNI);
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade =
       std::make_shared<PlatformViewAndroidJNIImpl>(java_object);
-  auto shell_holder = std::make_unique<AndroidShellHolder>(
-      FlutterMain::Get().GetSettings(), jni_facade,
-      FlutterMain::Get().GetAndroidRenderingAPI());
-  if (shell_holder->IsValid()) {
-    return reinterpret_cast<jlong>(shell_holder.release());
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    auto android_engine = std::make_unique<AndroidEngine>(
+        FlutterMain::Get().GetSettings(), jni_facade,
+        FlutterMain::Get().GetAndroidRenderingAPI());
+    return reinterpret_cast<jlong>(android_engine.release());
   } else {
-    return 0;
+    auto shell_holder = std::make_unique<AndroidShellHolder>(
+        FlutterMain::Get().GetSettings(), jni_facade,
+        FlutterMain::Get().GetAndroidRenderingAPI());
+    if (shell_holder->IsValid()) {
+      return reinterpret_cast<jlong>(shell_holder.release());
+    } else {
+      return 0;
+    }
   }
 }
 
 static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  delete ANDROID_SHELL_HOLDER;
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    delete reinterpret_cast<AndroidEngine*>(shell_holder);
+  } else {
+    delete ANDROID_SHELL_HOLDER;
+  }
 }
 
 // Signature is similar to RunBundleAndSnapshotFromLibrary but it can't change
@@ -205,11 +217,12 @@ static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
 // AOT.
 //
 // The shell_holder instance must be a pointer address to the current
-// AndroidShellHolder whose Shell will be used to spawn a new Shell.
+// AndroidShellHolder (or AndroidEngine) whose Shell/Engine will be used to
+// spawn a new instance.
 //
 // This creates a Java Long that points to the newly created
-// AndroidShellHolder's raw pointer, connects that Long to a newly created
-// FlutterJNI instance, then returns the FlutterJNI instance.
+// AndroidShellHolder/AndroidEngine's raw pointer, connects that Long to a newly
+// created FlutterJNI instance, then returns the FlutterJNI instance.
 static jobject SpawnJNI(JNIEnv* env,
                         jobject jcaller,
                         jlong shell_holder,
@@ -233,26 +246,49 @@ static jobject SpawnJNI(JNIEnv* env,
   auto initial_route = fml::jni::JavaStringToString(env, jInitialRoute);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  auto spawned_shell_holder =
-      ANDROID_SHELL_HOLDER->Spawn(jni_facade, entrypoint, libraryUrl,
-                                  initial_route, entrypoint_args, engineId);
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    auto* android_engine = reinterpret_cast<AndroidEngine*>(shell_holder);
+    auto spawned_engine =
+        android_engine->Spawn(jni_facade, entrypoint, libraryUrl, initial_route,
+                              entrypoint_args, engineId);
+    if (spawned_engine == nullptr || !spawned_engine->IsValid()) {
+      FML_LOG(ERROR) << "Could not spawn AndroidEngine";
+      return nullptr;
+    }
 
-  if (spawned_shell_holder == nullptr || !spawned_shell_holder->IsValid()) {
-    FML_LOG(ERROR) << "Could not spawn Shell";
-    return nullptr;
+    jobject javaLong = env->CallStaticObjectMethod(
+        g_java_long_class->obj(), g_long_constructor,
+        reinterpret_cast<jlong>(spawned_engine.release()));
+    if (javaLong == nullptr) {
+      FML_LOG(ERROR) << "Could not create a Long instance";
+      return nullptr;
+    }
+
+    env->SetObjectField(jni, g_jni_shell_holder_field, javaLong);
+
+    return jni;
+  } else {
+    auto spawned_shell_holder =
+        ANDROID_SHELL_HOLDER->Spawn(jni_facade, entrypoint, libraryUrl,
+                                    initial_route, entrypoint_args, engineId);
+
+    if (spawned_shell_holder == nullptr || !spawned_shell_holder->IsValid()) {
+      FML_LOG(ERROR) << "Could not spawn Shell";
+      return nullptr;
+    }
+
+    jobject javaLong = env->CallStaticObjectMethod(
+        g_java_long_class->obj(), g_long_constructor,
+        reinterpret_cast<jlong>(spawned_shell_holder.release()));
+    if (javaLong == nullptr) {
+      FML_LOG(ERROR) << "Could not create a Long instance";
+      return nullptr;
+    }
+
+    env->SetObjectField(jni, g_jni_shell_holder_field, javaLong);
+
+    return jni;
   }
-
-  jobject javaLong = env->CallStaticObjectMethod(
-      g_java_long_class->obj(), g_long_constructor,
-      reinterpret_cast<jlong>(spawned_shell_holder.release()));
-  if (javaLong == nullptr) {
-    FML_LOG(ERROR) << "Could not create a Long instance";
-    return nullptr;
-  }
-
-  env->SetObjectField(jni, g_jni_shell_holder_field, javaLong);
-
-  return jni;
 }
 
 static void SurfaceCreated(JNIEnv* env,
@@ -265,7 +301,12 @@ static void SurfaceCreated(JNIEnv* env,
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
-  ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyCreated(std::move(window));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->NotifySurfaceCreated(std::move(window));
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyCreated(std::move(window));
+  }
 }
 
 static void SurfaceWindowChanged(JNIEnv* env,
@@ -278,8 +319,13 @@ static void SurfaceWindowChanged(JNIEnv* env,
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       ANativeWindow_fromSurface(env, jsurface));
-  ANDROID_SHELL_HOLDER->GetPlatformView()->NotifySurfaceWindowChanged(
-      std::move(window));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->NotifySurfaceWindowChanged(std::move(window));
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->NotifySurfaceWindowChanged(
+        std::move(window));
+  }
 }
 
 static void SurfaceChanged(JNIEnv* env,
@@ -287,12 +333,21 @@ static void SurfaceChanged(JNIEnv* env,
                            jlong shell_holder,
                            jint width,
                            jint height) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyChanged(
-      DlISize(width, height));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->NotifySurfaceChanged(width, height);
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyChanged(
+        DlISize(width, height));
+  }
 }
 
 static void SurfaceDestroyed(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyDestroyed();
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)->NotifySurfaceDestroyed();
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->NotifyDestroyed();
+  }
 }
 
 static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
@@ -313,8 +368,14 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
   auto libraryUrl = fml::jni::JavaStringToString(env, jLibraryUrl);
   auto entrypoint_args = fml::jni::StringListToVector(env, jEntrypointArgs);
 
-  ANDROID_SHELL_HOLDER->Launch(std::move(apk_asset_provider), entrypoint,
-                               libraryUrl, entrypoint_args, engineId);
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->Launch(std::move(apk_asset_provider), entrypoint, libraryUrl,
+                 entrypoint_args, engineId);
+  } else {
+    ANDROID_SHELL_HOLDER->Launch(std::move(apk_asset_provider), entrypoint,
+                                 libraryUrl, entrypoint_args, engineId);
+  }
 }
 
 static jobject LookupCallbackInformation(JNIEnv* env,
@@ -428,26 +489,69 @@ static void SetViewportMetrics(JNIEnv* env,
           physicalDisplayCornerRadiusBottomLeft),  // p_physical_display_corner_radius_bottom_left
   };
 
-  ANDROID_SHELL_HOLDER->GetPlatformView()->SetViewportMetrics(
-      kFlutterImplicitViewId, metrics);
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->SetViewportMetrics(kFlutterImplicitViewId, metrics);
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->SetViewportMetrics(
+        kFlutterImplicitViewId, metrics);
+  }
 }
 
 static void UpdateDisplayMetrics(JNIEnv* env,
                                  jobject jcaller,
                                  jlong shell_holder) {
-  ANDROID_SHELL_HOLDER->UpdateDisplayMetrics();
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)->UpdateDisplayMetrics();
+  } else {
+    ANDROID_SHELL_HOLDER->UpdateDisplayMetrics();
+  }
 }
 
 static bool IsSurfaceControlEnabled(JNIEnv* env,
                                     jobject jcaller,
                                     jlong shell_holder) {
-  return ANDROID_SHELL_HOLDER->IsSurfaceControlEnabled();
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    return reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->IsSurfaceControlEnabled();
+  } else {
+    return ANDROID_SHELL_HOLDER->IsSurfaceControlEnabled();
+  }
 }
 
 static jobject GetBitmap(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  auto screenshot = ANDROID_SHELL_HOLDER->Screenshot(
-      Rasterizer::ScreenshotType::UncompressedImage, false);
-  if (screenshot.data == nullptr) {
+  size_t width = 0;
+  size_t height = 0;
+  const uint8_t* bytes = nullptr;
+  size_t size = 0;
+  struct AndroidEngine::Screenshot embedder_screenshot;
+  Rasterizer::Screenshot legacy_screenshot;
+
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    embedder_screenshot =
+        reinterpret_cast<AndroidEngine*>(shell_holder)
+            ->Screenshot(AndroidEngine::ScreenshotType::kUncompressedImage,
+                         false);
+    if (embedder_screenshot.data == nullptr) {
+      return nullptr;
+    }
+    width = embedder_screenshot.frame_size.width;
+    height = embedder_screenshot.frame_size.height;
+    bytes = embedder_screenshot.data->GetMapping();
+    size = embedder_screenshot.data->GetSize();
+  } else {
+    legacy_screenshot = ANDROID_SHELL_HOLDER->Screenshot(
+        Rasterizer::ScreenshotType::UncompressedImage, false);
+    if (legacy_screenshot.data == nullptr) {
+      return nullptr;
+    }
+    width = legacy_screenshot.frame_size.width;
+    height = legacy_screenshot.frame_size.height;
+    bytes = reinterpret_cast<const uint8_t*>(legacy_screenshot.data->data());
+    size = legacy_screenshot.data->size();
+  }
+
+  if (bytes == nullptr || size == 0) {
     return nullptr;
   }
 
@@ -462,14 +566,16 @@ static jobject GetBitmap(JNIEnv* env, jobject jcaller, jlong shell_holder) {
     return nullptr;
   }
 
-  auto bitmap = env->CallStaticObjectMethod(
-      g_bitmap_class->obj(), g_bitmap_create_bitmap_method,
-      screenshot.frame_size.width, screenshot.frame_size.height, bitmap_config);
+  auto bitmap = env->CallStaticObjectMethod(g_bitmap_class->obj(),
+                                            g_bitmap_create_bitmap_method,
+                                            width, height, bitmap_config);
+
+  if (bitmap == nullptr) {
+    return nullptr;
+  }
 
   fml::jni::ScopedJavaLocalRef<jobject> buffer(
-      env,
-      env->NewDirectByteBuffer(const_cast<uint8_t*>(screenshot.data->bytes()),
-                               screenshot.data->size()));
+      env, env->NewDirectByteBuffer(const_cast<uint8_t*>(bytes), size));
 
   env->CallVoidMethod(bitmap, g_bitmap_copy_pixels_from_buffer_method,
                       buffer.obj());
@@ -484,13 +590,24 @@ static void DispatchPlatformMessage(JNIEnv* env,
                                     jobject message,
                                     jint position,
                                     jint responseId) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchPlatformMessage(
-      env,                                         //
-      fml::jni::JavaStringToString(env, channel),  //
-      message,                                     //
-      position,                                    //
-      responseId                                   //
-  );
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->DispatchPlatformMessage(
+            env,                                         //
+            fml::jni::JavaStringToString(env, channel),  //
+            message,                                     //
+            position,                                    //
+            responseId                                   //
+        );
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchPlatformMessage(
+        env,                                         //
+        fml::jni::JavaStringToString(env, channel),  //
+        message,                                     //
+        position,                                    //
+        responseId                                   //
+    );
+  }
 }
 
 static void DispatchEmptyPlatformMessage(JNIEnv* env,
@@ -498,11 +615,20 @@ static void DispatchEmptyPlatformMessage(JNIEnv* env,
                                          jlong shell_holder,
                                          jstring channel,
                                          jint responseId) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchEmptyPlatformMessage(
-      env,                                         //
-      fml::jni::JavaStringToString(env, channel),  //
-      responseId                                   //
-  );
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->DispatchEmptyPlatformMessage(
+            env,                                         //
+            fml::jni::JavaStringToString(env, channel),  //
+            responseId                                   //
+        );
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchEmptyPlatformMessage(
+        env,                                         //
+        fml::jni::JavaStringToString(env, channel),  //
+        responseId                                   //
+    );
+  }
 }
 
 static void CleanupMessageData(JNIEnv* env,
@@ -518,9 +644,14 @@ static void DispatchPointerDataPacket(JNIEnv* env,
                                       jobject buffer,
                                       jint position) {
   uint8_t* data = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
-  auto packet = std::make_unique<flutter::PointerDataPacket>(data, position);
-  ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchPointerDataPacket(
-      std::move(packet));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->DispatchPointerDataPacket(data, position);
+  } else {
+    auto packet = std::make_unique<flutter::PointerDataPacket>(data, position);
+    ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchPointerDataPacket(
+        std::move(packet));
+  }
 }
 
 static void DispatchSemanticsAction(JNIEnv* env,
@@ -530,27 +661,47 @@ static void DispatchSemanticsAction(JNIEnv* env,
                                     jint action,
                                     jobject args,
                                     jint args_position) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchSemanticsAction(
-      env,           //
-      id,            //
-      action,        //
-      args,          //
-      args_position  //
-  );
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->DispatchSemanticsAction(env,           //
+                                  id,            //
+                                  action,        //
+                                  args,          //
+                                  args_position  //
+        );
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->DispatchSemanticsAction(
+        env,           //
+        id,            //
+        action,        //
+        args,          //
+        args_position  //
+    );
+  }
 }
 
 static void SetSemanticsEnabled(JNIEnv* env,
                                 jobject jcaller,
                                 jlong shell_holder,
                                 jboolean enabled) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->SetSemanticsEnabled(enabled);
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->SetSemanticsEnabled(enabled);
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->SetSemanticsEnabled(enabled);
+  }
 }
 
 static void SetAccessibilityFeatures(JNIEnv* env,
                                      jobject jcaller,
                                      jlong shell_holder,
                                      jint flags) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->SetAccessibilityFeatures(flags);
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->SetAccessibilityFeatures(flags);
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->SetAccessibilityFeatures(flags);
+  }
 }
 
 static jboolean GetIsSoftwareRendering(JNIEnv* env, jobject jcaller) {
@@ -562,10 +713,18 @@ static void RegisterTexture(JNIEnv* env,
                             jlong shell_holder,
                             jlong texture_id,
                             jobject surface_texture) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->RegisterExternalTexture(
-      static_cast<int64_t>(texture_id),                             //
-      fml::jni::ScopedJavaGlobalRef<jobject>(env, surface_texture)  //
-  );
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->RegisterExternalTexture(
+            static_cast<int64_t>(texture_id),                             //
+            fml::jni::ScopedJavaGlobalRef<jobject>(env, surface_texture)  //
+        );
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->RegisterExternalTexture(
+        static_cast<int64_t>(texture_id),                             //
+        fml::jni::ScopedJavaGlobalRef<jobject>(env, surface_texture)  //
+    );
+  }
 }
 
 static void RegisterImageTexture(JNIEnv* env,
@@ -574,35 +733,58 @@ static void RegisterImageTexture(JNIEnv* env,
                                  jlong texture_id,
                                  jobject image_texture_entry,
                                  jboolean reset_on_background) {
-  ImageExternalTexture::ImageLifecycle lifecycle =
-      reset_on_background ? ImageExternalTexture::ImageLifecycle::kReset
-                          : ImageExternalTexture::ImageLifecycle::kKeepAlive;
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->RegisterImageTexture(static_cast<int64_t>(texture_id),  //
+                               fml::jni::ScopedJavaGlobalRef<jobject>(
+                                   env, image_texture_entry),  //
+                               reset_on_background             //
+        );
+  } else {
+    ImageExternalTexture::ImageLifecycle lifecycle =
+        reset_on_background ? ImageExternalTexture::ImageLifecycle::kReset
+                            : ImageExternalTexture::ImageLifecycle::kKeepAlive;
 
-  ANDROID_SHELL_HOLDER->GetPlatformView()->RegisterImageTexture(
-      static_cast<int64_t>(texture_id),                                  //
-      fml::jni::ScopedJavaGlobalRef<jobject>(env, image_texture_entry),  //
-      lifecycle                                                          //
-  );
+    ANDROID_SHELL_HOLDER->GetPlatformView()->RegisterImageTexture(
+        static_cast<int64_t>(texture_id),                                  //
+        fml::jni::ScopedJavaGlobalRef<jobject>(env, image_texture_entry),  //
+        lifecycle                                                          //
+    );
+  }
 }
 
 static void UnregisterTexture(JNIEnv* env,
                               jobject jcaller,
                               jlong shell_holder,
                               jlong texture_id) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->UnregisterTexture(
-      static_cast<int64_t>(texture_id));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->UnregisterTexture(static_cast<int64_t>(texture_id));
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->UnregisterTexture(
+        static_cast<int64_t>(texture_id));
+  }
 }
 
 static void MarkTextureFrameAvailable(JNIEnv* env,
                                       jobject jcaller,
                                       jlong shell_holder,
                                       jlong texture_id) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->MarkTextureFrameAvailable(
-      static_cast<int64_t>(texture_id));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->MarkTextureFrameAvailable(static_cast<int64_t>(texture_id));
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->MarkTextureFrameAvailable(
+        static_cast<int64_t>(texture_id));
+  }
 }
 
 static void ScheduleFrame(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  ANDROID_SHELL_HOLDER->GetPlatformView()->ScheduleFrame();
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)->ScheduleFrame();
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->ScheduleFrame();
+  }
 }
 
 static void InvokePlatformMessageResponseCallback(JNIEnv* env,
@@ -616,22 +798,36 @@ static void InvokePlatformMessageResponseCallback(JNIEnv* env,
   FML_DCHECK(response_data != nullptr);
   auto mapping = std::make_unique<fml::MallocMapping>(
       fml::MallocMapping::Copy(response_data, response_data + position));
-  ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
-      ->InvokePlatformMessageResponseCallback(responseId, std::move(mapping));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->SendPlatformMessageResponse(responseId, std::move(mapping));
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
+        ->InvokePlatformMessageResponseCallback(responseId, std::move(mapping));
+  }
 }
 
 static void InvokePlatformMessageEmptyResponseCallback(JNIEnv* env,
                                                        jobject jcaller,
                                                        jlong shell_holder,
                                                        jint responseId) {
-  ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
-      ->InvokePlatformMessageEmptyResponseCallback(responseId);
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->SendEmptyPlatformMessageResponse(responseId);
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
+        ->InvokePlatformMessageEmptyResponseCallback(responseId);
+  }
 }
 
 static void NotifyLowMemoryWarning(JNIEnv* env,
                                    jobject obj,
                                    jlong shell_holder) {
-  ANDROID_SHELL_HOLDER->NotifyLowMemoryWarning();
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)->NotifyLowMemoryWarning();
+  } else {
+    ANDROID_SHELL_HOLDER->NotifyLowMemoryWarning();
+  }
 }
 
 static jboolean FlutterTextUtilsIsEmoji(JNIEnv* env,
@@ -730,9 +926,15 @@ static void LoadDartDeferredLibrary(JNIEnv* env,
       std::make_unique<const fml::SymbolMapping>(
           native_lib, DartSnapshot::kIsolateInstructionsSymbol);
 
-  ANDROID_SHELL_HOLDER->GetPlatformView()->LoadDartDeferredLibrary(
-      loading_unit_id, std::move(data_mapping),
-      std::move(instructions_mapping));
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->LoadDartDeferredLibrary(loading_unit_id, std::move(data_mapping),
+                                  std::move(instructions_mapping));
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->LoadDartDeferredLibrary(
+        loading_unit_id, std::move(data_mapping),
+        std::move(instructions_mapping));
+  }
 }
 
 static void UpdateJavaAssetManager(JNIEnv* env,
@@ -745,9 +947,16 @@ static void UpdateJavaAssetManager(JNIEnv* env,
       jAssetManager,                                         // asset manager
       fml::jni::JavaStringToString(env, jAssetBundlePath));  // apk asset dir
 
-  ANDROID_SHELL_HOLDER->GetPlatformView()->UpdateAssetResolverByType(
-      std::move(asset_resolver),
-      AssetResolver::AssetResolverType::kApkAssetProvider);
+  if (FlutterMain::IsEmbedderAPIEnabled()) {
+    reinterpret_cast<AndroidEngine*>(shell_holder)
+        ->UpdateAssetResolverByType(
+            std::move(asset_resolver),
+            AssetResolver::AssetResolverType::kApkAssetProvider);
+  } else {
+    ANDROID_SHELL_HOLDER->GetPlatformView()->UpdateAssetResolverByType(
+        std::move(asset_resolver),
+        AssetResolver::AssetResolverType::kApkAssetProvider);
+  }
 }
 
 bool RegisterApi(JNIEnv* env) {

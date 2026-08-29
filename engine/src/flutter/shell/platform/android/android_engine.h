@@ -44,55 +44,6 @@ typedef void* jobjectArray;
 
 namespace flutter {
 
-namespace Rasterizer {
-enum class ScreenshotType {
-  kSkiaPicture,
-  kUncompressedImage,
-  kCompressedImage,
-  kSurfaceData,
-};
-
-struct Screenshot {
-  struct FrameSize {
-    size_t width = 0;
-    size_t height = 0;
-  };
-  FrameSize frame_size;
-  std::unique_ptr<fml::Mapping> data;
-};
-}  // namespace Rasterizer
-
-struct ViewportMetrics {
-  double device_pixel_ratio = 1.0;
-  double physical_width = 0.0;
-  double physical_height = 0.0;
-  double physical_min_width_constraint = 0.0;
-  double physical_max_width_constraint = 0.0;
-  double physical_min_height_constraint = 0.0;
-  double physical_max_height_constraint = 0.0;
-  double physical_padding_top = 0.0;
-  double physical_padding_right = 0.0;
-  double physical_padding_bottom = 0.0;
-  double physical_padding_left = 0.0;
-  double physical_view_inset_top = 0.0;
-  double physical_view_inset_right = 0.0;
-  double physical_view_inset_bottom = 0.0;
-  double physical_view_inset_left = 0.0;
-  double physical_system_gesture_inset_top = 0.0;
-  double physical_system_gesture_inset_right = 0.0;
-  double physical_system_gesture_inset_bottom = 0.0;
-  double physical_system_gesture_inset_left = 0.0;
-  double physical_touch_slop = -1.0;
-  std::vector<double> physical_display_features_bounds;
-  std::vector<int> physical_display_features_type;
-  std::vector<int> physical_display_features_state;
-  int64_t display_id = 0;
-  double physical_display_corner_radius_top_left = 0.0;
-  double physical_display_corner_radius_top_right = 0.0;
-  double physical_display_corner_radius_bottom_right = 0.0;
-  double physical_display_corner_radius_bottom_left = 0.0;
-};
-
 /// @brief Orchestrates the Flutter Embedder C-API for the Android platform.
 ///
 /// AndroidEngine corresponds 1:1 with an active FlutterEngine instance on the
@@ -101,6 +52,94 @@ struct ViewportMetrics {
 /// and embedder callbacks.
 class AndroidEngine {
  public:
+  enum class ScreenshotType {
+    kSkiaPicture,
+    kUncompressedImage,
+    kCompressedImage,
+    kSurfaceData,
+  };
+
+  struct Screenshot {
+    struct FrameSize {
+      size_t width = 0;
+      size_t height = 0;
+    };
+    FrameSize frame_size;
+    std::unique_ptr<fml::Mapping> data;
+  };
+
+  struct ViewportMetrics {
+    double device_pixel_ratio = 1.0;
+    double physical_width = 0.0;
+    double physical_height = 0.0;
+    double physical_min_width_constraint = 0.0;
+    double physical_max_width_constraint = 0.0;
+    double physical_min_height_constraint = 0.0;
+    double physical_max_height_constraint = 0.0;
+    double physical_padding_top = 0.0;
+    double physical_padding_right = 0.0;
+    double physical_padding_bottom = 0.0;
+    double physical_padding_left = 0.0;
+    double physical_view_inset_top = 0.0;
+    double physical_view_inset_right = 0.0;
+    double physical_view_inset_bottom = 0.0;
+    double physical_view_inset_left = 0.0;
+    double physical_system_gesture_inset_top = 0.0;
+    double physical_system_gesture_inset_right = 0.0;
+    double physical_system_gesture_inset_bottom = 0.0;
+    double physical_system_gesture_inset_left = 0.0;
+    double physical_touch_slop = -1.0;
+    std::vector<double> physical_display_features_bounds;
+    std::vector<int> physical_display_features_type;
+    std::vector<int> physical_display_features_state;
+    int64_t display_id = 0;
+    double physical_display_corner_radius_top_left = 0.0;
+    double physical_display_corner_radius_top_right = 0.0;
+    double physical_display_corner_radius_bottom_right = 0.0;
+    double physical_display_corner_radius_bottom_left = 0.0;
+
+    ViewportMetrics() = default;
+
+    template <typename T>
+    ViewportMetrics(const T& m)
+        : device_pixel_ratio(m.device_pixel_ratio),
+          physical_width(m.physical_width),
+          physical_height(m.physical_height),
+          physical_min_width_constraint(m.physical_min_width_constraint),
+          physical_max_width_constraint(m.physical_max_width_constraint),
+          physical_min_height_constraint(m.physical_min_height_constraint),
+          physical_max_height_constraint(m.physical_max_height_constraint),
+          physical_padding_top(m.physical_padding_top),
+          physical_padding_right(m.physical_padding_right),
+          physical_padding_bottom(m.physical_padding_bottom),
+          physical_padding_left(m.physical_padding_left),
+          physical_view_inset_top(m.physical_view_inset_top),
+          physical_view_inset_right(m.physical_view_inset_right),
+          physical_view_inset_bottom(m.physical_view_inset_bottom),
+          physical_view_inset_left(m.physical_view_inset_left),
+          physical_system_gesture_inset_top(
+              m.physical_system_gesture_inset_top),
+          physical_system_gesture_inset_right(
+              m.physical_system_gesture_inset_right),
+          physical_system_gesture_inset_bottom(
+              m.physical_system_gesture_inset_bottom),
+          physical_system_gesture_inset_left(
+              m.physical_system_gesture_inset_left),
+          physical_touch_slop(m.physical_touch_slop),
+          physical_display_features_bounds(m.physical_display_features_bounds),
+          physical_display_features_type(m.physical_display_features_type),
+          physical_display_features_state(m.physical_display_features_state),
+          display_id(m.display_id),
+          physical_display_corner_radius_top_left(
+              m.physical_display_corner_radius_top_left),
+          physical_display_corner_radius_top_right(
+              m.physical_display_corner_radius_top_right),
+          physical_display_corner_radius_bottom_right(
+              m.physical_display_corner_radius_bottom_right),
+          physical_display_corner_radius_bottom_left(
+              m.physical_display_corner_radius_bottom_left) {}
+  };
+
   AndroidEngine(const flutter::Settings& settings,
                 std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
                 AndroidRenderingAPI android_rendering_api);
@@ -147,8 +186,7 @@ class AndroidEngine {
   // ---------------------------------------------------------------------------
   // Screenshots
   // ---------------------------------------------------------------------------
-  Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
-                                    bool base64_encode);
+  Screenshot Screenshot(ScreenshotType type, bool base64_encode);
 
   // ---------------------------------------------------------------------------
   // Platform Messages & Events

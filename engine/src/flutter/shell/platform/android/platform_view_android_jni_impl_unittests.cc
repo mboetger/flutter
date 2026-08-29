@@ -8,7 +8,9 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
@@ -172,6 +174,139 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
                        reinterpret_cast<jlong>(holder.get()), 1.0f, 100, 100, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
                        0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+
+  typedef jlong (*AttachJNIFn)(JNIEnv*, jclass, jobject);
+  typedef void (*DestroyJNIFn)(JNIEnv*, jobject, jlong);
+  typedef void (*SetViewportMetricsFn)(
+      JNIEnv*, jobject, jlong, jfloat, jint, jint, jint, jint, jint, jint, jint,
+      jint, jint, jint, jint, jint, jint, jint, jint, jintArray, jintArray,
+      jintArray, jint, jint, jint, jint, jint, jint, jint, jint);
+  typedef void (*SetSemanticsEnabledFn)(JNIEnv*, jobject, jlong, jboolean);
+  typedef void (*SetAccessibilityFeaturesFn)(JNIEnv*, jobject, jlong, jint);
+  typedef void (*ScheduleFrameFn)(JNIEnv*, jobject, jlong);
+  typedef void (*NotifyLowMemoryWarningFn)(JNIEnv*, jobject, jlong);
+  typedef void (*SurfaceDestroyedFn)(JNIEnv*, jobject, jlong);
+
+  const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
+  const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
+  const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
+
+  EXPECT_CALL(mock_env, GetObjectRefType(_))
+      .WillRepeatedly(Return(JNILocalRefType));
+  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
+  EXPECT_CALL(mock_env, GetFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
+
+  AttachJNIFn attach_jni = nullptr;
+  DestroyJNIFn destroy_jni = nullptr;
+  SetViewportMetricsFn set_viewport_metrics = nullptr;
+  SetSemanticsEnabledFn set_semantics_enabled = nullptr;
+  SetAccessibilityFeaturesFn set_accessibility_features = nullptr;
+  ScheduleFrameFn schedule_frame = nullptr;
+  NotifyLowMemoryWarningFn notify_low_memory = nullptr;
+  SurfaceDestroyedFn surface_destroyed = nullptr;
+
+  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
+      .WillRepeatedly([&](jclass clazz, const JNINativeMethod* methods,
+                          jint nMethods) {
+        for (jint i = 0; i < nMethods; ++i) {
+          if (strcmp(methods[i].name, "nativeAttach") == 0) {
+            attach_jni = reinterpret_cast<AttachJNIFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeDestroy") == 0) {
+            destroy_jni = reinterpret_cast<DestroyJNIFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeSetViewportMetrics") == 0) {
+            set_viewport_metrics =
+                reinterpret_cast<SetViewportMetricsFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeSetSemanticsEnabled") ==
+                     0) {
+            set_semantics_enabled =
+                reinterpret_cast<SetSemanticsEnabledFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name,
+                            "nativeSetAccessibilityFeatures") == 0) {
+            set_accessibility_features =
+                reinterpret_cast<SetAccessibilityFeaturesFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeScheduleFrame") == 0) {
+            schedule_frame =
+                reinterpret_cast<ScheduleFrameFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeNotifyLowMemoryWarning") ==
+                     0) {
+            notify_low_memory =
+                reinterpret_cast<NotifyLowMemoryWarningFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeSurfaceDestroyed") == 0) {
+            surface_destroyed =
+                reinterpret_cast<SurfaceDestroyedFn>(methods[i].fnPtr);
+          }
+        }
+        return 0;
+      });
+
+  PlatformViewAndroid::Register(&mock_env);
+
+  ASSERT_NE(attach_jni, nullptr);
+  ASSERT_NE(destroy_jni, nullptr);
+  ASSERT_NE(set_viewport_metrics, nullptr);
+  ASSERT_NE(set_semantics_enabled, nullptr);
+  ASSERT_NE(set_accessibility_features, nullptr);
+  ASSERT_NE(schedule_frame, nullptr);
+  ASSERT_NE(notify_low_memory, nullptr);
+  ASSERT_NE(surface_destroyed, nullptr);
+
+  EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
+
+  for (bool embedder_api_enabled : {false, true}) {
+    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_api_enabled);
+    EXPECT_EQ(FlutterMain::IsEmbedderAPIEnabled(), embedder_api_enabled);
+
+    jobject jcaller = reinterpret_cast<jobject>(123);
+    jintArray bounds = reinterpret_cast<jintArray>(456);
+    jintArray type = reinterpret_cast<jintArray>(789);
+    jintArray state = reinterpret_cast<jintArray>(1011);
+
+    jlong shell_holder_ptr = 0;
+    if (embedder_api_enabled) {
+      auto engine = std::make_unique<AndroidEngine>(
+          Settings(), std::make_shared<JNIMock>(),
+          AndroidRenderingAPI::kImpellerOpenGLES);
+      shell_holder_ptr = reinterpret_cast<jlong>(engine.release());
+    } else {
+      auto holder = std::make_unique<AndroidShellHolder>(
+          Settings(), std::make_shared<JNIMock>(),
+          AndroidRenderingAPI::kImpellerOpenGLES);
+      shell_holder_ptr = reinterpret_cast<jlong>(holder.release());
+    }
+
+    ASSERT_NE(shell_holder_ptr, 0);
+
+    set_viewport_metrics(&mock_env, jcaller, shell_holder_ptr, 1.0f, 100, 100,
+                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type,
+                         state, 0, 0, 0, 0, 0, 0, 0, 0);
+
+    set_semantics_enabled(&mock_env, jcaller, shell_holder_ptr, JNI_TRUE);
+    set_accessibility_features(&mock_env, jcaller, shell_holder_ptr, 0x3);
+    schedule_frame(&mock_env, jcaller, shell_holder_ptr);
+    notify_low_memory(&mock_env, jcaller, shell_holder_ptr);
+    surface_destroyed(&mock_env, jcaller, shell_holder_ptr);
+
+    destroy_jni(&mock_env, jcaller, shell_holder_ptr);
+  }
+
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
 }
 
 // The load order is exercised with an injected loader rather than real

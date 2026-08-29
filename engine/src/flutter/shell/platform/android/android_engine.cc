@@ -1001,18 +1001,17 @@ bool AndroidEngine::IsSurfaceControlEnabled() const {
   return false;
 }
 
-Rasterizer::Screenshot AndroidEngine::Screenshot(
-    Rasterizer::ScreenshotType type,
-    bool base64_encode) {
-  Rasterizer::Screenshot result;
+struct AndroidEngine::Screenshot AndroidEngine::Screenshot(ScreenshotType type,
+                                                           bool base64_encode) {
+  struct Screenshot result;
   if (!IsValid()) {
     return result;
   }
 
   FlutterScreenshotType embedder_type = kFlutterScreenshotTypeUncompressedImage;
-  if (type == Rasterizer::ScreenshotType::kCompressedImage) {
+  if (type == ScreenshotType::kCompressedImage) {
     embedder_type = kFlutterScreenshotTypeCompressedImage;
-  } else if (type == Rasterizer::ScreenshotType::kSurfaceData) {
+  } else if (type == ScreenshotType::kSurfaceData) {
     embedder_type = kFlutterScreenshotTypeSurfaceData;
   }
 
