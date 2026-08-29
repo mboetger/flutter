@@ -88,6 +88,13 @@ TEST(SwitchesTest, RouteParsedFlag) {
 
 TEST(SwitchesTest, EnableEmbedderAPI) {
   {
+    // default is enabled
+    fml::CommandLine command_line =
+        fml::CommandLineFromInitializerList({"command"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, true);
+  }
+  {
     // enable via presence
     fml::CommandLine command_line = fml::CommandLineFromInitializerList(
         {"command", "--enable-embedder-api"});
@@ -109,9 +116,16 @@ TEST(SwitchesTest, EnableEmbedderAPI) {
     EXPECT_EQ(settings.enable_embedder_api, false);
   }
   {
-    // default
-    fml::CommandLine command_line =
-        fml::CommandLineFromInitializerList({"command"});
+    // disable via negative rollback flag
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--no-enable-embedder-api"});
+    Settings settings = SettingsFromCommandLine(command_line);
+    EXPECT_EQ(settings.enable_embedder_api, false);
+  }
+  {
+    // negative rollback flag takes precedence
+    fml::CommandLine command_line = fml::CommandLineFromInitializerList(
+        {"command", "--enable-embedder-api=true", "--no-enable-embedder-api"});
     Settings settings = SettingsFromCommandLine(command_line);
     EXPECT_EQ(settings.enable_embedder_api, false);
   }

@@ -469,6 +469,9 @@ Settings SettingsFromCommandLine(const fml::CommandLine& command_line,
       settings.enable_embedder_api = enable_embedder_api_value.empty() ||
                                      "true" == enable_embedder_api_value;
     }
+    if (command_line.HasOption(FlagForSwitch(Switch::NoEnableEmbedderAPI))) {
+      settings.enable_embedder_api = false;
+    }
   }
 
   settings.prefetched_default_font_manager = command_line.HasOption(

@@ -892,6 +892,34 @@ public class FlutterLoaderTest {
   }
 
   @Test
+  public void itSetsEnableEmbedderAPIFromMetadata() {
+    // Test debug mode.
+    testFlagFromMetadataPresent(
+        "io.flutter.embedding.android.EnableEmbedderAPI",
+        defaultFlagTestValue,
+        "--enable-embedder-api=true");
+
+    // Test release mode.
+    testFlagFromMetadataPresentInReleaseMode(
+        "io.flutter.embedding.android.EnableEmbedderAPI", false, "--enable-embedder-api=false");
+  }
+
+  @Test
+  public void itSetsNoEnableEmbedderAPIFromMetadata() {
+    // Test debug mode.
+    testFlagFromMetadataPresent(
+        "io.flutter.embedding.android.NoEnableEmbedderAPI",
+        defaultFlagTestValue,
+        "--no-enable-embedder-api");
+
+    // Test release mode.
+    testFlagFromMetadataPresentInReleaseMode(
+        "io.flutter.embedding.android.NoEnableEmbedderAPI",
+        defaultFlagTestValue,
+        "--no-enable-embedder-api");
+  }
+
+  @Test
   public void itSetsImpellerBackendFromMetadata() {
     String expectedImpellerBackend = "Vulkan";
 

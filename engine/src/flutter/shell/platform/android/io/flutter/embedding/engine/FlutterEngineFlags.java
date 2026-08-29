@@ -162,6 +162,15 @@ public final class FlutterEngineFlags {
       new Flag("--enable-embedder-api=", "EnableEmbedderAPI", true);
 
   /**
+   * Disables the Android Embedder C-API architecture (negative rollback flag).
+   *
+   * <p>Allowed in release for negative rollback capability. Settable via the command line and
+   * manifest.
+   */
+  public static final Flag NO_ENABLE_EMBEDDER_API =
+      new Flag("--no-enable-embedder-api", "NoEnableEmbedderAPI", true);
+
+  /**
    * Specifies the backend to use for Impeller rendering.
    *
    * <p>Allowed in release to select a specific graphics backend for Impeller in production. Only
@@ -447,6 +456,7 @@ public final class FlutterEngineFlags {
               FLUTTER_ASSETS_DIR,
               ENABLE_IMPELLER,
               ENABLE_EMBEDDER_API,
+              NO_ENABLE_EMBEDDER_API,
               IMPELLER_BACKEND,
               ENABLE_VULKAN_VALIDATION,
               START_PAUSED,
