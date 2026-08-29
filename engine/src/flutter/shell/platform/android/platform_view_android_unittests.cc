@@ -33,8 +33,35 @@ TEST(AndroidPlatformView, DISABLED_SelectsVulkanBasedOnApiLevel) {
 TEST(FlutterMainTest, EmbedderAPIEnabledTestingOverrides) {
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
   FlutterMain::ResetSettingsForTesting();
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
   EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
 
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+}
+
+TEST(FlutterMainTest, EmbedderAPIEnabledSettingsFallback) {
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  FlutterMain::ResetSettingsForTesting();
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  Settings settings_disabled;
+  settings_disabled.enable_embedder_api = false;
+  FlutterMain::SetSettingsForTesting(settings_disabled);
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  Settings settings_enabled;
+  settings_enabled.enable_embedder_api = true;
+  FlutterMain::SetSettingsForTesting(settings_enabled);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  // Test override takes precedence over settings
+  FlutterMain::SetSettingsForTesting(settings_disabled);
   FlutterMain::SetEmbedderAPIEnabledForTesting(true);
   EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 
@@ -43,32 +70,9 @@ TEST(FlutterMainTest, EmbedderAPIEnabledTestingOverrides) {
 
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
   EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
-}
-
-TEST(FlutterMainTest, EmbedderAPIEnabledSettingsFallback) {
-  FlutterMain::ResetEmbedderAPIEnabledForTesting();
-  FlutterMain::ResetSettingsForTesting();
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
-
-  Settings settings_enabled;
-  settings_enabled.enable_embedder_api = true;
-  FlutterMain::SetSettingsForTesting(settings_enabled);
-  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
-
-  Settings settings_disabled;
-  settings_disabled.enable_embedder_api = false;
-  FlutterMain::SetSettingsForTesting(settings_disabled);
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
-
-  // Test override takes precedence over settings
-  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
-  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
-
-  FlutterMain::ResetEmbedderAPIEnabledForTesting();
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
 
   FlutterMain::ResetSettingsForTesting();
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 }
 
 TEST(FlutterMainTest, PrefetchDefaultFontManagerRunsSuccessfully) {

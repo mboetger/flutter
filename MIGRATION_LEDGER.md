@@ -53,5 +53,5 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [x] 4.3: Parameterized Multi-Backend Matrix Testing (Verified Dual-Flag Tests & Adversarial Review)
 
 ### Phase 5: Emancipation & Final Purge
-- [ ] 5.1: Enable Embedder API Default (Verified Dual-Flag Tests & Adversarial Review)
+- [x] 5.1: Enable Embedder API Default (Verified Dual-Flag Tests & Adversarial Review)
 - [ ] 5.2: (Waited for Rollout Window) Legacy Bridge Removal & Total GN Pruning (Verified Tests & Adversarial Review)
