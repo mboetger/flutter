@@ -93,8 +93,12 @@ std::optional<std::vector<std::string>> g_command_line_args_override;
 }  // namespace
 
 FlutterMain& FlutterMain::Get() {
-  FML_CHECK(g_flutter_main) << "ensureInitializationComplete must have already "
-                               "been called.";
+  if (!g_flutter_main) {
+    Settings settings;
+    g_flutter_main.reset(new FlutterMain(settings,
+                                         AndroidRenderingAPI::kImpellerOpenGLES,
+                                         std::vector<std::string>{"flutter"}));
+  }
   return *g_flutter_main;
 }
 

@@ -35,7 +35,7 @@
 namespace flutter {
 
 static inline bool IsEmbedderAPI() {
-  return FlutterMain::IsEmbedderAPIEnabled(FlutterMain::Get().GetSettings());
+  return FlutterMain::IsEmbedderAPIEnabled();
 }
 
 static inline AndroidEngine* AsAndroidEngine(jlong handle) {

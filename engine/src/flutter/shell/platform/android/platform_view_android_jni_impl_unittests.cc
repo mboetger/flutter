@@ -81,6 +81,8 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
   EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
   EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
   EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, NewWeakGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteWeakGlobalRef(_)).WillRepeatedly(Return());
   EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
   EXPECT_CALL(mock_env, GetFieldID(_, _, _))
       .WillRepeatedly(Return(kPlaceholderFieldID));
@@ -148,6 +150,8 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
   EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
   EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
   EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, NewWeakGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteWeakGlobalRef(_)).WillRepeatedly(Return());
   EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
   EXPECT_CALL(mock_env, GetFieldID(_, _, _))
       .WillRepeatedly(Return(kPlaceholderFieldID));
@@ -178,6 +182,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
   EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
   EXPECT_CALL(mock_env, GetIntArrayRegion(_, _, _, _)).Times(0);
 
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
   Settings settings;
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<JNIMock>();

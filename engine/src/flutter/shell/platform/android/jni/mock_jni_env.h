@@ -63,10 +63,17 @@ class MockableJNIEnv : public JNIEnv {
     jni_.GetFieldID = WrapGetFieldID;
     jni_.GetMethodID = WrapGetMethodID;
     jni_.GetObjectRefType = WrapGetObjectRefType;
+    jni_.GetObjectClass = WrapGetObjectClass;
+    jni_.IsSameObject = WrapIsSameObject;
     jni_.GetStaticFieldID = WrapGetStaticFieldID;
     jni_.GetStaticMethodID = WrapGetStaticMethodID;
+    jni_.GetStaticFloatField = WrapGetStaticFloatField;
+    jni_.GetStaticIntField = WrapGetStaticIntField;
+    jni_.GetStaticDoubleField = WrapGetStaticDoubleField;
     jni_.NewGlobalRef = WrapNewGlobalRef;
     jni_.NewLocalRef = WrapNewLocalRef;
+    jni_.NewWeakGlobalRef = WrapNewWeakGlobalRef;
+    jni_.DeleteWeakGlobalRef = WrapDeleteWeakGlobalRef;
     jni_.RegisterNatives = WrapRegisterNatives;
     jni_.GetArrayLength = WrapGetArrayLength;
     jni_.GetIntArrayRegion = WrapGetIntArrayRegion;
@@ -78,16 +85,23 @@ class MockableJNIEnv : public JNIEnv {
   virtual jobject CallObjectMethodV(jobject, jmethodID, va_list) = 0;
   virtual void DeleteGlobalRef(jobject) = 0;
   virtual void DeleteLocalRef(jobject) = 0;
+  virtual jweak NewWeakGlobalRef(jobject) = 0;
+  virtual void DeleteWeakGlobalRef(jweak) = 0;
   virtual jboolean ExceptionCheck() = 0;
   virtual void ExceptionClear() = 0;
   virtual void ExceptionDescribe() = 0;
   virtual jthrowable ExceptionOccurred() = 0;
   virtual jclass FindClass(const char*) = 0;
+  virtual jclass GetObjectClass(jobject) = 0;
   virtual jfieldID GetFieldID(jclass, const char*, const char*) = 0;
   virtual jmethodID GetMethodID(jclass, const char*, const char*) = 0;
   virtual jobjectRefType GetObjectRefType(jobject) = 0;
+  virtual jboolean IsSameObject(jobject, jobject) = 0;
   virtual jfieldID GetStaticFieldID(jclass, const char*, const char*) = 0;
   virtual jmethodID GetStaticMethodID(jclass, const char*, const char*) = 0;
+  virtual jfloat GetStaticFloatField(jclass, jfieldID) = 0;
+  virtual jint GetStaticIntField(jclass, jfieldID) = 0;
+  virtual jdouble GetStaticDoubleField(jclass, jfieldID) = 0;
   virtual jobject NewGlobalRef(jobject) = 0;
   virtual jobject NewLocalRef(jobject) = 0;
   virtual jint RegisterNatives(jclass, const JNINativeMethod*, jint) = 0;
@@ -151,6 +165,9 @@ class MockableJNIEnv : public JNIEnv {
   static jobjectRefType WrapGetObjectRefType(JNIEnv* env, jobject obj) {
     return static_cast<MockableJNIEnv*>(env)->GetObjectRefType(obj);
   }
+  static jboolean WrapIsSameObject(JNIEnv* env, jobject ref1, jobject ref2) {
+    return static_cast<MockableJNIEnv*>(env)->IsSameObject(ref1, ref2);
+  }
   static jfieldID WrapGetStaticFieldID(JNIEnv* env,
                                        jclass clazz,
                                        const char* name,
@@ -165,11 +182,33 @@ class MockableJNIEnv : public JNIEnv {
     return static_cast<MockableJNIEnv*>(env)->GetStaticMethodID(clazz, name,
                                                                 sig);
   }
+  static jclass WrapGetObjectClass(JNIEnv* env, jobject obj) {
+    return static_cast<MockableJNIEnv*>(env)->GetObjectClass(obj);
+  }
+  static jfloat WrapGetStaticFloatField(JNIEnv* env,
+                                        jclass clazz,
+                                        jfieldID fid) {
+    return static_cast<MockableJNIEnv*>(env)->GetStaticFloatField(clazz, fid);
+  }
+  static jint WrapGetStaticIntField(JNIEnv* env, jclass clazz, jfieldID fid) {
+    return static_cast<MockableJNIEnv*>(env)->GetStaticIntField(clazz, fid);
+  }
+  static jdouble WrapGetStaticDoubleField(JNIEnv* env,
+                                          jclass clazz,
+                                          jfieldID fid) {
+    return static_cast<MockableJNIEnv*>(env)->GetStaticDoubleField(clazz, fid);
+  }
   static jobject WrapNewGlobalRef(JNIEnv* env, jobject ref) {
     return static_cast<MockableJNIEnv*>(env)->NewGlobalRef(ref);
   }
   static jobject WrapNewLocalRef(JNIEnv* env, jobject ref) {
     return static_cast<MockableJNIEnv*>(env)->NewLocalRef(ref);
+  }
+  static jweak WrapNewWeakGlobalRef(JNIEnv* env, jobject ref) {
+    return static_cast<MockableJNIEnv*>(env)->NewWeakGlobalRef(ref);
+  }
+  static void WrapDeleteWeakGlobalRef(JNIEnv* env, jweak ref) {
+    static_cast<MockableJNIEnv*>(env)->DeleteWeakGlobalRef(ref);
   }
   static jint WrapRegisterNatives(JNIEnv* env,
                                   jclass clazz,
@@ -208,6 +247,30 @@ class MockableJNIEnv : public JNIEnv {
 
 class MockJNIEnv : public MockableJNIEnv {
  public:
+  MockJNIEnv() {
+    ON_CALL(*this, GetObjectRefType(::testing::_))
+        .WillByDefault(::testing::Return(JNILocalRefType));
+    ON_CALL(*this, IsSameObject(::testing::_, ::testing::_))
+        .WillByDefault(
+            [](jobject a, jobject b) { return a == b ? JNI_TRUE : JNI_FALSE; });
+    ON_CALL(*this, GetObjectClass(::testing::_))
+        .WillByDefault(::testing::Return(reinterpret_cast<jclass>(100)));
+    ON_CALL(*this, GetStaticFloatField(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(60.0f));
+    ON_CALL(*this, GetStaticIntField(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(0));
+    ON_CALL(*this, GetStaticDoubleField(::testing::_, ::testing::_))
+        .WillByDefault(::testing::Return(0.0));
+    ON_CALL(*this, NewLocalRef(::testing::_))
+        .WillByDefault(::testing::ReturnArg<0>());
+    ON_CALL(*this, NewGlobalRef(::testing::_))
+        .WillByDefault(::testing::ReturnArg<0>());
+    ON_CALL(*this, NewWeakGlobalRef(::testing::_))
+        .WillByDefault(::testing::ReturnArg<0>());
+    ON_CALL(*this, ExceptionCheck())
+        .WillByDefault(::testing::Return(JNI_FALSE));
+  }
+
   MOCK_METHOD(jobject,
               CallObjectMethodV,
               (jobject, jmethodID, va_list),
@@ -219,6 +282,7 @@ class MockJNIEnv : public MockableJNIEnv {
   MOCK_METHOD(void, ExceptionDescribe, (), (override));
   MOCK_METHOD(jthrowable, ExceptionOccurred, (), (override));
   MOCK_METHOD(jclass, FindClass, (const char*), (override));
+  MOCK_METHOD(jclass, GetObjectClass, (jobject), (override));
   MOCK_METHOD(jfieldID,
               GetFieldID,
               (jclass, const char*, const char*),
@@ -228,6 +292,7 @@ class MockJNIEnv : public MockableJNIEnv {
               (jclass, const char*, const char*),
               (override));
   MOCK_METHOD(jobjectRefType, GetObjectRefType, (jobject), (override));
+  MOCK_METHOD(jboolean, IsSameObject, (jobject, jobject), (override));
   MOCK_METHOD(jfieldID,
               GetStaticFieldID,
               (jclass, const char*, const char*),
@@ -236,8 +301,13 @@ class MockJNIEnv : public MockableJNIEnv {
               GetStaticMethodID,
               (jclass, const char*, const char*),
               (override));
+  MOCK_METHOD(jfloat, GetStaticFloatField, (jclass, jfieldID), (override));
+  MOCK_METHOD(jint, GetStaticIntField, (jclass, jfieldID), (override));
+  MOCK_METHOD(jdouble, GetStaticDoubleField, (jclass, jfieldID), (override));
   MOCK_METHOD(jobject, NewGlobalRef, (jobject), (override));
   MOCK_METHOD(jobject, NewLocalRef, (jobject), (override));
+  MOCK_METHOD(jweak, NewWeakGlobalRef, (jobject), (override));
+  MOCK_METHOD(void, DeleteWeakGlobalRef, (jweak), (override));
   MOCK_METHOD(jint,
               RegisterNatives,
               (jclass, const JNINativeMethod*, jint),
