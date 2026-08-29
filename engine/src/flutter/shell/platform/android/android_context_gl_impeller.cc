@@ -262,6 +262,9 @@ bool AndroidContextGLImpeller::OnscreenContextClearCurrent() {
 
 std::unique_ptr<impeller::egl::Surface>
 AndroidContextGLImpeller::CreateOnscreenSurface(EGLNativeWindowType window) {
+  if (window == nullptr) {
+    return display_->CreatePixelBufferSurface(*onscreen_config_, 1u, 1u);
+  }
   return display_->CreateWindowSurface(*onscreen_config_, window);
 }
 

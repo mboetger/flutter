@@ -102,6 +102,7 @@ bool AndroidSurfaceGLImpeller::IsValid() const {
 // |AndroidSurface|
 std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
     GrDirectContext* gr_context) {
+  OnGLContextMakeCurrent();
   auto surface = std::make_unique<GPUSurfaceGLImpeller>(
       this,                                    // delegate
       android_context_->GetImpellerContext(),  // context
@@ -203,7 +204,7 @@ bool AndroidSurfaceGLImpeller::OnGLContextMakeCurrent() {
         onscreen_surface_.get());
   }
   if (offscreen_surface_ && offscreen_surface_->IsValid()) {
-    return android_context_->ResourceContextMakeCurrent(
+    return android_context_->OnscreenContextMakeCurrent(
         offscreen_surface_.get());
   }
   return false;

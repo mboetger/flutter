@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#define FML_USED_ON_EMBEDDER
+
+#include "flutter/fml/make_copyable.h"
+#include "flutter/fml/message_loop.h"
 #include "flutter/fml/thread.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/flutter_main.h"
@@ -197,19 +201,27 @@ class MockPlatformViewAndroidDelegate : public PlatformViewAndroid::Delegate {
 }  // namespace
 
 TEST(PlatformViewAndroidTest, DelegateReceivesLifecycleAndEvents) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto platform_runner = fml::MessageLoop::GetCurrent().GetTaskRunner();
   fml::Thread thread("test_thread");
   auto loop_runner = thread.GetTaskRunner();
-  flutter::TaskRunners task_runners("test_runners", loop_runner, loop_runner,
-                                    loop_runner, loop_runner);
+  flutter::TaskRunners task_runners("test_runners", platform_runner,
+                                    loop_runner, loop_runner, loop_runner);
 
   MockPlatformViewAndroidDelegate delegate(task_runners);
   auto jni_facade = std::make_shared<JNIMock>();
 
   EXPECT_CALL(delegate, SetNextFrameCallback(::testing::_)).Times(1);
-  EXPECT_CALL(delegate, OnPlatformViewCreated(::testing::_)).Times(1);
+  EXPECT_CALL(delegate, OnPlatformViewCreated(::testing::_))
+      .WillOnce([&task_runners](std::unique_ptr<Surface> surface) {
+        if (surface) {
+          task_runners.GetRasterTaskRunner()->PostTask(fml::MakeCopyable(
+              [surface = std::move(surface)]() mutable { surface.reset(); }));
+        }
+      });
   EXPECT_CALL(delegate,
               OnPlatformViewSetViewportMetrics(::testing::_, ::testing::_))
-      .Times(2);
+      .Times(1);
   EXPECT_CALL(delegate, OnPlatformViewScheduleFrame()).Times(2);
   EXPECT_CALL(delegate, OnPlatformViewDestroyed()).Times(1);
 
@@ -238,10 +250,12 @@ TEST(PlatformViewAndroidTest, DelegateReceivesLifecycleAndEvents) {
 }
 
 TEST(PlatformViewAndroidTest, DelegateReceivesInputsAndMessages) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto platform_runner = fml::MessageLoop::GetCurrent().GetTaskRunner();
   fml::Thread thread("test_thread");
   auto loop_runner = thread.GetTaskRunner();
-  flutter::TaskRunners task_runners("test_runners", loop_runner, loop_runner,
-                                    loop_runner, loop_runner);
+  flutter::TaskRunners task_runners("test_runners", platform_runner,
+                                    loop_runner, loop_runner, loop_runner);
 
   MockPlatformViewAndroidDelegate delegate(task_runners);
   auto jni_facade = std::make_shared<JNIMock>();
@@ -283,10 +297,12 @@ TEST(PlatformViewAndroidTest, DelegateReceivesInputsAndMessages) {
 }
 
 TEST(PlatformViewAndroidTest, DeferredLibraryDelegation) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  auto platform_runner = fml::MessageLoop::GetCurrent().GetTaskRunner();
   fml::Thread thread("test_thread");
   auto loop_runner = thread.GetTaskRunner();
-  flutter::TaskRunners task_runners("test_runners", loop_runner, loop_runner,
-                                    loop_runner, loop_runner);
+  flutter::TaskRunners task_runners("test_runners", platform_runner,
+                                    loop_runner, loop_runner, loop_runner);
 
   MockPlatformViewAndroidDelegate delegate(task_runners);
   auto jni_facade = std::make_shared<JNIMock>();
@@ -308,6 +324,7 @@ TEST(PlatformViewAndroidTest, DeferredLibraryDelegation) {
 }
 
 TEST(PlatformViewAndroidTest, PlatformViewAndroidAdapterBridgesShell) {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
   Settings settings;
   settings.enable_software_rendering = true;
   settings.enable_impeller = false;
