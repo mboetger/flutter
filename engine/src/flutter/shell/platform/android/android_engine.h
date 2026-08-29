@@ -27,6 +27,8 @@
 
 namespace flutter {
 
+struct ViewportMetrics;
+
 //------------------------------------------------------------------------------
 /// @brief      Top-level C++ orchestrator for the Flutter Android embedding
 ///             powered entirely by the public C Embedder API (`embedder.h`).
@@ -77,6 +79,7 @@ class AndroidEngine {
 
   // Viewport metrics and display updates.
   void SetViewportMetrics(const FlutterWindowMetricsEvent& event);
+  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
   void UpdateDisplayMetrics();
 
   // Pointer input events.

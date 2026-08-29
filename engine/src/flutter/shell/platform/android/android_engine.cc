@@ -17,7 +17,8 @@
 #include "flutter/fml/make_copyable.h"
 #include "flutter/fml/native_library.h"
 #include "flutter/fml/trace_event.h"
-#include "flutter/shell/platform/android/android_thread_config.h"
+#include "flutter/lib/ui/window/viewport_metrics.h"
+#include "flutter/shell/platform/android/android_task_runners.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 
 namespace flutter {
@@ -588,6 +589,48 @@ struct AndroidGLEnvironment {
     return false;
   }
 
+  bool MakeResourceCurrent() {
+    if (display == EGL_NO_DISPLAY || config == nullptr ||
+        root_context == EGL_NO_CONTEXT) {
+      return false;
+    }
+    auto& tls_state = GetThreadState();
+    if (!tls_state) {
+      tls_state = std::make_unique<PerThreadState>();
+      tls_state->display = display;
+      const EGLint context_attribs[] = {
+          EGL_CONTEXT_CLIENT_VERSION,
+          3,
+          EGL_NONE,
+      };
+      tls_state->context =
+          eglCreateContext(display, config, root_context, context_attribs);
+      if (tls_state->context == EGL_NO_CONTEXT) {
+        const EGLint fallback_attribs[] = {
+            EGL_CONTEXT_CLIENT_VERSION,
+            2,
+            EGL_NONE,
+        };
+        tls_state->context =
+            eglCreateContext(display, config, root_context, fallback_attribs);
+      }
+      if (tls_state->context != EGL_NO_CONTEXT) {
+        const EGLint pbuffer_attribs[] = {
+            EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE,
+        };
+        tls_state->pbuffer_surface =
+            eglCreatePbufferSurface(display, config, pbuffer_attribs);
+      }
+    }
+    if (tls_state->context != EGL_NO_CONTEXT &&
+        tls_state->pbuffer_surface != EGL_NO_SURFACE) {
+      return eglMakeCurrent(display, tls_state->pbuffer_surface,
+                            tls_state->pbuffer_surface,
+                            tls_state->context) == EGL_TRUE;
+    }
+    return false;
+  }
+
   bool ClearCurrent() {
     if (display != EGL_NO_DISPLAY) {
       return eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE,
@@ -629,7 +672,7 @@ FlutterRendererConfig CreateRendererConfig(AndroidRenderingAPI rendering_api) {
       };
       renderer_config.open_gl.make_resource_current =
           [](void* user_data) -> bool {
-        return AndroidGLEnvironment::GetInstance().MakeCurrent();
+        return AndroidGLEnvironment::GetInstance().MakeResourceCurrent();
       };
       renderer_config.open_gl.gl_proc_resolver = [](void* user_data,
                                                     const char* name) -> void* {
@@ -1091,6 +1134,23 @@ void AndroidEngine::OnSurfaceDestroyed() {
   }
 }
 
+void AndroidEngine::SetViewportMetrics(int64_t view_id,
+                                       const ViewportMetrics& metrics) {
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.view_id = view_id;
+  event.width = static_cast<size_t>(metrics.physical_width);
+  event.height = static_cast<size_t>(metrics.physical_height);
+  event.pixel_ratio = metrics.device_pixel_ratio;
+  event.left = 0;
+  event.top = 0;
+  event.physical_view_inset_top = metrics.physical_view_inset_top;
+  event.physical_view_inset_right = metrics.physical_view_inset_right;
+  event.physical_view_inset_bottom = metrics.physical_view_inset_bottom;
+  event.physical_view_inset_left = metrics.physical_view_inset_left;
+  SetViewportMetrics(event);
+}
+
 void AndroidEngine::SetViewportMetrics(const FlutterWindowMetricsEvent& event) {
   if (!IsRunning()) {
     return;
@@ -1423,6 +1483,9 @@ void AndroidEngine::NotifyLowMemoryWarning() {
   if (IsRunning()) {
     embedder_api_.NotifyLowMemoryWarning(engine_);
   }
+  if (surface_manager_ != nullptr) {
+    surface_manager_->ClearBackingStorePool();
+  }
 }
 
 // static
@@ -1478,16 +1541,21 @@ void AndroidEngine::HandlePlatformMessage(
     pending_responses_[response_id] = message->response_handle;
   }
 
-  std::unique_ptr<fml::Mapping> mapping = nullptr;
+  std::unique_ptr<flutter::PlatformMessage> platform_message;
   if (message->message != nullptr) {
-    mapping = std::make_unique<fml::MallocMapping>(
-        message->message_size > 0
+    auto mapping =
+        (message->message_size > 0)
             ? fml::MallocMapping::Copy(message->message, message->message_size)
-            : fml::MallocMapping(static_cast<uint8_t*>(malloc(1)), 0));
+            : fml::MallocMapping(static_cast<uint8_t*>(malloc(1)), 0);
+    platform_message = std::make_unique<flutter::PlatformMessage>(
+        std::string(message->channel), std::move(mapping), nullptr);
+  } else {
+    platform_message = std::make_unique<flutter::PlatformMessage>(
+        std::string(message->channel), nullptr);
   }
 
-  jni_facade_->FlutterViewHandlePlatformMessage(
-      message->channel, std::move(mapping), response_id);
+  jni_facade_->FlutterViewHandlePlatformMessage(std::move(platform_message),
+                                                response_id);
 }
 
 namespace {
@@ -1617,7 +1685,8 @@ void AndroidEngine::HandleVsyncRequest(intptr_t baton) {
       }
     };
     if (ui_task_runner_) {
-      ui_task_runner_->PostTask(fallback_callback);
+      ui_task_runner_->PostDelayedTask(fallback_callback,
+                                       fml::TimeDelta::FromMilliseconds(16));
     } else {
       fallback_callback();
     }
