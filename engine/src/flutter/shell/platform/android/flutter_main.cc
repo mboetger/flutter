@@ -12,10 +12,12 @@
 #include <string>
 #include <vector>
 
+#include <dlfcn.h>
 #include "common/settings.h"
 #include "flutter/fml/command_line.h"
 #include "flutter/fml/file.h"
 #include "flutter/fml/logging.h"
+
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
@@ -23,9 +25,6 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/common/engine_switches.h"
-#include "impeller/base/validation.h"
-#include "impeller/toolkit/android/proc_table.h"
-#include "txt/platform.h"
 
 namespace flutter {
 
@@ -143,8 +142,13 @@ void FlutterMain::Init(JNIEnv* env,
   // Turn systracing on if ATrace_isEnabled is true and the user did not already
   // request systracing
   if (!settings.trace_systrace) {
-    settings.trace_systrace =
-        impeller::android::GetProcTable().TraceIsEnabled();
+    using ATrace_isEnabled_fn = bool (*)();
+    static ATrace_isEnabled_fn atrace_is_enabled =
+        reinterpret_cast<ATrace_isEnabled_fn>(
+            dlsym(RTLD_DEFAULT, "ATrace_isEnabled"));
+    if (atrace_is_enabled != nullptr) {
+      settings.trace_systrace = atrace_is_enabled();
+    }
     if (settings.trace_systrace) {
       __android_log_print(
           ANDROID_LOG_INFO, "Flutter",
@@ -235,8 +239,7 @@ void FlutterMain::Init(JNIEnv* env,
 }
 
 static void PrefetchDefaultFontManager(JNIEnv* env, jclass jcaller) {
-  // Initialize a singleton owned by Skia.
-  txt::GetDefaultFontManager();
+  // Font managers are initialized lazily upon first layout in the Embedder API.
 }
 
 bool FlutterMain::Register(JNIEnv* env) {

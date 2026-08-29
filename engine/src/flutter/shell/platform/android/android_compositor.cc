@@ -140,10 +140,17 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
     }
   }
 
-  EGLDisplay current_display = eglGetCurrentDisplay();
-  EGLSurface current_surface = eglGetCurrentSurface(EGL_DRAW);
-  if (current_display != EGL_NO_DISPLAY && current_surface != EGL_NO_SURFACE) {
-    eglSwapBuffers(current_display, current_surface);
+  // Swap EGL buffers if rendering on an OpenGL surface backend.
+  if (surface_manager_->GetRenderingAPI() ==
+          AndroidRenderingAPI::kImpellerOpenGLES ||
+      surface_manager_->GetRenderingAPI() ==
+          AndroidRenderingAPI::kSkiaOpenGLES) {
+    EGLDisplay current_display = eglGetCurrentDisplay();
+    EGLSurface current_surface = eglGetCurrentSurface(EGL_DRAW);
+    if (current_display != EGL_NO_DISPLAY &&
+        current_surface != EGL_NO_SURFACE) {
+      eglSwapBuffers(current_display, current_surface);
+    }
   }
 
   if (presented_frame_count_.fetch_add(1, std::memory_order_relaxed) == 0) {
