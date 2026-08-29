@@ -26,6 +26,12 @@
 #include "flutter/shell/platform/embedder/embedder.h"
 
 #if FML_OS_ANDROID
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#include <android/hardware_buffer.h>
+#include <android/hardware_buffer_jni.h>
 #include <jni.h>
 #else
 typedef void* jobject;
@@ -39,6 +45,11 @@ typedef uint8_t jboolean;
 typedef void* jstring;
 typedef void* jintArray;
 typedef void* jobjectArray;
+#ifndef EGL_NO_IMAGE_KHR
+typedef void* EGLImageKHR;
+#define EGL_NO_IMAGE_KHR ((EGLImageKHR)0)
+#endif
+typedef void AHardwareBuffer;
 #endif
 
 namespace flutter {
@@ -188,6 +199,10 @@ class AndroidEngine {
   void UnregisterTexture(int64_t texture_id);
   void MarkTextureFrameAvailable(int64_t texture_id);
   void ScheduleFrame();
+  bool OnGetGLTexture(int64_t texture_id,
+                      size_t width,
+                      size_t height,
+                      FlutterOpenGLTexture* texture_out);
 
   // ---------------------------------------------------------------------------
   // Deferred Components
@@ -232,6 +247,7 @@ class AndroidEngine {
   // ---------------------------------------------------------------------------
   // Compositor Delegation Handlers
   // ---------------------------------------------------------------------------
+  void OnBeginFrame();
   void OnPlatformViewPresented(int64_t view_id,
                                const FlutterPoint& offset,
                                const FlutterSize& size,
@@ -272,6 +288,9 @@ class AndroidEngine {
                                          void* user_data);
   static void OnDartDeferredLibraryRequestCallback(int64_t loading_unit_id,
                                                    void* user_data);
+  static double OnGetScaledFontSizeCallback(double unscaled_font_size,
+                                            int configuration_id,
+                                            void* user_data);
   static void OnRasterContextSetupCallback(void* user_data);
   static void OnRasterContextTeardownCallback(void* user_data);
 
@@ -294,6 +313,7 @@ class AndroidEngine {
   FLUTTER_API_SYMBOL(FlutterEngine) engine_ = nullptr;
   bool is_valid_ = false;
   bool surface_attached_ = false;
+  std::atomic<bool> first_frame_presented_{false};
   int64_t engine_id_ = 0;
 
   FlutterRendererConfig renderer_config_ = {};
@@ -304,6 +324,22 @@ class AndroidEngine {
   int32_t next_response_id_ = 1;
   std::unordered_map<int32_t, const FlutterPlatformMessageResponseHandle*>
       pending_responses_;
+
+  struct TextureRecord {
+    enum class Type {
+      kSurfaceTexture,
+      kImageReader,
+    };
+    Type type = Type::kSurfaceTexture;
+    fml::jni::ScopedJavaGlobalRef<jobject> java_object;
+    uint32_t gl_texture_id = 0;
+    bool is_attached = false;
+    EGLImageKHR egl_image = EGL_NO_IMAGE_KHR;
+    AHardwareBuffer* current_ahb = nullptr;
+  };
+
+  mutable std::mutex textures_mutex_;
+  std::unordered_map<int64_t, std::shared_ptr<TextureRecord>> textures_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidEngine);
 };

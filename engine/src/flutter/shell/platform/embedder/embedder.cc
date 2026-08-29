@@ -1243,9 +1243,13 @@ MakeRenderTargetFromBackingStoreImpeller(
   render_target_desc.SetDepthAttachment(depth0);
   render_target_desc.SetStencilAttachment(stencil0);
 
-  fml::closure framebuffer_destruct =
-      [callback = framebuffer->destruction_callback,
-       user_data = framebuffer->user_data]() { callback(user_data); };
+  fml::closure framebuffer_destruct = [callback =
+                                           framebuffer->destruction_callback,
+                                       user_data = framebuffer->user_data]() {
+    if (callback) {
+      callback(user_data);
+    }
+  };
 
   return std::make_unique<flutter::EmbedderRenderTargetImpeller>(
       backing_store, aiks_context,
@@ -2146,6 +2150,7 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
         nullptr,  // channel_update_callback
         nullptr,  // view_focus_change_request_callback
         nullptr,  // dart_deferred_library_loading_unit_callback
+        nullptr,  // get_scaled_font_size_callback
         nullptr,  // raster_context_setup_callback
         nullptr,  // raster_context_teardown_callback
         nullptr,  // raster_context_user_data
@@ -2276,6 +2281,15 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
             int64_t loading_unit_id) { ptr(loading_unit_id, user_data); };
   }
 
+  std::function<double(double, int)> get_scaled_font_size_callback = nullptr;
+  if (SAFE_ACCESS(args, get_scaled_font_size_callback, nullptr) != nullptr) {
+    get_scaled_font_size_callback =
+        [ptr = args->get_scaled_font_size_callback, user_data](
+            double unscaled_font_size, int configuration_id) -> double {
+      return ptr(unscaled_font_size, configuration_id, user_data);
+    };
+  }
+
   VoidCallback raster_context_setup_callback = nullptr;
   if (SAFE_ACCESS(args, raster_context_setup_callback, nullptr) != nullptr) {
     raster_context_setup_callback = args->raster_context_setup_callback;
@@ -2295,6 +2309,7 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
       channel_update_callback,                      //
       view_focus_change_request_callback,           //
       dart_deferred_library_loading_unit_callback,  //
+      get_scaled_font_size_callback,                //
       raster_context_setup_callback,                //
       raster_context_teardown_callback,             //
       user_data,                                    //
@@ -2501,7 +2516,7 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   if (!flutter::DartVM::IsRunningPrecompiledCode()) {
     // Verify the assets path contains Dart 2 kernel assets.
     const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
-    if (!settings.assets_path.empty()) {
+    if (!settings.assets_path.empty() && !has_custom_asset_resolvers) {
       std::string application_kernel_path = fml::paths::JoinPaths(
           {settings.assets_path, kApplicationKernelSnapshotFileName});
       if (!fml::IsFile(application_kernel_path)) {
@@ -2660,8 +2675,45 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   };
 
-  auto run_configuration =
-      flutter::RunConfiguration::InferFromSettings(settings);
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+
+  if (fml::UniqueFD::traits_type::IsValid(settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(settings.assets_dir), true));
+  }
+
+  if (!settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
+
+  if (has_custom_asset_resolvers) {
+    size_t count = args->asset_resolvers_count;
+    for (size_t i = 0; i < count; ++i) {
+      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
+      if (resolver != nullptr) {
+        if (resolver->struct_size < sizeof(FlutterAssetResolver)) {
+          return LOG_EMBEDDER_ERROR(
+              kInvalidArguments,
+              "FlutterAssetResolver struct_size is invalid.");
+        }
+        if (resolver->find_asset_callback == nullptr) {
+          return LOG_EMBEDDER_ERROR(
+              kInvalidArguments,
+              "FlutterAssetResolver find_asset_callback is required.");
+        }
+        auto asset_resolver =
+            std::make_unique<flutter::EmbedderAssetResolver>(*resolver);
+        asset_manager->PushBack(std::move(asset_resolver));
+      }
+    }
+  }
+
+  flutter::RunConfiguration run_configuration(
+      flutter::IsolateConfiguration::InferFromSettings(settings, asset_manager),
+      asset_manager);
 
   if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
@@ -2686,28 +2738,6 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   if (SAFE_ACCESS(args, engine_id, 0) != 0) {
     run_configuration.SetEngineId(args->engine_id);
-  }
-
-  if (has_custom_asset_resolvers) {
-    size_t count = args->asset_resolvers_count;
-    for (size_t i = 0; i < count; ++i) {
-      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
-      if (resolver != nullptr) {
-        if (resolver->struct_size < sizeof(FlutterAssetResolver)) {
-          return LOG_EMBEDDER_ERROR(
-              kInvalidArguments,
-              "FlutterAssetResolver struct_size is invalid.");
-        }
-        if (resolver->find_asset_callback == nullptr) {
-          return LOG_EMBEDDER_ERROR(
-              kInvalidArguments,
-              "FlutterAssetResolver find_asset_callback is required.");
-        }
-        auto asset_resolver =
-            std::make_unique<flutter::EmbedderAssetResolver>(*resolver);
-        run_configuration.AddAssetResolver(std::move(asset_resolver));
-      }
-    }
   }
 
   std::vector<flutter::ImageGeneratorFactoryRegistration> image_generators;
@@ -3424,10 +3454,6 @@ FlutterEngineResult FlutterEngineRegisterExternalTexture(
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
 
-  if (texture_identifier == 0) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments,
-                              "Texture identifier was invalid.");
-  }
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)->RegisterTexture(
           texture_identifier)) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
@@ -3441,11 +3467,6 @@ FlutterEngineResult FlutterEngineUnregisterExternalTexture(
     int64_t texture_identifier) {
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
-  }
-
-  if (texture_identifier == 0) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments,
-                              "Texture identifier was invalid.");
   }
 
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)->UnregisterTexture(
@@ -3462,9 +3483,6 @@ FlutterEngineResult FlutterEngineMarkExternalTextureFrameAvailable(
     int64_t texture_identifier) {
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
-  }
-  if (texture_identifier == 0) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid texture identifier.");
   }
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)
            ->MarkTextureFrameAvailable(texture_identifier)) {
@@ -4171,8 +4189,52 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
                               "Task runner configuration was invalid.");
   }
 
-  auto run_configuration =
-      flutter::RunConfiguration::InferFromSettings(parent_settings);
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+
+  if (fml::UniqueFD::traits_type::IsValid(parent_settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(parent_settings.assets_dir), true));
+  }
+
+  if (!parent_settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(parent_settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
+
+  if (args != nullptr) {
+    bool has_custom_asset_resolvers =
+        SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+        SAFE_ACCESS(args, asset_resolvers_count, 0) > 0;
+    if (has_custom_asset_resolvers) {
+      size_t count = args->asset_resolvers_count;
+      for (size_t i = 0; i < count; ++i) {
+        const FlutterAssetResolver* resolver = args->asset_resolvers[i];
+        if (resolver != nullptr) {
+          if (resolver->struct_size < sizeof(FlutterAssetResolver)) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterAssetResolver struct_size is invalid.");
+          }
+          if (resolver->find_asset_callback == nullptr) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterAssetResolver find_asset_callback is required.");
+          }
+          auto asset_resolver =
+              std::make_unique<flutter::EmbedderAssetResolver>(*resolver);
+          asset_manager->PushBack(std::move(asset_resolver));
+        }
+      }
+    }
+  }
+
+  flutter::RunConfiguration run_configuration(
+      flutter::IsolateConfiguration::InferFromSettings(
+          parent_settings, asset_manager, nullptr,
+          flutter::IsolateLaunchType::kExistingGroup),
+      asset_manager);
 
   if (SAFE_ACCESS(config, entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{config->entrypoint};
@@ -4217,31 +4279,6 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
 
   bool has_custom_image_generators = false;
   if (args != nullptr) {
-    bool has_custom_asset_resolvers =
-        SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
-        SAFE_ACCESS(args, asset_resolvers_count, 0) > 0;
-    if (has_custom_asset_resolvers) {
-      size_t count = args->asset_resolvers_count;
-      for (size_t i = 0; i < count; ++i) {
-        const FlutterAssetResolver* resolver = args->asset_resolvers[i];
-        if (resolver != nullptr) {
-          if (resolver->struct_size < sizeof(FlutterAssetResolver)) {
-            return LOG_EMBEDDER_ERROR(
-                kInvalidArguments,
-                "FlutterAssetResolver struct_size is invalid.");
-          }
-          if (resolver->find_asset_callback == nullptr) {
-            return LOG_EMBEDDER_ERROR(
-                kInvalidArguments,
-                "FlutterAssetResolver find_asset_callback is required.");
-          }
-          auto asset_resolver =
-              std::make_unique<flutter::EmbedderAssetResolver>(*resolver);
-          run_configuration.AddAssetResolver(std::move(asset_resolver));
-        }
-      }
-    }
-
     has_custom_image_generators =
         SAFE_ACCESS(args, image_generators, nullptr) != nullptr &&
         SAFE_ACCESS(args, image_generators_count, 0) > 0;

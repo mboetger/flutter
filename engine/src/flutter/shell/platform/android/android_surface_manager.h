@@ -102,6 +102,12 @@ class AndroidSurfaceManager {
   /// Returns the current FBO (typically 0 for onscreen window surfaces).
   uint32_t GetFBO() const;
 
+  /// Returns the EGLDisplay handle.
+  EGLDisplay GetEGLDisplay() const;
+
+  /// Returns the resource EGLContext handle.
+  EGLContext GetResourceContext() const;
+
   // ---------------------------------------------------------------------------
   // Software Surface Lifecycle Methods
   // ---------------------------------------------------------------------------
@@ -134,7 +140,8 @@ class AndroidSurfaceManager {
   EGLContext egl_onscreen_context_ = EGL_NO_CONTEXT;
   EGLContext egl_resource_context_ = EGL_NO_CONTEXT;
   EGLSurface egl_onscreen_surface_ = EGL_NO_SURFACE;
-  EGLSurface egl_pbuffer_surface_ = EGL_NO_SURFACE;
+  EGLSurface egl_onscreen_pbuffer_surface_ = EGL_NO_SURFACE;
+  EGLSurface egl_resource_pbuffer_surface_ = EGL_NO_SURFACE;
   bool has_surfaceless_context_ = false;
 
   bool InitializeEGL();

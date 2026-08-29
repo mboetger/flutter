@@ -12,11 +12,39 @@
 #include <utility>
 
 #include "flutter/fml/logging.h"
+#include "flutter/fml/paths.h"
 #include "flutter/shell/platform/android/android_mutators_mapper.h"
 
 #if FML_OS_ANDROID
+#include <android/api-level.h>
+#include <android/log.h>
+#include <dlfcn.h>
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+
+typedef AHardwareBuffer* (*AHardwareBuffer_fromHardwareBufferProc)(JNIEnv*,
+                                                                   jobject);
+typedef void (*AHardwareBuffer_acquireProc)(AHardwareBuffer*);
+typedef void (*AHardwareBuffer_releaseProc)(AHardwareBuffer*);
+
+static AHardwareBuffer_fromHardwareBufferProc
+GetAHardwareBuffer_fromHardwareBuffer() {
+  static auto proc = reinterpret_cast<AHardwareBuffer_fromHardwareBufferProc>(
+      dlsym(RTLD_DEFAULT, "AHardwareBuffer_fromHardwareBuffer"));
+  return proc;
+}
+
+static AHardwareBuffer_acquireProc GetAHardwareBuffer_acquire() {
+  static auto proc = reinterpret_cast<AHardwareBuffer_acquireProc>(
+      dlsym(RTLD_DEFAULT, "AHardwareBuffer_acquire"));
+  return proc;
+}
+
+static AHardwareBuffer_releaseProc GetAHardwareBuffer_release() {
+  static auto proc = reinterpret_cast<AHardwareBuffer_releaseProc>(
+      dlsym(RTLD_DEFAULT, "AHardwareBuffer_release"));
+  return proc;
+}
 #endif
 
 namespace flutter {
@@ -248,6 +276,12 @@ class AndroidEngine::CompositorDelegate
   ~CompositorDelegate() override = default;
 
   void DetachEngine() { engine_ = nullptr; }
+
+  void OnBeginFrame() override {
+    if (engine_ != nullptr) {
+      engine_->OnBeginFrame();
+    }
+  }
 
   void OnPlatformViewPresented(
       int64_t view_id,
@@ -629,6 +663,7 @@ bool AndroidEngine::Launch(std::unique_ptr<APKAssetProvider> apk_asset_provider,
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerAutoselect:
     case AndroidRenderingAPI::kImpellerOpenGLES:
+    case AndroidRenderingAPI::kImpellerVulkan:
       renderer_config_.type = kOpenGL;
       renderer_config_.open_gl.struct_size =
           sizeof(FlutterOpenGLRendererConfig);
@@ -667,9 +702,13 @@ bool AndroidEngine::Launch(std::unique_ptr<APKAssetProvider> apk_asset_provider,
         return nullptr;
 #endif
       };
-      break;
-    case AndroidRenderingAPI::kImpellerVulkan:
-      renderer_config_.type = kVulkan;
+      renderer_config_.open_gl.gl_external_texture_frame_callback =
+          [](void* user_data, int64_t texture_id, size_t width, size_t height,
+             FlutterOpenGLTexture* texture_out) -> bool {
+        auto* engine = static_cast<AndroidEngine*>(user_data);
+        return engine != nullptr &&
+               engine->OnGetGLTexture(texture_id, width, height, texture_out);
+      };
       break;
   }
 
@@ -686,6 +725,24 @@ bool AndroidEngine::Launch(std::unique_ptr<APKAssetProvider> apk_asset_provider,
     project_args_.asset_resolvers_count = 1;
   }
 
+  std::string assets_dir;
+  if (!settings_.application_kernel_asset.empty()) {
+    assets_dir =
+        fml::paths::GetDirectoryName(settings_.application_kernel_asset);
+    project_args_.assets_path = assets_dir.c_str();
+  } else if (!settings_.assets_path.empty()) {
+    project_args_.assets_path = settings_.assets_path.c_str();
+  }
+
+  std::vector<const char*> command_line_argv_ptrs;
+  command_line_argv_ptrs.reserve(settings_.command_line_args.size());
+  for (const auto& arg : settings_.command_line_args) {
+    command_line_argv_ptrs.push_back(arg.c_str());
+  }
+  project_args_.command_line_argc = command_line_argv_ptrs.size();
+  project_args_.command_line_argv =
+      command_line_argv_ptrs.empty() ? nullptr : command_line_argv_ptrs.data();
+
   project_args_.custom_dart_entrypoint =
       entrypoint.empty() ? nullptr : entrypoint.c_str();
 
@@ -698,16 +755,27 @@ bool AndroidEngine::Launch(std::unique_ptr<APKAssetProvider> apk_asset_provider,
   project_args_.dart_entrypoint_argv =
       entrypoint_argv_ptrs.empty() ? nullptr : entrypoint_argv_ptrs.data();
 
+  project_args_.log_tag = "flutter";
+  project_args_.log_message_callback = [](const char* tag, const char* message,
+                                          void* user_data) {
+#if FML_OS_ANDROID
+    __android_log_print(ANDROID_LOG_INFO, tag ? tag : "flutter", "%s",
+                        message ? message : "");
+#endif
+  };
   project_args_.platform_message_callback =
       &AndroidEngine::OnPlatformMessageCallback;
   project_args_.update_semantics_callback2 =
       &AndroidEngine::OnUpdateSemantics2Callback;
   project_args_.dart_deferred_library_loader_callback =
       &AndroidEngine::OnDartDeferredLibraryRequestCallback;
+  project_args_.get_scaled_font_size_callback =
+      &AndroidEngine::OnGetScaledFontSizeCallback;
   project_args_.raster_context_setup_callback =
       &AndroidEngine::OnRasterContextSetupCallback;
   project_args_.raster_context_teardown_callback =
       &AndroidEngine::OnRasterContextTeardownCallback;
+  project_args_.engine_id = engine_id;
 
   FlutterEngineResult result =
       FlutterEngineInitialize(FLUTTER_ENGINE_VERSION, &renderer_config_,
@@ -730,8 +798,16 @@ bool AndroidEngine::Launch(std::unique_ptr<APKAssetProvider> apk_asset_provider,
   is_valid_ = true;
   engine_id_ = engine_id;
 
+  {
+    std::lock_guard<std::mutex> lock(textures_mutex_);
+    for (const auto& [id, record] : textures_) {
+      FlutterEngineRegisterExternalTexture(engine_, id);
+    }
+  }
+
   if (surface_attached_) {
     FlutterEngineNotifyCreated(engine_);
+    FlutterEngineScheduleFrame(engine_);
   }
 
   return true;
@@ -777,6 +853,7 @@ std::unique_ptr<AndroidEngine> AndroidEngine::Spawn(
 #endif  // !SLIMPELLER
     case AndroidRenderingAPI::kImpellerAutoselect:
     case AndroidRenderingAPI::kImpellerOpenGLES:
+    case AndroidRenderingAPI::kImpellerVulkan:
       child->renderer_config_.type = kOpenGL;
       child->renderer_config_.open_gl.struct_size =
           sizeof(FlutterOpenGLRendererConfig);
@@ -818,9 +895,13 @@ std::unique_ptr<AndroidEngine> AndroidEngine::Spawn(
         return nullptr;
 #endif
       };
-      break;
-    case AndroidRenderingAPI::kImpellerVulkan:
-      child->renderer_config_.type = kVulkan;
+      child->renderer_config_.open_gl.gl_external_texture_frame_callback =
+          [](void* user_data, int64_t texture_id, size_t width, size_t height,
+             FlutterOpenGLTexture* texture_out) -> bool {
+        auto* engine = static_cast<AndroidEngine*>(user_data);
+        return engine != nullptr &&
+               engine->OnGetGLTexture(texture_id, width, height, texture_out);
+      };
       break;
   }
 
@@ -840,12 +921,22 @@ std::unique_ptr<AndroidEngine> AndroidEngine::Spawn(
     child->project_args_.asset_resolvers = child->asset_resolvers_array_;
     child->project_args_.asset_resolvers_count = 1;
   }
+  child->project_args_.log_tag = "flutter";
+  child->project_args_.log_message_callback =
+      [](const char* tag, const char* message, void* user_data) {
+#if FML_OS_ANDROID
+        __android_log_print(ANDROID_LOG_INFO, tag ? tag : "flutter", "%s",
+                            message ? message : "");
+#endif
+      };
   child->project_args_.platform_message_callback =
       &AndroidEngine::OnPlatformMessageCallback;
   child->project_args_.update_semantics_callback2 =
       &AndroidEngine::OnUpdateSemantics2Callback;
   child->project_args_.dart_deferred_library_loader_callback =
       &AndroidEngine::OnDartDeferredLibraryRequestCallback;
+  child->project_args_.get_scaled_font_size_callback =
+      &AndroidEngine::OnGetScaledFontSizeCallback;
   child->project_args_.raster_context_setup_callback =
       &AndroidEngine::OnRasterContextSetupCallback;
   child->project_args_.raster_context_teardown_callback =
@@ -881,18 +972,31 @@ std::unique_ptr<AndroidEngine> AndroidEngine::Spawn(
   child->is_valid_ = true;
   child->engine_id_ = engine_id;
 
+  {
+    std::lock_guard<std::mutex> lock(child->textures_mutex_);
+    for (const auto& [id, record] : child->textures_) {
+      FlutterEngineRegisterExternalTexture(child->engine_, id);
+    }
+  }
+
   return child;
 }
 
 void AndroidEngine::NotifySurfaceCreated(ANativeWindow* native_window,
                                          bool is_fake_window) {
+  first_frame_presented_ = false;
   if (surface_manager_ != nullptr) {
     surface_manager_->SetNativeWindow(native_window, is_fake_window);
     bool valid = (native_window != nullptr || is_fake_window);
-    if (valid && !surface_attached_) {
-      surface_attached_ = true;
+    if (valid) {
+      if (!surface_attached_) {
+        surface_attached_ = true;
+        if (engine_ != nullptr) {
+          FlutterEngineNotifyCreated(engine_);
+        }
+      }
       if (engine_ != nullptr) {
-        FlutterEngineNotifyCreated(engine_);
+        FlutterEngineScheduleFrame(engine_);
       }
     }
   }
@@ -900,31 +1004,40 @@ void AndroidEngine::NotifySurfaceCreated(ANativeWindow* native_window,
 
 void AndroidEngine::NotifySurfaceWindowChanged(ANativeWindow* native_window,
                                                bool is_fake_window) {
+  first_frame_presented_ = false;
   if (surface_manager_ != nullptr) {
     surface_manager_->SetNativeWindow(native_window, is_fake_window);
     bool valid = (native_window != nullptr || is_fake_window);
-    if (valid && !surface_attached_) {
-      surface_attached_ = true;
+    if (valid) {
+      if (!surface_attached_) {
+        surface_attached_ = true;
+        if (engine_ != nullptr) {
+          FlutterEngineNotifyCreated(engine_);
+        }
+      }
       if (engine_ != nullptr) {
-        FlutterEngineNotifyCreated(engine_);
+        FlutterEngineScheduleFrame(engine_);
       }
     }
   }
 }
 
 void AndroidEngine::NotifySurfaceChanged(int width, int height) {
-  // Dimensions are tracked by AndroidSurfaceManager on window attach/draw.
+  if (engine_ != nullptr && surface_attached_) {
+    FlutterEngineScheduleFrame(engine_);
+  }
 }
 
 void AndroidEngine::NotifySurfaceDestroyed() {
+  first_frame_presented_ = false;
   if (surface_manager_ != nullptr) {
-    surface_manager_->ClearNativeWindow();
     if (surface_attached_) {
       surface_attached_ = false;
       if (engine_ != nullptr) {
         FlutterEngineNotifyDestroyed(engine_);
       }
     }
+    surface_manager_->ClearNativeWindow();
   }
 }
 
@@ -989,7 +1102,14 @@ void AndroidEngine::UpdateDisplayMetrics() {
 }
 
 bool AndroidEngine::IsSurfaceControlEnabled() const {
+#if FML_OS_ANDROID
+  return settings_.enable_surface_control &&
+         android_get_device_api_level() >= 33 &&
+         (android_rendering_api_ == AndroidRenderingAPI::kImpellerVulkan ||
+          android_rendering_api_ == AndroidRenderingAPI::kImpellerAutoselect);
+#else
   return false;
+#endif
 }
 
 struct AndroidEngine::Screenshot AndroidEngine::Screenshot(ScreenshotType type,
@@ -1167,6 +1287,20 @@ void AndroidEngine::DispatchSemanticsAction(JNIEnv* env,
 void AndroidEngine::RegisterExternalTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+  {
+    std::lock_guard<std::mutex> lock(textures_mutex_);
+    auto record = std::make_shared<TextureRecord>();
+    record->type = TextureRecord::Type::kSurfaceTexture;
+#if FML_OS_ANDROID
+    if (!surface_texture.is_null()) {
+      JNIEnv* env = fml::jni::AttachCurrentThread();
+      if (env != nullptr && surface_texture.obj() != nullptr) {
+        record->java_object.Reset(env, surface_texture.obj());
+      }
+    }
+#endif
+    textures_[texture_id] = record;
+  }
   if (IsValid()) {
     FlutterEngineRegisterExternalTexture(engine_, texture_id);
   }
@@ -1176,6 +1310,20 @@ void AndroidEngine::RegisterImageTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
     int32_t lifecycle) {
+  {
+    std::lock_guard<std::mutex> lock(textures_mutex_);
+    auto record = std::make_shared<TextureRecord>();
+    record->type = TextureRecord::Type::kImageReader;
+#if FML_OS_ANDROID
+    if (!image_texture_entry.is_null()) {
+      JNIEnv* env = fml::jni::AttachCurrentThread();
+      if (env != nullptr && image_texture_entry.obj() != nullptr) {
+        record->java_object.Reset(env, image_texture_entry.obj());
+      }
+    }
+#endif
+    textures_[texture_id] = record;
+  }
   if (IsValid()) {
     FlutterEngineRegisterExternalTexture(engine_, texture_id);
   }
@@ -1185,6 +1333,51 @@ void AndroidEngine::UnregisterTexture(int64_t texture_id) {
   if (IsValid()) {
     FlutterEngineUnregisterExternalTexture(engine_, texture_id);
   }
+  std::shared_ptr<TextureRecord> record;
+  {
+    std::lock_guard<std::mutex> lock(textures_mutex_);
+    auto it = textures_.find(texture_id);
+    if (it != textures_.end()) {
+      record = it->second;
+      textures_.erase(it);
+    }
+  }
+  if (record) {
+#if FML_OS_ANDROID
+    if (record->type == TextureRecord::Type::kSurfaceTexture &&
+        record->is_attached && record->java_object.obj() != nullptr) {
+      if (jni_facade_) {
+        jni_facade_->SurfaceTextureDetachFromGLContext(
+            fml::jni::ScopedJavaLocalRef<jobject>(record->java_object));
+      }
+    }
+    if (record->egl_image != EGL_NO_IMAGE_KHR) {
+      EGLDisplay display = eglGetCurrentDisplay();
+      if (display == EGL_NO_DISPLAY && surface_manager_) {
+        display = surface_manager_->GetEGLDisplay();
+      }
+      if (display != EGL_NO_DISPLAY) {
+        auto destroy_image = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(
+            eglGetProcAddress("eglDestroyImageKHR"));
+        if (destroy_image) {
+          destroy_image(display, record->egl_image);
+        }
+      }
+      record->egl_image = EGL_NO_IMAGE_KHR;
+    }
+    if (record->current_ahb != nullptr) {
+      auto release_ahb = GetAHardwareBuffer_release();
+      if (release_ahb) {
+        release_ahb(record->current_ahb);
+      }
+      record->current_ahb = nullptr;
+    }
+    if (record->gl_texture_id != 0) {
+      glDeleteTextures(1, &record->gl_texture_id);
+      record->gl_texture_id = 0;
+    }
+#endif
+  }
 }
 
 void AndroidEngine::MarkTextureFrameAvailable(int64_t texture_id) {
@@ -1193,8 +1386,213 @@ void AndroidEngine::MarkTextureFrameAvailable(int64_t texture_id) {
   }
 }
 
+bool AndroidEngine::OnGetGLTexture(int64_t texture_id,
+                                   size_t width,
+                                   size_t height,
+                                   FlutterOpenGLTexture* texture_out) {
+  if (texture_out == nullptr) {
+    return false;
+  }
+  std::shared_ptr<TextureRecord> record;
+  {
+    std::lock_guard<std::mutex> lock(textures_mutex_);
+    auto it = textures_.find(texture_id);
+    if (it == textures_.end()) {
+#if FML_OS_ANDROID
+      __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                          "OnGetGLTexture: texture_id %lld not found in map",
+                          (long long)texture_id);
+#endif
+      return false;
+    }
+    record = it->second;
+  }
+  if (!record || record->java_object.is_null() || !jni_facade_) {
+#if FML_OS_ANDROID
+    __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                        "OnGetGLTexture: record or java_object is null");
+#endif
+    return false;
+  }
+
+#if FML_OS_ANDROID
+  JNIEnv* env = fml::jni::AttachCurrentThread();
+  if (env == nullptr) {
+    return false;
+  }
+
+  if (record->type == TextureRecord::Type::kSurfaceTexture) {
+    if (record->gl_texture_id == 0) {
+      glGenTextures(1, &record->gl_texture_id);
+      glBindTexture(GL_TEXTURE_EXTERNAL_OES, record->gl_texture_id);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER,
+                      GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER,
+                      GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S,
+                      GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T,
+                      GL_CLAMP_TO_EDGE);
+      jni_facade_->SurfaceTextureAttachToGLContext(
+          fml::jni::ScopedJavaLocalRef<jobject>(record->java_object),
+          record->gl_texture_id);
+      record->is_attached = true;
+    }
+    if (jni_facade_->SurfaceTextureShouldUpdate(
+            fml::jni::ScopedJavaLocalRef<jobject>(record->java_object))) {
+      jni_facade_->SurfaceTextureUpdateTexImage(
+          fml::jni::ScopedJavaLocalRef<jobject>(record->java_object));
+    }
+    texture_out->target = GL_TEXTURE_EXTERNAL_OES;
+    texture_out->name = record->gl_texture_id;
+    texture_out->format = GL_RGBA8_OES;
+    texture_out->width = width;
+    texture_out->height = height;
+    texture_out->user_data = nullptr;
+    texture_out->destruction_callback = nullptr;
+    return true;
+  } else if (record->type == TextureRecord::Type::kImageReader) {
+    auto image = jni_facade_->ImageProducerTextureEntryAcquireLatestImage(
+        fml::jni::ScopedJavaLocalRef<jobject>(record->java_object));
+    if (!image.is_null()) {
+      auto hardware_buffer = jni_facade_->ImageGetHardwareBuffer(image);
+      if (!hardware_buffer.is_null()) {
+        auto from_hardware_buffer = GetAHardwareBuffer_fromHardwareBuffer();
+        auto acquire_ahb = GetAHardwareBuffer_acquire();
+        auto release_ahb = GetAHardwareBuffer_release();
+
+        if (from_hardware_buffer && acquire_ahb && release_ahb) {
+          AHardwareBuffer* ahb =
+              from_hardware_buffer(env, hardware_buffer.obj());
+          if (ahb != nullptr) {
+            acquire_ahb(ahb);
+            EGLDisplay display = eglGetCurrentDisplay();
+            if (display == EGL_NO_DISPLAY && surface_manager_) {
+              display = surface_manager_->GetEGLDisplay();
+            }
+            EGLContext context = eglGetCurrentContext();
+            if (context == EGL_NO_CONTEXT && surface_manager_) {
+              surface_manager_->MakeCurrent();
+              context = eglGetCurrentContext();
+            }
+            if (display != EGL_NO_DISPLAY) {
+              auto get_native_client_buffer =
+                  reinterpret_cast<PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC>(
+                      eglGetProcAddress("eglGetNativeClientBufferANDROID"));
+              auto create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>(
+                  eglGetProcAddress("eglCreateImageKHR"));
+              auto destroy_image = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(
+                  eglGetProcAddress("eglDestroyImageKHR"));
+              auto image_target_texture_2d =
+                  reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
+                      eglGetProcAddress("glEGLImageTargetTexture2DOES"));
+
+              if (get_native_client_buffer && create_image &&
+                  image_target_texture_2d) {
+                EGLClientBuffer client_buffer = get_native_client_buffer(ahb);
+                if (client_buffer != nullptr) {
+                  EGLImageKHR new_image =
+                      create_image(display, EGL_NO_CONTEXT,
+                                   EGL_NATIVE_BUFFER_ANDROID, client_buffer, 0);
+                  if (new_image != EGL_NO_IMAGE_KHR) {
+                    if (record->gl_texture_id == 0) {
+                      glGenTextures(1, &record->gl_texture_id);
+                    }
+                    glBindTexture(GL_TEXTURE_EXTERNAL_OES,
+                                  record->gl_texture_id);
+                    image_target_texture_2d(
+                        GL_TEXTURE_EXTERNAL_OES,
+                        static_cast<GLeglImageOES>(new_image));
+                    GLenum err = glGetError();
+                    if (err != GL_NO_ERROR) {
+                      __android_log_print(
+                          ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                          "OnGetGLTexture: image_target_texture_2d glGetError: "
+                          "%d",
+                          err);
+                    }
+                    glTexParameteri(GL_TEXTURE_EXTERNAL_OES,
+                                    GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_EXTERNAL_OES,
+                                    GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S,
+                                    GL_CLAMP_TO_EDGE);
+                    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T,
+                                    GL_CLAMP_TO_EDGE);
+
+                    if (record->egl_image != EGL_NO_IMAGE_KHR &&
+                        destroy_image) {
+                      destroy_image(display, record->egl_image);
+                    }
+                    if (record->current_ahb != nullptr) {
+                      release_ahb(record->current_ahb);
+                    }
+                    record->egl_image = new_image;
+                    record->current_ahb = ahb;
+                  } else {
+                    __android_log_print(
+                        ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                        "OnGetGLTexture: create_image failed: %d",
+                        eglGetError());
+                    release_ahb(ahb);
+                  }
+                } else {
+                  __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                                      "OnGetGLTexture: client_buffer null");
+                  release_ahb(ahb);
+                }
+              } else {
+                __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                                    "OnGetGLTexture: EGL proc null");
+                release_ahb(ahb);
+              }
+            } else {
+              __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                                  "OnGetGLTexture: EGL display null");
+              release_ahb(ahb);
+            }
+          } else {
+            __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                                "OnGetGLTexture: ahb null");
+          }
+        }
+      } else {
+        __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                            "OnGetGLTexture: hardware_buffer is null");
+      }
+    } else {
+      __android_log_print(
+          ANDROID_LOG_INFO, "FlutterAndroidEngine",
+          "OnGetGLTexture: acquireLatestImage returned null (tex=%u)",
+          record->gl_texture_id);
+    }
+
+    if (record->gl_texture_id == 0) {
+      __android_log_print(ANDROID_LOG_ERROR, "FlutterAndroidEngine",
+                          "OnGetGLTexture: gl_texture_id is 0");
+      return false;
+    }
+    texture_out->target = GL_TEXTURE_EXTERNAL_OES;
+    texture_out->name = record->gl_texture_id;
+    texture_out->format = GL_RGBA8_OES;
+    texture_out->width = width;
+    texture_out->height = height;
+    texture_out->user_data = nullptr;
+    texture_out->destruction_callback = nullptr;
+    return true;
+  }
+#endif
+  return false;
+}
+
 void AndroidEngine::ScheduleFrame() {
   if (IsValid()) {
+    {
+      std::lock_guard<std::mutex> lock(textures_mutex_);
+      for (const auto& [id, record] : textures_) {
+        FlutterEngineMarkExternalTextureFrameAvailable(engine_, id);
+      }
+    }
     FlutterEngineScheduleFrame(engine_);
   }
 }
@@ -1346,17 +1744,27 @@ void AndroidEngine::OnDartDeferredLibraryRequestCallback(
   }
 }
 
-void AndroidEngine::OnRasterContextSetupCallback(void* user_data) {
+double AndroidEngine::OnGetScaledFontSizeCallback(double unscaled_font_size,
+                                                  int configuration_id,
+                                                  void* user_data) {
   auto* engine = static_cast<AndroidEngine*>(user_data);
-  if (engine != nullptr && engine->surface_manager_ != nullptr) {
-    engine->surface_manager_->MakeResourceCurrent();
+  if (engine != nullptr && engine->jni_facade_ != nullptr) {
+    return engine->jni_facade_->FlutterViewGetScaledFontSize(unscaled_font_size,
+                                                             configuration_id);
   }
+  return -1;
 }
 
-void AndroidEngine::OnRasterContextTeardownCallback(void* user_data) {
-  auto* engine = static_cast<AndroidEngine*>(user_data);
-  if (engine != nullptr && engine->surface_manager_ != nullptr) {
-    engine->surface_manager_->ClearCurrent();
+void AndroidEngine::OnRasterContextSetupCallback(void* user_data) {}
+
+void AndroidEngine::OnRasterContextTeardownCallback(void* user_data) {}
+
+void AndroidEngine::OnBeginFrame() {
+  if (jni_facade_ != nullptr && task_runners_ != nullptr) {
+    if (!IsSurfaceControlEnabled()) {
+      task_runners_->GetPlatformTaskRunner()->PostTask(
+          [jni = jni_facade_]() { jni->FlutterViewBeginFrame(); });
+    }
   }
 }
 
@@ -1375,19 +1783,63 @@ void AndroidEngine::OnPlatformViewPresented(
   int width = static_cast<int>(std::round(size.width));
   int height = static_cast<int>(std::round(size.height));
 
+  auto records =
+      AndroidMutatorsMapper::ParseMutations(mutations_count, mutations);
+
+  bool is_surface_control = IsSurfaceControlEnabled();
+
   task_runners_->GetPlatformTaskRunner()->PostTask(
-      [jni = jni_facade_, view_id, x, y, width, height]() {
-        MutatorsStack mutators_stack;
-        jni->FlutterViewOnDisplayPlatformView(static_cast<int>(view_id), x, y,
-                                              width, height, width, height,
-                                              mutators_stack);
+      [jni = jni_facade_, is_surface_control, view_id, x, y, width, height,
+       records = std::move(records)]() {
+#if FML_OS_ANDROID
+        AndroidMutatorsStack mutators_stack;
+        if (fml::jni::HasJavaVM()) {
+          JNIEnv* env = fml::jni::AttachCurrentThread();
+          jobject java_stack =
+              AndroidMutatorsMapper::CreateJavaMutatorsStackFromRecords(
+                  env, records);
+          JavaLocalRef local_stack(env, java_stack);
+          mutators_stack = AndroidMutatorsStack(std::move(local_stack));
+        }
+        if (is_surface_control) {
+          jni->onDisplayPlatformView2(static_cast<int>(view_id), x, y, width,
+                                      height, width, height,
+                                      std::move(mutators_stack));
+        } else {
+          jni->FlutterViewOnDisplayPlatformView(static_cast<int>(view_id), x, y,
+                                                width, height, width, height,
+                                                std::move(mutators_stack));
+        }
+#else
+        AndroidMutatorsStack mutators_stack;
+        if (is_surface_control) {
+          jni->onDisplayPlatformView2(static_cast<int>(view_id), x, y, width,
+                                      height, width, height, mutators_stack);
+        } else {
+          jni->FlutterViewOnDisplayPlatformView(static_cast<int>(view_id), x, y,
+                                                width, height, width, height,
+                                                mutators_stack);
+        }
+#endif
       });
 }
 
 void AndroidEngine::OnFramePresented() {
   if (jni_facade_ != nullptr && task_runners_ != nullptr) {
+    bool is_first_frame = !first_frame_presented_.exchange(true);
+    bool is_surface_control = IsSurfaceControlEnabled();
     task_runners_->GetPlatformTaskRunner()->PostTask(
-        [jni = jni_facade_]() { jni->FlutterViewEndFrame(); });
+        [jni = jni_facade_, is_first_frame, is_surface_control]() {
+          if (is_first_frame) {
+            jni->FlutterViewOnFirstFrame();
+          }
+          if (is_surface_control) {
+            jni->swapTransaction();
+            jni->onEndFrame2();
+          } else {
+            jni->FlutterViewEndFrame();
+          }
+        });
   }
 }
 

@@ -72,12 +72,20 @@ class AndroidMutatorsMapper {
   static bool RegisterJNI(JNIEnv* env);
 
   /// Instantiates and populates a Java
-  /// io.flutter.embedding.engine.mutatorsstack.FlutterMutatorsStack object.
+  /// io.flutter.embedding.engine.mutatorsstack.FlutterMutatorsStack object from
+  /// raw embedder mutations.
   static jobject CreateJavaMutatorsStack(
       JNIEnv* env,
       size_t mutations_count,
       const FlutterPlatformViewMutation** mutations,
       double device_pixel_ratio = 1.0);
+
+  /// Instantiates and populates a Java
+  /// io.flutter.embedding.engine.mutatorsstack.FlutterMutatorsStack object from
+  /// parsed AndroidMutatorRecords.
+  static jobject CreateJavaMutatorsStackFromRecords(
+      JNIEnv* env,
+      const std::vector<AndroidMutatorRecord>& records);
 #endif
 
  private:

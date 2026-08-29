@@ -20,6 +20,7 @@
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/shell/platform/android/android_engine.h"
+#include "flutter/shell/platform/android/android_mutators_mapper.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -437,6 +438,12 @@ static void UpdateDisplayMetrics(JNIEnv* env,
                                  jobject jcaller,
                                  jlong shell_holder) {
   reinterpret_cast<AndroidEngine*>(shell_holder)->UpdateDisplayMetrics();
+}
+
+static void UpdateRefreshRate(JNIEnv* env,
+                              jobject jcaller,
+                              jfloat refresh_rate_fps) {
+  FML_DLOG(INFO) << "Display refresh rate updated: " << refresh_rate_fps;
 }
 
 static bool IsSurfaceControlEnabled(JNIEnv* env,
@@ -963,6 +970,11 @@ bool RegisterApi(JNIEnv* env) {
           .fnPtr = reinterpret_cast<void*>(&UpdateDisplayMetrics),
       },
       {
+          .name = "nativeUpdateRefreshRate",
+          .signature = "(F)V",
+          .fnPtr = reinterpret_cast<void*>(&UpdateRefreshRate),
+      },
+      {
           .name = "nativeIsSurfaceControlEnabled",
           .signature = "(J)Z",
           .fnPtr = reinterpret_cast<void*>(&IsSurfaceControlEnabled),
@@ -973,6 +985,8 @@ bool RegisterApi(JNIEnv* env) {
     FML_LOG(ERROR) << "Failed to RegisterNatives with FlutterJNI";
     return false;
   }
+
+  AndroidMutatorsMapper::RegisterJNI(env);
 
   g_jni_shell_holder_field = env->GetFieldID(
       g_flutter_jni_class->obj(), "nativeShellHolderId", "Ljava/lang/Long;");
@@ -1769,15 +1783,21 @@ void PlatformViewAndroidJNIImpl::FlutterViewOnDisplayPlatformView(
     int height,
     int viewWidth,
     int viewHeight,
-    MutatorsStack mutators_stack) {
+    AndroidMutatorsStack mutators_stack) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
     return;
   }
 
-  jobject mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
-                                         g_mutators_stack_init_method);
+  jobject mutatorsStack = nullptr;
+#if FML_OS_ANDROID
+  mutatorsStack = mutators_stack.obj();
+#endif
+  if (mutatorsStack == nullptr) {
+    mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
+                                   g_mutators_stack_init_method);
+  }
 
   env->CallVoidMethod(java_object.obj(), g_on_display_platform_view_method,
                       view_id, x, y, width, height, viewWidth, viewHeight,
@@ -2105,15 +2125,21 @@ void PlatformViewAndroidJNIImpl::onDisplayPlatformView2(
     int32_t height,
     int32_t viewWidth,
     int32_t viewHeight,
-    MutatorsStack mutators_stack) {
+    AndroidMutatorsStack mutators_stack) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
     return;
   }
 
-  jobject mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
-                                         g_mutators_stack_init_method);
+  jobject mutatorsStack = nullptr;
+#if FML_OS_ANDROID
+  mutatorsStack = mutators_stack.obj();
+#endif
+  if (mutatorsStack == nullptr) {
+    mutatorsStack = env->NewObject(g_mutators_stack_class->obj(),
+                                   g_mutators_stack_init_method);
+  }
 
   env->CallVoidMethod(java_object.obj(), g_on_display_platform_view2_method,
                       view_id, x, y, width, height, viewWidth, viewHeight,

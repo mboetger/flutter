@@ -76,7 +76,8 @@ bool AndroidCompositor::CreateBackingStore(
     }
     case AndroidRenderingAPI::kSkiaOpenGLES:
     case AndroidRenderingAPI::kImpellerOpenGLES:
-    case AndroidRenderingAPI::kImpellerAutoselect: {
+    case AndroidRenderingAPI::kImpellerAutoselect:
+    case AndroidRenderingAPI::kImpellerVulkan: {
       backing_store_out->type = kFlutterBackingStoreTypeOpenGL;
       backing_store_out->user_data = this;
       backing_store_out->open_gl.type = kFlutterOpenGLTargetTypeFramebuffer;
@@ -86,9 +87,6 @@ bool AndroidCompositor::CreateBackingStore(
       backing_store_out->open_gl.framebuffer.user_data = nullptr;
       backing_store_out->open_gl.framebuffer.destruction_callback = nullptr;
       return true;
-    }
-    case AndroidRenderingAPI::kImpellerVulkan: {
-      return false;
     }
   }
   return false;
@@ -122,6 +120,10 @@ bool AndroidCompositor::PresentLayers(const FlutterLayer** layers,
 
   if (!surface_manager_) {
     return false;
+  }
+
+  if (delegate != nullptr) {
+    delegate->OnBeginFrame();
   }
 
   bool present_success = true;

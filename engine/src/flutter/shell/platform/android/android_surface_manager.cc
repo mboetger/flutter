@@ -41,10 +41,8 @@ AndroidSurfaceManager::AndroidSurfaceManager(AndroidRenderingAPI rendering_api)
     case AndroidRenderingAPI::kSkiaOpenGLES:
     case AndroidRenderingAPI::kImpellerOpenGLES:
     case AndroidRenderingAPI::kImpellerAutoselect:
-      is_valid_ = InitializeEGL();
-      break;
     case AndroidRenderingAPI::kImpellerVulkan:
-      is_valid_ = true;
+      is_valid_ = InitializeEGL();
       break;
   }
 }
@@ -104,6 +102,16 @@ bool AndroidSurfaceManager::SetNativeWindow(ANativeWindow* window,
     if (rendering_api_ == AndroidRenderingAPI::kSoftware) {
       ANativeWindow_setBuffersGeometry(native_window_, 0, 0,
                                        WINDOW_FORMAT_RGBA_8888);
+    } else if (egl_display_ != EGL_NO_DISPLAY && egl_config_ != nullptr) {
+      EGLint format = 0;
+      if (eglGetConfigAttrib(egl_display_, egl_config_, EGL_NATIVE_VISUAL_ID,
+                             &format) == EGL_TRUE &&
+          format != 0) {
+        ANativeWindow_setBuffersGeometry(native_window_, 0, 0, format);
+      } else {
+        ANativeWindow_setBuffersGeometry(native_window_, 0, 0,
+                                         WINDOW_FORMAT_RGBA_8888);
+      }
     }
   }
 #endif
@@ -221,10 +229,15 @@ bool AndroidSurfaceManager::InitializeEGL() {
   const EGLint pbuffer_attribs[] = {
       EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE,
   };
-  egl_pbuffer_surface_ =
+  egl_onscreen_pbuffer_surface_ =
       eglCreatePbufferSurface(egl_display_, egl_config_, pbuffer_attribs);
-  if (egl_pbuffer_surface_ == EGL_NO_SURFACE && !has_surfaceless_context_) {
-    FML_LOG(ERROR) << "Failed to create EGL pbuffer surface: " << eglGetError();
+  egl_resource_pbuffer_surface_ =
+      eglCreatePbufferSurface(egl_display_, egl_config_, pbuffer_attribs);
+  if ((egl_onscreen_pbuffer_surface_ == EGL_NO_SURFACE ||
+       egl_resource_pbuffer_surface_ == EGL_NO_SURFACE) &&
+      !has_surfaceless_context_) {
+    FML_LOG(ERROR) << "Failed to create EGL pbuffer surfaces: "
+                   << eglGetError();
     return false;
   }
 
@@ -241,9 +254,14 @@ void AndroidSurfaceManager::TeardownEGL() {
     eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE,
                    EGL_NO_CONTEXT);
 
-    if (egl_pbuffer_surface_ != EGL_NO_SURFACE) {
-      eglDestroySurface(egl_display_, egl_pbuffer_surface_);
-      egl_pbuffer_surface_ = EGL_NO_SURFACE;
+    if (egl_onscreen_pbuffer_surface_ != EGL_NO_SURFACE) {
+      eglDestroySurface(egl_display_, egl_onscreen_pbuffer_surface_);
+      egl_onscreen_pbuffer_surface_ = EGL_NO_SURFACE;
+    }
+
+    if (egl_resource_pbuffer_surface_ != EGL_NO_SURFACE) {
+      eglDestroySurface(egl_display_, egl_resource_pbuffer_surface_);
+      egl_resource_pbuffer_surface_ = EGL_NO_SURFACE;
     }
 
     if (egl_onscreen_surface_ != EGL_NO_SURFACE) {
@@ -269,6 +287,10 @@ void AndroidSurfaceManager::TeardownEGL() {
 
 bool AndroidSurfaceManager::CreateOrUpdateOnscreenSurfaceLocked() {
 #if FML_OS_ANDROID
+  if (rendering_api_ == AndroidRenderingAPI::kSoftware) {
+    return true;
+  }
+
   if (egl_display_ == EGL_NO_DISPLAY || egl_config_ == nullptr) {
     return is_fake_window_;
   }
@@ -322,13 +344,25 @@ bool AndroidSurfaceManager::MakeCurrent() {
   }
   EGLSurface surface = egl_onscreen_surface_;
   if (surface == EGL_NO_SURFACE) {
-    surface = has_surfaceless_context_ ? EGL_NO_SURFACE : egl_pbuffer_surface_;
+    surface =
+        (egl_onscreen_pbuffer_surface_ != EGL_NO_SURFACE)
+            ? egl_onscreen_pbuffer_surface_
+            : (has_surfaceless_context_ ? EGL_NO_SURFACE : EGL_NO_SURFACE);
   }
   if (surface == EGL_NO_SURFACE && !has_surfaceless_context_) {
     return false;
   }
-  return eglMakeCurrent(egl_display_, surface, surface,
-                        egl_onscreen_context_) == EGL_TRUE;
+  EGLBoolean res =
+      eglMakeCurrent(egl_display_, surface, surface, egl_onscreen_context_);
+  if (res != EGL_TRUE) {
+    FML_LOG(ERROR) << "eglMakeCurrent failed: " << eglGetError()
+                   << " (surface=" << surface
+                   << ", onscreen_surface=" << egl_onscreen_surface_
+                   << ", pbuffer_surface=" << egl_onscreen_pbuffer_surface_
+                   << ", context=" << egl_onscreen_context_ << ")";
+    return false;
+  }
+  return true;
 #else
   return true;
 #endif
@@ -358,9 +392,21 @@ bool AndroidSurfaceManager::MakeResourceCurrent() {
     return false;
   }
   EGLSurface surface =
-      has_surfaceless_context_ ? EGL_NO_SURFACE : egl_pbuffer_surface_;
-  return eglMakeCurrent(egl_display_, surface, surface,
-                        egl_resource_context_) == EGL_TRUE;
+      (egl_resource_pbuffer_surface_ != EGL_NO_SURFACE)
+          ? egl_resource_pbuffer_surface_
+          : (has_surfaceless_context_ ? EGL_NO_SURFACE : EGL_NO_SURFACE);
+  if (surface == EGL_NO_SURFACE && !has_surfaceless_context_) {
+    return false;
+  }
+  EGLBoolean res =
+      eglMakeCurrent(egl_display_, surface, surface, egl_resource_context_);
+  if (res != EGL_TRUE) {
+    FML_LOG(ERROR) << "eglMakeCurrent (resource) failed: " << eglGetError()
+                   << " (surface=" << surface
+                   << ", context=" << egl_resource_context_ << ")";
+    return false;
+  }
+  return true;
 #else
   return true;
 #endif
@@ -376,7 +422,12 @@ bool AndroidSurfaceManager::Present() {
       egl_onscreen_surface_ == EGL_NO_SURFACE) {
     return false;
   }
-  return eglSwapBuffers(egl_display_, egl_onscreen_surface_) == EGL_TRUE;
+  EGLBoolean res = eglSwapBuffers(egl_display_, egl_onscreen_surface_);
+  if (res != EGL_TRUE) {
+    FML_LOG(ERROR) << "eglSwapBuffers failed: " << eglGetError();
+    return false;
+  }
+  return true;
 #else
   return true;
 #endif
@@ -384,6 +435,16 @@ bool AndroidSurfaceManager::Present() {
 
 uint32_t AndroidSurfaceManager::GetFBO() const {
   return 0;
+}
+
+EGLDisplay AndroidSurfaceManager::GetEGLDisplay() const {
+  std::lock_guard<std::mutex> lock(window_mutex_);
+  return egl_display_;
+}
+
+EGLContext AndroidSurfaceManager::GetResourceContext() const {
+  std::lock_guard<std::mutex> lock(window_mutex_);
+  return egl_resource_context_;
 }
 
 bool AndroidSurfaceManager::PresentSoftware(const void* allocation,

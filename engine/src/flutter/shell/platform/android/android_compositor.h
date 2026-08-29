@@ -22,6 +22,9 @@ class AndroidCompositorPlatformViewDelegate {
  public:
   virtual ~AndroidCompositorPlatformViewDelegate() = default;
 
+  /// Invoked when beginning frame presentation.
+  virtual void OnBeginFrame() {}
+
   /// Invoked when a platform view layer is encountered in the frame composition
   /// stack.
   virtual void OnPlatformViewPresented(

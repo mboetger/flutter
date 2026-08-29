@@ -48,16 +48,26 @@ class PlatformMessage {
   fml::MallocMapping data_;
 };
 
-class MutatorsStack {
- public:
-  MutatorsStack() = default;
-};
-
 #if FML_OS_ANDROID
 using JavaLocalRef = fml::jni::ScopedJavaLocalRef<jobject>;
 #else
 using JavaLocalRef = std::nullptr_t;
 #endif
+
+class AndroidMutatorsStack {
+ public:
+  AndroidMutatorsStack() = default;
+#if FML_OS_ANDROID
+  explicit AndroidMutatorsStack(JavaLocalRef java_stack)
+      : java_stack_(std::move(java_stack)) {}
+
+  const JavaLocalRef& GetJavaStack() const { return java_stack_; }
+  jobject obj() const { return java_stack_.obj(); }
+
+ private:
+  JavaLocalRef java_stack_;
+#endif
+};
 
 //------------------------------------------------------------------------------
 /// Allows to call Java code running in the JVM from any thread. However, most
@@ -197,7 +207,7 @@ class PlatformViewAndroidJNI {
       int height,
       int viewWidth,
       int viewHeight,
-      MutatorsStack mutators_stack) = 0;
+      AndroidMutatorsStack mutators_stack) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Positions and sizes an overlay surface in hybrid composition.
@@ -286,7 +296,7 @@ class PlatformViewAndroidJNI {
                                       int32_t height,
                                       int32_t viewWidth,
                                       int32_t viewHeight,
-                                      MutatorsStack mutators_stack) = 0;
+                                      AndroidMutatorsStack mutators_stack) = 0;
 
   virtual void hidePlatformView2(int32_t view_id) = 0;
 

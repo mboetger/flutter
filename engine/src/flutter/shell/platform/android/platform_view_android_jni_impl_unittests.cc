@@ -76,6 +76,8 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
       .WillRepeatedly(Return(kPlaceholderFieldID));
   EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
       .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, GetStaticObjectField(_, _))
+      .WillRepeatedly(Return(kPlaceholderClass));
   EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
   EXPECT_CALL(mock_env, RegisterNatives(_, _, _)).WillRepeatedly(Return(0));
 

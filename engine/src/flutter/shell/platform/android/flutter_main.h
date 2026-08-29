@@ -33,8 +33,10 @@ struct AndroidSettings {
   bool enable_embedder_api = true;
   bool enable_software_rendering = false;
   bool enable_impeller = true;
+  bool enable_surface_control = false;
   bool trace_systrace = false;
   std::string requested_rendering_backend;
+  std::string assets_path;
   std::string application_kernel_asset;
   std::vector<std::string> command_line_args;
 };
@@ -45,6 +47,7 @@ class FlutterMain {
 
   static bool Register(JNIEnv* env);
 
+  static bool IsInitialized();
   static FlutterMain& Get();
 
   const AndroidSettings& GetSettings() const;

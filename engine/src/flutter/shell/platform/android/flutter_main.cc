@@ -97,6 +97,10 @@ static std::unique_ptr<FlutterMain> g_flutter_main;
 static std::atomic<int8_t> s_embedder_api_override_for_testing{
     static_cast<int8_t>(OverrideState::kNotSet)};
 
+bool FlutterMain::IsInitialized() {
+  return g_flutter_main != nullptr;
+}
+
 FlutterMain& FlutterMain::Get() {
   FML_CHECK(g_flutter_main) << "ensureInitializationComplete must have already "
                                "been called.";
@@ -146,30 +150,56 @@ void FlutterMain::ResetSettingsForTesting() {
 }
 
 static AndroidSettings SettingsFromCommandLine(
-    const fml::CommandLine& command_line) {
+    const std::vector<std::string>& args) {
   AndroidSettings settings;
   settings.enable_embedder_api = true;
-  if (command_line.HasOption("enable-embedder-api")) {
-    std::string val;
-    command_line.GetOptionValue("enable-embedder-api", &val);
-    settings.enable_embedder_api = (val != "false");
+
+  for (const auto& arg : args) {
+    if (arg.rfind("--", 0) == 0) {
+      std::string opt = arg.substr(2);
+      std::string key = opt;
+      std::string val = "";
+      auto eq_pos = opt.find('=');
+      if (eq_pos != std::string::npos) {
+        key = opt.substr(0, eq_pos);
+        val = opt.substr(eq_pos + 1);
+      }
+
+      if (key == "enable-embedder-api") {
+        settings.enable_embedder_api = (val != "false");
+      } else if (key == "enable-software-rendering" ||
+                 key == "software-rendering") {
+        settings.enable_software_rendering = (val != "false");
+      } else if (key == "enable-impeller") {
+        settings.enable_impeller = (val != "false");
+      } else if (key == "enable-hcpp" ||
+                 key == "enable-hcpp-and-surface-control" ||
+                 key == "enable-surface-control") {
+        settings.enable_surface_control = (val != "false");
+      } else if (key == "impeller-backend" ||
+                 key == "requested-rendering-backend") {
+        settings.requested_rendering_backend = val;
+      } else if (key == "snapshot-asset-path" || key == "assets-path") {
+        settings.assets_path = val;
+      } else if (key == "trace-systrace") {
+        settings.trace_systrace = (val != "false");
+      }
+#if FML_OS_ANDROID
+      __android_log_print(ANDROID_LOG_INFO, "FlutterMain",
+                          "SettingsFromCommandLine: arg=%s -> key=%s, val=%s, "
+                          "enable_surface_control=%d",
+                          arg.c_str(), key.c_str(), val.c_str(),
+                          settings.enable_surface_control);
+#endif
+    }
   }
-  if (command_line.HasOption("enable-software-rendering") ||
-      command_line.HasOption("software-rendering")) {
-    settings.enable_software_rendering = true;
-  }
-  if (command_line.HasOption("enable-impeller")) {
-    std::string val;
-    command_line.GetOptionValue("enable-impeller", &val);
-    settings.enable_impeller = (val != "false");
-  }
-  if (command_line.HasOption("requested-rendering-backend")) {
-    command_line.GetOptionValue("requested-rendering-backend",
-                                &settings.requested_rendering_backend);
-  }
-  if (command_line.HasOption("trace-systrace")) {
-    settings.trace_systrace = true;
-  }
+#if FML_OS_ANDROID
+  __android_log_print(
+      ANDROID_LOG_INFO, "FlutterMain",
+      "SettingsFromCommandLine summary: enable_surface_control=%d, backend=%s",
+      settings.enable_surface_control,
+      settings.requested_rendering_backend.c_str());
+#endif
   return settings;
 }
 
@@ -187,9 +217,8 @@ void FlutterMain::Init(JNIEnv* env,
   for (auto& arg : fml::jni::StringArrayToVector(env, jargs)) {
     args.push_back(std::move(arg));
   }
-  auto command_line = fml::CommandLineFromIterators(args.begin(), args.end());
 
-  auto settings = SettingsFromCommandLine(command_line);
+  auto settings = SettingsFromCommandLine(args);
   settings.command_line_args = args;
 
   // Turn systracing on if ATrace_isEnabled is true and the user did not already
@@ -235,10 +264,7 @@ void FlutterMain::Init(JNIEnv* env,
   if (!FlutterEngineRunsAOTCompiledDartCode() && kernelPath) {
     auto application_kernel_path =
         fml::jni::JavaStringToString(env, kernelPath);
-
-    if (fml::IsFile(application_kernel_path)) {
-      settings.application_kernel_asset = application_kernel_path;
-    }
+    settings.application_kernel_asset = application_kernel_path;
   }
 
   // Not thread safe. Will be removed when FlutterMain is refactored to no

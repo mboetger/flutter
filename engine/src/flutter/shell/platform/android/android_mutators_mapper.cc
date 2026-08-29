@@ -15,6 +15,7 @@
 #include "flutter/fml/logging.h"
 
 #if FML_OS_ANDROID
+#include <android/log.h>
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #endif
@@ -142,6 +143,14 @@ jobject AndroidMutatorsMapper::CreateJavaMutatorsStack(
     size_t mutations_count,
     const FlutterPlatformViewMutation** mutations,
     double device_pixel_ratio) {
+  std::vector<AndroidMutatorRecord> records =
+      ParseMutations(mutations_count, mutations, device_pixel_ratio);
+  return CreateJavaMutatorsStackFromRecords(env, records);
+}
+
+jobject AndroidMutatorsMapper::CreateJavaMutatorsStackFromRecords(
+    JNIEnv* env,
+    const std::vector<AndroidMutatorRecord>& records) {
   if (env == nullptr) {
     return nullptr;
   }
@@ -155,9 +164,6 @@ jobject AndroidMutatorsMapper::CreateJavaMutatorsStack(
   if (java_stack == nullptr) {
     return nullptr;
   }
-
-  std::vector<AndroidMutatorRecord> records =
-      ParseMutations(mutations_count, mutations, device_pixel_ratio);
 
   for (const auto& record : records) {
     switch (record.type) {

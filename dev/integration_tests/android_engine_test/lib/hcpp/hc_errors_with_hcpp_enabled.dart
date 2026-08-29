@@ -100,7 +100,7 @@ class LandingPage extends StatelessWidget {
       appBar: AppBar(title: const Text('Welcome')),
       body: Center(
         child: ElevatedButton(
-          key: const ValueKey<String>('LoadHCPlatformView'),
+          key: const ValueKey<String>('LoadPlatformView'),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             textStyle: const TextStyle(fontSize: 18),
