@@ -1,11 +1,11 @@
 # Flutter Android Embedder API Migration — State Ledger
 
 ## Current Status
-- **Active Phase**: Phase 3.3 (Direct JNI Platform View Mutator Mapping & DPR Normalization)
-- **Active Branch**: `android-embedder-v3/phase-3.3-platform-view-mutator-mapping`
-- **Base Commit SHA**: `4b21a64db89` (Phase 3.2 commit)
-- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2]
-- **Adversarial Review Loop Status**: Complete (Phase 3.2 Approved with 0 findings)
+- **Active Phase**: Phase 4.1 (AndroidEngine Orchestrator Implementation)
+- **Active Branch**: `android-embedder-v3/phase-4.1-android-engine`
+- **Base Commit SHA**: `ac3e8618965` (Phase 3.3 commit)
+- **Completed PRs**: [0.1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3]
+- **Adversarial Review Loop Status**: Complete (Phase 3.3 Approved with 0 findings)
 - **Target Dependency Boundary**:
   - Required: `//flutter/shell/platform/embedder:embedder_as_internal_library`
   - Optional: `//flutter/fml`, `//flutter/shell/platform/common`, `//flutter/third_party`
@@ -31,7 +31,7 @@
 - [x] Phase 2.5: Decouple `flutter_main.cc` using `//flutter/shell/platform/common`
 - [x] Phase 3.1: AndroidSurfaceManager Backing Store Pool (Gated: flag=true & false)
 - [x] Phase 3.2: AndroidCompositor Layer Presentation & Surface Detach Barrier (Gated: flag=true & false)
-- [ ] Phase 3.3: Direct JNI Platform View Mutator Mapping & DPR Normalization (Gated: flag=true & false)
+- [x] Phase 3.3: Direct JNI Platform View Mutator Mapping & DPR Normalization (Gated: flag=true & false)
 - [ ] Phase 4.1: AndroidEngine Implementation (Gated: flag=true & false)
 - [ ] Phase 4.2: JNI Dispatch Dual-Path Routing (Gated: flag=true & false)
 - [ ] Phase 4.3: Parameterized Multi-Backend Matrix (`TEST_P`) & Scenario Validation
