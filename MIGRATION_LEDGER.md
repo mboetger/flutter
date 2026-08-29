@@ -48,7 +48,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [x] 3.3: Direct JNI Mutator Mapping (Verified Dual-Flag Tests & Adversarial Review)
 
 ### Phase 4: JNI Routing & Dual-Stack Rollout
-- [ ] 4.1: AndroidEngine Implementation (Verified Dual-Flag Tests & Adversarial Review)
+- [x] 4.1: AndroidEngine Implementation (Verified Dual-Flag Tests & Adversarial Review)
 - [ ] 4.2: JNI Dispatch Routing / Inline if-statements (Verified Dual-Flag Tests & Adversarial Review)
 - [ ] 4.3: Parameterized Multi-Backend Matrix Testing (Verified Dual-Flag Tests & Adversarial Review)
 
