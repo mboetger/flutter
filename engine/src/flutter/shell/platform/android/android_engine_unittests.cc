@@ -490,22 +490,203 @@ TEST(AndroidEngineTest, CompositorDelegateLifecycle) {
   retained_compositor->PresentLayers(layers, 1);
 }
 
-TEST(AndroidEngineTest, DualFlagMatrixTest) {
-  for (bool embedder_api_enabled : {false, true}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_api_enabled);
-    EXPECT_EQ(FlutterMain::IsEmbedderAPIEnabled(), embedder_api_enabled);
-
-    auto jni = std::make_shared<JNIMock>();
-    AndroidEngine engine(Settings(), jni,
-                         AndroidRenderingAPI::kImpellerOpenGLES);
-
-    auto window = fml::MakeRefCounted<AndroidNativeWindow>(
-        nullptr, /*is_fake_window=*/true);
-    engine.NotifySurfaceCreated(window);
-    engine.NotifySurfaceDestroyed();
+class AndroidEngineMultiBackendMatrixTest
+    : public ::testing::TestWithParam<std::tuple<bool, AndroidRenderingAPI>> {
+ protected:
+  void SetUp() override {
+    embedder_api_enabled_ = std::get<0>(GetParam());
+    rendering_api_ = std::get<1>(GetParam());
+    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_api_enabled_);
   }
-  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+
+  void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
+
+  Settings GetSettings() const {
+    Settings settings;
+    if (rendering_api_ == AndroidRenderingAPI::kSoftware) {
+      settings.enable_software_rendering = true;
+      settings.enable_impeller = false;
+    } else if (rendering_api_ == AndroidRenderingAPI::kSkiaOpenGLES) {
+      settings.enable_software_rendering = false;
+      settings.enable_impeller = false;
+    } else {
+      settings.enable_software_rendering = false;
+      settings.enable_impeller = true;
+    }
+    return settings;
+  }
+
+  bool embedder_api_enabled_ = false;
+  AndroidRenderingAPI rendering_api_ = AndroidRenderingAPI::kImpellerOpenGLES;
+};
+
+static std::string MatrixTestName(
+    const ::testing::TestParamInfo<std::tuple<bool, AndroidRenderingAPI>>&
+        info) {
+  bool flag = std::get<0>(info.param);
+  AndroidRenderingAPI api = std::get<1>(info.param);
+  std::string flag_name = flag ? "EmbedderAPI" : "Legacy";
+  std::string api_name;
+  switch (api) {
+    case AndroidRenderingAPI::kSoftware:
+      api_name = "Software";
+      break;
+    case AndroidRenderingAPI::kSkiaOpenGLES:
+      api_name = "SkiaOpenGLES";
+      break;
+    case AndroidRenderingAPI::kImpellerOpenGLES:
+      api_name = "ImpellerOpenGLES";
+      break;
+    case AndroidRenderingAPI::kImpellerVulkan:
+      api_name = "ImpellerVulkan";
+      break;
+    case AndroidRenderingAPI::kImpellerAutoselect:
+      api_name = "ImpellerAutoselect";
+      break;
+  }
+  return flag_name + "_" + api_name;
 }
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, LifecycleAndSubsystems) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  EXPECT_EQ(engine.GetRenderingAPI(), rendering_api_);
+  EXPECT_NE(engine.GetSurfaceManager(), nullptr);
+  EXPECT_NE(engine.GetCompositor(), nullptr);
+  EXPECT_NE(engine.GetTaskRunners(), nullptr);
+  EXPECT_FALSE(engine.IsSurfaceControlEnabled());
+
+  auto runners = engine.GetTaskRunners();
+  EXPECT_NE(runners->GetPlatformTaskRunner().get(), nullptr);
+  EXPECT_NE(runners->GetUITaskRunner().get(), nullptr);
+  EXPECT_NE(runners->GetRasterTaskRunner().get(), nullptr);
+}
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, SurfaceLifecycle) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  engine.NotifySurfaceCreated(window);
+  engine.NotifySurfaceWindowChanged(window);
+  engine.NotifySurfaceChanged(1080, 1920);
+  engine.NotifySurfaceDestroyed();
+
+  // Re-create surface to verify lifecycle replay
+  engine.NotifySurfaceCreated(window);
+  engine.NotifySurfaceChanged(720, 1280);
+  engine.NotifySurfaceDestroyed();
+}
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, ViewportMetricsAndDisplayFeatures) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  AndroidEngine::ViewportMetrics metrics;
+  metrics.device_pixel_ratio = 2.0;
+  metrics.physical_width = 800;
+  metrics.physical_height = 1200;
+  metrics.physical_padding_top = 40;
+  metrics.physical_padding_bottom = 80;
+  metrics.physical_view_inset_bottom = 120;
+  metrics.physical_system_gesture_inset_left = 20;
+  metrics.physical_touch_slop = 8.0;
+  metrics.physical_display_features_bounds = {0, 590, 800, 610};
+  metrics.physical_display_features_type = {1};
+  metrics.physical_display_features_state = {2};
+  metrics.physical_display_corner_radius_top_left = 16.0;
+
+  engine.SetViewportMetrics(0, metrics);
+  engine.SetViewportMetrics(1, metrics);
+  engine.UpdateDisplayMetrics();
+}
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, PointerAndSemanticsDispatch) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  // Dispatch pointer data packet
+  std::vector<uint8_t> valid_buffer(36 * 8, 0);
+  engine.DispatchPointerDataPacket(valid_buffer.data(), valid_buffer.size());
+
+  // Dispatch semantics actions and toggle features
+  engine.SetSemanticsEnabled(true);
+  engine.SetAccessibilityFeatures(0x7);
+  engine.DispatchSemanticsAction(nullptr, 10, 0, nullptr, 0);
+  engine.SetSemanticsEnabled(false);
+}
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, TextureLifecycle) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> dummy_texture;
+  engine.RegisterExternalTexture(101, dummy_texture);
+  engine.MarkTextureFrameAvailable(101);
+  engine.UnregisterTexture(101);
+
+  engine.RegisterImageTexture(102, dummy_texture, 0);
+  engine.MarkTextureFrameAvailable(102);
+  engine.UnregisterTexture(102);
+
+  engine.ScheduleFrame();
+}
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, PlatformMessagingAndResponses) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  engine.DispatchEmptyPlatformMessage(nullptr, "flutter/test_channel", 1);
+  engine.SendEmptyPlatformMessageResponse(1);
+
+  uint8_t data[] = {'h', 'e', 'l', 'l', 'o'};
+  auto mapping = std::make_unique<fml::MallocMapping>(
+      fml::MallocMapping::Copy(data, data + sizeof(data)));
+  engine.SendPlatformMessageResponse(2, std::move(mapping));
+  engine.NotifyLowMemoryWarning();
+}
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, Screenshots) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  auto s1 = engine.Screenshot(AndroidEngine::ScreenshotType::kUncompressedImage,
+                              false);
+  EXPECT_EQ(s1.data, nullptr);
+
+  auto s2 =
+      engine.Screenshot(AndroidEngine::ScreenshotType::kCompressedImage, true);
+  EXPECT_EQ(s2.data, nullptr);
+
+  auto s3 =
+      engine.Screenshot(AndroidEngine::ScreenshotType::kSurfaceData, false);
+  EXPECT_EQ(s3.data, nullptr);
+}
+
+TEST_P(AndroidEngineMultiBackendMatrixTest, SpawningAndDeferredLibraries) {
+  auto jni = std::make_shared<JNIMock>();
+  AndroidEngine engine(GetSettings(), jni, rendering_api_);
+
+  auto spawned = engine.Spawn(jni, "main", "", "", {}, 42);
+  EXPECT_EQ(spawned, nullptr);
+
+  engine.LoadDartDeferredLibrary(1, nullptr, nullptr);
+  engine.LoadDartDeferredLibraryError(1, "Test error", true);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Matrix,
+    AndroidEngineMultiBackendMatrixTest,
+    ::testing::Combine(
+        ::testing::Values(false, true),
+        ::testing::Values(AndroidRenderingAPI::kSoftware,
+                          AndroidRenderingAPI::kSkiaOpenGLES,
+                          AndroidRenderingAPI::kImpellerOpenGLES,
+                          AndroidRenderingAPI::kImpellerVulkan,
+                          AndroidRenderingAPI::kImpellerAutoselect)),
+    MatrixTestName);
 
 }  // namespace testing
 }  // namespace flutter

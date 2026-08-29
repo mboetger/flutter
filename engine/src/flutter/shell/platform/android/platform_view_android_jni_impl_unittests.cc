@@ -176,21 +176,79 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
                        0, 0, 0, 0, 0, 0, 0, 0);
 }
 
-TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
+class PlatformViewAndroidJNIMultiBackendMatrixTest
+    : public PlatformViewAndroidJNIImplTest,
+      public ::testing::WithParamInterface<
+          std::tuple<bool, AndroidRenderingAPI>> {
+ protected:
+  void SetUp() override {
+    embedder_api_enabled_ = std::get<0>(GetParam());
+    rendering_api_ = std::get<1>(GetParam());
+    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_api_enabled_);
+  }
+
+  void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
+
+  bool embedder_api_enabled_ = false;
+  AndroidRenderingAPI rendering_api_ = AndroidRenderingAPI::kImpellerOpenGLES;
+};
+
+static std::string JNIMatrixTestName(
+    const ::testing::TestParamInfo<std::tuple<bool, AndroidRenderingAPI>>&
+        info) {
+  bool flag = std::get<0>(info.param);
+  AndroidRenderingAPI api = std::get<1>(info.param);
+  std::string flag_name = flag ? "EmbedderAPI" : "Legacy";
+  std::string api_name;
+  switch (api) {
+    case AndroidRenderingAPI::kSoftware:
+      api_name = "Software";
+      break;
+    case AndroidRenderingAPI::kSkiaOpenGLES:
+      api_name = "SkiaOpenGLES";
+      break;
+    case AndroidRenderingAPI::kImpellerOpenGLES:
+      api_name = "ImpellerOpenGLES";
+      break;
+    case AndroidRenderingAPI::kImpellerVulkan:
+      api_name = "ImpellerVulkan";
+      break;
+    case AndroidRenderingAPI::kImpellerAutoselect:
+      api_name = "ImpellerAutoselect";
+      break;
+  }
+  return flag_name + "_" + api_name;
+}
+
+TEST_P(PlatformViewAndroidJNIMultiBackendMatrixTest, FullJNIDispatchSuite) {
   MockJNIEnvProvider env_provider;
   MockJNIEnv& mock_env = env_provider.env();
 
   typedef jlong (*AttachJNIFn)(JNIEnv*, jclass, jobject);
   typedef void (*DestroyJNIFn)(JNIEnv*, jobject, jlong);
+  typedef void (*SurfaceCreatedFn)(JNIEnv*, jobject, jlong, jobject);
+  typedef void (*SurfaceWindowChangedFn)(JNIEnv*, jobject, jlong, jobject);
+  typedef void (*SurfaceChangedFn)(JNIEnv*, jobject, jlong, jint, jint);
+  typedef void (*SurfaceDestroyedFn)(JNIEnv*, jobject, jlong);
   typedef void (*SetViewportMetricsFn)(
       JNIEnv*, jobject, jlong, jfloat, jint, jint, jint, jint, jint, jint, jint,
       jint, jint, jint, jint, jint, jint, jint, jint, jintArray, jintArray,
       jintArray, jint, jint, jint, jint, jint, jint, jint, jint);
+  typedef void (*UpdateDisplayMetricsFn)(JNIEnv*, jobject, jlong);
+  typedef jboolean (*IsSurfaceControlEnabledFn)(JNIEnv*, jobject, jlong);
+  typedef jobject (*GetBitmapFn)(JNIEnv*, jobject, jlong);
+  typedef void (*DispatchEmptyPlatformMessageFn)(JNIEnv*, jobject, jlong,
+                                                 jstring, jint);
+  typedef void (*InvokeEmptyResponseCallbackFn)(JNIEnv*, jobject, jlong, jint);
   typedef void (*SetSemanticsEnabledFn)(JNIEnv*, jobject, jlong, jboolean);
   typedef void (*SetAccessibilityFeaturesFn)(JNIEnv*, jobject, jlong, jint);
+  typedef void (*RegisterTextureFn)(JNIEnv*, jobject, jlong, jlong, jobject);
+  typedef void (*RegisterImageTextureFn)(JNIEnv*, jobject, jlong, jlong,
+                                         jobject, jboolean);
+  typedef void (*MarkTextureFrameAvailableFn)(JNIEnv*, jobject, jlong, jlong);
+  typedef void (*UnregisterTextureFn)(JNIEnv*, jobject, jlong, jlong);
   typedef void (*ScheduleFrameFn)(JNIEnv*, jobject, jlong);
   typedef void (*NotifyLowMemoryWarningFn)(JNIEnv*, jobject, jlong);
-  typedef void (*SurfaceDestroyedFn)(JNIEnv*, jobject, jlong);
 
   const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
   const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
@@ -215,12 +273,24 @@ TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
 
   AttachJNIFn attach_jni = nullptr;
   DestroyJNIFn destroy_jni = nullptr;
+  SurfaceCreatedFn surface_created = nullptr;
+  SurfaceWindowChangedFn surface_window_changed = nullptr;
+  SurfaceChangedFn surface_changed = nullptr;
+  SurfaceDestroyedFn surface_destroyed = nullptr;
   SetViewportMetricsFn set_viewport_metrics = nullptr;
+  UpdateDisplayMetricsFn update_display_metrics = nullptr;
+  IsSurfaceControlEnabledFn is_surface_control_enabled = nullptr;
+  GetBitmapFn get_bitmap = nullptr;
+  DispatchEmptyPlatformMessageFn dispatch_empty_msg = nullptr;
+  InvokeEmptyResponseCallbackFn invoke_empty_response = nullptr;
   SetSemanticsEnabledFn set_semantics_enabled = nullptr;
   SetAccessibilityFeaturesFn set_accessibility_features = nullptr;
+  RegisterTextureFn register_texture = nullptr;
+  RegisterImageTextureFn register_image_texture = nullptr;
+  MarkTextureFrameAvailableFn mark_texture_available = nullptr;
+  UnregisterTextureFn unregister_texture = nullptr;
   ScheduleFrameFn schedule_frame = nullptr;
   NotifyLowMemoryWarningFn notify_low_memory = nullptr;
-  SurfaceDestroyedFn surface_destroyed = nullptr;
 
   EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
       .WillRepeatedly([&](jclass clazz, const JNINativeMethod* methods,
@@ -230,9 +300,44 @@ TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
             attach_jni = reinterpret_cast<AttachJNIFn>(methods[i].fnPtr);
           } else if (strcmp(methods[i].name, "nativeDestroy") == 0) {
             destroy_jni = reinterpret_cast<DestroyJNIFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeSurfaceCreated") == 0) {
+            surface_created =
+                reinterpret_cast<SurfaceCreatedFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeSurfaceWindowChanged") ==
+                     0) {
+            surface_window_changed =
+                reinterpret_cast<SurfaceWindowChangedFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeSurfaceChanged") == 0) {
+            surface_changed =
+                reinterpret_cast<SurfaceChangedFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeSurfaceDestroyed") == 0) {
+            surface_destroyed =
+                reinterpret_cast<SurfaceDestroyedFn>(methods[i].fnPtr);
           } else if (strcmp(methods[i].name, "nativeSetViewportMetrics") == 0) {
             set_viewport_metrics =
                 reinterpret_cast<SetViewportMetricsFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeUpdateDisplayMetrics") ==
+                     0) {
+            update_display_metrics =
+                reinterpret_cast<UpdateDisplayMetricsFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeIsSurfaceControlEnabled") ==
+                     0) {
+            is_surface_control_enabled =
+                reinterpret_cast<IsSurfaceControlEnabledFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeGetBitmap") == 0) {
+            get_bitmap = reinterpret_cast<GetBitmapFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name,
+                            "nativeDispatchEmptyPlatformMessage") == 0) {
+            dispatch_empty_msg =
+                reinterpret_cast<DispatchEmptyPlatformMessageFn>(
+                    methods[i].fnPtr);
+          } else if (strcmp(
+                         methods[i].name,
+                         "nativeInvokePlatformMessageEmptyResponseCallback") ==
+                     0) {
+            invoke_empty_response =
+                reinterpret_cast<InvokeEmptyResponseCallbackFn>(
+                    methods[i].fnPtr);
           } else if (strcmp(methods[i].name, "nativeSetSemanticsEnabled") ==
                      0) {
             set_semantics_enabled =
@@ -241,6 +346,20 @@ TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
                             "nativeSetAccessibilityFeatures") == 0) {
             set_accessibility_features =
                 reinterpret_cast<SetAccessibilityFeaturesFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeRegisterTexture") == 0) {
+            register_texture =
+                reinterpret_cast<RegisterTextureFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeRegisterImageTexture") ==
+                     0) {
+            register_image_texture =
+                reinterpret_cast<RegisterImageTextureFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name,
+                            "nativeMarkTextureFrameAvailable") == 0) {
+            mark_texture_available =
+                reinterpret_cast<MarkTextureFrameAvailableFn>(methods[i].fnPtr);
+          } else if (strcmp(methods[i].name, "nativeUnregisterTexture") == 0) {
+            unregister_texture =
+                reinterpret_cast<UnregisterTextureFn>(methods[i].fnPtr);
           } else if (strcmp(methods[i].name, "nativeScheduleFrame") == 0) {
             schedule_frame =
                 reinterpret_cast<ScheduleFrameFn>(methods[i].fnPtr);
@@ -248,9 +367,6 @@ TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
                      0) {
             notify_low_memory =
                 reinterpret_cast<NotifyLowMemoryWarningFn>(methods[i].fnPtr);
-          } else if (strcmp(methods[i].name, "nativeSurfaceDestroyed") == 0) {
-            surface_destroyed =
-                reinterpret_cast<SurfaceDestroyedFn>(methods[i].fnPtr);
           }
         }
         return 0;
@@ -258,7 +374,6 @@ TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
 
   PlatformViewAndroid::Register(&mock_env);
 
-  ASSERT_NE(attach_jni, nullptr);
   ASSERT_NE(destroy_jni, nullptr);
   ASSERT_NE(set_viewport_metrics, nullptr);
   ASSERT_NE(set_semantics_enabled, nullptr);
@@ -269,45 +384,98 @@ TEST_F(PlatformViewAndroidJNIImplTest, DualFlagMatrixLifecycleAndDispatch) {
 
   EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
 
-  for (bool embedder_api_enabled : {false, true}) {
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_api_enabled);
-    EXPECT_EQ(FlutterMain::IsEmbedderAPIEnabled(), embedder_api_enabled);
+  jobject jcaller = reinterpret_cast<jobject>(123);
+  jintArray bounds = reinterpret_cast<jintArray>(456);
+  jintArray type = reinterpret_cast<jintArray>(789);
+  jintArray state = reinterpret_cast<jintArray>(1011);
 
-    jobject jcaller = reinterpret_cast<jobject>(123);
-    jintArray bounds = reinterpret_cast<jintArray>(456);
-    jintArray type = reinterpret_cast<jintArray>(789);
-    jintArray state = reinterpret_cast<jintArray>(1011);
-
-    jlong shell_holder_ptr = 0;
-    if (embedder_api_enabled) {
-      auto engine = std::make_unique<AndroidEngine>(
-          Settings(), std::make_shared<JNIMock>(),
-          AndroidRenderingAPI::kImpellerOpenGLES);
-      shell_holder_ptr = reinterpret_cast<jlong>(engine.release());
-    } else {
-      auto holder = std::make_unique<AndroidShellHolder>(
-          Settings(), std::make_shared<JNIMock>(),
-          AndroidRenderingAPI::kImpellerOpenGLES);
-      shell_holder_ptr = reinterpret_cast<jlong>(holder.release());
-    }
-
-    ASSERT_NE(shell_holder_ptr, 0);
-
-    set_viewport_metrics(&mock_env, jcaller, shell_holder_ptr, 1.0f, 100, 100,
-                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type,
-                         state, 0, 0, 0, 0, 0, 0, 0, 0);
-
-    set_semantics_enabled(&mock_env, jcaller, shell_holder_ptr, JNI_TRUE);
-    set_accessibility_features(&mock_env, jcaller, shell_holder_ptr, 0x3);
-    schedule_frame(&mock_env, jcaller, shell_holder_ptr);
-    notify_low_memory(&mock_env, jcaller, shell_holder_ptr);
-    surface_destroyed(&mock_env, jcaller, shell_holder_ptr);
-
-    destroy_jni(&mock_env, jcaller, shell_holder_ptr);
+  Settings settings;
+  if (rendering_api_ == AndroidRenderingAPI::kSoftware) {
+    settings.enable_software_rendering = true;
+    settings.enable_impeller = false;
+  } else if (rendering_api_ == AndroidRenderingAPI::kSkiaOpenGLES) {
+    settings.enable_software_rendering = false;
+    settings.enable_impeller = false;
+  } else {
+    settings.enable_software_rendering = false;
+    settings.enable_impeller = true;
   }
 
-  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  jlong shell_holder_ptr = 0;
+  if (embedder_api_enabled_) {
+    auto engine = std::make_unique<AndroidEngine>(
+        settings, std::make_shared<JNIMock>(), rendering_api_);
+    shell_holder_ptr = reinterpret_cast<jlong>(engine.release());
+  } else {
+    auto holder = std::make_unique<AndroidShellHolder>(
+        settings, std::make_shared<JNIMock>(), rendering_api_);
+    shell_holder_ptr = reinterpret_cast<jlong>(holder.release());
+  }
+
+  ASSERT_NE(shell_holder_ptr, 0);
+
+  // Surface and frame lifecycle
+  if (embedder_api_enabled_) {
+    surface_changed(&mock_env, jcaller, shell_holder_ptr, 1080, 1920);
+  } else if (rendering_api_ == AndroidRenderingAPI::kSoftware ||
+             rendering_api_ == AndroidRenderingAPI::kSkiaOpenGLES ||
+             rendering_api_ == AndroidRenderingAPI::kImpellerOpenGLES) {
+    auto holder = reinterpret_cast<AndroidShellHolder*>(shell_holder_ptr);
+    auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+        nullptr, /*is_fake_window=*/true);
+    holder->GetPlatformView()->NotifyCreated(window);
+    surface_changed(&mock_env, jcaller, shell_holder_ptr, 1080, 1920);
+  }
+  surface_destroyed(&mock_env, jcaller, shell_holder_ptr);
+
+  // Metrics and displays
+  set_viewport_metrics(&mock_env, jcaller, shell_holder_ptr, 1.0f, 100, 100, 0,
+                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
+                       0, 0, 0, 0, 0, 0, 0, 0);
+  update_display_metrics(&mock_env, jcaller, shell_holder_ptr);
+  EXPECT_FALSE(
+      is_surface_control_enabled(&mock_env, jcaller, shell_holder_ptr));
+
+  // Semantics & Accessibility
+  set_semantics_enabled(&mock_env, jcaller, shell_holder_ptr, JNI_TRUE);
+  set_accessibility_features(&mock_env, jcaller, shell_holder_ptr, 0x7);
+  set_semantics_enabled(&mock_env, jcaller, shell_holder_ptr, JNI_FALSE);
+
+  // Textures and Frame Scheduling
+  register_texture(&mock_env, jcaller, shell_holder_ptr, 1001, nullptr);
+  mark_texture_available(&mock_env, jcaller, shell_holder_ptr, 1001);
+  unregister_texture(&mock_env, jcaller, shell_holder_ptr, 1001);
+
+  register_image_texture(&mock_env, jcaller, shell_holder_ptr, 1002, nullptr,
+                         JNI_FALSE);
+  mark_texture_available(&mock_env, jcaller, shell_holder_ptr, 1002);
+  unregister_texture(&mock_env, jcaller, shell_holder_ptr, 1002);
+
+  schedule_frame(&mock_env, jcaller, shell_holder_ptr);
+
+  // Platform Messages & Memory
+  dispatch_empty_msg(&mock_env, jcaller, shell_holder_ptr, nullptr, 0);
+  invoke_empty_response(&mock_env, jcaller, shell_holder_ptr, 10);
+  notify_low_memory(&mock_env, jcaller, shell_holder_ptr);
+
+  // GetBitmap uninitialized returns nullptr safely
+  EXPECT_EQ(get_bitmap(&mock_env, jcaller, shell_holder_ptr), nullptr);
+
+  // Cleanup
+  destroy_jni(&mock_env, jcaller, shell_holder_ptr);
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    Matrix,
+    PlatformViewAndroidJNIMultiBackendMatrixTest,
+    ::testing::Combine(
+        ::testing::Values(false, true),
+        ::testing::Values(AndroidRenderingAPI::kSoftware,
+                          AndroidRenderingAPI::kSkiaOpenGLES,
+                          AndroidRenderingAPI::kImpellerOpenGLES,
+                          AndroidRenderingAPI::kImpellerVulkan,
+                          AndroidRenderingAPI::kImpellerAutoselect)),
+    JNIMatrixTestName);
 
 // The load order is exercised with an injected loader rather than real
 // dlopen(): the property under test is purely the ordering (first-to-last,
