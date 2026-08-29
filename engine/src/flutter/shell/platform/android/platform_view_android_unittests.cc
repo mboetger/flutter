@@ -109,46 +109,45 @@ struct ScopedEmbedderAPIOverrideReset {
 
 }  // namespace
 
-TEST(PlatformViewAndroidTest, EmbedderAPIFeatureFlagSettings) {
-  ScopedEmbedderAPIOverrideReset reset_on_exit;
+TEST(FlutterMainTest, EmbedderAPIEnabledTestingOverrides) {
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  FlutterMain::ResetSettingsForTesting();
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 
-  Settings settings_disabled;
-  settings_disabled.enable_android_embedder_api = false;
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled(settings_disabled));
+  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 
-  Settings settings_enabled;
-  settings_enabled.enable_android_embedder_api = true;
-  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled(settings_enabled));
+  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 }
 
-TEST(PlatformViewAndroidTest, EmbedderAPIFeatureFlagTestingOverride) {
-  ScopedEmbedderAPIOverrideReset reset_on_exit;
+TEST(FlutterMainTest, EmbedderAPIEnabledSettingsFallback) {
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
+  FlutterMain::ResetSettingsForTesting();
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
+
+  Settings settings_enabled;
+  settings_enabled.enable_embedder_api = true;
+  FlutterMain::SetSettingsForTesting(settings_enabled);
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 
   Settings settings_disabled;
-  settings_disabled.enable_android_embedder_api = false;
+  settings_disabled.enable_embedder_api = false;
+  FlutterMain::SetSettingsForTesting(settings_disabled);
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
 
-  // Override to true.
+  // Test override takes precedence over settings
   FlutterMain::SetEmbedderAPIEnabledForTesting(true);
-  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled(settings_disabled));
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 
-  // Override to false with enabled settings.
-  Settings settings_enabled;
-  settings_enabled.enable_android_embedder_api = true;
-  FlutterMain::SetEmbedderAPIEnabledForTesting(false);
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled(settings_enabled));
-
-  // Passing std::nullopt clears test override.
-  FlutterMain::SetEmbedderAPIEnabledForTesting(std::nullopt);
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled(settings_disabled));
-  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled(settings_enabled));
-
-  // Reset override explicitly.
-  FlutterMain::SetEmbedderAPIEnabledForTesting(true);
   FlutterMain::ResetEmbedderAPIEnabledForTesting();
-  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled(settings_disabled));
-  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled(settings_enabled));
+  EXPECT_FALSE(FlutterMain::IsEmbedderAPIEnabled());
+
+  FlutterMain::ResetSettingsForTesting();
+  EXPECT_TRUE(FlutterMain::IsEmbedderAPIEnabled());
 }
 
 struct ScopedCommandLineArgsOverrideReset {
