@@ -19,7 +19,6 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
-#include "flutter/impeller/toolkit/android/proc_table.h"
 #include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
@@ -2078,10 +2077,15 @@ ASurfaceTransaction* PlatformViewAndroidJNIImpl::createTransaction() {
   if (transaction.is_null()) {
     return nullptr;
   }
-  FML_CHECK(fml::jni::CheckException(env));
-
-  return impeller::android::GetProcTable().ASurfaceTransaction_fromJava(
-      env, transaction.obj());
+  typedef ASurfaceTransaction* (*ASurfaceTransaction_fromJava_fn)(JNIEnv*,
+                                                                  jobject);
+  static ASurfaceTransaction_fromJava_fn from_java =
+      reinterpret_cast<ASurfaceTransaction_fromJava_fn>(
+          dlsym(RTLD_DEFAULT, "ASurfaceTransaction_fromJava"));
+  if (from_java != nullptr) {
+    return from_java(env, transaction.obj());
+  }
+  return nullptr;
 }
 
 void PlatformViewAndroidJNIImpl::swapTransaction() {

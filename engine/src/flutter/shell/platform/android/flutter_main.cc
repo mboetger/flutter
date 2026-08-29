@@ -112,7 +112,8 @@ std::vector<std::string> FlutterMain::GetCommandLineArgs() {
   if (g_command_line_args_override.has_value()) {
     return g_command_line_args_override.value();
   }
-  if (g_flutter_main != nullptr) {
+  if (g_flutter_main != nullptr &&
+      !g_flutter_main->command_line_args_.empty()) {
     return g_flutter_main->command_line_args_;
   }
   return {"flutter"};

@@ -7,6 +7,8 @@
 
 #include <jni.h>
 
+#include "gmock/gmock.h"
+
 namespace flutter {
 
 class MockJavaVM : public JavaVM {
@@ -104,6 +106,8 @@ class MockableJNIEnv : public JNIEnv {
   virtual jdouble GetStaticDoubleField(jclass, jfieldID) = 0;
   virtual jobject NewGlobalRef(jobject) = 0;
   virtual jobject NewLocalRef(jobject) = 0;
+  virtual jweak NewWeakGlobalRef(jobject) = 0;
+  virtual void DeleteWeakGlobalRef(jweak) = 0;
   virtual jint RegisterNatives(jclass, const JNINativeMethod*, jint) = 0;
   virtual jsize GetArrayLength(jarray) = 0;
   virtual void GetIntArrayRegion(jintArray, jsize, jsize, jint*) = 0;
@@ -270,13 +274,13 @@ class MockJNIEnv : public MockableJNIEnv {
     ON_CALL(*this, ExceptionCheck())
         .WillByDefault(::testing::Return(JNI_FALSE));
   }
-
   MOCK_METHOD(jobject,
               CallObjectMethodV,
               (jobject, jmethodID, va_list),
               (override));
   MOCK_METHOD(void, DeleteGlobalRef, (jobject), (override));
   MOCK_METHOD(void, DeleteLocalRef, (jobject), (override));
+  MOCK_METHOD(void, DeleteWeakGlobalRef, (jweak), (override));
   MOCK_METHOD(jboolean, ExceptionCheck, (), (override));
   MOCK_METHOD(void, ExceptionClear, (), (override));
   MOCK_METHOD(void, ExceptionDescribe, (), (override));
@@ -307,7 +311,6 @@ class MockJNIEnv : public MockableJNIEnv {
   MOCK_METHOD(jobject, NewGlobalRef, (jobject), (override));
   MOCK_METHOD(jobject, NewLocalRef, (jobject), (override));
   MOCK_METHOD(jweak, NewWeakGlobalRef, (jobject), (override));
-  MOCK_METHOD(void, DeleteWeakGlobalRef, (jweak), (override));
   MOCK_METHOD(jint,
               RegisterNatives,
               (jclass, const JNINativeMethod*, jint),

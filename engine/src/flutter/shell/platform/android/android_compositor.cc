@@ -241,6 +241,10 @@ AndroidMutatorsStack AndroidCompositor::ConvertMutationsToMutatorsStack(
         const FlutterTransformation& t = mutation->transformation;
         AndroidMutator mutator;
         mutator.type = AndroidMutatorType::kTransform;
+        // Map to android.graphics.Matrix values:
+        // [0] MSCALE_X, [1] MSKEW_X, [2] MTRANS_X,
+        // [3] MSKEW_Y,  [4] MSCALE_Y, [5] MTRANS_Y,
+        // [6] MPERSP_0, [7] MPERSP_1, [8] MPERSP_2.
         mutator.matrix = {
             static_cast<float>(t.scaleX), static_cast<float>(t.skewX),
             static_cast<float>(t.transX), static_cast<float>(t.skewY),
