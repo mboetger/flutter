@@ -10,8 +10,6 @@
 
 #include <EGL/egl.h>
 
-#include "flutter/display_list/geometry/dl_geometry_types.h"
-#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/trace_event.h"
 
@@ -122,7 +120,7 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
         TRACE_EVENT0("flutter", "AndroidCompositor::PresentPlatformView");
         const FlutterPlatformView* platform_view = layer->platform_view;
         if (platform_view != nullptr && jni_facade_ != nullptr) {
-          MutatorsStack mutators_stack =
+          AndroidMutatorsStack mutators_stack =
               ConvertMutationsToMutatorsStack(platform_view);
           // Round floating-point physical coordinates using std::lround to
           // prevent 1-pixel rounding seams on fractional device pixel ratios.
@@ -212,11 +210,11 @@ std::shared_ptr<AndroidSurfaceManager> AndroidCompositor::GetSurfaceManager()
 }
 
 // static
-MutatorsStack AndroidCompositor::ConvertMutationsToMutatorsStack(
+AndroidMutatorsStack AndroidCompositor::ConvertMutationsToMutatorsStack(
     const FlutterPlatformView* platform_view) {
   TRACE_EVENT0("flutter", "AndroidCompositor::ConvertMutationsToMutatorsStack");
 
-  MutatorsStack mutators_stack;
+  AndroidMutatorsStack mutators_stack;
   if (platform_view == nullptr) {
     return mutators_stack;
   }
@@ -241,56 +239,70 @@ MutatorsStack AndroidCompositor::ConvertMutationsToMutatorsStack(
     switch (mutation->type) {
       case kFlutterPlatformViewMutationTypeTransformation: {
         const FlutterTransformation& t = mutation->transformation;
-        // Construct 4x4 matrix matching DlMatrix row layout from 2D affine /
-        // perspective matrix.
-        DlMatrix matrix =
-            DlMatrix::MakeRow(t.scaleX, t.skewX, 0.0, t.transX,  // Row 0
-                              t.skewY, t.scaleY, 0.0, t.transY,  // Row 1
-                              0.0, 0.0, 1.0, 0.0,                // Row 2
-                              t.pers0, t.pers1, 0.0, t.pers2);   // Row 3
-        mutators_stack.PushTransform(matrix);
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kTransform;
+        mutator.matrix = {
+            static_cast<float>(t.scaleX), static_cast<float>(t.skewX),
+            static_cast<float>(t.transX), static_cast<float>(t.skewY),
+            static_cast<float>(t.scaleY), static_cast<float>(t.transY),
+            static_cast<float>(t.pers0),  static_cast<float>(t.pers1),
+            static_cast<float>(t.pers2),
+        };
+        mutators_stack.push_back(mutator);
         break;
       }
       case kFlutterPlatformViewMutationTypeClipRect: {
         const FlutterRect& r = mutation->clip_rect;
-        mutators_stack.PushClipRect(
-            DlRect::MakeLTRB(r.left, r.top, r.right, r.bottom));
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kClipRect;
+        mutator.rect_left = static_cast<float>(r.left);
+        mutator.rect_top = static_cast<float>(r.top);
+        mutator.rect_right = static_cast<float>(r.right);
+        mutator.rect_bottom = static_cast<float>(r.bottom);
+        mutators_stack.push_back(mutator);
         break;
       }
       case kFlutterPlatformViewMutationTypeClipRoundedRect: {
         const FlutterRoundedRect& r = mutation->clip_rounded_rect;
-        DlRect bounds = DlRect::MakeLTRB(r.rect.left, r.rect.top, r.rect.right,
-                                         r.rect.bottom);
-        DlRoundingRadii radii = {
-            .top_left = DlSize(r.upper_left_corner_radius.width,
-                               r.upper_left_corner_radius.height),
-            .top_right = DlSize(r.upper_right_corner_radius.width,
-                                r.upper_right_corner_radius.height),
-            .bottom_left = DlSize(r.lower_left_corner_radius.width,
-                                  r.lower_left_corner_radius.height),
-            .bottom_right = DlSize(r.lower_right_corner_radius.width,
-                                   r.lower_right_corner_radius.height),
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kClipRRect;
+        mutator.rect_left = static_cast<float>(r.rect.left);
+        mutator.rect_top = static_cast<float>(r.rect.top);
+        mutator.rect_right = static_cast<float>(r.rect.right);
+        mutator.rect_bottom = static_cast<float>(r.rect.bottom);
+        mutator.radii = {
+            static_cast<float>(r.upper_left_corner_radius.width),
+            static_cast<float>(r.upper_left_corner_radius.height),
+            static_cast<float>(r.upper_right_corner_radius.width),
+            static_cast<float>(r.upper_right_corner_radius.height),
+            static_cast<float>(r.lower_right_corner_radius.width),
+            static_cast<float>(r.lower_right_corner_radius.height),
+            static_cast<float>(r.lower_left_corner_radius.width),
+            static_cast<float>(r.lower_left_corner_radius.height),
         };
-        mutators_stack.PushClipRRect(DlRoundRect::MakeRectRadii(bounds, radii));
+        mutators_stack.push_back(mutator);
         break;
       }
       case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse: {
         const FlutterRoundedSuperellipse& r =
             mutation->clip_rounded_superellipse;
-        DlRect bounds = DlRect::MakeLTRB(r.rect.left, r.rect.top, r.rect.right,
-                                         r.rect.bottom);
-        DlRoundingRadii radii = {
-            .top_left = DlSize(r.upper_left_corner_radius.width,
-                               r.upper_left_corner_radius.height),
-            .top_right = DlSize(r.upper_right_corner_radius.width,
-                                r.upper_right_corner_radius.height),
-            .bottom_left = DlSize(r.lower_left_corner_radius.width,
-                                  r.lower_left_corner_radius.height),
-            .bottom_right = DlSize(r.lower_right_corner_radius.width,
-                                   r.lower_right_corner_radius.height),
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kClipRSE;
+        mutator.rect_left = static_cast<float>(r.rect.left);
+        mutator.rect_top = static_cast<float>(r.rect.top);
+        mutator.rect_right = static_cast<float>(r.rect.right);
+        mutator.rect_bottom = static_cast<float>(r.rect.bottom);
+        mutator.radii = {
+            static_cast<float>(r.upper_left_corner_radius.width),
+            static_cast<float>(r.upper_left_corner_radius.height),
+            static_cast<float>(r.upper_right_corner_radius.width),
+            static_cast<float>(r.upper_right_corner_radius.height),
+            static_cast<float>(r.lower_right_corner_radius.width),
+            static_cast<float>(r.lower_right_corner_radius.height),
+            static_cast<float>(r.lower_left_corner_radius.width),
+            static_cast<float>(r.lower_left_corner_radius.height),
         };
-        mutators_stack.PushClipRSE(
-            DlRoundSuperellipse::MakeRectRadii(bounds, radii));
+        mutators_stack.push_back(mutator);
         break;
       }
       case kFlutterPlatformViewMutationTypeOpacity: {
@@ -298,7 +310,10 @@ MutatorsStack AndroidCompositor::ConvertMutationsToMutatorsStack(
         double clamped_opacity = std::clamp(mutation->opacity, 0.0, 1.0);
         uint8_t alpha =
             static_cast<uint8_t>(std::lround(clamped_opacity * kMaxAlpha));
-        mutators_stack.PushOpacity(alpha);
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kOpacity;
+        mutator.alpha = alpha;
+        mutators_stack.push_back(mutator);
         break;
       }
       case kFlutterPlatformViewMutationTypeClipPath:

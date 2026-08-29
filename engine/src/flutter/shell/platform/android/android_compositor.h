@@ -82,7 +82,7 @@ class AndroidCompositor {
 
   /// Converts `FlutterPlatformView` mutations array to a `MutatorsStack` for
   /// JNI platform view presentation.
-  static MutatorsStack ConvertMutationsToMutatorsStack(
+  static AndroidMutatorsStack ConvertMutationsToMutatorsStack(
       const FlutterPlatformView* platform_view);
 
  private:
