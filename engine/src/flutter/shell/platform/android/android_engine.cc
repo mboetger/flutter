@@ -15,9 +15,7 @@
 
 #include "flutter/fml/logging.h"
 #include "flutter/fml/make_copyable.h"
-#include "flutter/fml/native_library.h"
 #include "flutter/fml/trace_event.h"
-#include "flutter/lib/ui/window/viewport_metrics.h"
 #include "flutter/shell/platform/android/android_task_runners.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 
@@ -1134,23 +1132,6 @@ void AndroidEngine::OnSurfaceDestroyed() {
   }
 }
 
-void AndroidEngine::SetViewportMetrics(int64_t view_id,
-                                       const ViewportMetrics& metrics) {
-  FlutterWindowMetricsEvent event = {};
-  event.struct_size = sizeof(FlutterWindowMetricsEvent);
-  event.view_id = view_id;
-  event.width = static_cast<size_t>(metrics.physical_width);
-  event.height = static_cast<size_t>(metrics.physical_height);
-  event.pixel_ratio = metrics.device_pixel_ratio;
-  event.left = 0;
-  event.top = 0;
-  event.physical_view_inset_top = metrics.physical_view_inset_top;
-  event.physical_view_inset_right = metrics.physical_view_inset_right;
-  event.physical_view_inset_bottom = metrics.physical_view_inset_bottom;
-  event.physical_view_inset_left = metrics.physical_view_inset_left;
-  SetViewportMetrics(event);
-}
-
 void AndroidEngine::SetViewportMetrics(const FlutterWindowMetricsEvent& event) {
   if (!IsRunning()) {
     return;
@@ -1541,21 +1522,19 @@ void AndroidEngine::HandlePlatformMessage(
     pending_responses_[response_id] = message->response_handle;
   }
 
-  std::unique_ptr<flutter::PlatformMessage> platform_message;
+  std::unique_ptr<fml::Mapping> platform_message;
   if (message->message != nullptr) {
-    auto mapping =
-        (message->message_size > 0)
-            ? fml::MallocMapping::Copy(message->message, message->message_size)
-            : fml::MallocMapping(static_cast<uint8_t*>(malloc(1)), 0);
-    platform_message = std::make_unique<flutter::PlatformMessage>(
-        std::string(message->channel), std::move(mapping), nullptr);
-  } else {
-    platform_message = std::make_unique<flutter::PlatformMessage>(
-        std::string(message->channel), nullptr);
+    if (message->message_size > 0) {
+      platform_message = std::make_unique<fml::MallocMapping>(
+          fml::MallocMapping::Copy(message->message, message->message_size));
+    } else {
+      platform_message =
+          std::make_unique<fml::DataMapping>(std::vector<uint8_t>());
+    }
   }
 
-  jni_facade_->FlutterViewHandlePlatformMessage(std::move(platform_message),
-                                                response_id);
+  jni_facade_->FlutterViewHandlePlatformMessage(
+      std::string(message->channel), std::move(platform_message), response_id);
 }
 
 namespace {

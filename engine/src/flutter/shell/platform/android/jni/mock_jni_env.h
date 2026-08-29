@@ -106,8 +106,6 @@ class MockableJNIEnv : public JNIEnv {
   virtual jdouble GetStaticDoubleField(jclass, jfieldID) = 0;
   virtual jobject NewGlobalRef(jobject) = 0;
   virtual jobject NewLocalRef(jobject) = 0;
-  virtual jweak NewWeakGlobalRef(jobject) = 0;
-  virtual void DeleteWeakGlobalRef(jweak) = 0;
   virtual jint RegisterNatives(jclass, const JNINativeMethod*, jint) = 0;
   virtual jsize GetArrayLength(jarray) = 0;
   virtual void GetIntArrayRegion(jintArray, jsize, jsize, jint*) = 0;
