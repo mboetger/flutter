@@ -65,6 +65,7 @@ class MockableJNIEnv : public JNIEnv {
     jni_.GetObjectRefType = WrapGetObjectRefType;
     jni_.GetStaticFieldID = WrapGetStaticFieldID;
     jni_.GetStaticMethodID = WrapGetStaticMethodID;
+    jni_.GetStaticObjectField = WrapGetStaticObjectField;
     jni_.NewGlobalRef = WrapNewGlobalRef;
     jni_.NewLocalRef = WrapNewLocalRef;
     jni_.RegisterNatives = WrapRegisterNatives;
@@ -85,6 +86,7 @@ class MockableJNIEnv : public JNIEnv {
   virtual jobjectRefType GetObjectRefType(jobject) = 0;
   virtual jfieldID GetStaticFieldID(jclass, const char*, const char*) = 0;
   virtual jmethodID GetStaticMethodID(jclass, const char*, const char*) = 0;
+  virtual jobject GetStaticObjectField(jclass, jfieldID) = 0;
   virtual jobject NewGlobalRef(jobject) = 0;
   virtual jobject NewLocalRef(jobject) = 0;
   virtual jint RegisterNatives(jclass, const JNINativeMethod*, jint) = 0;
@@ -159,6 +161,12 @@ class MockableJNIEnv : public JNIEnv {
     return static_cast<MockableJNIEnv*>(env)->GetStaticMethodID(clazz, name,
                                                                 sig);
   }
+  static jobject WrapGetStaticObjectField(JNIEnv* env,
+                                          jclass clazz,
+                                          jfieldID fieldID) {
+    return static_cast<MockableJNIEnv*>(env)->GetStaticObjectField(clazz,
+                                                                   fieldID);
+  }
   static jobject WrapNewGlobalRef(JNIEnv* env, jobject ref) {
     return static_cast<MockableJNIEnv*>(env)->NewGlobalRef(ref);
   }
@@ -217,6 +225,7 @@ class MockJNIEnv : public MockableJNIEnv {
               GetStaticMethodID,
               (jclass, const char*, const char*),
               (override));
+  MOCK_METHOD(jobject, GetStaticObjectField, (jclass, jfieldID), (override));
   MOCK_METHOD(jobject, NewGlobalRef, (jobject), (override));
   MOCK_METHOD(jobject, NewLocalRef, (jobject), (override));
   MOCK_METHOD(jint,

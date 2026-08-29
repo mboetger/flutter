@@ -17,7 +17,8 @@ namespace testing {
 
 TEST(AndroidEngineTest, LifecycleAndInitialState) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   EXPECT_FALSE(engine.IsValid());
   EXPECT_EQ(engine.GetRenderingAPI(), AndroidRenderingAPI::kImpellerOpenGLES);
@@ -29,18 +30,14 @@ TEST(AndroidEngineTest, LifecycleAndInitialState) {
 
 TEST(AndroidEngineTest, SurfaceLifecycleTransitions) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kSoftware);
+  AndroidEngine engine(AndroidSettings(), jni, AndroidRenderingAPI::kSoftware);
 
-  auto window1 = fml::MakeRefCounted<AndroidNativeWindow>(
-      nullptr, /*is_fake_window=*/true);
-  engine.NotifySurfaceCreated(window1);
+  engine.NotifySurfaceCreated(nullptr, /*is_fake_window=*/true);
   engine.NotifySurfaceChanged(300, 400);
   engine.NotifySurfaceDestroyed();
 
-  auto window2 = fml::MakeRefCounted<AndroidNativeWindow>(
-      nullptr, /*is_fake_window=*/true);
-  engine.NotifySurfaceCreated(window2);
-  engine.NotifySurfaceWindowChanged(window2);
+  engine.NotifySurfaceCreated(nullptr, /*is_fake_window=*/true);
+  engine.NotifySurfaceWindowChanged(nullptr, /*is_fake_window=*/true);
   engine.NotifySurfaceChanged(500, 600);
   engine.NotifySurfaceDestroyed();
 }
@@ -294,7 +291,8 @@ TEST(AndroidEngineTest, SerializeSemanticsUpdateCompleteness) {
 
 TEST(AndroidEngineTest, SetViewportMetricsAndDisplayFeatures) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   AndroidEngine::ViewportMetrics metrics;
   metrics.device_pixel_ratio = 2.5;
@@ -312,7 +310,8 @@ TEST(AndroidEngineTest, SetViewportMetricsAndDisplayFeatures) {
 
 TEST(AndroidEngineTest, PointerDataPacketDispatch) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   std::vector<uint8_t> short_buffer(100, 0);
   engine.DispatchPointerDataPacket(short_buffer.data(), short_buffer.size());
@@ -334,7 +333,8 @@ TEST(AndroidEngineTest, PointerDataPacketDispatch) {
 
 TEST(AndroidEngineTest, PlatformMessageDispatchAndResponse) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   engine.DispatchEmptyPlatformMessage(nullptr, "test/channel", 0);
 
@@ -346,7 +346,8 @@ TEST(AndroidEngineTest, PlatformMessageDispatchAndResponse) {
 
 TEST(AndroidEngineTest, AccessibilityAndSemantics) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   engine.SetSemanticsEnabled(true);
   engine.SetAccessibilityFeatures(0x01 | 0x02);
@@ -355,7 +356,8 @@ TEST(AndroidEngineTest, AccessibilityAndSemantics) {
 
 TEST(AndroidEngineTest, ExternalTexturesAndFrameScheduling) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
   engine.RegisterExternalTexture(1001, null_ref);
@@ -368,7 +370,8 @@ TEST(AndroidEngineTest, ExternalTexturesAndFrameScheduling) {
 
 TEST(AndroidEngineTest, DeferredLibraryLoading) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   std::vector<uint8_t> data{0xDE, 0xAD, 0xBE, 0xEF};
   auto data_mapping = std::make_unique<fml::DataMapping>(data);
@@ -389,11 +392,9 @@ TEST(AndroidEngineTest, ConcurrentMultiInstanceThreadSafety) {
       auto jni = std::make_shared<JNIMock>();
       auto api = (i % 2 == 0) ? AndroidRenderingAPI::kSoftware
                               : AndroidRenderingAPI::kImpellerOpenGLES;
-      AndroidEngine engine(Settings(), jni, api);
+      AndroidEngine engine(AndroidSettings(), jni, api);
 
-      auto window = fml::MakeRefCounted<AndroidNativeWindow>(
-          nullptr, /*is_fake_window=*/true);
-      engine.NotifySurfaceCreated(window);
+      engine.NotifySurfaceCreated(nullptr, /*is_fake_window=*/true);
       engine.NotifySurfaceChanged(100, 100);
       engine.SetSemanticsEnabled(true);
       engine.ScheduleFrame();
@@ -408,7 +409,8 @@ TEST(AndroidEngineTest, ConcurrentMultiInstanceThreadSafety) {
 
 TEST(AndroidEngineTest, LaunchAndSpawnValidation) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   EXPECT_FALSE(engine.IsValid());
   EXPECT_EQ(engine.GetEmbedderEngineHandle(), nullptr);
@@ -419,7 +421,8 @@ TEST(AndroidEngineTest, LaunchAndSpawnValidation) {
 
 TEST(AndroidEngineTest, ScreenshotUninitialized) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   auto screenshot = engine.Screenshot(
       AndroidEngine::ScreenshotType::kUncompressedImage, false);
@@ -430,7 +433,8 @@ TEST(AndroidEngineTest, ScreenshotUninitialized) {
 
 TEST(AndroidEngineTest, LowMemoryAndAssetResolver) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   engine.NotifyLowMemoryWarning();
   engine.UpdateAssetResolverByType(nullptr, 0);
@@ -438,7 +442,8 @@ TEST(AndroidEngineTest, LowMemoryAndAssetResolver) {
 
 TEST(AndroidEngineTest, CompositorDelegation) {
   auto jni = std::make_shared<JNIMock>();
-  AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  AndroidEngine engine(AndroidSettings(), jni,
+                       AndroidRenderingAPI::kImpellerOpenGLES);
 
   FlutterPoint offset = {10.0, 20.0};
   FlutterSize size = {300.0, 400.0};
@@ -466,7 +471,7 @@ TEST(AndroidEngineTest, CompositorDelegateLifecycle) {
   auto jni = std::make_shared<JNIMock>();
   std::shared_ptr<AndroidCompositor> retained_compositor;
   {
-    AndroidEngine engine(Settings(), jni,
+    AndroidEngine engine(AndroidSettings(), jni,
                          AndroidRenderingAPI::kImpellerOpenGLES);
     retained_compositor = engine.GetCompositor();
     ASSERT_NE(retained_compositor, nullptr);
@@ -501,8 +506,8 @@ class AndroidEngineMultiBackendMatrixTest
 
   void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
 
-  Settings GetSettings() const {
-    Settings settings;
+  AndroidSettings GetSettings() const {
+    AndroidSettings settings;
     if (rendering_api_ == AndroidRenderingAPI::kSoftware) {
       settings.enable_software_rendering = true;
       settings.enable_impeller = false;
@@ -567,15 +572,13 @@ TEST_P(AndroidEngineMultiBackendMatrixTest, SurfaceLifecycle) {
   auto jni = std::make_shared<JNIMock>();
   AndroidEngine engine(GetSettings(), jni, rendering_api_);
 
-  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
-      nullptr, /*is_fake_window=*/true);
-  engine.NotifySurfaceCreated(window);
-  engine.NotifySurfaceWindowChanged(window);
+  engine.NotifySurfaceCreated(nullptr, /*is_fake_window=*/true);
+  engine.NotifySurfaceWindowChanged(nullptr, /*is_fake_window=*/true);
   engine.NotifySurfaceChanged(1080, 1920);
   engine.NotifySurfaceDestroyed();
 
   // Re-create surface to verify lifecycle replay
-  engine.NotifySurfaceCreated(window);
+  engine.NotifySurfaceCreated(nullptr, /*is_fake_window=*/true);
   engine.NotifySurfaceChanged(720, 1280);
   engine.NotifySurfaceDestroyed();
 }

@@ -64,9 +64,11 @@ class PlatformViewEmbedder final : public PlatformView {
         view_focus_change_request_callback;  // optional
     DartDeferredLibraryLoadingUnitCallback
         dart_deferred_library_loading_unit_callback;  // optional
-    VoidCallback raster_context_setup_callback;       // optional
-    VoidCallback raster_context_teardown_callback;    // optional
-    void* raster_context_user_data;                   // optional
+    std::function<double(double, int)>
+        get_scaled_font_size_callback;              // optional
+    VoidCallback raster_context_setup_callback;     // optional
+    VoidCallback raster_context_teardown_callback;  // optional
+    void* raster_context_user_data;                 // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -142,6 +144,10 @@ class PlatformViewEmbedder final : public PlatformView {
   void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
                                     const std::string error_message,
                                     bool transient) override;
+
+  // |PlatformView|
+  double GetScaledFontSize(double unscaled_font_size,
+                           int configuration_id) const override;
 
  private:
   class EmbedderPlatformMessageHandler;

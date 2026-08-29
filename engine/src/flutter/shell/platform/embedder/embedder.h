@@ -2817,6 +2817,13 @@ typedef void (*FlutterDartDeferredLibraryLoadingUnitCallback)(
     int64_t /* loading_unit_id */,
     void* /* user_data */);
 
+/// Callback invoked when Dart requests a scaled font size for nonlinear text
+/// scaling.
+typedef double (*FlutterGetScaledFontSizeCallback)(
+    double /* unscaled_font_size */,
+    int /* configuration_id */,
+    void* /* user_data */);
+
 /// This struct specifies the data buffers or mappings for loading a Dart
 /// deferred library (loading unit).
 typedef struct {
@@ -3547,6 +3554,10 @@ typedef struct {
 
   /// The number of image generators in the `image_generators` array.
   size_t image_generators_count;
+
+  /// The callback invoked by the engine to compute scaled font size for
+  /// nonlinear font scaling.
+  FlutterGetScaledFontSizeCallback get_scaled_font_size_callback;
 } FlutterProjectArgs;
 
 typedef struct {
@@ -3626,6 +3637,34 @@ typedef struct {
   /// applied to the spawned engine.
   const FlutterProjectArgs* project_args;
 } FlutterEngineSpawnConfig;
+
+//------------------------------------------------------------------------------
+/// @brief      A callback invoked when the Dart VM Service URI is available.
+///
+///             This callback may be invoked on an arbitrary background isolate
+///             or Dart VM service thread. The provided `uri` string pointer is
+///             only guaranteed to remain valid for the duration of this
+///             callback invocation; callees must make a copy if they need to
+///             retain it.
+///
+/// @param[in]  uri        The null-terminated VM Service URI string.
+/// @param[in]  user_data  User data provided when the callback was registered.
+///
+typedef void (*FlutterEngineVMServiceUriCallback)(const char* uri,
+                                                  void* user_data);
+
+//------------------------------------------------------------------------------
+/// @brief      Configuration for registering a Dart VM Service URI callback.
+///
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterVMServiceUriCallbackConfig).
+  size_t struct_size;
+  /// The callback to invoke when the VM Service URI is available.
+  FlutterEngineVMServiceUriCallback callback;
+  /// User-defined data passed to the callback.
+  void* user_data;
+} FlutterVMServiceUriCallbackConfig;
 
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
@@ -4631,34 +4670,6 @@ FlutterEngineResult FlutterEngineGetCallbackHandle(
 ///
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void);
-
-//------------------------------------------------------------------------------
-/// @brief      A callback invoked when the Dart VM Service URI is available.
-///
-///             This callback may be invoked on an arbitrary background isolate
-///             or Dart VM service thread. The provided `uri` string pointer is
-///             only guaranteed to remain valid for the duration of this
-///             callback invocation; callees must make a copy if they need to
-///             retain it.
-///
-/// @param[in]  uri        The null-terminated VM Service URI string.
-/// @param[in]  user_data  User data provided when the callback was registered.
-///
-typedef void (*FlutterEngineVMServiceUriCallback)(const char* uri,
-                                                  void* user_data);
-
-//------------------------------------------------------------------------------
-/// @brief      Configuration for registering a Dart VM Service URI callback.
-///
-typedef struct {
-  /// The size of this struct. Must be
-  /// sizeof(FlutterVMServiceUriCallbackConfig).
-  size_t struct_size;
-  /// The callback to invoke when the VM Service URI is available.
-  FlutterEngineVMServiceUriCallback callback;
-  /// User-defined data passed to the callback.
-  void* user_data;
-} FlutterVMServiceUriCallbackConfig;
 
 //------------------------------------------------------------------------------
 /// @brief      Registers a callback to receive notifications when the Dart VM

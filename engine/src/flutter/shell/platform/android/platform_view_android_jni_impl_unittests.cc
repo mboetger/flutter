@@ -9,11 +9,9 @@
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/shell/platform/android/android_engine.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
-#include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 
 namespace flutter {
@@ -78,10 +76,12 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
       .WillRepeatedly(Return(kPlaceholderFieldID));
   EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
       .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, GetStaticObjectField(_, _))
+      .WillRepeatedly(Return(kPlaceholderClass));
   EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
   EXPECT_CALL(mock_env, RegisterNatives(_, _, _)).WillRepeatedly(Return(0));
 
-  PlatformViewAndroid::Register(&mock_env);
+  PlatformViewAndroidJNIImpl::Register(&mock_env);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, ImageGetHardwareBufferException) {
@@ -152,17 +152,17 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
             return 0;
           });
 
-  PlatformViewAndroid::Register(&mock_env);
+  PlatformViewAndroidJNIImpl::Register(&mock_env);
 
   ASSERT_NE(set_viewport_metrics, nullptr);
 
   EXPECT_CALL(mock_env, GetArrayLength(_)).WillRepeatedly(Return(0));
   EXPECT_CALL(mock_env, GetIntArrayRegion(_, _, _, _)).Times(0);
 
-  Settings settings;
+  AndroidSettings settings;
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<JNIMock>();
-  auto holder = std::make_unique<AndroidShellHolder>(
+  auto engine = std::make_unique<AndroidEngine>(
       settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
 
   jobject jcaller = reinterpret_cast<jobject>(123);
@@ -171,53 +171,35 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
   jintArray state = reinterpret_cast<jintArray>(1011);
 
   set_viewport_metrics(&mock_env, jcaller,
-                       reinterpret_cast<jlong>(holder.get()), 1.0f, 100, 100, 0,
+                       reinterpret_cast<jlong>(engine.get()), 1.0f, 100, 100, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
                        0, 0, 0, 0, 0, 0, 0, 0);
 }
 
 class PlatformViewAndroidJNIMultiBackendMatrixTest
     : public PlatformViewAndroidJNIImplTest,
-      public ::testing::WithParamInterface<
-          std::tuple<bool, AndroidRenderingAPI>> {
+      public ::testing::WithParamInterface<AndroidRenderingAPI> {
  protected:
-  void SetUp() override {
-    embedder_api_enabled_ = std::get<0>(GetParam());
-    rendering_api_ = std::get<1>(GetParam());
-    FlutterMain::SetEmbedderAPIEnabledForTesting(embedder_api_enabled_);
-  }
+  void SetUp() override { rendering_api_ = GetParam(); }
 
-  void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
-
-  bool embedder_api_enabled_ = false;
   AndroidRenderingAPI rendering_api_ = AndroidRenderingAPI::kImpellerOpenGLES;
 };
 
 static std::string JNIMatrixTestName(
-    const ::testing::TestParamInfo<std::tuple<bool, AndroidRenderingAPI>>&
-        info) {
-  bool flag = std::get<0>(info.param);
-  AndroidRenderingAPI api = std::get<1>(info.param);
-  std::string flag_name = flag ? "EmbedderAPI" : "Legacy";
-  std::string api_name;
+    const ::testing::TestParamInfo<AndroidRenderingAPI>& info) {
+  AndroidRenderingAPI api = info.param;
   switch (api) {
     case AndroidRenderingAPI::kSoftware:
-      api_name = "Software";
-      break;
+      return "Software";
     case AndroidRenderingAPI::kSkiaOpenGLES:
-      api_name = "SkiaOpenGLES";
-      break;
+      return "SkiaOpenGLES";
     case AndroidRenderingAPI::kImpellerOpenGLES:
-      api_name = "ImpellerOpenGLES";
-      break;
+      return "ImpellerOpenGLES";
     case AndroidRenderingAPI::kImpellerVulkan:
-      api_name = "ImpellerVulkan";
-      break;
+      return "ImpellerVulkan";
     case AndroidRenderingAPI::kImpellerAutoselect:
-      api_name = "ImpellerAutoselect";
-      break;
+      return "ImpellerAutoselect";
   }
-  return flag_name + "_" + api_name;
 }
 
 TEST_P(PlatformViewAndroidJNIMultiBackendMatrixTest, FullJNIDispatchSuite) {
@@ -372,7 +354,7 @@ TEST_P(PlatformViewAndroidJNIMultiBackendMatrixTest, FullJNIDispatchSuite) {
         return 0;
       });
 
-  PlatformViewAndroid::Register(&mock_env);
+  PlatformViewAndroidJNIImpl::Register(&mock_env);
 
   ASSERT_NE(destroy_jni, nullptr);
   ASSERT_NE(set_viewport_metrics, nullptr);
@@ -389,7 +371,7 @@ TEST_P(PlatformViewAndroidJNIMultiBackendMatrixTest, FullJNIDispatchSuite) {
   jintArray type = reinterpret_cast<jintArray>(789);
   jintArray state = reinterpret_cast<jintArray>(1011);
 
-  Settings settings;
+  AndroidSettings settings;
   if (rendering_api_ == AndroidRenderingAPI::kSoftware) {
     settings.enable_software_rendering = true;
     settings.enable_impeller = false;
@@ -401,31 +383,14 @@ TEST_P(PlatformViewAndroidJNIMultiBackendMatrixTest, FullJNIDispatchSuite) {
     settings.enable_impeller = true;
   }
 
-  jlong shell_holder_ptr = 0;
-  if (embedder_api_enabled_) {
-    auto engine = std::make_unique<AndroidEngine>(
-        settings, std::make_shared<JNIMock>(), rendering_api_);
-    shell_holder_ptr = reinterpret_cast<jlong>(engine.release());
-  } else {
-    auto holder = std::make_unique<AndroidShellHolder>(
-        settings, std::make_shared<JNIMock>(), rendering_api_);
-    shell_holder_ptr = reinterpret_cast<jlong>(holder.release());
-  }
+  auto engine = std::make_unique<AndroidEngine>(
+      settings, std::make_shared<JNIMock>(), rendering_api_);
+  jlong shell_holder_ptr = reinterpret_cast<jlong>(engine.release());
 
   ASSERT_NE(shell_holder_ptr, 0);
 
   // Surface and frame lifecycle
-  if (embedder_api_enabled_) {
-    surface_changed(&mock_env, jcaller, shell_holder_ptr, 1080, 1920);
-  } else if (rendering_api_ == AndroidRenderingAPI::kSoftware ||
-             rendering_api_ == AndroidRenderingAPI::kSkiaOpenGLES ||
-             rendering_api_ == AndroidRenderingAPI::kImpellerOpenGLES) {
-    auto holder = reinterpret_cast<AndroidShellHolder*>(shell_holder_ptr);
-    auto window = fml::MakeRefCounted<AndroidNativeWindow>(
-        nullptr, /*is_fake_window=*/true);
-    holder->GetPlatformView()->NotifyCreated(window);
-    surface_changed(&mock_env, jcaller, shell_holder_ptr, 1080, 1920);
-  }
+  surface_changed(&mock_env, jcaller, shell_holder_ptr, 1080, 1920);
   surface_destroyed(&mock_env, jcaller, shell_holder_ptr);
 
   // Metrics and displays
@@ -468,13 +433,11 @@ TEST_P(PlatformViewAndroidJNIMultiBackendMatrixTest, FullJNIDispatchSuite) {
 INSTANTIATE_TEST_SUITE_P(
     Matrix,
     PlatformViewAndroidJNIMultiBackendMatrixTest,
-    ::testing::Combine(
-        ::testing::Values(false, true),
-        ::testing::Values(AndroidRenderingAPI::kSoftware,
-                          AndroidRenderingAPI::kSkiaOpenGLES,
-                          AndroidRenderingAPI::kImpellerOpenGLES,
-                          AndroidRenderingAPI::kImpellerVulkan,
-                          AndroidRenderingAPI::kImpellerAutoselect)),
+    ::testing::Values(AndroidRenderingAPI::kSoftware,
+                      AndroidRenderingAPI::kSkiaOpenGLES,
+                      AndroidRenderingAPI::kImpellerOpenGLES,
+                      AndroidRenderingAPI::kImpellerVulkan,
+                      AndroidRenderingAPI::kImpellerAutoselect),
     JNIMatrixTestName);
 
 // The load order is exercised with an injected loader rather than real

@@ -68,7 +68,7 @@ class JNIMock final : public PlatformViewAndroidJNI {
               (JavaLocalRef surface_texture),
               (override));
 
-  MOCK_METHOD(SkM44,
+  MOCK_METHOD(std::vector<float>,
               SurfaceTextureGetTransformMatrix,
               (JavaLocalRef surface_texture),
               (override));
@@ -104,7 +104,7 @@ class JNIMock final : public PlatformViewAndroidJNI {
                int height,
                int viewWidth,
                int viewHeight,
-               MutatorsStack mutators_stack),
+               AndroidMutatorsStack mutators_stack),
               (override));
 
   MOCK_METHOD(void,
@@ -145,7 +145,7 @@ class JNIMock final : public PlatformViewAndroidJNI {
                int32_t height,
                int32_t viewWidth,
                int32_t viewHeight,
-               MutatorsStack mutators_stack),
+               AndroidMutatorsStack mutators_stack),
               (override));
 
   MOCK_METHOD(void, hidePlatformView2, (int32_t view_id), (override));

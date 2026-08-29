@@ -39,6 +39,10 @@ JavaRef<jobject>::JavaRef(JNIEnv* env, jobject obj) : obj_(obj) {
 JavaRef<jobject>::~JavaRef() = default;
 
 JNIEnv* JavaRef<jobject>::SetNewLocalRef(JNIEnv* env, jobject obj) {
+  if (!obj && !obj_) {
+    obj_ = NULL;
+    return env;
+  }
   if (!env) {
     env = AttachCurrentThread();
   } else {
@@ -55,6 +59,10 @@ JNIEnv* JavaRef<jobject>::SetNewLocalRef(JNIEnv* env, jobject obj) {
 }
 
 void JavaRef<jobject>::SetNewGlobalRef(JNIEnv* env, jobject obj) {
+  if (!obj && !obj_) {
+    obj_ = NULL;
+    return;
+  }
   if (!env) {
     env = AttachCurrentThread();
   } else {

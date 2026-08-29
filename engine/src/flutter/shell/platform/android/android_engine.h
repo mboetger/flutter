@@ -12,7 +12,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "flutter/common/settings.h"
 #include "flutter/fml/macros.h"
 #include "flutter/fml/mapping.h"
 #include "flutter/fml/memory/ref_counted.h"
@@ -22,11 +21,17 @@
 #include "flutter/shell/platform/android/android_surface_manager.h"
 #include "flutter/shell/platform/android/android_task_runners.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
+#include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
-#include "flutter/shell/platform/android/surface/android_native_window.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 
 #if FML_OS_ANDROID
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#include <android/hardware_buffer.h>
+#include <android/hardware_buffer_jni.h>
 #include <jni.h>
 #else
 typedef void* jobject;
@@ -40,6 +45,11 @@ typedef uint8_t jboolean;
 typedef void* jstring;
 typedef void* jintArray;
 typedef void* jobjectArray;
+#ifndef EGL_NO_IMAGE_KHR
+typedef void* EGLImageKHR;
+#define EGL_NO_IMAGE_KHR ((EGLImageKHR)0)
+#endif
+typedef void AHardwareBuffer;
 #endif
 
 namespace flutter {
@@ -97,50 +107,9 @@ class AndroidEngine {
     double physical_display_corner_radius_top_right = 0.0;
     double physical_display_corner_radius_bottom_right = 0.0;
     double physical_display_corner_radius_bottom_left = 0.0;
-
-    ViewportMetrics() = default;
-
-    template <typename T>
-    ViewportMetrics(const T& m)
-        : device_pixel_ratio(m.device_pixel_ratio),
-          physical_width(m.physical_width),
-          physical_height(m.physical_height),
-          physical_min_width_constraint(m.physical_min_width_constraint),
-          physical_max_width_constraint(m.physical_max_width_constraint),
-          physical_min_height_constraint(m.physical_min_height_constraint),
-          physical_max_height_constraint(m.physical_max_height_constraint),
-          physical_padding_top(m.physical_padding_top),
-          physical_padding_right(m.physical_padding_right),
-          physical_padding_bottom(m.physical_padding_bottom),
-          physical_padding_left(m.physical_padding_left),
-          physical_view_inset_top(m.physical_view_inset_top),
-          physical_view_inset_right(m.physical_view_inset_right),
-          physical_view_inset_bottom(m.physical_view_inset_bottom),
-          physical_view_inset_left(m.physical_view_inset_left),
-          physical_system_gesture_inset_top(
-              m.physical_system_gesture_inset_top),
-          physical_system_gesture_inset_right(
-              m.physical_system_gesture_inset_right),
-          physical_system_gesture_inset_bottom(
-              m.physical_system_gesture_inset_bottom),
-          physical_system_gesture_inset_left(
-              m.physical_system_gesture_inset_left),
-          physical_touch_slop(m.physical_touch_slop),
-          physical_display_features_bounds(m.physical_display_features_bounds),
-          physical_display_features_type(m.physical_display_features_type),
-          physical_display_features_state(m.physical_display_features_state),
-          display_id(m.display_id),
-          physical_display_corner_radius_top_left(
-              m.physical_display_corner_radius_top_left),
-          physical_display_corner_radius_top_right(
-              m.physical_display_corner_radius_top_right),
-          physical_display_corner_radius_bottom_right(
-              m.physical_display_corner_radius_bottom_right),
-          physical_display_corner_radius_bottom_left(
-              m.physical_display_corner_radius_bottom_left) {}
   };
 
-  AndroidEngine(const flutter::Settings& settings,
+  AndroidEngine(const flutter::AndroidSettings& settings,
                 std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
                 AndroidRenderingAPI android_rendering_api);
 
@@ -170,9 +139,10 @@ class AndroidEngine {
   // ---------------------------------------------------------------------------
   // Surface Lifecycle
   // ---------------------------------------------------------------------------
-  void NotifySurfaceCreated(fml::RefPtr<AndroidNativeWindow> native_window);
-  void NotifySurfaceWindowChanged(
-      fml::RefPtr<AndroidNativeWindow> native_window);
+  void NotifySurfaceCreated(ANativeWindow* native_window,
+                            bool is_fake_window = false);
+  void NotifySurfaceWindowChanged(ANativeWindow* native_window,
+                                  bool is_fake_window = false);
   void NotifySurfaceChanged(int width, int height);
   void NotifySurfaceDestroyed();
 
@@ -229,6 +199,10 @@ class AndroidEngine {
   void UnregisterTexture(int64_t texture_id);
   void MarkTextureFrameAvailable(int64_t texture_id);
   void ScheduleFrame();
+  bool OnGetGLTexture(int64_t texture_id,
+                      size_t width,
+                      size_t height,
+                      FlutterOpenGLTexture* texture_out);
 
   // ---------------------------------------------------------------------------
   // Deferred Components
@@ -252,7 +226,7 @@ class AndroidEngine {
   // ---------------------------------------------------------------------------
   // Getters
   // ---------------------------------------------------------------------------
-  const flutter::Settings& GetSettings() const { return settings_; }
+  const flutter::AndroidSettings& GetSettings() const { return settings_; }
   AndroidRenderingAPI GetRenderingAPI() const { return android_rendering_api_; }
   FLUTTER_API_SYMBOL(FlutterEngine) GetEmbedderEngineHandle() const {
     return engine_;
@@ -273,6 +247,7 @@ class AndroidEngine {
   // ---------------------------------------------------------------------------
   // Compositor Delegation Handlers
   // ---------------------------------------------------------------------------
+  void OnBeginFrame();
   void OnPlatformViewPresented(int64_t view_id,
                                const FlutterPoint& offset,
                                const FlutterSize& size,
@@ -302,7 +277,7 @@ class AndroidEngine {
   class CompositorDelegate;
 
   // Constructor used for spawned child engines.
-  AndroidEngine(const flutter::Settings& settings,
+  AndroidEngine(const flutter::AndroidSettings& settings,
                 std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
                 std::shared_ptr<AndroidTaskRunners> task_runners,
                 AndroidRenderingAPI android_rendering_api);
@@ -313,6 +288,9 @@ class AndroidEngine {
                                          void* user_data);
   static void OnDartDeferredLibraryRequestCallback(int64_t loading_unit_id,
                                                    void* user_data);
+  static double OnGetScaledFontSizeCallback(double unscaled_font_size,
+                                            int configuration_id,
+                                            void* user_data);
   static void OnRasterContextSetupCallback(void* user_data);
   static void OnRasterContextTeardownCallback(void* user_data);
 
@@ -320,7 +298,7 @@ class AndroidEngine {
   const FlutterPlatformMessageResponseHandle* TakePendingResponse(
       int32_t response_id);
 
-  const flutter::Settings settings_;
+  const flutter::AndroidSettings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   const AndroidRenderingAPI android_rendering_api_;
 
@@ -335,6 +313,7 @@ class AndroidEngine {
   FLUTTER_API_SYMBOL(FlutterEngine) engine_ = nullptr;
   bool is_valid_ = false;
   bool surface_attached_ = false;
+  std::atomic<bool> first_frame_presented_{false};
   int64_t engine_id_ = 0;
 
   FlutterRendererConfig renderer_config_ = {};
@@ -345,6 +324,22 @@ class AndroidEngine {
   int32_t next_response_id_ = 1;
   std::unordered_map<int32_t, const FlutterPlatformMessageResponseHandle*>
       pending_responses_;
+
+  struct TextureRecord {
+    enum class Type {
+      kSurfaceTexture,
+      kImageReader,
+    };
+    Type type = Type::kSurfaceTexture;
+    fml::jni::ScopedJavaGlobalRef<jobject> java_object;
+    uint32_t gl_texture_id = 0;
+    bool is_attached = false;
+    EGLImageKHR egl_image = EGL_NO_IMAGE_KHR;
+    AHardwareBuffer* current_ahb = nullptr;
+  };
+
+  mutable std::mutex textures_mutex_;
+  std::unordered_map<int64_t, std::shared_ptr<TextureRecord>> textures_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(AndroidEngine);
 };

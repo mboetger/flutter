@@ -31,6 +31,10 @@ void InitJavaVM(JavaVM* vm) {
   g_jvm = vm;
 }
 
+bool HasJavaVM() {
+  return g_jvm != nullptr;
+}
+
 JNIEnv* AttachCurrentThread() {
   FML_DCHECK(g_jvm != nullptr)
       << "Trying to attach to current thread without calling InitJavaVM first.";
