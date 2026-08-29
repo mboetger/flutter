@@ -355,10 +355,7 @@ bool FlutterMain::IsEmbedderAPIEnabled() {
   if (g_testing_settings.has_value()) {
     return g_testing_settings->enable_embedder_api;
   }
-  if (g_flutter_main != nullptr) {
-    return g_flutter_main->GetSettings().enable_embedder_api;
-  }
-  return false;
+  return FlutterMain::Get().GetSettings().enable_embedder_api;
 }
 
 // static
