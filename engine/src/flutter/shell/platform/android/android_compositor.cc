@@ -4,13 +4,25 @@
 
 #include "flutter/shell/platform/android/android_compositor.h"
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include <EGL/egl.h>
 
+#include "flutter/display_list/geometry/dl_geometry_types.h"
+#include "flutter/flow/embedded_views.h"
 #include "flutter/fml/logging.h"
+#include "flutter/fml/trace_event.h"
 
 namespace flutter {
+
+namespace {
+
+// Maximum alpha value for 8-bit channel opacity conversion.
+constexpr double kMaxAlpha = 255.0;
+
+}  // namespace
 
 AndroidCompositor::AndroidCompositor(
     std::shared_ptr<AndroidSurfaceManager> surface_manager,
@@ -70,6 +82,8 @@ bool AndroidCompositor::PresentView(const FlutterPresentViewInfo* info) {
 bool AndroidCompositor::Present(FlutterViewId view_id,
                                 const FlutterLayer** layers,
                                 size_t layers_count) {
+  TRACE_EVENT0("flutter", "AndroidCompositor::Present");
+
   if (surface_destroyed_.load(std::memory_order_acquire) ||
       !surface_manager_->HasNativeWindow()) {
     // Drop presentation gracefully when native surface has been destroyed.
@@ -104,9 +118,27 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
       case kFlutterLayerContentTypeBackingStore:
         // Backing store layer is presented to the surface/swapchain.
         break;
-      case kFlutterLayerContentTypePlatformView:
-        // Platform view mutations will be applied via mutators stack.
+      case kFlutterLayerContentTypePlatformView: {
+        TRACE_EVENT0("flutter", "AndroidCompositor::PresentPlatformView");
+        const FlutterPlatformView* platform_view = layer->platform_view;
+        if (platform_view != nullptr && jni_facade_ != nullptr) {
+          MutatorsStack mutators_stack =
+              ConvertMutationsToMutatorsStack(platform_view);
+          // Round floating-point physical coordinates using std::lround to
+          // prevent 1-pixel rounding seams on fractional device pixel ratios.
+          int x = static_cast<int>(std::lround(layer->offset.x));
+          int y = static_cast<int>(std::lround(layer->offset.y));
+          int width = static_cast<int>(std::lround(layer->size.width));
+          int height = static_cast<int>(std::lround(layer->size.height));
+          int view_width = width;
+          int view_height = height;
+
+          jni_facade_->FlutterViewOnDisplayPlatformView(
+              platform_view->identifier, x, y, width, height, view_width,
+              view_height, std::move(mutators_stack));
+        }
         break;
+      }
     }
   }
 
@@ -177,6 +209,105 @@ bool AndroidCompositor::IsSurfaceDestroyed() const {
 std::shared_ptr<AndroidSurfaceManager> AndroidCompositor::GetSurfaceManager()
     const {
   return surface_manager_;
+}
+
+// static
+MutatorsStack AndroidCompositor::ConvertMutationsToMutatorsStack(
+    const FlutterPlatformView* platform_view) {
+  TRACE_EVENT0("flutter", "AndroidCompositor::ConvertMutationsToMutatorsStack");
+
+  MutatorsStack mutators_stack;
+  if (platform_view == nullptr) {
+    return mutators_stack;
+  }
+  if (platform_view->struct_size < sizeof(FlutterPlatformView)) {
+    FML_LOG(ERROR) << "AndroidCompositor::ConvertMutationsToMutatorsStack: "
+                      "invalid struct_size: "
+                   << platform_view->struct_size;
+    return mutators_stack;
+  }
+
+  if (platform_view->mutations == nullptr ||
+      platform_view->mutations_count == 0) {
+    return mutators_stack;
+  }
+
+  for (size_t i = 0; i < platform_view->mutations_count; ++i) {
+    const FlutterPlatformViewMutation* mutation = platform_view->mutations[i];
+    if (mutation == nullptr) {
+      continue;
+    }
+
+    switch (mutation->type) {
+      case kFlutterPlatformViewMutationTypeTransformation: {
+        const FlutterTransformation& t = mutation->transformation;
+        // Construct 4x4 matrix matching DlMatrix row layout from 2D affine /
+        // perspective matrix.
+        DlMatrix matrix =
+            DlMatrix::MakeRow(t.scaleX, t.skewX, 0.0, t.transX,  // Row 0
+                              t.skewY, t.scaleY, 0.0, t.transY,  // Row 1
+                              0.0, 0.0, 1.0, 0.0,                // Row 2
+                              t.pers0, t.pers1, 0.0, t.pers2);   // Row 3
+        mutators_stack.PushTransform(matrix);
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeClipRect: {
+        const FlutterRect& r = mutation->clip_rect;
+        mutators_stack.PushClipRect(
+            DlRect::MakeLTRB(r.left, r.top, r.right, r.bottom));
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeClipRoundedRect: {
+        const FlutterRoundedRect& r = mutation->clip_rounded_rect;
+        DlRect bounds = DlRect::MakeLTRB(r.rect.left, r.rect.top, r.rect.right,
+                                         r.rect.bottom);
+        DlRoundingRadii radii = {
+            .top_left = DlSize(r.upper_left_corner_radius.width,
+                               r.upper_left_corner_radius.height),
+            .top_right = DlSize(r.upper_right_corner_radius.width,
+                                r.upper_right_corner_radius.height),
+            .bottom_left = DlSize(r.lower_left_corner_radius.width,
+                                  r.lower_left_corner_radius.height),
+            .bottom_right = DlSize(r.lower_right_corner_radius.width,
+                                   r.lower_right_corner_radius.height),
+        };
+        mutators_stack.PushClipRRect(DlRoundRect::MakeRectRadii(bounds, radii));
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeClipRoundedSuperellipse: {
+        const FlutterRoundedSuperellipse& r =
+            mutation->clip_rounded_superellipse;
+        DlRect bounds = DlRect::MakeLTRB(r.rect.left, r.rect.top, r.rect.right,
+                                         r.rect.bottom);
+        DlRoundingRadii radii = {
+            .top_left = DlSize(r.upper_left_corner_radius.width,
+                               r.upper_left_corner_radius.height),
+            .top_right = DlSize(r.upper_right_corner_radius.width,
+                                r.upper_right_corner_radius.height),
+            .bottom_left = DlSize(r.lower_left_corner_radius.width,
+                                  r.lower_left_corner_radius.height),
+            .bottom_right = DlSize(r.lower_right_corner_radius.width,
+                                   r.lower_right_corner_radius.height),
+        };
+        mutators_stack.PushClipRSE(
+            DlRoundSuperellipse::MakeRectRadii(bounds, radii));
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeOpacity: {
+        // Convert opacity [0.0, 1.0] to uint8_t [0, 255].
+        double clamped_opacity = std::clamp(mutation->opacity, 0.0, 1.0);
+        uint8_t alpha =
+            static_cast<uint8_t>(std::lround(clamped_opacity * kMaxAlpha));
+        mutators_stack.PushOpacity(alpha);
+        break;
+      }
+      case kFlutterPlatformViewMutationTypeClipPath:
+        // ClipPath mutator is not directly passed to Java mutators stack.
+        break;
+    }
+  }
+
+  return mutators_stack;
 }
 
 // static

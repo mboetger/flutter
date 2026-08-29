@@ -80,6 +80,11 @@ class AndroidCompositor {
   /// Returns the underlying surface manager.
   std::shared_ptr<AndroidSurfaceManager> GetSurfaceManager() const;
 
+  /// Converts `FlutterPlatformView` mutations array to a `MutatorsStack` for
+  /// JNI platform view presentation.
+  static MutatorsStack ConvertMutationsToMutatorsStack(
+      const FlutterPlatformView* platform_view);
+
  private:
   // Static callback thunks matching FlutterCompositor function pointer
   // signatures.
