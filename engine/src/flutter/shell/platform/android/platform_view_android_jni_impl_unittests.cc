@@ -617,13 +617,11 @@ class PlatformViewAndroidJNIMatrixTest
     : public ::testing::TestWithParam<JNIMatrixConfig> {
  public:
   static void SetUpTestSuite() {
-    static std::once_flag jvm_init_flag;
-    std::call_once(jvm_init_flag, SetUpJVM);
+    PlatformViewAndroidJNIImplTest::SetUpTestSuite();
   }
 
   static void* GetNativeMethod(const std::string& name) {
-    auto it = native_methods_.find(name);
-    return it != native_methods_.end() ? it->second : nullptr;
+    return PlatformViewAndroidJNIImplTest::GetNativeMethod(name);
   }
 
  protected:
@@ -633,54 +631,7 @@ class PlatformViewAndroidJNIMatrixTest
   }
 
   void TearDown() override { FlutterMain::ResetEmbedderAPIEnabledForTesting(); }
-
- private:
-  friend class MockJNIEnvProvider;
-  static MockJavaVM jvm_;
-  static std::map<std::string, void*> native_methods_;
-  static void SetUpJVM();
 };
-
-MockJavaVM PlatformViewAndroidJNIMatrixTest::jvm_;
-std::map<std::string, void*> PlatformViewAndroidJNIMatrixTest::native_methods_;
-
-void PlatformViewAndroidJNIMatrixTest::SetUpJVM() {
-  fml::jni::InitJavaVM(&jvm_);
-
-  MockJNIEnvProvider env_provider;
-  MockJNIEnv& mock_env = env_provider.env();
-
-  const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
-  const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
-  const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
-
-  EXPECT_CALL(mock_env, GetObjectRefType(_))
-      .WillRepeatedly(Return(JNILocalRefType));
-  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
-  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
-  EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
-  EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
-  EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
-  EXPECT_CALL(mock_env, GetFieldID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderFieldID));
-  EXPECT_CALL(mock_env, GetMethodID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderMethodID));
-  EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderFieldID));
-  EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
-      .WillRepeatedly(Return(kPlaceholderMethodID));
-  EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
-  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
-      .WillRepeatedly(
-          [&](jclass clazz, const JNINativeMethod* methods, jint nMethods) {
-            for (jint i = 0; i < nMethods; ++i) {
-              native_methods_[methods[i].name] = methods[i].fnPtr;
-            }
-            return 0;
-          });
-
-  PlatformViewAndroid::Register(&mock_env);
-}
 
 TEST_P(PlatformViewAndroidJNIMatrixTest, MatrixAttachDestroyAndLifecycle) {
   MockJNIEnvProvider env_provider;
