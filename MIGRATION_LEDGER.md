@@ -43,7 +43,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 - [x] 2.5: Decouple `flutter_main.cc` (Verified Tests & Adversarial Review)
 
 ### Phase 3: Abstractions & Architecture
-- [ ] 3.1: AndroidSurfaceManager (Verified Dual-Flag Tests & Adversarial Review)
+- [x] 3.1: AndroidSurfaceManager (Verified Dual-Flag Tests & Adversarial Review)
 - [ ] 3.2: AndroidCompositor (Verified ANR-Safe & Dual-Flag Tests & Adversarial Review)
 - [ ] 3.3: Direct JNI Mutator Mapping (Verified Dual-Flag Tests & Adversarial Review)
 
