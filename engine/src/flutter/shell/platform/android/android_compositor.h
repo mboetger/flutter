@@ -25,16 +25,19 @@ namespace flutter {
 /// the Android Embedder API.
 ///
 /// Features:
-/// - Handles backing store allocation and collection via `AndroidSurfaceManager`.
+/// - Handles backing store allocation and collection via
+/// `AndroidSurfaceManager`.
 /// - Supports view presentation (`FlutterPresentViewCallback`).
 /// - Implements a synchronous surface detachment barrier (`OnSurfaceDestroyed`)
 ///   using `fml::AutoResetWaitableEvent` to guarantee that all active raster
-///   operations on the `ANativeWindow` complete before the OS destroys the window.
+///   operations on the `ANativeWindow` complete before the OS destroys the
+///   window.
 class AndroidCompositor {
  public:
   AndroidCompositor(
       std::shared_ptr<AndroidSurfaceManager> surface_manager,
       std::shared_ptr<PlatformViewAndroidJNI> jni_facade = nullptr,
+      fml::RefPtr<fml::TaskRunner> platform_task_runner = nullptr,
       fml::RefPtr<fml::TaskRunner> raster_task_runner = nullptr);
 
   ~AndroidCompositor();
@@ -78,18 +81,20 @@ class AndroidCompositor {
   std::shared_ptr<AndroidSurfaceManager> GetSurfaceManager() const;
 
  private:
-  // Static callback thunks matching FlutterCompositor function pointer signatures.
+  // Static callback thunks matching FlutterCompositor function pointer
+  // signatures.
   static bool OnCreateBackingStore(const FlutterBackingStoreConfig* config,
-                                  FlutterBackingStore* backing_store_out,
-                                  void* user_data);
+                                   FlutterBackingStore* backing_store_out,
+                                   void* user_data);
 
   static bool OnCollectBackingStore(const FlutterBackingStore* backing_store,
-                                   void* user_data);
+                                    void* user_data);
 
   static bool OnPresentView(const FlutterPresentViewInfo* info);
 
   const std::shared_ptr<AndroidSurfaceManager> surface_manager_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
+  const fml::RefPtr<fml::TaskRunner> platform_task_runner_;
   const fml::RefPtr<fml::TaskRunner> raster_task_runner_;
 
   mutable std::mutex present_mutex_;

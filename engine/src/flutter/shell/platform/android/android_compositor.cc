@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include <EGL/egl.h>
+
 #include "flutter/fml/logging.h"
 
 namespace flutter {
@@ -13,9 +15,11 @@ namespace flutter {
 AndroidCompositor::AndroidCompositor(
     std::shared_ptr<AndroidSurfaceManager> surface_manager,
     std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+    fml::RefPtr<fml::TaskRunner> platform_task_runner,
     fml::RefPtr<fml::TaskRunner> raster_task_runner)
     : surface_manager_(std::move(surface_manager)),
       jni_facade_(std::move(jni_facade)),
+      platform_task_runner_(std::move(platform_task_runner)),
       raster_task_runner_(std::move(raster_task_runner)) {
   FML_CHECK(surface_manager_ != nullptr)
       << "AndroidCompositor requires a non-null AndroidSurfaceManager.";
@@ -64,8 +68,8 @@ bool AndroidCompositor::PresentView(const FlutterPresentViewInfo* info) {
 }
 
 bool AndroidCompositor::Present(FlutterViewId view_id,
-                               const FlutterLayer** layers,
-                               size_t layers_count) {
+                                const FlutterLayer** layers,
+                                size_t layers_count) {
   if (surface_destroyed_.load(std::memory_order_acquire) ||
       !surface_manager_->HasNativeWindow()) {
     // Drop presentation gracefully when native surface has been destroyed.
@@ -73,9 +77,9 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
   }
 
   if (layers_count > 0 && layers == nullptr) {
-    FML_LOG(ERROR)
-        << "AndroidCompositor::Present: layers pointer is null but layers_count is "
-        << layers_count;
+    FML_LOG(ERROR) << "AndroidCompositor::Present: layers pointer is null but "
+                      "layers_count is "
+                   << layers_count;
     return false;
   }
 
@@ -91,8 +95,9 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
       continue;
     }
     if (layer->struct_size < sizeof(FlutterLayer)) {
-      FML_LOG(ERROR) << "AndroidCompositor::Present: invalid layer struct_size: "
-                     << layer->struct_size;
+      FML_LOG(ERROR)
+          << "AndroidCompositor::Present: invalid layer struct_size: "
+          << layer->struct_size;
       continue;
     }
     switch (layer->type) {
@@ -105,7 +110,22 @@ bool AndroidCompositor::Present(FlutterViewId view_id,
     }
   }
 
-  presented_frame_count_.fetch_add(1, std::memory_order_relaxed);
+  EGLDisplay current_display = eglGetCurrentDisplay();
+  EGLSurface current_surface = eglGetCurrentSurface(EGL_DRAW);
+  if (current_display != EGL_NO_DISPLAY && current_surface != EGL_NO_SURFACE) {
+    eglSwapBuffers(current_display, current_surface);
+  }
+
+  if (presented_frame_count_.fetch_add(1, std::memory_order_relaxed) == 0) {
+    if (jni_facade_ != nullptr) {
+      if (platform_task_runner_) {
+        platform_task_runner_->PostTask(
+            [jni = jni_facade_]() { jni->FlutterViewOnFirstFrame(); });
+      } else {
+        jni_facade_->FlutterViewOnFirstFrame();
+      }
+    }
+  }
   return true;
 }
 
@@ -119,8 +139,7 @@ void AndroidCompositor::OnSurfaceCreated(
 void AndroidCompositor::OnSurfaceDestroyed() {
   surface_destroyed_.store(true, std::memory_order_release);
 
-  if (raster_task_runner_ &&
-      !raster_task_runner_->RunsTasksOnCurrentThread()) {
+  if (raster_task_runner_ && !raster_task_runner_->RunsTasksOnCurrentThread()) {
     // Synchronous surface detachment barrier: blocks until the raster thread
     // drops all native window references and cleans up active raster state.
     //
@@ -166,11 +185,12 @@ bool AndroidCompositor::OnCreateBackingStore(
     FlutterBackingStore* backing_store_out,
     void* user_data) {
   if (user_data == nullptr) {
-    FML_LOG(ERROR) << "AndroidCompositor::OnCreateBackingStore: user_data is null.";
+    FML_LOG(ERROR)
+        << "AndroidCompositor::OnCreateBackingStore: user_data is null.";
     return false;
   }
-  return static_cast<AndroidCompositor*>(user_data)
-      ->CreateBackingStore(config, backing_store_out);
+  return static_cast<AndroidCompositor*>(user_data)->CreateBackingStore(
+      config, backing_store_out);
 }
 
 // static
@@ -182,8 +202,8 @@ bool AndroidCompositor::OnCollectBackingStore(
         << "AndroidCompositor::OnCollectBackingStore: user_data is null.";
     return false;
   }
-  return static_cast<AndroidCompositor*>(user_data)
-      ->CollectBackingStore(backing_store);
+  return static_cast<AndroidCompositor*>(user_data)->CollectBackingStore(
+      backing_store);
 }
 
 // static

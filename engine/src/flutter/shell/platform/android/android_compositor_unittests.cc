@@ -112,7 +112,8 @@ TEST(AndroidCompositor, PresentViewGracefulDropWhenDestroyed) {
       .user_data = &compositor,
   };
 
-  // Presenting while surface is destroyed drops the frame gracefully and returns true.
+  // Presenting while surface is destroyed drops the frame gracefully and
+  // returns true.
   EXPECT_TRUE(compositor.PresentView(&present_info));
 }
 
@@ -140,7 +141,8 @@ TEST(AndroidCompositor, SynchronousSurfaceDetachBarrier) {
   EXPECT_EQ(surface_manager->GetCachedBackingStoreCount(), 1u);
 
   // Invoke OnSurfaceDestroyed from platform/main thread.
-  // The synchronous barrier must block until the raster thread clears the window.
+  // The synchronous barrier must block until the raster thread clears the
+  // window.
   compositor.OnSurfaceDestroyed();
 
   EXPECT_TRUE(compositor.IsSurfaceDestroyed());
@@ -159,7 +161,8 @@ TEST(AndroidCompositor, DestructorExecutesSynchronousTeardownBarrierSafely) {
         nullptr, /*is_fake_window=*/true);
     compositor->OnSurfaceCreated(window);
     EXPECT_TRUE(surface_manager->HasNativeWindow());
-    // Destructor runs here and must not trigger a use-after-free on present_mutex_.
+    // Destructor runs here and must not trigger a use-after-free on
+    // present_mutex_.
   }
   EXPECT_FALSE(surface_manager->HasNativeWindow());
 }
@@ -215,8 +218,8 @@ TEST(AndroidCompositor, ArgumentValidation) {
 
   // C callback thunks validation.
   FlutterCompositor flutter_compositor = compositor.GetFlutterCompositor();
-  EXPECT_FALSE(
-      flutter_compositor.create_backing_store_callback(nullptr, nullptr, nullptr));
+  EXPECT_FALSE(flutter_compositor.create_backing_store_callback(
+      nullptr, nullptr, nullptr));
   EXPECT_FALSE(
       flutter_compositor.collect_backing_store_callback(nullptr, nullptr));
   EXPECT_FALSE(flutter_compositor.present_view_callback(nullptr));
