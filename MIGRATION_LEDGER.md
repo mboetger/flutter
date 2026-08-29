@@ -49,7 +49,7 @@ To enforce flawless execution across PR sequences, this ledger MUST be updated a
 
 ### Phase 4: JNI Routing & Dual-Stack Rollout
 - [x] 4.1: AndroidEngine Implementation (Verified Dual-Flag Tests & Adversarial Review)
-- [ ] 4.2: JNI Dispatch Routing / Inline if-statements (Verified Dual-Flag Tests & Adversarial Review)
+- [x] 4.2: JNI Dispatch Routing / Inline if-statements (Verified Dual-Flag Tests & Adversarial Review)
 - [ ] 4.3: Parameterized Multi-Backend Matrix Testing (Verified Dual-Flag Tests & Adversarial Review)
 
 ### Phase 5: Emancipation & Final Purge

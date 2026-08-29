@@ -296,7 +296,7 @@ TEST(AndroidEngineTest, SetViewportMetricsAndDisplayFeatures) {
   auto jni = std::make_shared<JNIMock>();
   AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
 
-  ViewportMetrics metrics;
+  AndroidEngine::ViewportMetrics metrics;
   metrics.device_pixel_ratio = 2.5;
   metrics.physical_width = 1080;
   metrics.physical_height = 1920;
@@ -421,8 +421,8 @@ TEST(AndroidEngineTest, ScreenshotUninitialized) {
   auto jni = std::make_shared<JNIMock>();
   AndroidEngine engine(Settings(), jni, AndroidRenderingAPI::kImpellerOpenGLES);
 
-  auto screenshot =
-      engine.Screenshot(Rasterizer::ScreenshotType::kUncompressedImage, false);
+  auto screenshot = engine.Screenshot(
+      AndroidEngine::ScreenshotType::kUncompressedImage, false);
   EXPECT_EQ(screenshot.data, nullptr);
   EXPECT_EQ(screenshot.frame_size.width, 0u);
   EXPECT_EQ(screenshot.frame_size.height, 0u);
