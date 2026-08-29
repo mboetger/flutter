@@ -7,7 +7,6 @@
 
 #include "flutter/fml/build_config.h"
 
-#include "flutter/display_list/geometry/dl_geometry_types.h"
 #include "flutter/fml/macros.h"
 #include "flutter/fml/memory/ref_counted.h"
 
@@ -16,6 +15,19 @@
 #endif  // FML_OS_ANDROID
 
 namespace flutter {
+
+struct AndroidISize {
+  int32_t width = 0;
+  int32_t height = 0;
+
+  static AndroidISize Make(int32_t width, int32_t height) {
+    return AndroidISize{width, height};
+  }
+
+  static AndroidISize MakeEmpty() { return AndroidISize{0, 0}; }
+
+  bool is_empty() const { return width <= 0 || height <= 0; }
+};
 
 class AndroidNativeWindow
     : public fml::RefCountedThreadSafe<AndroidNativeWindow> {
@@ -30,7 +42,7 @@ class AndroidNativeWindow
 
   Handle handle() const;
 
-  DlISize GetSize() const;
+  AndroidISize GetSize() const;
 
   /// Returns true when this AndroidNativeWindow is not backed by a real window
   /// (used for testing).

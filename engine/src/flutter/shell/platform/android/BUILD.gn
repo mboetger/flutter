@@ -29,7 +29,6 @@ source_set("image_generator") {
 
   deps = [
     "//flutter/fml",
-    "//flutter/lib/ui",
     "//flutter/skia",
   ]
 
@@ -50,7 +49,6 @@ executable("flutter_shell_native_unittests") {
     "android_task_runners_unittests.cc",
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
-    "image_lru_unittests.cc",
     "platform_view_android_jni_impl_unittests.cc",
     "platform_view_android_unittests.cc",
   ]
@@ -103,26 +101,10 @@ source_set("flutter_shell_native_src") {
     "apk_asset_provider.h",
     "flutter_main.cc",
     "flutter_main.h",
-    "image_external_texture.cc",
-    "image_external_texture.h",
-    "image_external_texture_gl.cc",
-    "image_external_texture_gl.h",
-    "image_external_texture_gl_impeller.cc",
-    "image_external_texture_gl_impeller.h",
-    "image_external_texture_vk_impeller.cc",
-    "image_external_texture_vk_impeller.h",
-    "image_lru.cc",
-    "image_lru.h",
     "library_loader.cc",
     "platform_view_android.h",
     "platform_view_android_jni_impl.cc",
     "platform_view_android_jni_impl.h",
-    "surface_texture_external_texture.cc",
-    "surface_texture_external_texture.h",
-    "surface_texture_external_texture_gl_impeller.cc",
-    "surface_texture_external_texture_gl_impeller.h",
-    "surface_texture_external_texture_vk_impeller.cc",
-    "surface_texture_external_texture_vk_impeller.h",
     "vsync_waiter_android.cc",
     "vsync_waiter_android.h",
   ]
@@ -131,7 +113,6 @@ source_set("flutter_shell_native_src") {
     ":android_gpu_configuration",
     ":image_generator",
     "//flutter/fml",
-    "//flutter/lib/ui",
     "//flutter/shell/platform/android/jni",
     "//flutter/shell/platform/android/surface:native_window",
     "//flutter/shell/platform/common:common_cpp_enums",
@@ -139,11 +120,7 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/embedder:embedder_as_internal_library",
   ]
 
-  deps = [
-    "//flutter/assets",
-    "//flutter/impeller/toolkit/glvk",
-    "//flutter/runtime",
-  ]
+  deps = []
 
   public_configs = [ "//flutter:config" ]
 

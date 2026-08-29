@@ -7,10 +7,15 @@
 
 #include <jni.h>
 
+#include <optional>
+
 #include "flutter/fml/memory/ref_ptr.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/task_runner.h"
-#include "flutter/lib/ui/painting/image_generator.h"
+#include "third_party/skia/include/codec/SkCodecAnimation.h"
+#include "third_party/skia/include/core/SkData.h"
+#include "third_party/skia/include/core/SkImageInfo.h"
+#include "third_party/skia/include/core/SkSize.h"
 
 namespace flutter {
 
@@ -18,41 +23,42 @@ namespace testing {
 FML_TEST_CLASS(AndroidImageGenerator, HeaderDecodeDimensionMismatch);
 }
 
-class AndroidImageGenerator : public ImageGenerator {
+class AndroidImageGenerator {
  private:
   explicit AndroidImageGenerator(sk_sp<SkData> buffer);
 
  public:
+  struct FrameInfo {
+    std::optional<unsigned int> required_frame;
+    unsigned int duration;
+    SkCodecAnimation::DisposalMethod disposal_method;
+    std::optional<SkIRect> disposal_rect;
+    SkCodecAnimation::Blend blend_mode;
+  };
+
   ~AndroidImageGenerator();
 
-  // |ImageGenerator|
-  const SkImageInfo& GetInfo() override;
+  const SkImageInfo& GetInfo();
 
-  // |ImageGenerator|
-  unsigned int GetFrameCount() const override;
+  unsigned int GetFrameCount() const;
 
-  // |ImageGenerator|
-  unsigned int GetPlayCount() const override;
+  unsigned int GetPlayCount() const;
 
-  // |ImageGenerator|
-  const ImageGenerator::FrameInfo GetFrameInfo(
-      unsigned int frame_index) override;
+  FrameInfo GetFrameInfo(unsigned int frame_index);
 
-  // |ImageGenerator|
-  SkISize GetScaledDimensions(float desired_scale) override;
+  SkISize GetScaledDimensions(float desired_scale);
 
-  // |ImageGenerator|
   bool GetPixels(const SkImageInfo& info,
                  void* pixels,
                  size_t row_bytes,
                  unsigned int frame_index,
-                 std::optional<unsigned int> prior_frame) override;
+                 std::optional<unsigned int> prior_frame);
 
   void DecodeImage();
 
   static bool Register(JNIEnv* env);
 
-  static std::shared_ptr<ImageGenerator> MakeFromData(
+  static std::shared_ptr<AndroidImageGenerator> MakeFromData(
       sk_sp<SkData> data,
       const fml::RefPtr<fml::TaskRunner>& task_runner);
 

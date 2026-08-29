@@ -5,12 +5,12 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 
+#include <array>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "flutter/fml/mapping.h"
-
-#include "flutter/flow/embedded_views.h"
-#include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 
 #if FML_OS_ANDROID
@@ -20,6 +20,29 @@
 struct ASurfaceTransaction;
 
 namespace flutter {
+
+enum class AndroidMutatorType {
+  kTransform,
+  kClipRect,
+  kClipRRect,
+  kClipRSE,
+  kOpacity,
+};
+
+struct AndroidMutator {
+  AndroidMutatorType type;
+  std::array<float, 9> matrix;
+  float rect_left = 0.0f;
+  float rect_top = 0.0f;
+  float rect_right = 0.0f;
+  float rect_bottom = 0.0f;
+  // 8 radii floats: top-left (w,h), top-right (w,h), bottom-left (w,h),
+  // bottom-right (w,h).
+  std::array<float, 8> radii = {};
+  uint8_t alpha = 255;
+};
+
+using AndroidMutatorsStack = std::vector<AndroidMutator>;
 
 #if FML_OS_ANDROID
 using JavaLocalRef = fml::jni::ScopedJavaLocalRef<jobject>;
@@ -43,7 +66,8 @@ class PlatformViewAndroidJNI {
   /// @brief      Sends a platform message. The message may be empty.
   ///
   virtual void FlutterViewHandlePlatformMessage(
-      std::unique_ptr<flutter::PlatformMessage> message,
+      const std::string& channel,
+      std::unique_ptr<fml::Mapping> message,
       int responseId) = 0;
 
   //----------------------------------------------------------------------------
@@ -121,7 +145,7 @@ class PlatformViewAndroidJNI {
   ///             Then, it updates the `transform` matrix, so it fill the canvas
   ///             and preserve the aspect ratio.
   ///
-  virtual SkM44 SurfaceTextureGetTransformMatrix(
+  virtual std::array<float, 16> SurfaceTextureGetTransformMatrix(
       JavaLocalRef surface_texture) = 0;
 
   //----------------------------------------------------------------------------
@@ -165,7 +189,7 @@ class PlatformViewAndroidJNI {
       int height,
       int viewWidth,
       int viewHeight,
-      MutatorsStack mutators_stack) = 0;
+      AndroidMutatorsStack mutators_stack) = 0;
 
   //----------------------------------------------------------------------------
   /// @brief      Positions and sizes an overlay surface in hybrid composition.
@@ -249,7 +273,7 @@ class PlatformViewAndroidJNI {
                                       int32_t height,
                                       int32_t viewWidth,
                                       int32_t viewHeight,
-                                      MutatorsStack mutators_stack) = 0;
+                                      AndroidMutatorsStack mutators_stack) = 0;
 
   virtual void hidePlatformView2(int32_t view_id) = 0;
 

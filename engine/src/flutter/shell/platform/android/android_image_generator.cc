@@ -37,11 +37,15 @@ unsigned int AndroidImageGenerator::GetPlayCount() const {
   return 1;
 }
 
-const ImageGenerator::FrameInfo AndroidImageGenerator::GetFrameInfo(
+AndroidImageGenerator::FrameInfo AndroidImageGenerator::GetFrameInfo(
     unsigned int frame_index) {
-  return {.required_frame = std::nullopt,
-          .duration = 0,
-          .disposal_method = SkCodecAnimation::DisposalMethod::kKeep};
+  return FrameInfo{
+      .required_frame = std::nullopt,
+      .duration = 0,
+      .disposal_method = SkCodecAnimation::DisposalMethod::kKeep,
+      .disposal_rect = std::nullopt,
+      .blend_mode = SkCodecAnimation::Blend::kSrcOver,
+  };
 }
 
 SkISize AndroidImageGenerator::GetScaledDimensions(float desired_scale) {
@@ -176,7 +180,7 @@ bool AndroidImageGenerator::Register(JNIEnv* env) {
   return true;
 }
 
-std::shared_ptr<ImageGenerator> AndroidImageGenerator::MakeFromData(
+std::shared_ptr<AndroidImageGenerator> AndroidImageGenerator::MakeFromData(
     sk_sp<SkData> data,
     const fml::RefPtr<fml::TaskRunner>& task_runner) {
   std::shared_ptr<AndroidImageGenerator> generator(

@@ -18,7 +18,8 @@ class JNIMock final : public PlatformViewAndroidJNI {
  public:
   MOCK_METHOD(void,
               FlutterViewHandlePlatformMessage,
-              (std::unique_ptr<flutter::PlatformMessage> message,
+              (const std::string& channel,
+               std::unique_ptr<fml::Mapping> message,
                int responseId),
               (override));
 
@@ -68,7 +69,7 @@ class JNIMock final : public PlatformViewAndroidJNI {
               (JavaLocalRef surface_texture),
               (override));
 
-  MOCK_METHOD(SkM44,
+  MOCK_METHOD((std::array<float, 16>),
               SurfaceTextureGetTransformMatrix,
               (JavaLocalRef surface_texture),
               (override));
@@ -104,7 +105,7 @@ class JNIMock final : public PlatformViewAndroidJNI {
                int height,
                int viewWidth,
                int viewHeight,
-               MutatorsStack mutators_stack),
+               AndroidMutatorsStack mutators_stack),
               (override));
 
   MOCK_METHOD(void,
@@ -145,7 +146,7 @@ class JNIMock final : public PlatformViewAndroidJNI {
                int32_t height,
                int32_t viewWidth,
                int32_t viewHeight,
-               MutatorsStack mutators_stack),
+               AndroidMutatorsStack mutators_stack),
               (override));
 
   MOCK_METHOD(void, hidePlatformView2, (int32_t view_id), (override));

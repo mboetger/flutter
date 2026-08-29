@@ -19,8 +19,6 @@
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
-#include "flutter/runtime/dart_vm.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/flutter_main.h"
@@ -182,18 +180,10 @@ void FlutterMain::Init(JNIEnv* env,
   settings.enable_timeline_event_handler = settings.trace_systrace;
 #endif  // FLUTTER_RELEASE
 
-  // Restore the callback cache.
-  // TODO(chinmaygarde): Route all cache file access through FML and remove this
-  // setter.
-  flutter::DartCallbackCache::SetCachePath(
-      fml::jni::JavaStringToString(env, appStoragePath));
-
   fml::paths::InitializeAndroidCachesPath(
       fml::jni::JavaStringToString(env, engineCachesPath));
 
-  flutter::DartCallbackCache::LoadCacheFromDisk();
-
-  if (!flutter::DartVM::IsRunningPrecompiledCode() && kernelPath) {
+  if (kernelPath) {
     // Check to see if the appropriate kernel files are present and configure
     // settings accordingly.
     auto application_kernel_path =
@@ -241,36 +231,6 @@ void FlutterMain::Init(JNIEnv* env,
   // longer be a singleton.
   g_flutter_main.reset(
       new FlutterMain(settings, android_rendering_api, std::move(args)));
-  g_flutter_main->SetupDartVMServiceUriCallback(env);
-}
-
-void FlutterMain::SetupDartVMServiceUriCallback(JNIEnv* env) {
-  g_flutter_jni_class = new fml::jni::ScopedJavaGlobalRef<jclass>(
-      env, env->FindClass("io/flutter/embedding/engine/FlutterJNI"));
-  if (g_flutter_jni_class->is_null()) {
-    return;
-  }
-  jfieldID uri_field = env->GetStaticFieldID(
-      g_flutter_jni_class->obj(), "vmServiceUri", "Ljava/lang/String;");
-  if (uri_field == nullptr) {
-    return;
-  }
-
-  auto set_uri = [env, uri_field](const std::string& uri) {
-    fml::jni::ScopedJavaLocalRef<jstring> java_uri =
-        fml::jni::StringToJavaString(env, uri);
-    env->SetStaticObjectField(g_flutter_jni_class->obj(), uri_field,
-                              java_uri.obj());
-  };
-
-  fml::MessageLoop::EnsureInitializedForCurrentThread();
-  fml::RefPtr<fml::TaskRunner> platform_runner =
-      fml::MessageLoop::GetCurrent().GetTaskRunner();
-
-  vm_service_uri_callback_ = DartServiceIsolate::AddServerStatusCallback(
-      [platform_runner, set_uri](const std::string& uri) {
-        platform_runner->PostTask([uri, set_uri] { set_uri(uri); });
-      });
 }
 
 static void PrefetchDefaultFontManager(JNIEnv* env, jclass jcaller) {

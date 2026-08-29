@@ -23,7 +23,7 @@ class MockAPKAssetProviderImpl : public APKAssetProviderInternal {
               (const, override));
 };
 
-TEST(APKAssetProvider, CloneAndEquals) {
+TEST(APKAssetProvider, Clone) {
   auto first_provider = std::make_unique<APKAssetProvider>(
       std::make_shared<MockAPKAssetProviderImpl>());
   auto second_provider = std::make_unique<APKAssetProvider>(
@@ -32,8 +32,6 @@ TEST(APKAssetProvider, CloneAndEquals) {
 
   ASSERT_NE(first_provider->GetImpl(), second_provider->GetImpl());
   ASSERT_EQ(first_provider->GetImpl(), third_provider->GetImpl());
-  ASSERT_FALSE(*first_provider == *second_provider);
-  ASSERT_TRUE(*first_provider == *third_provider);
 }
 
 TEST(APKAssetProvider, GetAssetResolverFields) {

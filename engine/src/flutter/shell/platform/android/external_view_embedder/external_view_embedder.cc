@@ -32,6 +32,84 @@ int32_t ToPhysicalPixels(DlScalar size_points, double device_pixel_ratio) {
   return static_cast<int32_t>(std::round(size_points * device_pixel_ratio));
 }
 
+AndroidMutatorsStack ToAndroidMutatorsStack(const MutatorsStack& stack) {
+  AndroidMutatorsStack android_stack;
+  for (auto iter = stack.Begin(); iter != stack.End(); ++iter) {
+    switch ((*iter)->GetType()) {
+      case MutatorType::kTransform: {
+        const DlMatrix& m = (*iter)->GetMatrix();
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kTransform;
+        mutator.matrix = {
+            m.m[0],  m.m[4], m.m[12], m.m[1],  m.m[5],
+            m.m[13], m.m[3], m.m[7],  m.m[15],
+        };
+        android_stack.push_back(mutator);
+        break;
+      }
+      case MutatorType::kClipRect: {
+        const DlRect& r = (*iter)->GetRect();
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kClipRect;
+        mutator.rect_left = r.GetLeft();
+        mutator.rect_top = r.GetTop();
+        mutator.rect_right = r.GetRight();
+        mutator.rect_bottom = r.GetBottom();
+        android_stack.push_back(mutator);
+        break;
+      }
+      case MutatorType::kClipRRect: {
+        const DlRoundRect& r = (*iter)->GetRRect();
+        const DlRect& bounds = r.GetBounds();
+        const DlRoundingRadii& radii = r.GetRadii();
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kClipRRect;
+        mutator.rect_left = bounds.GetLeft();
+        mutator.rect_top = bounds.GetTop();
+        mutator.rect_right = bounds.GetRight();
+        mutator.rect_bottom = bounds.GetBottom();
+        mutator.radii = {
+            radii.top_left.width,     radii.top_left.height,
+            radii.top_right.width,    radii.top_right.height,
+            radii.bottom_right.width, radii.bottom_right.height,
+            radii.bottom_left.width,  radii.bottom_left.height,
+        };
+        android_stack.push_back(mutator);
+        break;
+      }
+      case MutatorType::kClipRSE: {
+        const DlRoundRect& r = (*iter)->GetRSEApproximation();
+        const DlRect& bounds = r.GetBounds();
+        const DlRoundingRadii& radii = r.GetRadii();
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kClipRSE;
+        mutator.rect_left = bounds.GetLeft();
+        mutator.rect_top = bounds.GetTop();
+        mutator.rect_right = bounds.GetRight();
+        mutator.rect_bottom = bounds.GetBottom();
+        mutator.radii = {
+            radii.top_left.width,     radii.top_left.height,
+            radii.top_right.width,    radii.top_right.height,
+            radii.bottom_right.width, radii.bottom_right.height,
+            radii.bottom_left.width,  radii.bottom_left.height,
+        };
+        android_stack.push_back(mutator);
+        break;
+      }
+      case MutatorType::kOpacity: {
+        AndroidMutator mutator;
+        mutator.type = AndroidMutatorType::kOpacity;
+        mutator.alpha = (*iter)->GetAlpha();
+        android_stack.push_back(mutator);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return android_stack;
+}
+
 }  // namespace
 
 AndroidExternalViewEmbedder::AndroidExternalViewEmbedder(
@@ -137,7 +215,7 @@ void AndroidExternalViewEmbedder::SubmitFlutterView(
         view_rect.GetHeight(),  //
         ToPhysicalPixels(params.sizePoints().width, device_pixel_ratio_),
         ToPhysicalPixels(params.sizePoints().height, device_pixel_ratio_),
-        params.mutatorsStack()  //
+        ToAndroidMutatorsStack(params.mutatorsStack())  //
     );
     std::unordered_map<int64_t, DlRect>::const_iterator overlay =
         overlay_layers.find(view_id);
