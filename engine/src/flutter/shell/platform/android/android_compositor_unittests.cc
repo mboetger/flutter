@@ -500,6 +500,7 @@ TEST(AndroidCompositor, PlatformViewPresentJniDispatch) {
                         /*height=*/300, /*viewWidth=*/200, /*viewHeight=*/300,
                         ::testing::_))
       .Times(1);
+  EXPECT_CALL(*jni, FlutterViewOnFirstFrame()).Times(::testing::AtLeast(0));
 
   EXPECT_TRUE(compositor.PresentView(&present_info));
 }

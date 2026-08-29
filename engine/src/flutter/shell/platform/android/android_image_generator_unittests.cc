@@ -27,9 +27,11 @@ TEST(AndroidImageGenerator, HeaderDecodeDimensionMismatch) {
   ASSERT_EQ(gen->GetInfo().dimensions(), SkISize(kHeaderW, kHeaderH));
 
   // AndroidImageGenerator should detect that the buffer size derived from the
-  // SkImageInfo is insufficent for the decoded data.
-  sk_sp<SkImage> image = gen->GetImage();
-  EXPECT_EQ(image, nullptr);
+  // SkImageInfo is insufficient for the decoded data.
+  std::vector<uint8_t> pixels(kHeaderW * kHeaderH * 4);
+  bool success =
+      gen->GetPixels(header_info, pixels.data(), kHeaderW * 4, 0, std::nullopt);
+  EXPECT_FALSE(success);
 }
 
 }  // namespace testing
