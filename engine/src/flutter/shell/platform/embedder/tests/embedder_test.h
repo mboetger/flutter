@@ -5,8 +5,12 @@
 #ifndef FLUTTER_SHELL_PLATFORM_EMBEDDER_TESTS_EMBEDDER_TEST_H_
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_TESTS_EMBEDDER_TEST_H_
 
+#include <iosfwd>
 #include <map>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "flutter/fml/macros.h"
 #include "flutter/shell/platform/embedder/tests/embedder_test_context.h"
@@ -16,10 +20,49 @@
 
 namespace flutter::testing {
 
+class EmbedderConfigBuilder;
 class EmbedderTestContextGL;
 class EmbedderTestContextMetal;
 class EmbedderTestContextSoftware;
 class EmbedderTestContextVulkan;
+
+const char* EmbedderTestContextTypeToString(EmbedderTestContextType type);
+bool IsBackendSupported(EmbedderTestContextType type);
+std::vector<EmbedderTestContextType> GetSupportedBackends();
+std::vector<EmbedderTestContextType> GetSupportedGpuBackends();
+
+std::ostream& operator<<(std::ostream& os, const EmbedderTestContextType& type);
+void PrintTo(const EmbedderTestContextType& type, std::ostream* os);
+
+struct EmbedderTestParam {
+  EmbedderTestContextType backend_type =
+      EmbedderTestContextType::kSoftwareContext;
+  bool enable_impeller = false;
+  std::vector<std::string> extra_arguments = {};
+
+  EmbedderTestParam() = default;
+  EmbedderTestParam(EmbedderTestContextType backend,
+                    bool impeller = false,
+                    std::vector<std::string> args = {})
+      : backend_type(backend),
+        enable_impeller(impeller),
+        extra_arguments(std::move(args)) {}
+
+  std::string ToString() const;
+};
+
+std::ostream& operator<<(std::ostream& os, const EmbedderTestParam& param);
+void PrintTo(const EmbedderTestParam& param, std::ostream* os);
+
+struct EmbedderTestParamName {
+  std::string operator()(
+      const ::testing::TestParamInfo<EmbedderTestContextType>& info) const;
+  std::string operator()(
+      const ::testing::TestParamInfo<EmbedderTestParam>& info) const;
+};
+
+std::vector<EmbedderTestParam> GetSupportedMatrixConfigs();
+std::vector<EmbedderTestParam> GetSupportedGpuMatrixConfigs();
 
 class EmbedderTest : public ThreadTest {
  public:
@@ -53,6 +96,8 @@ class EmbedderTest : public ThreadTest {
     return reinterpret_cast<EmbedderTestContextVulkan&>(GetVulkanContext());
   }
 
+  EmbedderTestContext& GetEmbedderContext(EmbedderTestContextType type);
+
  protected:
   // We return the base class here and reinterpret_cast in the template
   // specializations because we're using forward declarations rather than
@@ -77,7 +122,26 @@ class EmbedderTestMultiBackend
     : public EmbedderTest,
       public ::testing::WithParamInterface<EmbedderTestContextType> {
  public:
-  EmbedderTestContext& GetEmbedderContext(EmbedderTestContextType type);
+  EmbedderTestContextType GetBackendType() const { return GetParam(); }
+  EmbedderTestContext& GetEmbedderContext() {
+    return EmbedderTest::GetEmbedderContext(GetParam());
+  }
+};
+
+class EmbedderTestMatrix
+    : public EmbedderTest,
+      public ::testing::WithParamInterface<EmbedderTestParam> {
+ public:
+  const EmbedderTestParam& GetTestParam() const { return GetParam(); }
+  EmbedderTestContextType GetBackendType() const {
+    return GetParam().backend_type;
+  }
+  bool IsImpellerEnabled() const { return GetParam().enable_impeller; }
+  EmbedderTestContext& GetEmbedderContext() {
+    return EmbedderTest::GetEmbedderContext(GetParam().backend_type);
+  }
+
+  void ConfigureBuilder(EmbedderConfigBuilder& builder);
 };
 
 }  // namespace flutter::testing

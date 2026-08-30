@@ -3,11 +3,11 @@
 This ledger strictly enforces that **all tests are explicitly run and validated** throughout the atomic migration steps. A phase cannot be marked complete until both the implementation PR has merged and the corresponding test matrix validations are explicitly verified as passing locally and in CI.
 
 ## Phase 1: Foundations, Safety Nets, and C-API Prep
-- [ ] **1.1 Matrix Initialization**:
-    - [ ] *Branch Stub*: `android-embedder-migration-v7/phase-1.1-matrix-initialization`
-    - [ ] `TEST_P` Multi-backend test matrix initialized.
-    - [ ] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
-    - [ ] *Validation*: `embedder_unittests` pass locally on macOS/Linux hosts.
+- [x] **1.1 Matrix Initialization**:
+    - [x] *Branch Stub*: `android-embedder-migration-v7/phase-1.1-matrix-initialization`
+    - [x] `TEST_P` Multi-backend test matrix initialized.
+    - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
+    - [x] *Validation*: `embedder_unittests` pass locally on macOS/Linux hosts.
 - [ ] **1.2 Pre-Emptive GN Quarantine**:
     - [ ] *Branch Stub*: `android-embedder-migration-v7/phase-1.2-pre-emptive-gn-quarantine`
     - [ ] `flutter_embedder_native` target initialized strictly forbidding Skia/UI headers.
