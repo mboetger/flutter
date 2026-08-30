@@ -190,34 +190,35 @@ This ledger strictly enforces that **all tests are explicitly run and validated*
     - [x] Embedder flags defaulted to `true`.
     - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
     - [x] *Validation*: CI remains unconditionally green on default runs.
-- [x] **5.2 Legacy Deletion (Subsystems)**: 
+- [x] **5.2 Legacy Deletion (Subsystems)**:
     - [x] *Branch Stub*: `android-embedder-migration-v7/phase-5.2-legacy-deletion-subsystems`
-    - [x] Assets, Images, Callbacks, Mutators wiped. 
+    - [x] Assets, Images, Callbacks, Mutators wiped.
     - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
     - [x] *Validation*: `ninja -C out/android_debug_unopt flutter_shell_native_unittests` compiles successfully AND `//shell/platform/android:robolectric_tests` passes entirely without legacy code.
-- [x] **5.3 Legacy Deletion (Platform Views/Semantics)**: 
+- [x] **5.3 Legacy Deletion (Platform Views/Semantics)**:
     - [x] *Branch Stub*: `android-embedder-migration-v7/phase-5.3-legacy-deletion-platform-views-semantics`
     - [x] Platform views and semantics wiped.
     - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
     - [x] *Validation*: `ninja -C out/android_debug_unopt flutter_shell_native_unittests` compiles successfully AND `//shell/platform/android:robolectric_tests` passes entirely without legacy code.
-- [x] **5.4 Legacy Deletion (Graphics Pipeline)**: 
+- [x] **5.4 Legacy Deletion (Graphics Pipeline)**:
     - [x] *Branch Stub*: `android-embedder-migration-v7/phase-5.4-legacy-deletion-graphics-pipeline`
     - [x] `android_context`, `android_surface` wiped.
     - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
     - [x] *Validation*: `ninja -C out/android_debug_unopt flutter_shell_native_unittests` compiles successfully AND `//shell/platform/android:robolectric_tests` passes entirely without legacy code.
-- [x] **5.5 Flag Obliteration**: 
+- [x] **5.5 Flag Obliteration**:
     - [x] *Branch Stub*: `android-embedder-migration-v7/phase-5.5-flag-obliteration`
     - [x] Flags pruned and routing hardcoded unconditionally.
     - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
     - [x] *Validation*: CLI flags `--enable-embedder-api` are rejected by build scripts appropriately.
-- [x] **5.6 Strict GN Target Isolation**: 
+- [x] **5.6 Strict GN Target Isolation**:
     - [x] *Branch Stub*: `android-embedder-migration-v7/phase-5.6-strict-gn-target-isolation`
     - [x] `flutter_shell_native` internal Skia/UI dependencies purged; targets merged.
     - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
     - [x] *Validation*: Clean `gn` re-run; `ninja` builds successfully assuring absolute GN C-ABI quarantine.
 
-- [ ] **Phase 5 Parity Checkpoint**:
-    - [ ] *Validation*: Framework unit tests (`flutter test`) and `flutter_shell_native_unittests` run globally across the directory, ensuring no cascading failures.
-    - [ ] *Validation*: Golden tests verified to ensure zero pixel-level regressions on Android canvases. **Strict Golden Rule**: Local engine builds must be tested against the baseline framework. Only the baseline (without local engine build) is permitted to update goldens. If a local engine build fails a golden test, you must fix the C++ native implementation in the local engine—you cannot update the golden image to match the flawed output.
-    - [ ] *Validation*: Core integration tests (`dev/integration_tests/*`) pass unconditionally.
-    - [ ] *Review*: Any deviations or failing tests are caught, adversarially root-caused, and pushed back into the specific atomic branches for this phase before proceeding.
+- [x] **Phase 5 Parity Checkpoint**:
+    - [x] *Branch Stub*: `android-embedder-migration-v7/phase-5-parity-checkpoint`
+    - [x] *Validation*: Framework unit tests (`flutter test`) and `flutter_shell_native_unittests` run globally across the directory, ensuring no cascading failures.
+    - [x] *Validation*: Golden tests verified to ensure zero pixel-level regressions on Android canvases. **Strict Golden Rule**: Local engine builds must be tested against the baseline framework. Only the baseline (without local engine build) is permitted to update goldens. If a local engine build fails a golden test, you must fix the C++ native implementation in the local engine—you cannot update the golden image to match the flawed output.
+    - [x] *Validation*: Core integration tests (`dev/integration_tests/*`) pass unconditionally.
+    - [x] *Review*: Any deviations or failing tests are caught, adversarially root-caused, and pushed back into the specific atomic branches for this phase before proceeding.
