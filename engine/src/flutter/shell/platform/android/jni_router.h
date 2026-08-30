@@ -51,6 +51,8 @@ class LegacyJniDelegate {
                                        double pixel_ratio) = 0;
 
   virtual bool RequestDartDeferredLibrary(int64_t loading_unit_id) = 0;
+
+  virtual bool OnAssetManagerChanged() = 0;
 };
 
 /// @brief Native JNI Routing Boundary that dispatches calls based on
@@ -106,6 +108,8 @@ class JniRouter {
                             double pixel_ratio);
 
   bool RouteRequestDartDeferredLibrary(int64_t loading_unit_id);
+
+  bool RouteAssetManagerChanged();
 
   std::shared_ptr<JniDelegate> GetEmbedderDelegate() const;
   std::shared_ptr<LegacyJniDelegate> GetLegacyDelegate() const;

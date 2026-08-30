@@ -18,6 +18,8 @@ source_set("flutter_embedder_native_src") {
   visibility = [ ":*" ]
 
   sources = [
+    "apk_asset_provider.cc",
+    "apk_asset_provider.h",
     "flutter_embedder_native.cc",
     "flutter_embedder_native.h",
     "jni_delegate.cc",
@@ -35,6 +37,7 @@ source_set("flutter_embedder_native_src") {
   ]
 
   public_deps = [
+    "//flutter/assets",
     "//flutter/fml",
     "//flutter/shell/platform/embedder:embedder_headers",
   ]
@@ -68,6 +71,7 @@ executable("flutter_embedder_native_unittests") {
   visibility = [ "*" ]
   testonly = true
   sources = [
+    "apk_asset_provider_unittests.cc",
     "flutter_embedder_native_unittests.cc",
   ]
   public_configs = [ "//flutter:config" ]
