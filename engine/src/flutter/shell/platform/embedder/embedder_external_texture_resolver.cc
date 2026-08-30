@@ -43,7 +43,7 @@ EmbedderExternalTextureResolver::ResolveExternalTexture(int64_t texture_id) {
 #ifdef SHELL_ENABLE_METAL
   if (metal_callback_) {
     return std::make_unique<EmbedderExternalTextureMetal>(texture_id,
-                                                           metal_callback_);
+                                                          metal_callback_);
   }
 #endif
 

@@ -17,8 +17,8 @@ namespace flutter {
 
 class EmbedderExternalTextureHB : public flutter::Texture {
  public:
-  using ExternalTextureCallback = std::function<
-      std::unique_ptr<FlutterHardwareBufferExternalTexture>(int64_t, size_t, size_t)>;
+  using ExternalTextureCallback = std::function<std::unique_ptr<
+      FlutterHardwareBufferExternalTexture>(int64_t, size_t, size_t)>;
 
   EmbedderExternalTextureHB(int64_t texture_identifier,
                             ExternalTextureCallback callback);
