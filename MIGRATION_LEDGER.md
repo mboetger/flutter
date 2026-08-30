@@ -8,11 +8,11 @@ This ledger strictly enforces that **all tests are explicitly run and validated*
     - [x] `TEST_P` Multi-backend test matrix initialized.
     - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
     - [x] *Validation*: `embedder_unittests` pass locally on macOS/Linux hosts.
-- [ ] **1.2 Pre-Emptive GN Quarantine**:
-    - [ ] *Branch Stub*: `android-embedder-migration-v7/phase-1.2-pre-emptive-gn-quarantine`
-    - [ ] `flutter_embedder_native` target initialized strictly forbidding Skia/UI headers.
-    - [ ] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
-    - [ ] *Validation*: `ninja -C out/android_debug_unopt flutter_embedder_native` builds successfully.
+- [x] **1.2 Pre-Emptive GN Quarantine**:
+    - [x] *Branch Stub*: `android-embedder-migration-v7/phase-1.2-pre-emptive-gn-quarantine`
+    - [x] `flutter_embedder_native` target initialized strictly forbidding Skia/UI headers.
+    - [x] *Review*: Autonomous Adversarial Review Loop executed natively on PR (including Perfetto trace instrumentation verification) and feedback addressed.
+    - [x] *Validation*: `ninja -C out/android_debug_unopt flutter_embedder_native` builds successfully.
 - [ ] **1.3 JNI Routing & Mocking**:
     - [ ] *Branch Stub*: `android-embedder-migration-v7/phase-1.3-jni-routing-mocking`
     - [ ] `JvmInvoker` abstracted; JNI routing wired to `JniDelegate`.
