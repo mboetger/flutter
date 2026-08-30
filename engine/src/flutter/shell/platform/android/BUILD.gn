@@ -14,73 +14,6 @@ import("//flutter/shell/gpu/gpu.gni")
 import("//flutter/shell/version/version.gni")
 import("//flutter/vulkan/config.gni")
 
-shell_gpu_configuration("android_gpu_configuration") {
-  enable_software = true
-  enable_gl = true
-  enable_vulkan = true
-  enable_metal = false
-}
-
-source_set("image_generator") {
-  sources = [
-    "android_image_generator.cc",
-    "android_image_generator.h",
-  ]
-
-  deps = [
-    "//flutter/fml",
-    "//flutter/lib/ui",
-    "//flutter/skia",
-  ]
-
-  libs = [
-    "android",
-    "jnigraphics",
-  ]
-}
-
-executable("flutter_shell_native_unittests") {
-  visibility = [ "*" ]
-  testonly = true
-  sources = [
-    "android_context_gl_impeller_unittests.cc",
-    "android_image_generator_unittests.cc",
-    "android_shell_holder_unittests.cc",
-    "apk_asset_provider_unittests.cc",
-    "flutter_shell_native_unittests.cc",
-    "image_lru_unittests.cc",
-    "platform_view_android_jni_impl_unittests.cc",
-    "platform_view_android_unittests.cc",
-  ]
-  if (!slimpeller) {
-    sources += [ "android_context_gl_unittests.cc" ]
-  }
-  public_configs = [ "//flutter:config" ]
-  deps = [
-    ":flutter_shell_native_src",
-    "//flutter/fml",
-    "//flutter/shell/platform/android/jni:jni_mock",
-    "//flutter/shell/platform/android/jni:mock_jni_env",
-    "//flutter/third_party/googletest:gmock",
-    "//flutter/third_party/googletest:gtest",
-  ]
-}
-
-executable("flutter_embedder_native_unittests") {
-  visibility = [ "*" ]
-  testonly = true
-  sources = [
-    "flutter_embedder_native_unittests.cc",
-  ]
-  public_configs = [ "//flutter:config" ]
-  deps = [
-    ":flutter_embedder_native_src",
-    "//flutter/fml",
-    "//flutter/third_party/googletest:gmock",
-    "//flutter/third_party/googletest:gtest",
-  ]
-}
-
 source_set("flutter_embedder_native_src") {
   visibility = [ ":*" ]
 
@@ -93,6 +26,8 @@ source_set("flutter_embedder_native_src") {
     "jni_router.h",
     "jvm_invoker.cc",
     "jvm_invoker.h",
+    "os_library_loader.cc",
+    "os_library_loader.h",
   ]
 
   defines = [
@@ -110,165 +45,236 @@ source_set("flutter_embedder_native_src") {
 
   public_configs = [ "//flutter:config" ]
 
-  libs = [
-    "android",
-    "EGL",
-    "GLESv2",
-  ]
+  if (is_android) {
+    libs = [
+      "android",
+      "EGL",
+      "GLESv2",
+    ]
+  }
 }
 
 shared_library("flutter_embedder_native") {
   inputs = [ "android_exports.lst" ]
   output_name = "flutter_embedder"
   deps = [ ":flutter_embedder_native_src" ]
-  ldflags = [ "-Wl,--version-script=" +
-              rebase_path("android_exports.lst", root_build_dir) ]
+  if (is_android || is_linux) {
+    ldflags = [ "-Wl,--version-script=" +
+                rebase_path("android_exports.lst", root_build_dir) ]
+  }
 }
 
-shared_library("flutter_shell_native") {
-  inputs = [ "android_exports.lst" ]
-  output_name = "flutter"
-  deps = [ ":flutter_shell_native_src" ]
-  ldflags = [ "-Wl,--version-script=" +
-              rebase_path("android_exports.lst", root_build_dir) ]
-}
-
-bin_to_assembly("icudtl_asm") {
-  deps = []
-  input = "//flutter/third_party/icu/flutter/icudtl.dat"
-  symbol = "_binary_icudtl_dat_start"
-  size_symbol = "_binary_icudtl_dat_size"
-  executable = false
-}
-
-source_set("flutter_shell_native_src") {
-  visibility = [ ":*" ]
-
+executable("flutter_embedder_native_unittests") {
+  visibility = [ "*" ]
+  testonly = true
   sources = [
-    "android_context_dynamic_impeller.cc",
-    "android_context_dynamic_impeller.h",
-    "android_context_gl_impeller.cc",
-    "android_context_gl_impeller.h",
-    "android_context_vk_impeller.cc",
-    "android_context_vk_impeller.h",
-    "android_display.cc",
-    "android_display.h",
-    "android_egl_surface.cc",
-    "android_egl_surface.h",
-    "android_environment_gl.cc",
-    "android_environment_gl.h",
-    "android_shell_holder.cc",
-    "android_shell_holder.h",
-    "android_surface_dynamic_impeller.cc",
-    "android_surface_dynamic_impeller.h",
-    "android_surface_gl_impeller.cc",
-    "android_surface_gl_impeller.h",
-    "android_surface_vk_impeller.cc",
-    "android_surface_vk_impeller.h",
-    "apk_asset_provider.cc",
-    "apk_asset_provider.h",
-    "flutter_main.cc",
-    "flutter_main.h",
-    "image_external_texture.cc",
-    "image_external_texture.h",
-    "image_external_texture_gl.cc",
-    "image_external_texture_gl.h",
-    "image_external_texture_gl_impeller.cc",
-    "image_external_texture_gl_impeller.h",
-    "image_external_texture_vk_impeller.cc",
-    "image_external_texture_vk_impeller.h",
-    "image_lru.cc",
-    "image_lru.h",
-    "library_loader.cc",
-    "platform_message_handler_android.cc",
-    "platform_message_handler_android.h",
-    "platform_message_response_android.cc",
-    "platform_message_response_android.h",
-    "platform_view_android.cc",
-    "platform_view_android.h",
-    "platform_view_android_jni_impl.cc",
-    "platform_view_android_jni_impl.h",
-    "surface_texture_external_texture.cc",
-    "surface_texture_external_texture.h",
-    "surface_texture_external_texture_gl_impeller.cc",
-    "surface_texture_external_texture_gl_impeller.h",
-    "surface_texture_external_texture_vk_impeller.cc",
-    "surface_texture_external_texture_vk_impeller.h",
-    "vsync_waiter_android.cc",
-    "vsync_waiter_android.h",
+    "flutter_embedder_native_unittests.cc",
   ]
+  public_configs = [ "//flutter:config" ]
+  deps = [
+    ":flutter_embedder_native_src",
+    "//flutter/fml",
+    "//flutter/third_party/googletest:gmock",
+    "//flutter/third_party/googletest:gtest",
+  ]
+}
 
-  if (!slimpeller) {
-    sources += [
-      "android_context_gl_skia.cc",
-      "android_context_gl_skia.h",
-      "android_surface_gl_skia.cc",
-      "android_surface_gl_skia.h",
-      "android_surface_software.cc",
-      "android_surface_software.h",
-      "image_external_texture_gl_skia.cc",
-      "image_external_texture_gl_skia.h",
-      "surface_texture_external_texture_gl_skia.cc",
-      "surface_texture_external_texture_gl_skia.h",
+if (is_android) {
+  shell_gpu_configuration("android_gpu_configuration") {
+    enable_software = true
+    enable_gl = true
+    enable_vulkan = true
+    enable_metal = false
+  }
+
+  source_set("image_generator") {
+    sources = [
+      "android_image_generator.cc",
+      "android_image_generator.h",
+    ]
+
+    deps = [
+      "//flutter/fml",
+      "//flutter/lib/ui",
+      "//flutter/skia",
+    ]
+
+    libs = [
+      "android",
+      "jnigraphics",
     ]
   }
 
-  sources += get_target_outputs(":icudtl_asm")
+  executable("flutter_shell_native_unittests") {
+    visibility = [ "*" ]
+    testonly = true
+    sources = [
+      "android_context_gl_impeller_unittests.cc",
+      "android_image_generator_unittests.cc",
+      "android_shell_holder_unittests.cc",
+      "apk_asset_provider_unittests.cc",
+      "flutter_shell_native_unittests.cc",
+      "image_lru_unittests.cc",
+      "platform_view_android_jni_impl_unittests.cc",
+      "platform_view_android_unittests.cc",
+    ]
+    if (!slimpeller) {
+      sources += [ "android_context_gl_unittests.cc" ]
+    }
+    public_configs = [ "//flutter:config" ]
+    deps = [
+      ":flutter_shell_native_src",
+      "//flutter/fml",
+      "//flutter/shell/platform/android/jni:jni_mock",
+      "//flutter/shell/platform/android/jni:mock_jni_env",
+      "//flutter/third_party/googletest:gmock",
+      "//flutter/third_party/googletest:gtest",
+    ]
+  }
 
-  public_deps = [
-    ":android_gpu_configuration",
-    ":icudtl_asm",
-    ":image_generator",
-    "//flutter/assets",
-    "//flutter/common",
-    "//flutter/common/graphics",
-    "//flutter/flow",
-    "//flutter/fml",
-    "//flutter/impeller",
-    "//flutter/impeller/toolkit/android",
-    "//flutter/impeller/toolkit/egl",
-    "//flutter/impeller/toolkit/gles",
-    "//flutter/impeller/toolkit/glvk",
-    "//flutter/lib/ui",
-    "//flutter/runtime",
-    "//flutter/runtime:libdart",
-    "//flutter/shell/common",
-    "//flutter/shell/platform/android/context",
-    "//flutter/shell/platform/android/external_view_embedder",
-    "//flutter/shell/platform/android/jni",
-    "//flutter/shell/platform/android/platform_view_android_delegate",
-    "//flutter/shell/platform/android/surface",
-    "//flutter/shell/platform/android/surface:native_window",
-    "//flutter/skia",
-    "//flutter/txt",
-    "//flutter/vulkan",
-  ]
+  shared_library("flutter_shell_native") {
+    inputs = [ "android_exports.lst" ]
+    output_name = "flutter"
+    deps = [ ":flutter_shell_native_src" ]
+    ldflags = [ "-Wl,--version-script=" +
+                rebase_path("android_exports.lst", root_build_dir) ]
+  }
 
-  public_configs = [ "//flutter:config" ]
+  bin_to_assembly("icudtl_asm") {
+    deps = []
+    input = "//flutter/third_party/icu/flutter/icudtl.dat"
+    symbol = "_binary_icudtl_dat_start"
+    size_symbol = "_binary_icudtl_dat_size"
+    executable = false
+  }
 
-  defines = []
+  source_set("flutter_shell_native_src") {
+    visibility = [ ":*" ]
 
-  libs = [
-    "android",
-    "EGL",
-    "GLESv2",
-  ]
-}
+    sources = [
+      "android_context_dynamic_impeller.cc",
+      "android_context_dynamic_impeller.h",
+      "android_context_gl_impeller.cc",
+      "android_context_gl_impeller.h",
+      "android_context_vk_impeller.cc",
+      "android_context_vk_impeller.h",
+      "android_display.cc",
+      "android_display.h",
+      "android_egl_surface.cc",
+      "android_egl_surface.h",
+      "android_environment_gl.cc",
+      "android_environment_gl.h",
+      "android_shell_holder.cc",
+      "android_shell_holder.h",
+      "android_surface_dynamic_impeller.cc",
+      "android_surface_dynamic_impeller.h",
+      "android_surface_gl_impeller.cc",
+      "android_surface_gl_impeller.h",
+      "android_surface_vk_impeller.cc",
+      "android_surface_vk_impeller.h",
+      "apk_asset_provider.cc",
+      "apk_asset_provider.h",
+      "flutter_main.cc",
+      "flutter_main.h",
+      "image_external_texture.cc",
+      "image_external_texture.h",
+      "image_external_texture_gl.cc",
+      "image_external_texture_gl.h",
+      "image_external_texture_gl_impeller.cc",
+      "image_external_texture_gl_impeller.h",
+      "image_external_texture_vk_impeller.cc",
+      "image_external_texture_vk_impeller.h",
+      "image_lru.cc",
+      "image_lru.h",
+      "library_loader.cc",
+      "platform_message_handler_android.cc",
+      "platform_message_handler_android.h",
+      "platform_message_response_android.cc",
+      "platform_message_response_android.h",
+      "platform_view_android.cc",
+      "platform_view_android.h",
+      "platform_view_android_jni_impl.cc",
+      "platform_view_android_jni_impl.h",
+      "surface_texture_external_texture.cc",
+      "surface_texture_external_texture.h",
+      "surface_texture_external_texture_gl_impeller.cc",
+      "surface_texture_external_texture_gl_impeller.h",
+      "surface_texture_external_texture_vk_impeller.cc",
+      "surface_texture_external_texture_vk_impeller.h",
+      "vsync_waiter_android.cc",
+      "vsync_waiter_android.h",
+    ]
 
-action("gen_android_build_config_java") {
-  script = "//flutter/tools/gen_android_buildconfig.py"
+    if (!slimpeller) {
+      sources += [
+        "android_context_gl_skia.cc",
+        "android_context_gl_skia.h",
+        "android_surface_gl_skia.cc",
+        "android_surface_gl_skia.h",
+        "android_surface_software.cc",
+        "android_surface_software.h",
+        "image_external_texture_gl_skia.cc",
+        "image_external_texture_gl_skia.h",
+        "surface_texture_external_texture_gl_skia.cc",
+        "surface_texture_external_texture_gl_skia.h",
+      ]
+    }
 
-  build_config_java = "$target_gen_dir/io/flutter/BuildConfig.java"
+    sources += get_target_outputs(":icudtl_asm")
 
-  outputs = [ build_config_java ]
+    public_deps = [
+      ":android_gpu_configuration",
+      ":icudtl_asm",
+      ":image_generator",
+      "//flutter/assets",
+      "//flutter/common",
+      "//flutter/common/graphics",
+      "//flutter/flow",
+      "//flutter/fml",
+      "//flutter/impeller",
+      "//flutter/impeller/toolkit/android",
+      "//flutter/impeller/toolkit/egl",
+      "//flutter/impeller/toolkit/gles",
+      "//flutter/impeller/toolkit/glvk",
+      "//flutter/lib/ui",
+      "//flutter/runtime",
+      "//flutter/runtime:libdart",
+      "//flutter/shell/common",
+      "//flutter/shell/platform/android/context",
+      "//flutter/shell/platform/android/external_view_embedder",
+      "//flutter/shell/platform/android/jni",
+      "//flutter/shell/platform/android/platform_view_android_delegate",
+      "//flutter/shell/platform/android/surface",
+      "//flutter/shell/platform/android/surface:native_window",
+      "//flutter/skia",
+      "//flutter/txt",
+      "//flutter/vulkan",
+    ]
 
-  args = [
-    "--out",
-    rebase_path(build_config_java, root_build_dir),
-    "--runtime-mode",
-    flutter_runtime_mode,
-  ]
-}
+    public_configs = [ "//flutter:config" ]
+
+    defines = []
+
+    libs = [
+      "android",
+      "EGL",
+      "GLESv2",
+    ]
+  }
+  action("gen_android_build_config_java") {
+    script = "//flutter/tools/gen_android_buildconfig.py"
+
+    build_config_java = "$target_gen_dir/io/flutter/BuildConfig.java"
+
+    outputs = [ build_config_java ]
+
+    args = [
+      "--out",
+      rebase_path(build_config_java, root_build_dir),
+      "--runtime-mode",
+      flutter_runtime_mode,
+    ]
+  }
 
 embedding_artifact_id = "flutter_embedding_$flutter_runtime_mode"
 embedding_jar_filename = "$embedding_artifact_id.jar"
@@ -1063,3 +1069,5 @@ action("abi_jars") {
     ]
   }
 }
+}
+
