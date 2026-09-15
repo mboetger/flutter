@@ -143,3 +143,36 @@ The gaps identified above directly motivate the Stage 0 characterization tasks:
 - **T-0.5**: Covers Gap #10 (Deletion of vestigial configurations).
 
 All tasks in Stage 0 have clear, prioritized test objectives based on this inventory.
+
+---
+
+## 6. Candidate Vestigial Rendering Configuration Analysis (T-0.5)
+
+Per `MIGRATION_LEDGER.md` §T-0.5, every rendering configuration surviving into the Embedder API migration must be designed for, carried, and verified. We analyzed all four candidate configurations present in `AndroidRenderingAPI` (`shell/platform/android/android_rendering_selector.h:11`):
+
+### 6.1 `kSoftware`
+- **Selection Mechanism:** Selected in `FlutterMain::SelectedRenderingAPI` when `settings.enable_software_rendering` is true (via `--enable-software-rendering`, `FlutterEngineFlags.ENABLE_SOFTWARE_RENDERING`, or `FlutterShellArgs.ARG_ENABLE_SOFTWARE_RENDERING`).
+- **Implementation:** Backed by `AndroidSurfaceSoftware` (`shell/platform/android/android_surface_software.cc`), which acquires `ANativeWindow` buffers and uses Skia software rasterization (`SkSurface::MakeRasterDirect`).
+- **Reachability & Dependencies:** Used in headless Android test environments, emulator test fixtures (e.g. `FlutterActivityTestRule.java`), and Robolectric tests where GPU emulation is unavailable or flaking.
+- **Decision:** **Retain.** Deleting `kSoftware` would break testing environments and violates Flutter's breaking change process for user-reachable flags. Tracked for removal when emulator test fixtures migrate fully to Vulkan/SwiftShader.
+
+### 6.2 `kSkiaOpenGLES`
+- **Selection Mechanism:** Selected in `FlutterMain::SelectedRenderingAPI` when Impeller is disabled via `--no-enable-impeller` or `AndroidManifest.xml` meta-data, or automatically when `api_level < kMinimumAndroidApiLevelForImpeller` (API < 29), or when running on Vivante GPUs (`IsVivante()`).
+- **Implementation:** Backed by `AndroidContextGLSkia` and `AndroidSurfaceGLSkia`.
+- **Reachability & Dependencies:** Highly reachable in production. Flutter's current minimum supported Android API level is 21 (Android 5.0 Lollipop). All devices running Android API levels 21 through 28 (Lollipop through Pie) do not enable Impeller by default and fall back directly to `kSkiaOpenGLES`.
+- **Decision:** **Retain.** Deleting `kSkiaOpenGLES` immediately causes all Android devices below API 29 to fail to initialize rendering, violating Invariant I-1 (no silent fallbacks). Tracked for removal when Flutter officially raises `minSdkVersion` to 29 and concludes the Impeller opt-out deprecation period.
+
+### 6.3 `kImpellerAutoselect`
+- **Selection Mechanism:** Selected in `FlutterMain::SelectedRenderingAPI` when `settings.enable_impeller` is true, `api_level >= 29`, and `!IsVivante()`.
+- **Implementation:** Backed by `AndroidContextDynamicImpeller` and `AndroidSurfaceDynamicImpeller`.
+- **Reachability & Dependencies:** Default production path for modern Android devices.
+- **Decision:** **Retain.** Interacts directly with Blocker B-1 (deferred graphics context resolution).
+
+### 6.4 `kMergeAfterLaunch`
+- **Selection Mechanism:** Reached via the `--merged-platform-ui-thread=mergeAfterLaunch` engine switch.
+- **Implementation:** Managed through `switches.cc` and `Shell::Create`.
+- **Reachability & Dependencies:** Relied upon by specific internal Flutter clients.
+- **Decision:** **Retain.** Maintained on the engine-switch route per `MIGRATION_PLAN.md` §4; do not delete.
+
+**Outcome for T-0.5:** Zero configurations deleted on this branch. Findings recorded in `DR-0017`.
+
