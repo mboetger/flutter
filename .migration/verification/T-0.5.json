@@ -1,0 +1,23 @@
+{
+  "task_id": "T-0.5",
+  "branch": "android-embedder-v8/t-0.5-delete-vestigial-configs",
+  "commit_sha": "1b714431d768975ea7449629291a68dad7e9bb44",
+  "parent_sha": "590d51074453974efd333de679d4d5cf7518889a",
+  "timestamp": "2026-09-15T20:36:59.254721Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 204947,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
