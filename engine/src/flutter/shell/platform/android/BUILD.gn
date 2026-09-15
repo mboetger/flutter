@@ -50,6 +50,7 @@ executable("flutter_shell_native_unittests") {
     "flutter_shell_native_unittests.cc",
     "image_lru_unittests.cc",
     "platform_view_android_jni_impl_unittests.cc",
+    "platform_view_android_surface_lifecycle_unittests.cc",
     "platform_view_android_unittests.cc",
   ]
   if (!slimpeller) {
