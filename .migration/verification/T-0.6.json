@@ -1,0 +1,23 @@
+{
+  "task_id": "T-0.6",
+  "branch": "android-embedder-v8/t-0.6-graphics-context-spike",
+  "commit_sha": "bc42cef018062474a0342cf0e2d8041f27c4ae3d",
+  "parent_sha": "fbbe881b2e15b1478fb0699f474a9d3ea46131e6",
+  "timestamp": "2026-09-15T20:43:19.171066Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 205371,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
