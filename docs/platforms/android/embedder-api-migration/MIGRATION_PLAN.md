@@ -121,7 +121,7 @@ These are derived from the v7 post-mortem. Each one maps to a specific way v7 we
 
 **I-6 — Net CI coverage may not decrease.** Deleting a test file requires either a replacement test or an explicit, reviewed waiver naming what coverage is being given up.
 
-**I-7 — 400-line diff cap.** Excluding generated files and pure deletions, no PR exceeds 400 changed lines. If a change cannot be split, that is a signal the refactor is wrong, not that the cap is wrong.
+**I-7 — tiered diff cap.** Excluding generated files, pure deletions, **and tests**: mechanical, tooling, and pure-refactor changes that alter no runtime behaviour cap at **3000 changed lines**; any change that alters rendering or runtime behaviour caps at **1000 changed lines**. Tests are excluded from the count entirely and must never be dropped, shortened, or merged to fit a cap. If a change cannot be split, that is a signal the refactor is wrong, not that the cap is wrong — but the remedy is always more branches, never fewer tests or fewer controls.
 
 **I-8 — `nogncheck` requires a bug.** Every `// nogncheck` needs an adjacent `// TODO(b/NNN)`. The count is tracked and must trend to zero. *v7 added 19.*
 

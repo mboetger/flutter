@@ -1,0 +1,59 @@
+{
+  "task_id": "T-0.15a",
+  "branch": "android-embedder-v8/t-0.15a-tooling-core",
+  "commit_sha": "3f004339559b51e4ac4499573c51133733f9971e",
+  "parent_sha": "3060e32c45fd47494980cc8a790f8747ae52242a",
+  "timestamp": "2026-09-15T18:32:57.933539Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": true,
+  "dirty_paths": [
+    ".migration/decisions/DR-0003.md",
+    ".migration/decisions/DR-0005.md",
+    ".migration/decisions/DR-0006.md",
+    ".migration/decisions/DR-0009.md",
+    ".migration/decisions/DR-0012.md",
+    ".migration/plans/T-0.15.plan-review-1.md",
+    ".migration/plans/T-0.15.plan-review-3.md",
+    ".migration/plans/T-0.15.replan2-review-1.md",
+    ".migration/plans/T-0.15.replan2-review-2.md",
+    ".migration/plans/T-0.15.replan2-review-3.md",
+    ".migration/plans/T-0.15.replan2-review-4.md",
+    ".migration/plans/T-0.15.replan3-review-1.md",
+    ".migration/plans/T-0.15.replan3-review-2.md",
+    ".migration/plans/T-0.15a.replan-review-1.md",
+    ".migration/plans/T-0.15a.replan-review-2.md",
+    ".migration/plans/T-0.15a.replan-review-3.md",
+    ".migration/plans/T-0.15a.replan-review-4.md",
+    ".migration/reviews/T-0.15a.code-review-1.md",
+    ".migration/reviews/T-0.15a.code-review-2.md",
+    ".migration/reviews/T-0.15a.code-review-4.md",
+    ".migration/reviews/T-0.15a.code-review-5.md",
+    ".migration/reviews/T-0.15a.code-review-r2-1.md",
+    ".migration/reviews/T-0.15a.code-review-r2-2.md",
+    ".migration/reviews/T-0.15a.code-review-r2-3.md",
+    ".migration/reviews/T-0.15a.code-review-r2-4.md",
+    ".migration/reviews/T-0.15a.code-review-r2-5.md",
+    ".migration/reviews/T-0.15a.code-review-r3-1.md",
+    ".migration/reviews/T-0.15a.code-review-r3-2.md",
+    ".migration/verification/T-0.15a.implementer-evidence.REJECTED-FABRICATED.md",
+    ".migration/verification/T-0.15a.implementer-evidence.md",
+    ".migration/verification/T-0.15a.json",
+    "dev/tools/bin/migration_verify.dart",
+    "dev/tools/lib/migration_verify.dart",
+    "dev/tools/test/migration_verify_test.dart"
+  ],
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 212653,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}

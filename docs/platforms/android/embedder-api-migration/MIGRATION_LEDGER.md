@@ -28,7 +28,7 @@ Check every one before pushing a branch. A "no" on any line means the branch is 
 - [ ] **I-4** Behaviour claims are backed by a test that fails before and passes after.
 - [ ] **I-5** Any new test target is wired into `testing/run_tests.py` and `ci/builders/*.json` **on this branch**.
 - [ ] **I-6** Net test coverage did not decrease.
-- [ ] **I-7** Diff is ≤ 400 lines excluding generated files and pure deletions.
+- [ ] **I-7** Diff is within the applicable cap, excluding generated files, pure deletions, **and tests**: **≤ 3000 lines** for mechanical, tooling, or pure-refactor changes that alter no runtime behaviour; **≤ 1000 lines** for any change that alters rendering or runtime behaviour. Tests are never counted and must never be dropped, shortened, or merged to fit a cap.
 - [ ] **I-8** Any new `// nogncheck` has an adjacent `// TODO(b/NNN)`.
 - [ ] **I-9** No changes to `shell/common/`, `runtime/`, `lib/ui/`, or non-Android embedders. Those need their own branch and a cross-platform reviewer.
 - [ ] **I-10** No Android types, `#if defined(__ANDROID__)`, or NDK headers added under `shell/platform/embedder/`.
@@ -50,7 +50,7 @@ Commit:  [android-embedder] T-0.3: <one-line summary>
 ```
 
 > [!IMPORTANT]
-> **Who runs these commands matters.** The *Implementer* creates the branch and makes local `WIP:` commits. Only the *orchestrator* squashes, commits the final message, and pushes — and only after the *Validator* returns `PASS`. See **§D.7** for the exact sequence. An implementer that pushes has bypassed two of the five required agents.
+> **Who runs these commands matters.** The *Orchestrator* creates the branch. The *Implementer* only makes local `WIP:` commits. Only the *orchestrator* squashes, commits the final message, and pushes — and only after the *Validator* returns `PASS`. See **§D.7** for the exact sequence. An implementer that pushes has bypassed two of the five required agents.
 
 **Stack topology.** Branches form a single linear stack. Each branch is cut from the previous task's branch, **not** from `master`:
 
@@ -74,7 +74,11 @@ git push origin android-embedder-v8/<this-task-id>-<slug>
 4. **Verification:** the path to the committed verification artifact (A.6) and a one-line result summary.
 5. **Invariant checklist** from A.1, filled in.
 
-**Why the 400-line cap still applies.** The final PR will contain the entire stack. The only thing that makes it reviewable is a clean commit-by-commit history. A 4,000-line commit is unreviewable in a stack of 100 the same way it is unreviewable in a PR — v7's single commits reached +4,606 lines and nobody could audit them.
+**Why a diff cap still applies.** The final PR will contain the entire stack. The only thing that makes it reviewable is a clean commit-by-commit history. A 4,000-line commit is unreviewable in a stack of 100 the same way it is unreviewable in a PR — v7's single commits reached +4,606 lines and nobody could audit them.
+
+The cap is **tiered** because review attention is not uniform. A 3,000-line mechanical rename is genuinely reviewable: the reader checks the pattern and spot-checks instances. A 3,000-line change to rendering or threading is not, because every line can carry a behavioural consequence. Hence 3000 for mechanical, tooling, and pure-refactor work; 1000 where runtime behaviour changes.
+
+**Tests are excluded from the count entirely.** An earlier revision of this ledger counted them, and on T-0.15a that produced five consecutive plan revisions in which tests were deferred, thinned, or silently dropped to fit the number — including one attempt to credit deleted lines as negative. A cap that discourages test coverage is worse than no cap. Test volume is never the variable that flexes.
 
 > [!CAUTION]
 > **Do not create a branch manifest file.** No `MIGRATION_BRANCHES.md`, no hand-maintained list of branch names or head SHAs, anywhere in the repo or the ledger.
@@ -321,7 +325,7 @@ A physical Android device is attached to the workstation. It is a **single, non-
 
 | Stage | Tasks | Done | Parked | Split | Blocked |
 |---|---|---|---|---|---|
-| 0 — Pre-Work & Test Hardening | 16 | 0 | 0 | 0 | — |
+| 0 — Pre-Work & Test Hardening | 18 | 0 | 0 | 0 | — |
 | 1 — Addressing Gaps | 19 | 0 | 0 | 0 | — |
 | 2 — Refactoring & Decoupling | TBD after T-0.6/0.7/0.8/0.13 | 0 | 0 | 0 | — |
 | 3 — Adherence | TBD after Stage 2 | 0 | 0 | 0 | — |
@@ -1138,15 +1142,29 @@ Also enumerate the **Java-side** public surface that must keep working: `Texture
 
 ---
 
-### T-0.15 — Verification tooling and stack audit (**branch #2, immediately after T-0.0**)
+### T-0.15a — Verification tooling core and artifacts
 
 | Field | Value |
 |---|---|
+| **Task ID and title** | T-0.15a — Verification tooling core and artifacts |
+| **Goal, one sentence** | Create the core verification JSON schema, dependency-injected execution/filesystem validators, and `--check-artifact-sha` pipeline completeness check. |
 | **Depends on** | T-0.0 |
 | **Flag** | none |
-| **Behaviour change** | No — tooling only |
-| **Size** | ~400 lines of Dart |
-| **Reviewer** | Android + infra |
+| **Behaviour change: yes/no** | No |
+| **Anchor** | `dev/tools/bin/migration_verify.dart` |
+| **Composition impact** | none — tooling only |
+
+### T-0.15b — Stack audit and device lock
+
+| Field | Value |
+|---|---|
+| **Task ID and title** | T-0.15b — Stack audit and device lock |
+| **Goal, one sentence** | Implement across-branch history checking (`--audit-stack`) and exclusive hardware lock (`--device-lock`). |
+| **Depends on** | T-0.15a |
+| **Flag** | none |
+| **Behaviour change: yes/no** | No |
+| **Anchor** | `dev/tools/bin/migration_verify.dart` |
+| **Composition impact** | none — tooling only |
 
 > [!CAUTION]
 > **This is the first *code* branch in the stack — cut from T-0.0, ahead of T-0.1.** Every other task's evidence depends on it. Without it there is no mechanism to tick a box, and the migration is running blind in exactly the way v7 did.
@@ -1442,7 +1460,7 @@ The previous attempt added `FlutterEngineScreenshot` and `FlutterEngineFreeScree
 
 **Implement exactly the C-ABI in the T-0.13 deliverable.** The shape sketched in plan §B-4 is a starting point, not the specification — if T-0.13's measurements changed it, follow T-0.13.
 
-#### PR split (I-7: ≤400 lines each)
+#### PR split (I-7: within the applicable cap, tests excluded)
 
 **T-1.18a — Header and proc table.**
 - Append to `embedder.h`: `FlutterRasterThreadMergerRef`, `FlutterPostPrerollResult`, `FlutterFrameThreadingInfo`, `FlutterPostPrerollCallback`, `FlutterCompositorFrameCallback`.
@@ -1528,7 +1546,7 @@ SHARD=android_engine_opengles_tests bin/cache/dart-sdk/bin/dart dev/bots/test.da
 - The Stage 0 characterization tests must pass **without modification**. Needing to change one means behaviour changed — stop the branch and treat it as a blocking finding (§D.5), never as a test to adjust (I-3).
 - No `FlutterEngine*` call is introduced in Stage 2. Shapes only.
 - The T-0.9 ratchet may not increase.
-- Diff ≤ 400 lines (I-7). "Migrate all overrides" is not one PR.
+- Diff within the I-7 cap for its change class, tests excluded. "Migrate all overrides" is not one PR.
 - **No file under `external_view_embedder/`, and neither external texture implementation, may be deleted in Stage 2.** Refactors move code; they do not remove capability. Deleting any of them requires a separate PR citing I-11 with a reviewer who is not the author.
 
 ## Stage 2 exit gate
@@ -1772,10 +1790,10 @@ The orchestrator (the top-level agent) is a **dispatcher and a bookkeeper**. It 
 
 ### D.3.1 The return block
 
-Every agent's final message is exactly this, and nothing else of substance:
-
+Every agent's final message is exactly this, and nothing else of substance.
+For planners, reviewers, and validators:
 ```
-ROLE:      planner | plan-reviewer | implementer | code-reviewer | validator
+ROLE:      planner | plan-reviewer | code-reviewer | validator
 TASK:      T-X.Y
 ROUND:     <n>            # loops only
 VERDICT:   DONE | APPROVE | REVISE | PASS | FAIL | BLOCKED | SPLIT
@@ -1784,6 +1802,21 @@ BLOCKING:  <count>        # reviewers only
 DECISIONS: DR-NNNN, ...   # or 'none'
 SUMMARY:   <= 3 lines, plain English
 NEXT:      <the role the orchestrator should spawn next>
+```
+
+For the implementer exclusively (DR-0016):
+```
+ROLE: implementer
+VERDICT: DONE | BLOCKED | SPLIT
+GATES:
+  dart analyze --fatal-infos <files>        -> <verbatim final line>
+  dart format --set-exit-if-changed <files> -> <verbatim final line>
+  dart test <file>                          -> <verbatim final line>
+  bin/flutter test <file>                   -> <verbatim final line>
+  outside-dev/tools experiment              -> <result>
+  end-to-end tool invocation                -> <verbatim final outcome>
+Follow-ups: <Any T-X.Y tasks>
+Artifacts: <list of touched files>
 ```
 
 An agent that returns prose instead of this block has failed its contract; re-spawn it with the block pasted back at it.
@@ -1851,7 +1884,7 @@ Hard rules:
   - Never assert engine behaviour you have not verified. Run the command, read
     the file, cite file:line. The previous migration's review agents asserted
     things that were false, twice; assume you are about to do the same.
-  - If the plan exceeds the task's 400-line diff budget (I-7), say so and
+  - If the plan exceeds the task's applicable I-7 diff budget, say so and
     propose a split instead of planning an oversized change.
 
 Finish with the §D.3.1 return block.
@@ -1923,7 +1956,6 @@ Also read /usr/local/google/home/boetger/src/flutter/.agents/rules/dart-editing.
 before editing any Dart.
 
 Do:
-  - Create the branch per §A.2, cut from the previous task's branch.
   - Implement the approved plan. Write the failing test FIRST, confirm it fails,
     then make it pass. Record both, you will be asked for them.
   - Commit locally as 'WIP: <task-id> <step>'. DO NOT push. DO NOT open a PR,
@@ -2304,7 +2336,7 @@ The Planner says so and returns `SPLIT` or `BLOCKED`. It does **not** quietly pl
 | The work is already done upstream | `BLOCKED` + DR recording the evidence; orchestrator marks the row done-by-upstream in §B. |
 | The row is three tasks | `SPLIT` with the proposed subtasks and their seven contract fields each. |
 | The row's premise is false | `BLOCKED` + DR. This is a finding about `MIGRATION_PLAN.md` and the plan gets corrected on this branch. |
-| The row is right but bigger than I-7's 400 lines | `SPLIT`. Never plan an oversized change (§D.4.1). |
+| The row is right but bigger than its applicable I-7 cap | `SPLIT`. Never plan an oversized change (§D.4.1). Never shrink it by dropping tests — tests are excluded from the cap. |
 
 ---
 
@@ -2395,6 +2427,7 @@ The existing test `dev/integration_tests/android_engine_test/lib/hcpp/platform_v
 | HCPP tests | `.../lib/hcpp/` — 14 `*_main.dart` |
 | External texture tests | `.../lib/external_texture/` — `surface_texture_smiley_face_main.dart`, `surface_producer_smiley_face_main.dart` |
 | Devicelab tasks | `android_views`, `hybrid_android_views_integration_test`, `platform_views_scroll_perf__timeline_summary`, `platform_views_scroll_perf_impeller__timeline_summary`, `platform_views_hcpp_scroll_perf__timeline_summary`, `android_view_scroll_perf__timeline_summary`, `platform_views_scroll_perf_ad_banners`, `platform_views_scroll_perf_bottom_ad_banner`, `android_lifecycles_test`, `android_choreographer_do_frame_test`, `android_semantics_integration_test`, `android_display_cutout`, `android_verified_input_test` |
+| `dev/tools/` CI runner (verified 2026-09-15) | `dev/bots/suite_runners/run_framework_tests.dart:307` — tests run under `flutter test` in CI, via `runFlutterTest(...'dev','tools')`. `runDartTest` exists and is used elsewhere (:304), so the choice is deliberate. Any test landing in `dev/tools/` MUST pass under `flutter test`. |
 
 ## G.7 Git topology
 
