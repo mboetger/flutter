@@ -1,0 +1,26 @@
+{
+  "task_id": "T-0.15b",
+  "branch": "android-embedder-v8/t-0.15b-stack-audit",
+  "commit_sha": "719d68603e4144364ff79abc8290196b53e8a7c5",
+  "parent_sha": "6db6b7d794c1799f5c5747eb12fd775f8fca99aa",
+  "timestamp": "2026-09-15T19:41:59.553728Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": true,
+  "dirty_paths": [
+    ".migration/verification/T-0.15b.json"
+  ],
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 211795,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
