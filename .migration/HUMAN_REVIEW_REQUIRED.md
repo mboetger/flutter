@@ -29,4 +29,11 @@ Append, never reorder. Use this shape:
 
 ## Entries
 
-*(None yet.)*
+### T-0.7 — iOS owner sign-off on Renderer Availability API
+- **Role required:** iOS engine owner
+- **Question they must answer:** Does `FlutterEngineSetGpuAvailability` (`kFlutterGpuAvailabilityAvailable`, `kFlutterGpuAvailabilityFlushAndMakeUnavailable`, `kFlutterGpuAvailabilityUnavailable`) faithfully expose the `Shell::SetGpuAvailability` contract needed by iOS on app backgrounding/foregrounding?
+- **Where to look:** `engine/src/flutter/docs/engine/renderer_availability.md` §5, `shell/common/shell.h:64`, `shell/platform/darwin/ios/framework/Source/FlutterEngine.mm:857`.
+- **Mechanical evidence already gathered:** Verified `Shell::SetGpuAvailability` implementation in `shell.cc:2434` and verified T-0.2 surface lifecycle characterization tests.
+- **What the pipeline assumed in the meantime:** The Embedder API exposes `FlutterEngineSetGpuAvailability` directly mapping to `Shell::SetGpuAvailability`, recorded in `DR-0019`.
+- **Blast radius if the assumption is wrong:** Minimal; the API is additive and inert for existing embedders until adopted.
+
