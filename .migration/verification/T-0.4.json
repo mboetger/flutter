@@ -1,0 +1,23 @@
+{
+  "task_id": "T-0.4",
+  "branch": "android-embedder-v8/t-0.4-viewport-metrics-affinity",
+  "commit_sha": "97fe6dabd67e0cb59af4516535bedde52b547abb",
+  "parent_sha": "ecd1dd58b70fed1a7b73760178f09aa2fde5aa9f",
+  "timestamp": "2026-09-15T20:28:38.107287Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 255194,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
