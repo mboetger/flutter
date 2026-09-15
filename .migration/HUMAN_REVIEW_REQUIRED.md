@@ -44,3 +44,11 @@ Append, never reorder. Use this shape:
 - **Mechanical evidence already gathered:** Verified `PlatformMessageHandlerIos::DoesHandlePlatformMessageOnPlatformThread()` is `false`, verified T-0.4 platform message affinity tests in tree (`platform_message_affinity_unittests.cc`).
 - **What the pipeline assumed in the meantime:** The Embedder API will grow an explicit configuration knob in Stage 1 (Task T-1.13) allowing embedders to opt out of the automatic hop to the platform thread, recorded in `DR-0020`.
 - **Blast radius if the assumption is wrong:** Minimal; zero-initialization maintains `true` as the default for existing desktop embedders.
+
+### T-0.13 — Engine Threading & Desktop Owners sign-off on Dynamic Thread Merging C-ABI
+- **Role required:** Engine threading owner (Chris Bracken) and Desktop/iOS embedder owners
+- **Question they must answer:** Does the proposed dynamic thread merging C-ABI (`FlutterRasterThreadMergerRef`, `FlutterFrameThreadingInfo`, `post_preroll_callback`, `begin_frame_callback`, `end_frame_callback`, `supports_dynamic_thread_merging`) properly expose engine thread merger capabilities without compromising thread safety or desktop embedder simplicity?
+- **Where to look:** `engine/src/flutter/docs/android/embedder_migration_b4_thread_merging.md`, `fml/raster_thread_merger.h`, `shell/platform/embedder/embedder.h`.
+- **Mechanical evidence already gathered:** Verified steady-state lease behavior (continuous 10-frame lease renewal without flapping), verified static-merge compatibility with `--merged-platform-ui-thread`, and verified zero-initialization inertness for desktop embedders.
+- **What the pipeline assumed in the meantime:** The Embedder API will be extended in Stage 1 (Task T-1.18) with the specified callbacks and opaque merger reference, recorded in `DR-0021`.
+- **Blast radius if the assumption is wrong:** Blocking for Hybrid Composition (HC) on Android; HC would not be able to land on the Embedder API without an alternative synchronization mechanism.
