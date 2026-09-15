@@ -37,3 +37,10 @@ Append, never reorder. Use this shape:
 - **What the pipeline assumed in the meantime:** The Embedder API exposes `FlutterEngineSetGpuAvailability` directly mapping to `Shell::SetGpuAvailability`, recorded in `DR-0019`.
 - **Blast radius if the assumption is wrong:** Minimal; the API is additive and inert for existing embedders until adopted.
 
+### T-0.8 — iOS owner sign-off on Platform Message Thread Affinity Configuration
+- **Role required:** iOS engine owner
+- **Question they must answer:** Does the proposed `does_handle_platform_messages_on_platform_thread` configuration knob and extended platform message callback satisfy iOS's requirement to bypass the main thread for custom task queues in `FlutterEmbedderAPIBridge`?
+- **Where to look:** `engine/src/flutter/docs/engine/platform_message_threading.md` §5, `shell/platform/darwin/ios/platform_message_handler_ios.mm:83-96`, `shell/platform/embedder/embedder.h:2581`.
+- **Mechanical evidence already gathered:** Verified `PlatformMessageHandlerIos::DoesHandlePlatformMessageOnPlatformThread()` is `false`, verified T-0.4 platform message affinity tests in tree (`platform_message_affinity_unittests.cc`).
+- **What the pipeline assumed in the meantime:** The Embedder API will grow an explicit configuration knob in Stage 1 (Task T-1.13) allowing embedders to opt out of the automatic hop to the platform thread, recorded in `DR-0020`.
+- **Blast radius if the assumption is wrong:** Minimal; zero-initialization maintains `true` as the default for existing desktop embedders.
