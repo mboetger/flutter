@@ -55,6 +55,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_asset_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_platform_message_response.h"
@@ -2498,6 +2499,39 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     run_configuration.SetEngineId(args->engine_id);
   }
 
+  if (SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
+    for (size_t i = 0; i < args->asset_resolvers_count; ++i) {
+      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
+      if (resolver == nullptr) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "An element in the asset_resolvers array was null.");
+      }
+      if (SAFE_ACCESS(resolver, struct_size, 0) <
+          sizeof(FlutterAssetResolver)) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "An element in the asset_resolvers array had an invalid struct "
+            "size.");
+      }
+      if (SAFE_ACCESS(resolver, get_asset_callback, nullptr) == nullptr) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "An element in the asset_resolvers array had a null "
+            "get_asset_callback.");
+      }
+      run_configuration.AddAssetResolver(
+          std::make_unique<flutter::EmbedderAssetResolver>(*resolver));
+    }
+  } else if (SAFE_ACCESS(args, asset_resolvers, nullptr) == nullptr &&
+             SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "asset_resolvers_count was greater than zero, but asset_resolvers "
+        "array was null.");
+  }
+
   if (!run_configuration.IsValid()) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
@@ -3836,6 +3870,41 @@ FlutterEngineResult FlutterEngineNotifySurfaceDestroyed(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineUpdateAssetResolver(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterAssetResolver* resolver) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (!resolver) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Asset resolver handle was invalid.");
+  }
+
+  if (SAFE_ACCESS(resolver, struct_size, 0) < sizeof(FlutterAssetResolver)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Asset resolver struct size was invalid.");
+  }
+
+  if (SAFE_ACCESS(resolver, get_asset_callback, nullptr) == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Asset resolver get_asset_callback was null.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  auto embedder_resolver =
+      std::make_unique<flutter::EmbedderAssetResolver>(*resolver);
+  auto type = embedder_resolver->GetType();
+  if (!embedder_engine->UpdateAssetResolver(std::move(embedder_resolver),
+                                            type)) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not update asset resolver.");
+  }
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -3895,6 +3964,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(SetGpuAvailability, FlutterEngineSetGpuAvailability);
   SET_PROC(NotifySurfaceCreated, FlutterEngineNotifySurfaceCreated);
   SET_PROC(NotifySurfaceDestroyed, FlutterEngineNotifySurfaceDestroyed);
+  SET_PROC(UpdateAssetResolver, FlutterEngineUpdateAssetResolver);
 #undef SET_PROC
 
   return kSuccess;

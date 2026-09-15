@@ -392,6 +392,16 @@ bool EmbedderEngine::ScheduleFrame() {
   return true;
 }
 
+bool EmbedderEngine::UpdateAssetResolver(
+    std::unique_ptr<AssetResolver> updated_asset_resolver,
+    AssetResolver::AssetResolverType type) {
+  if (!IsValid()) {
+    return false;
+  }
+  shell_->UpdateAssetResolverByType(std::move(updated_asset_resolver), type);
+  return true;
+}
+
 Shell& EmbedderEngine::GetShell() {
   FML_DCHECK(shell_);
   return *shell_.get();

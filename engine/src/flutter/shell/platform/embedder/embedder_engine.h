@@ -8,6 +8,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "flutter/assets/asset_resolver.h"
 #include "flutter/fml/macros.h"
 #include "flutter/shell/common/shell.h"
 #include "flutter/shell/common/thread_host.h"
@@ -89,6 +90,10 @@ class EmbedderEngine {
       const std::function<void(FlutterNativeThreadType)>& closure) const;
 
   bool ScheduleFrame();
+
+  bool UpdateAssetResolver(
+      std::unique_ptr<AssetResolver> updated_asset_resolver,
+      AssetResolver::AssetResolverType type);
 
   Shell& GetShell();
 
