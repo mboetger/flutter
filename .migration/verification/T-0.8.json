@@ -1,0 +1,23 @@
+{
+  "task_id": "T-0.8",
+  "branch": "android-embedder-v8/t-0.8-message-affinity-spike",
+  "commit_sha": "108c98e19e86170a353724808e208d1349b8e0fd",
+  "parent_sha": "b0a651a45fc5ec84cc3b75cfdae87e7a7bf5dad0",
+  "timestamp": "2026-09-15T20:57:00.295210Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 209411,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
