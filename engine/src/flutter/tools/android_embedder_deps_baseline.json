@@ -1,0 +1,330 @@
+{
+  "targets": {
+    "//shell/platform/android/context:context": {
+      "internal_deps": [
+        "//flutter/impeller/renderer",
+        "//flutter/skia",
+        "//flutter/vulkan"
+      ],
+      "internal_deps_count": 3,
+      "internal_includes": [
+        "android_context.h:flutter/impeller/base/flags.h",
+        "android_context.h:flutter/impeller/renderer/context.h"
+      ],
+      "internal_includes_count": 2,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/external_view_embedder:android_external_view_embedder_unittests": {
+      "internal_deps": [
+        "//flutter/flow",
+        "//flutter/shell/gpu:gpu_surface_gl",
+        "//flutter/testing",
+        "//flutter/testing:dart",
+        "//flutter/testing:skia"
+      ],
+      "internal_deps_count": 5,
+      "internal_includes": [
+        "external_view_embedder_unittests.cc:flutter/flow/embedded_views.h",
+        "external_view_embedder_unittests.cc:flutter/flow/surface.h",
+        "external_view_embedder_unittests.cc:flutter/shell/common/thread_host.h",
+        "external_view_embedder_unittests.cc:flutter/testing/post_task_sync.h",
+        "external_view_embedder_unittests.cc:flutter/testing/testing.h"
+      ],
+      "internal_includes_count": 5,
+      "nogncheck_count": 0,
+      "type": "executable"
+    },
+    "//shell/platform/android/external_view_embedder:external_view_embedder": {
+      "internal_deps": [
+        "//flutter/flow",
+        "//flutter/impeller/renderer/backend/vulkan",
+        "//flutter/skia"
+      ],
+      "internal_deps_count": 3,
+      "internal_includes": [
+        "external_view_embedder.h:flutter/flow/embedded_views.h",
+        "external_view_embedder_2.h:flutter/flow/embedded_views.h",
+        "external_view_embedder_wrapper.cc:flutter/impeller/renderer/backend/vulkan/context_vk.h",
+        "external_view_embedder_wrapper.h:flutter/flow/embedded_views.h",
+        "surface_pool.h:flutter/flow/surface.h"
+      ],
+      "internal_includes_count": 5,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/jni:jni": {
+      "internal_deps": [
+        "//flutter/flow",
+        "//flutter/lib/ui",
+        "//flutter/skia"
+      ],
+      "internal_deps_count": 3,
+      "internal_includes": [
+        "platform_view_android_jni.h:flutter/flow/embedded_views.h",
+        "platform_view_android_jni.h:flutter/lib/ui/window/platform_message.h"
+      ],
+      "internal_includes_count": 2,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/jni:jni_mock": {
+      "internal_deps": [],
+      "internal_deps_count": 0,
+      "internal_includes": [],
+      "internal_includes_count": 0,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/jni:jni_unittests": {
+      "internal_deps": [
+        "//flutter/testing",
+        "//flutter/testing:dart",
+        "//flutter/testing:skia"
+      ],
+      "internal_deps_count": 3,
+      "internal_includes": [],
+      "internal_includes_count": 0,
+      "nogncheck_count": 0,
+      "type": "executable"
+    },
+    "//shell/platform/android/jni:mock_jni_env": {
+      "internal_deps": [],
+      "internal_deps_count": 0,
+      "internal_includes": [],
+      "internal_includes_count": 0,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/platform_view_android_delegate:platform_view_android_delegate": {
+      "internal_deps": [
+        "//flutter/lib/ui",
+        "//flutter/shell/common",
+        "//flutter/skia"
+      ],
+      "internal_deps_count": 3,
+      "internal_includes": [
+        "platform_view_android_delegate.h:flutter/shell/common/platform_view.h"
+      ],
+      "internal_includes_count": 1,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/platform_view_android_delegate:platform_view_android_delegate_unittests": {
+      "internal_deps": [
+        "//flutter/testing",
+        "//flutter/testing:dart",
+        "//flutter/txt"
+      ],
+      "internal_deps_count": 3,
+      "internal_includes": [],
+      "internal_includes_count": 0,
+      "nogncheck_count": 0,
+      "type": "executable"
+    },
+    "//shell/platform/android/surface:native_window": {
+      "internal_deps": [
+        "//flutter/display_list",
+        "//flutter/skia"
+      ],
+      "internal_deps_count": 2,
+      "internal_includes": [
+        "android_native_window.h:flutter/display_list/geometry/dl_geometry_types.h"
+      ],
+      "internal_includes_count": 1,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/surface:surface": {
+      "internal_deps": [
+        "//flutter/flow",
+        "//flutter/shell/common",
+        "//flutter/skia"
+      ],
+      "internal_deps_count": 3,
+      "internal_includes": [
+        "android_surface.h:flutter/flow/embedded_views.h",
+        "android_surface.h:flutter/flow/surface.h",
+        "snapshot_surface_producer.h:flutter/flow/surface.h",
+        "snapshot_surface_producer.h:flutter/shell/common/snapshot_surface_producer.h"
+      ],
+      "internal_includes_count": 4,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android/surface:surface_mock": {
+      "internal_deps": [
+        "//flutter/flow",
+        "//flutter/shell/gpu:gpu_surface_gl",
+        "//flutter/third_party/googletest:gmock",
+        "//flutter/third_party/googletest:gtest",
+        "//flutter/vulkan"
+      ],
+      "internal_deps_count": 5,
+      "internal_includes": [
+        "android_surface_mock.h:flutter/shell/gpu/gpu_surface_gl_skia.h"
+      ],
+      "internal_includes_count": 1,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android:flutter_shell_native": {
+      "internal_deps": [],
+      "internal_deps_count": 0,
+      "internal_includes": [],
+      "internal_includes_count": 0,
+      "nogncheck_count": 0,
+      "type": "shared_library"
+    },
+    "//shell/platform/android:flutter_shell_native_src": {
+      "internal_deps": [
+        "//flutter/flow",
+        "//flutter/impeller",
+        "//flutter/impeller/toolkit/android",
+        "//flutter/impeller/toolkit/egl",
+        "//flutter/impeller/toolkit/gles",
+        "//flutter/impeller/toolkit/glvk",
+        "//flutter/lib/ui",
+        "//flutter/runtime",
+        "//flutter/runtime:libdart",
+        "//flutter/shell/common",
+        "//flutter/skia",
+        "//flutter/txt",
+        "//flutter/vulkan"
+      ],
+      "internal_deps_count": 26,
+      "internal_includes": [
+        "android_context_dynamic_impeller.cc:flutter/impeller/base/validation.h",
+        "android_context_gl_impeller.cc:flutter/impeller/renderer/backend/gles/context_gles.h",
+        "android_context_gl_impeller.cc:flutter/impeller/renderer/backend/gles/proc_table_gles.h",
+        "android_context_gl_impeller.cc:flutter/impeller/renderer/backend/gles/reactor_gles.h",
+        "android_context_gl_impeller.cc:flutter/impeller/toolkit/egl/context.h",
+        "android_context_gl_impeller.cc:flutter/impeller/toolkit/egl/surface.h",
+        "android_context_gl_impeller.h:flutter/impeller/toolkit/egl/display.h",
+        "android_context_gl_skia.h:flutter/shell/common/platform_view.h",
+        "android_context_vk_impeller.cc:flutter/impeller/entity/vk/entity_shaders_vk.h",
+        "android_context_vk_impeller.cc:flutter/impeller/entity/vk/framebuffer_blend_shaders_vk.h",
+        "android_context_vk_impeller.cc:flutter/impeller/entity/vk/modern_shaders_vk.h",
+        "android_context_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/context_vk.h",
+        "android_display.h:flutter/shell/common/display.h",
+        "android_egl_surface.h:flutter/display_list/geometry/dl_geometry_types.h",
+        "android_shell_holder.cc:flutter/lib/ui/painting/image_generator_registry.h",
+        "android_shell_holder.cc:flutter/shell/common/rasterizer.h",
+        "android_shell_holder.cc:flutter/shell/common/run_configuration.h",
+        "android_shell_holder.cc:flutter/shell/common/thread_host.h",
+        "android_shell_holder.h:flutter/shell/common/run_configuration.h",
+        "android_shell_holder.h:flutter/shell/common/shell.h",
+        "android_shell_holder.h:flutter/shell/common/thread_host.h",
+        "android_surface_dynamic_impeller.h:flutter/impeller/display_list/aiks_context.h",
+        "android_surface_dynamic_impeller.h:flutter/impeller/renderer/backend/vulkan/surface_context_vk.h",
+        "android_surface_gl_impeller.cc:flutter/impeller/toolkit/egl/surface.h",
+        "android_surface_gl_impeller.cc:flutter/shell/gpu/gpu_surface_gl_impeller.h",
+        "android_surface_gl_impeller.h:flutter/impeller/renderer/context.h",
+        "android_surface_gl_impeller.h:flutter/shell/gpu/gpu_surface_gl_delegate.h",
+        "android_surface_gl_skia.h:flutter/shell/gpu/gpu_surface_gl_skia.h",
+        "android_surface_software.h:flutter/shell/gpu/gpu_surface_software.h",
+        "android_surface_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/context_vk.h",
+        "android_surface_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/swapchain/swapchain_vk.h",
+        "android_surface_vk_impeller.cc:flutter/shell/gpu/gpu_surface_vulkan_impeller.h",
+        "android_surface_vk_impeller.cc:flutter/vulkan/vulkan_native_surface_android.h",
+        "android_surface_vk_impeller.h:flutter/impeller/display_list/aiks_context.h",
+        "android_surface_vk_impeller.h:flutter/impeller/renderer/backend/vulkan/surface_context_vk.h",
+        "flutter_main.cc:flutter/lib/ui/plugins/callback_cache.h",
+        "flutter_main.cc:flutter/runtime/dart_vm.h",
+        "flutter_main.cc:flutter/shell/common/switches.h",
+        "flutter_main.h:flutter/runtime/dart_service_isolate.h",
+        "image_external_texture.cc:flutter/impeller/toolkit/android/proc_table.h",
+        "image_external_texture_gl.cc:flutter/impeller/core/formats.h",
+        "image_external_texture_gl.cc:flutter/impeller/display_list/dl_image_impeller.h",
+        "image_external_texture_gl.cc:flutter/impeller/toolkit/android/hardware_buffer.h",
+        "image_external_texture_gl.cc:flutter/impeller/toolkit/egl/image.h",
+        "image_external_texture_gl.cc:flutter/impeller/toolkit/gles/texture.h",
+        "image_external_texture_gl.h:flutter/impeller/toolkit/egl/image.h",
+        "image_external_texture_gl.h:flutter/impeller/toolkit/gles/texture.h",
+        "image_external_texture_gl_impeller.cc:flutter/impeller/display_list/dl_image_impeller.h",
+        "image_external_texture_gl_impeller.cc:flutter/impeller/renderer/backend/gles/texture_gles.h",
+        "image_external_texture_gl_impeller.h:flutter/impeller/renderer/backend/gles/context_gles.h",
+        "image_external_texture_gl_skia.cc:flutter/display_list/image/dl_image_skia.h",
+        "image_external_texture_gl_skia.cc:flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
+        "image_external_texture_gl_skia.cc:flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h",
+        "image_external_texture_vk_impeller.cc:flutter/impeller/core/formats.h",
+        "image_external_texture_vk_impeller.cc:flutter/impeller/core/texture_descriptor.h",
+        "image_external_texture_vk_impeller.cc:flutter/impeller/display_list/dl_image_impeller.h",
+        "image_external_texture_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
+        "image_external_texture_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h",
+        "image_external_texture_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/texture_vk.h",
+        "image_external_texture_vk_impeller.cc:flutter/impeller/toolkit/android/hardware_buffer.h",
+        "image_external_texture_vk_impeller.h:flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
+        "image_external_texture_vk_impeller.h:flutter/impeller/renderer/backend/vulkan/context_vk.h",
+        "image_external_texture_vk_impeller.h:flutter/impeller/renderer/backend/vulkan/vk.h",
+        "platform_message_handler_android.h:flutter/lib/ui/window/platform_message.h",
+        "platform_message_handler_android.h:flutter/shell/common/platform_message_handler.h",
+        "platform_message_response_android.h:flutter/lib/ui/window/platform_message_response.h",
+        "platform_view_android.cc:flutter/shell/common/shell_io_manager.h",
+        "platform_view_android.cc:flutter/shell/gpu/gpu_surface_gl_delegate.h",
+        "platform_view_android.h:flutter/lib/ui/window/platform_message.h",
+        "platform_view_android.h:flutter/shell/common/platform_view.h",
+        "platform_view_android.h:flutter/shell/common/snapshot_surface_producer.h",
+        "platform_view_android_jni_impl.cc:flutter/flow/embedded_views.h",
+        "platform_view_android_jni_impl.cc:flutter/impeller/toolkit/android/proc_table.h",
+        "platform_view_android_jni_impl.cc:flutter/lib/ui/plugins/callback_cache.h",
+        "surface_texture_external_texture.cc:flutter/display_list/effects/dl_color_source.h",
+        "surface_texture_external_texture.h:flutter/third_party/skia/include/core/SkM44.h",
+        "surface_texture_external_texture_gl_impeller.cc:flutter/impeller/display_list/dl_image_impeller.h",
+        "surface_texture_external_texture_gl_impeller.h:flutter/impeller/renderer/backend/gles/context_gles.h",
+        "surface_texture_external_texture_gl_impeller.h:flutter/impeller/renderer/backend/gles/texture_gles.h",
+        "surface_texture_external_texture_gl_skia.cc:flutter/display_list/image/dl_image_skia.h",
+        "surface_texture_external_texture_gl_skia.cc:flutter/third_party/skia/include/core/SkColorSpace.h",
+        "surface_texture_external_texture_gl_skia.cc:flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h",
+        "surface_texture_external_texture_gl_skia.cc:flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h",
+        "surface_texture_external_texture_gl_skia.cc:flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
+        "surface_texture_external_texture_gl_skia.cc:flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h",
+        "surface_texture_external_texture_gl_skia.cc:flutter/third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h",
+        "surface_texture_external_texture_vk_impeller.cc:flutter/impeller/display_list/dl_image_impeller.h",
+        "surface_texture_external_texture_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h",
+        "surface_texture_external_texture_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/surface_context_vk.h",
+        "surface_texture_external_texture_vk_impeller.cc:flutter/impeller/renderer/backend/vulkan/texture_vk.h",
+        "surface_texture_external_texture_vk_impeller.cc:flutter/impeller/toolkit/android/hardware_buffer.h",
+        "surface_texture_external_texture_vk_impeller.h:flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
+        "surface_texture_external_texture_vk_impeller.h:flutter/impeller/renderer/backend/vulkan/context_vk.h",
+        "surface_texture_external_texture_vk_impeller.h:flutter/impeller/toolkit/egl/context.h",
+        "surface_texture_external_texture_vk_impeller.h:flutter/impeller/toolkit/egl/display.h",
+        "surface_texture_external_texture_vk_impeller.h:flutter/impeller/toolkit/egl/surface.h",
+        "surface_texture_external_texture_vk_impeller.h:flutter/impeller/toolkit/glvk/trampoline.h",
+        "vsync_waiter_android.h:flutter/shell/common/vsync_waiter.h"
+      ],
+      "internal_includes_count": 98,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    },
+    "//shell/platform/android:flutter_shell_native_unittests": {
+      "internal_deps": [
+        "//flutter/third_party/googletest:gmock",
+        "//flutter/third_party/googletest:gtest"
+      ],
+      "internal_deps_count": 2,
+      "internal_includes": [
+        "android_context_gl_unittests.cc:flutter/shell/common/thread_host.h",
+        "android_viewport_metrics_unittests.cc:flutter/lib/ui/window/viewport_metrics.h",
+        "image_lru_unittests.cc:flutter/display_list/image/dl_image_skia.h"
+      ],
+      "internal_includes_count": 3,
+      "nogncheck_count": 0,
+      "type": "executable"
+    },
+    "//shell/platform/android:image_generator": {
+      "internal_deps": [
+        "//flutter/lib/ui",
+        "//flutter/skia"
+      ],
+      "internal_deps_count": 2,
+      "internal_includes": [
+        "android_image_generator.h:flutter/lib/ui/painting/image_generator.h"
+      ],
+      "internal_includes_count": 1,
+      "nogncheck_count": 0,
+      "type": "source_set"
+    }
+  },
+  "total_gn_nogncheck": 0
+}
