@@ -1079,6 +1079,21 @@ typedef struct {
 /// stable until the Flutter application restarts.
 typedef uint64_t FlutterEngineDisplayId;
 
+/// Types of display features that may be present on a screen.
+typedef enum {
+  kFlutterDisplayFeatureTypeUnknown = 0,
+  kFlutterDisplayFeatureTypeFold = 1,
+  kFlutterDisplayFeatureTypeHinge = 2,
+  kFlutterDisplayFeatureTypeCutout = 3,
+} FlutterDisplayFeatureType;
+
+/// The state of a display feature.
+typedef enum {
+  kFlutterDisplayFeatureStateUnknown = 0,
+  kFlutterDisplayFeatureStatePostureFlat = 1,
+  kFlutterDisplayFeatureStatePostureHalfOpened = 2,
+} FlutterDisplayFeatureState;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterWindowMetricsEvent).
   size_t struct_size;
@@ -1127,6 +1142,54 @@ typedef struct {
   /// If |has_constraints| is `true`, this must be greater than or equal to
   /// |min_height_constraint| and |height|.
   size_t max_height_constraint;
+  /// The number of physical display features.
+  size_t display_features_count;
+  /// Physical display features bounds. Each display feature has 4 double
+  /// values: left, top, right, bottom. Array length must be
+  /// display_features_count * 4.
+  const double* display_features_bounds;
+  /// Physical display features types. Array length must be
+  /// display_features_count. Elements are values from
+  /// `FlutterDisplayFeatureType`.
+  const int* display_features_type;
+  /// Physical display features states. Array length must be
+  /// display_features_count. Elements are values from
+  /// `FlutterDisplayFeatureState`.
+  const int* display_features_state;
+  /// Top padding of the window in physical pixels (e.g. status bar / display
+  /// cutout).
+  double physical_padding_top;
+  /// Right padding of the window in physical pixels (e.g. display cutout /
+  /// waterfall).
+  double physical_padding_right;
+  /// Bottom padding of the window in physical pixels (e.g. navigation bar /
+  /// home indicator).
+  double physical_padding_bottom;
+  /// Left padding of the window in physical pixels (e.g. display cutout /
+  /// waterfall).
+  double physical_padding_left;
+  /// Top system gesture inset of the window in physical pixels.
+  double physical_system_gesture_inset_top;
+  /// Right system gesture inset of the window in physical pixels.
+  double physical_system_gesture_inset_right;
+  /// Bottom system gesture inset of the window in physical pixels.
+  double physical_system_gesture_inset_bottom;
+  /// Left system gesture inset of the window in physical pixels.
+  double physical_system_gesture_inset_left;
+  /// Physical touch slop. A value less than 0 (e.g. -1.0) indicates unset.
+  double physical_touch_slop;
+  /// Top-left display corner radius in physical pixels. A value less than 0
+  /// indicates unset.
+  double physical_display_corner_radius_top_left;
+  /// Top-right display corner radius in physical pixels. A value less than 0
+  /// indicates unset.
+  double physical_display_corner_radius_top_right;
+  /// Bottom-right display corner radius in physical pixels. A value less than 0
+  /// indicates unset.
+  double physical_display_corner_radius_bottom_right;
+  /// Bottom-left display corner radius in physical pixels. A value less than 0
+  /// indicates unset.
+  double physical_display_corner_radius_bottom_left;
 } FlutterWindowMetricsEvent;
 
 typedef struct {

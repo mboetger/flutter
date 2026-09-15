@@ -1693,6 +1693,36 @@ MakeViewportMetricsFromWindowMetrics(
       SAFE_ACCESS(flutter_metrics, physical_view_inset_left, 0.0);
   metrics.display_id = SAFE_ACCESS(flutter_metrics, display_id, 0);
 
+  metrics.physical_padding_top =
+      SAFE_ACCESS(flutter_metrics, physical_padding_top, 0.0);
+  metrics.physical_padding_right =
+      SAFE_ACCESS(flutter_metrics, physical_padding_right, 0.0);
+  metrics.physical_padding_bottom =
+      SAFE_ACCESS(flutter_metrics, physical_padding_bottom, 0.0);
+  metrics.physical_padding_left =
+      SAFE_ACCESS(flutter_metrics, physical_padding_left, 0.0);
+
+  metrics.physical_system_gesture_inset_top =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_top, 0.0);
+  metrics.physical_system_gesture_inset_right =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_right, 0.0);
+  metrics.physical_system_gesture_inset_bottom =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_bottom, 0.0);
+  metrics.physical_system_gesture_inset_left =
+      SAFE_ACCESS(flutter_metrics, physical_system_gesture_inset_left, 0.0);
+
+  metrics.physical_touch_slop =
+      SAFE_ACCESS(flutter_metrics, physical_touch_slop, -1.0);
+
+  metrics.physical_display_corner_radius_top_left = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_top_left, -1.0);
+  metrics.physical_display_corner_radius_top_right = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_top_right, -1.0);
+  metrics.physical_display_corner_radius_bottom_right = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_bottom_right, -1.0);
+  metrics.physical_display_corner_radius_bottom_left = SAFE_ACCESS(
+      flutter_metrics, physical_display_corner_radius_bottom_left, -1.0);
+
   if (metrics.device_pixel_ratio <= 0.0) {
     return "Device pixel ratio was invalid. It must be greater than zero.";
   }
@@ -1710,6 +1740,52 @@ MakeViewportMetricsFromWindowMetrics(
       metrics.physical_view_inset_left > metrics.physical_width) {
     return "Physical view insets are invalid. They cannot be greater than "
            "physical height or width.";
+  }
+
+  if (metrics.physical_padding_top < 0 || metrics.physical_padding_right < 0 ||
+      metrics.physical_padding_bottom < 0 ||
+      metrics.physical_padding_left < 0) {
+    return "Physical view paddings are invalid. They must be non-negative.";
+  }
+
+  if (metrics.physical_padding_top > metrics.physical_height ||
+      metrics.physical_padding_right > metrics.physical_width ||
+      metrics.physical_padding_bottom > metrics.physical_height ||
+      metrics.physical_padding_left > metrics.physical_width) {
+    return "Physical view paddings are invalid. They cannot be greater than "
+           "physical height or width.";
+  }
+
+  size_t display_features_count =
+      SAFE_ACCESS(flutter_metrics, display_features_count, 0);
+  const double* display_features_bounds =
+      SAFE_ACCESS(flutter_metrics, display_features_bounds, nullptr);
+  const int* display_features_type =
+      SAFE_ACCESS(flutter_metrics, display_features_type, nullptr);
+  const int* display_features_state =
+      SAFE_ACCESS(flutter_metrics, display_features_state, nullptr);
+
+  // Each display feature rectangle consists of 4 double values: left, top,
+  // right, bottom.
+  constexpr size_t kBoundsPerDisplayFeature = 4;
+  if (display_features_count > 0) {
+    if (display_features_count > SIZE_MAX / kBoundsPerDisplayFeature) {
+      return "Display features count overflow.";
+    }
+    if (display_features_bounds == nullptr ||
+        display_features_type == nullptr || display_features_state == nullptr) {
+      return "Display features count is non-zero, but one or more display "
+             "feature buffers are null.";
+    }
+    metrics.physical_display_features_bounds.assign(
+        display_features_bounds,
+        display_features_bounds +
+            (display_features_count * kBoundsPerDisplayFeature));
+    metrics.physical_display_features_type.assign(
+        display_features_type, display_features_type + display_features_count);
+    metrics.physical_display_features_state.assign(
+        display_features_state,
+        display_features_state + display_features_count);
   }
 
   return metrics;

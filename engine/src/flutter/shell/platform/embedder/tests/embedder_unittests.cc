@@ -3178,6 +3178,28 @@ TEST_F(EmbedderTest, InvalidFlutterWindowMetricsEvent) {
   // Left/right insets cannot be greater than width.
   ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
             kInvalidArguments);
+
+  // Reset insets to zero to test padding validation.
+  event.physical_view_inset_top = 0.0;
+  event.physical_view_inset_right = 0.0;
+  event.physical_view_inset_bottom = 0.0;
+  event.physical_view_inset_left = 0.0;
+
+  // Negative padding should be rejected.
+  event.physical_padding_top = -1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kInvalidArguments);
+
+  // Excessive padding exceeding window dimensions should be rejected.
+  event.physical_padding_top = 700.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kInvalidArguments);
+
+  // Valid padding should succeed.
+  event.physical_padding_top = 72.0;
+  event.physical_padding_bottom = 48.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
 }
 
 TEST_F(EmbedderTest, WindowMetricsEventWithConstraints) {
@@ -3274,6 +3296,117 @@ TEST_F(EmbedderTest, WindowMetricsEventWithConstraints) {
   ASSERT_EQ(
       FlutterEngineSendWindowMetricsEvent(engine.get(), &event_invalid_height),
       kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, WindowMetricsEventDisplayFeaturesValidation) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Test with display_features_count > 0 but null buffers.
+  FlutterWindowMetricsEvent event_null_buffers = {};
+  event_null_buffers.struct_size = sizeof(event_null_buffers);
+  event_null_buffers.width = 800;
+  event_null_buffers.height = 600;
+  event_null_buffers.pixel_ratio = 1.0;
+  event_null_buffers.display_features_count = 1;
+  event_null_buffers.display_features_bounds = nullptr;
+  event_null_buffers.display_features_type = nullptr;
+  event_null_buffers.display_features_state = nullptr;
+
+  ASSERT_EQ(
+      FlutterEngineSendWindowMetricsEvent(engine.get(), &event_null_buffers),
+      kInvalidArguments);
+
+  // Test with valid display feature buffers.
+  constexpr double kBounds[] = {0.0, 0.0, 100.0, 20.0};
+  constexpr int kType[] = {kFlutterDisplayFeatureTypeFold};
+  constexpr int kState[] = {kFlutterDisplayFeatureStatePostureFlat};
+
+  FlutterWindowMetricsEvent event_valid = {};
+  event_valid.struct_size = sizeof(event_valid);
+  event_valid.width = 800;
+  event_valid.height = 600;
+  event_valid.pixel_ratio = 1.0;
+  event_valid.display_features_count = 1;
+  event_valid.display_features_bounds = kBounds;
+  event_valid.display_features_type = kType;
+  event_valid.display_features_state = kState;
+
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event_valid),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, WindowMetricsEventAllParityFields) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  constexpr double kDisplayFeaturesBounds[] = {0.0, 1000.0, 1080.0, 1050.0};
+  constexpr int kDisplayFeaturesType[] = {kFlutterDisplayFeatureTypeFold};
+  constexpr int kDisplayFeaturesState[] = {
+      kFlutterDisplayFeatureStatePostureHalfOpened};
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 1080;
+  event.height = 2400;
+  event.pixel_ratio = 2.75;
+  event.left = 0;
+  event.top = 0;
+  event.physical_view_inset_top = 10.0;
+  event.physical_view_inset_right = 20.0;
+  event.physical_view_inset_bottom = 30.0;
+  event.physical_view_inset_left = 40.0;
+  event.display_id = 0;
+  event.view_id = 0;
+  event.has_constraints = false;
+
+  // Parity contract fields from T-0.4
+  event.display_features_count = 1;
+  event.display_features_bounds = kDisplayFeaturesBounds;
+  event.display_features_type = kDisplayFeaturesType;
+  event.display_features_state = kDisplayFeaturesState;
+  event.physical_padding_top = 84.0;
+  event.physical_padding_right = 12.0;
+  event.physical_padding_bottom = 48.0;
+  event.physical_padding_left = 16.0;
+  event.physical_system_gesture_inset_top = 50.0;
+  event.physical_system_gesture_inset_right = 60.0;
+  event.physical_system_gesture_inset_bottom = 70.0;
+  event.physical_system_gesture_inset_left = 80.0;
+  event.physical_touch_slop = 24.0;
+  event.physical_display_corner_radius_top_left = 15.0;
+  event.physical_display_corner_radius_top_right = 16.0;
+  event.physical_display_corner_radius_bottom_right = 17.0;
+  event.physical_display_corner_radius_bottom_left = 18.0;
+
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, WindowMetricsEventWithLegacyStructSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  // Simulate an older caller whose struct ended at max_height_constraint.
+  event.struct_size =
+      offsetof(FlutterWindowMetricsEvent, max_height_constraint) +
+      sizeof(size_t);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
 }
 
 static void expectSoftwareRenderingOutputMatches(
