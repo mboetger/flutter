@@ -13,6 +13,7 @@
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/lib/ui/semantics/semantics_node.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_semantics_update.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/testing/testing.h"
 #include "third_party/tonic/converter/dart_converter.h"
@@ -883,6 +884,81 @@ TEST_F(EmbedderA11yTest, A11yTreesAreConsistentWithMultipleViews) {
   ASSERT_EQ(result, FlutterEngineResult::kSuccess);
   notify_semantics_enabled_latch_3.Wait();
 #endif
+}
+
+TEST_F(EmbedderA11yTest, SemanticsNode2FieldGaps) {
+  SemanticsNodeUpdates node_updates;
+  CustomAccessibilityActionUpdates action_updates;
+
+  SemanticsNode node;
+  node.id = 42;
+  node.maxValueLength = 100;
+  node.currentValueLength = 25;
+  node.traversalParent = 12;
+  node.minValue = "10.5";
+  node.maxValue = "99.5";
+  node.hitTestTransform = SkM44::Scale(2.0f, 3.0f, 1.0f);
+  node.linkUrl = "https://flutter.dev";
+  node.role = SemanticsRole::kTab;
+  node.validationResult = SemanticsValidationResult::kValid;
+  node.locale = "en-US";
+
+  node_updates[node.id] = node;
+
+  EmbedderSemanticsUpdate2 update(0, node_updates, action_updates);
+  FlutterSemanticsUpdate2* semantics_update = update.get();
+  ASSERT_NE(semantics_update, nullptr);
+  ASSERT_EQ(semantics_update->node_count, 1u);
+
+  const FlutterSemanticsNode2* embedder_node = semantics_update->nodes[0];
+  ASSERT_NE(embedder_node, nullptr);
+  EXPECT_EQ(embedder_node->struct_size, sizeof(FlutterSemanticsNode2));
+  EXPECT_EQ(embedder_node->id, 42);
+  EXPECT_EQ(embedder_node->max_value_length, 100);
+  EXPECT_EQ(embedder_node->current_value_length, 25);
+  EXPECT_EQ(embedder_node->traversal_parent, 12);
+  EXPECT_STREQ(embedder_node->min_value, "10.5");
+  EXPECT_STREQ(embedder_node->max_value, "99.5");
+  EXPECT_DOUBLE_EQ(embedder_node->hit_test_transform.scaleX, 2.0);
+  EXPECT_DOUBLE_EQ(embedder_node->hit_test_transform.scaleY, 3.0);
+  EXPECT_DOUBLE_EQ(embedder_node->hit_test_transform.pers2, 1.0);
+  EXPECT_STREQ(embedder_node->link_url, "https://flutter.dev");
+  EXPECT_EQ(embedder_node->role, kFlutterSemanticsRoleTab);
+  EXPECT_EQ(embedder_node->validation_result,
+            kFlutterSemanticsValidationResultValid);
+  EXPECT_STREQ(embedder_node->locale, "en-US");
+}
+
+TEST_F(EmbedderA11yTest, SemanticsNode2FieldGapsDefaults) {
+  SemanticsNodeUpdates node_updates;
+  CustomAccessibilityActionUpdates action_updates;
+
+  SemanticsNode node;
+  node.id = 1;
+  node_updates[node.id] = node;
+
+  EmbedderSemanticsUpdate2 update(0, node_updates, action_updates);
+  FlutterSemanticsUpdate2* semantics_update = update.get();
+  ASSERT_NE(semantics_update, nullptr);
+  ASSERT_EQ(semantics_update->node_count, 1u);
+
+  const FlutterSemanticsNode2* embedder_node = semantics_update->nodes[0];
+  ASSERT_NE(embedder_node, nullptr);
+  EXPECT_EQ(embedder_node->struct_size, sizeof(FlutterSemanticsNode2));
+  EXPECT_EQ(embedder_node->id, 1);
+  EXPECT_EQ(embedder_node->max_value_length, -1);
+  EXPECT_EQ(embedder_node->current_value_length, -1);
+  EXPECT_EQ(embedder_node->traversal_parent, 0);
+  EXPECT_STREQ(embedder_node->min_value, "");
+  EXPECT_STREQ(embedder_node->max_value, "");
+  EXPECT_DOUBLE_EQ(embedder_node->hit_test_transform.scaleX, 1.0);
+  EXPECT_DOUBLE_EQ(embedder_node->hit_test_transform.scaleY, 1.0);
+  EXPECT_DOUBLE_EQ(embedder_node->hit_test_transform.pers2, 1.0);
+  EXPECT_STREQ(embedder_node->link_url, "");
+  EXPECT_EQ(embedder_node->role, kFlutterSemanticsRoleNone);
+  EXPECT_EQ(embedder_node->validation_result,
+            kFlutterSemanticsValidationResultNone);
+  EXPECT_STREQ(embedder_node->locale, "");
 }
 
 }  // namespace testing

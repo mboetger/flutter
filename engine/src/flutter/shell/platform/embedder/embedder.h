@@ -1686,6 +1686,56 @@ typedef struct {
   int32_t heading_level;
 } FlutterSemanticsNode;
 
+/// The role of a semantics node in the accessibility hierarchy.
+///
+/// Must match `flutter::SemanticsRole` in `semantics_node.h` and
+/// `SemanticsRole` in `lib/ui/semantics.dart`.
+typedef enum {
+  kFlutterSemanticsRoleNone = 0,
+  kFlutterSemanticsRoleTab = 1,
+  kFlutterSemanticsRoleTabBar = 2,
+  kFlutterSemanticsRoleTabPanel = 3,
+  kFlutterSemanticsRoleDialog = 4,
+  kFlutterSemanticsRoleAlertDialog = 5,
+  kFlutterSemanticsRoleTable = 6,
+  kFlutterSemanticsRoleCell = 7,
+  kFlutterSemanticsRoleRow = 8,
+  kFlutterSemanticsRoleColumnHeader = 9,
+  kFlutterSemanticsRoleDragHandle = 10,
+  kFlutterSemanticsRoleSpinButton = 11,
+  kFlutterSemanticsRoleComboBox = 12,
+  kFlutterSemanticsRoleMenuBar = 13,
+  kFlutterSemanticsRoleMenu = 14,
+  kFlutterSemanticsRoleMenuItem = 15,
+  kFlutterSemanticsRoleMenuItemCheckbox = 16,
+  kFlutterSemanticsRoleMenuItemRadio = 17,
+  kFlutterSemanticsRoleList = 18,
+  kFlutterSemanticsRoleListItem = 19,
+  kFlutterSemanticsRoleForm = 20,
+  kFlutterSemanticsRoleTooltip = 21,
+  kFlutterSemanticsRoleLoadingSpinner = 22,
+  kFlutterSemanticsRoleProgressBar = 23,
+  kFlutterSemanticsRoleHotKey = 24,
+  kFlutterSemanticsRoleRadioGroup = 25,
+  kFlutterSemanticsRoleStatus = 26,
+  kFlutterSemanticsRoleAlert = 27,
+  kFlutterSemanticsRoleComplementary = 28,
+  kFlutterSemanticsRoleContentInfo = 29,
+  kFlutterSemanticsRoleMain = 30,
+  kFlutterSemanticsRoleNavigation = 31,
+  kFlutterSemanticsRoleRegion = 32,
+} FlutterSemanticsRole;
+
+/// The result of validating form field input.
+///
+/// Must match `flutter::SemanticsValidationResult` in `semantics_node.h` and
+/// `SemanticsValidationResult` in `lib/ui/semantics.dart`.
+typedef enum {
+  kFlutterSemanticsValidationResultNone = 0,
+  kFlutterSemanticsValidationResultValid = 1,
+  kFlutterSemanticsValidationResultInvalid = 2,
+} FlutterSemanticsValidationResult;
+
 /// A node in the Flutter semantics tree.
 ///
 /// The semantics tree is maintained during the semantics phase of the pipeline
@@ -1800,6 +1850,39 @@ typedef struct {
   /// This is usually used for UI testing with tools that work by querying the
   /// native accessibility, like UI Automator, XCUITest, or Appium.
   const char* identifier;
+  /// The maximum character length limit for an editable text field, or -1 if no
+  /// limit.
+  int32_t max_value_length;
+  /// The current character length used for an editable text field, or -1 if no
+  /// limit.
+  int32_t current_value_length;
+  /// The identifier of the semantics node that serves as the parent of this
+  /// node for accessibility traversal order.
+  int32_t traversal_parent;
+  /// The minimum value of the node if it represents a range. May be null.
+  /// The string is guaranteed to be valid for the duration of the
+  /// `FlutterUpdateSemanticsCallback2` invocation.
+  const char* min_value;
+  /// The maximum value of the node if it represents a range. May be null.
+  /// The string is guaranteed to be valid for the duration of the
+  /// `FlutterUpdateSemanticsCallback2` invocation.
+  const char* max_value;
+  /// The transform from this node's coordinate system to its parent's
+  /// coordinate system used for hit testing.
+  FlutterTransformation hit_test_transform;
+  /// The URL that this node links to, or null if this node is not a link.
+  /// The string is guaranteed to be valid for the duration of the
+  /// `FlutterUpdateSemanticsCallback2` invocation.
+  const char* link_url;
+  /// The accessibility role of the node.
+  FlutterSemanticsRole role;
+  /// The result of validating form field input.
+  FlutterSemanticsValidationResult validation_result;
+  /// The BCP 47 locale string of the content in this node, or null if
+  /// unspecified.
+  /// The string is guaranteed to be valid for the duration of the
+  /// `FlutterUpdateSemanticsCallback2` invocation.
+  const char* locale;
 } FlutterSemanticsNode2;
 
 /// `FlutterSemanticsCustomAction` ID used as a sentinel to signal the end of a
