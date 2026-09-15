@@ -377,33 +377,47 @@ class MigrationVerifyRunner {
   Future<int> _auditStack() async {
     final CommandResult logCmd = await executor.run(<String>['git', 'log', '--format=%H']);
     if (logCmd.exitCode != 0) {
+      errLogger('Error running git log');
       return 1;
     }
-    final List<String> mockGitLog = logCmd.stdout.split('\n');
+    final List<String> gitLog = logCmd.stdout
+        .split('\n')
+        .map((String e) => e.trim())
+        .where((String e) => e.isNotEmpty)
+        .toList();
 
     final Directory verificationDir = fs.directory('.migration/verification');
     if (!verificationDir.existsSync()) {
+      errLogger('Error: .migration/verification directory missing');
       return 1;
     }
 
-    for (final FileSystemEntity entity in verificationDir.listSync()) {
-      if (entity is File && entity.basename.endsWith('.json')) {
-        final artifact = jsonDecode(entity.readAsStringSync()) as Map<String, dynamic>;
-        final artifactCommitSha = artifact['commit_sha'] as String;
+    final List<FileSystemEntity> entities = verificationDir.listSync();
+    final List<File> jsonFiles = entities
+        .whereType<File>()
+        .where((File f) => f.basename.endsWith('.json'))
+        .toList();
+    if (jsonFiles.isEmpty) {
+      errLogger('Error: No verification artifacts found in .migration/verification/');
+      return 1;
+    }
 
-        var matched = false;
-        for (final logEntry in mockGitLog) {
-          if (logEntry.trim() == artifactCommitSha) {
-            matched = true;
-            break;
-          }
-        }
+    for (final entity in jsonFiles) {
+      final artifact = jsonDecode(entity.readAsStringSync()) as Map<String, dynamic>;
+      final artifactCommitSha = artifact['commit_sha'] as String?;
+      if (artifactCommitSha == null || artifactCommitSha.isEmpty) {
+        errLogger('Error: Artifact ${entity.basename} has missing or empty commit_sha');
+        return 1;
+      }
 
-        if (!matched) {
-          return 1;
-        }
+      if (!gitLog.contains(artifactCommitSha)) {
+        errLogger(
+          'Error: Artifact ${entity.basename} commit_sha ($artifactCommitSha) not found in git log',
+        );
+        return 1;
       }
     }
+    logger('Stack audit clean: all ${jsonFiles.length} artifacts verified against git history.');
     return 0;
   }
 
@@ -412,37 +426,38 @@ class MigrationVerifyRunner {
       return 1;
     }
 
-    final File lockFile = fs.file('/tmp/android-embedder-v8.device.lock');
-    io.RandomAccessFile? raf;
-    raf = (lockFile as io.File).openSync(mode: io.FileMode.write);
-    raf.lockSync();
+    final lockFile = io.File('/tmp/android-embedder-v8.device.lock');
+    final io.RandomAccessFile raf = lockFile.openSync(mode: io.FileMode.write);
+    raf.lockSync(io.FileLock.blockingExclusive);
+    try {
+      final CommandResult serialCmd = await executor.run(<String>['adb', 'get-serialno']);
+      final String serial = serialCmd.stdout.trim();
+      if (serial.isEmpty || serial.contains('.*')) {
+        errLogger('Error: No connected Android device found via adb');
+        return 1;
+      }
 
-    final CommandResult serialCmd = await executor.run(<String>['adb', 'get-serialno']);
-    final String serial = serialCmd.stdout.trim();
-    if (serial.isEmpty || serial.contains('.*')) {
+      final CommandResult dumpSys = await executor.run(<String>[
+        'adb',
+        'shell',
+        'dumpsys',
+        'deviceidle',
+      ]);
+      if (dumpSys.exitCode != 0) {
+        errLogger('Error: Device preconditions check failed');
+        return 1;
+      }
+
+      final CommandResult gateCmd = await executor.run(cmdArgs);
+
+      await executor.run(<String>['adb', 'uninstall', 'dev.flutter.integration_test']);
+      await executor.run(<String>['adb', 'logcat', '-c']);
+
+      return gateCmd.exitCode;
+    } finally {
       raf.unlockSync();
       raf.closeSync();
-      return 1;
     }
-
-    final CommandResult dumpSys = await executor.run(<String>[
-      'adb',
-      'shell',
-      'dumpsys',
-      'deviceidle',
-    ]);
-    if (dumpSys.exitCode != 0) {
-      return 1;
-    }
-
-    final CommandResult gateCmd = await executor.run(cmdArgs);
-
-    await executor.run(<String>['adb', 'uninstall', 'dev.flutter.integration_test']);
-    await executor.run(<String>['adb', 'logcat', '-c']);
-
-    raf.unlockSync();
-    raf.closeSync();
-    return gateCmd.exitCode;
   }
 
   Future<int> _summary() async {

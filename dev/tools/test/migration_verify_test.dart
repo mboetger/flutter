@@ -270,6 +270,50 @@ void main() {
       expect(exitCode, 1);
     });
 
+    test('Req 5: audit-stack passes when all artifacts match git log', () async {
+      final fs = MemoryFileSystem();
+      final Directory verificationDir = fs.directory('.migration/verification')
+        ..createSync(recursive: true);
+      fs
+          .file('${verificationDir.path}/T-0.15a.json')
+          .writeAsStringSync(
+            jsonEncode(<String, dynamic>{'task_id': 'T-0.15a', 'commit_sha': 'validsha1'}),
+          );
+
+      final executor = FakeSystemCommandExecutor();
+      executor.registerCommand(
+        <String>['git', 'log', '--format=%H'],
+        exitCode: 0,
+        stdout: 'validsha1\nparentsha\n',
+      );
+
+      final runner = MigrationVerifyRunner(executor: executor, fs: fs);
+      final int exitCode = await runner.run(<String>['--audit-stack']);
+      expect(exitCode, 0);
+    });
+
+    test('Req 5: audit-stack fails when an artifact commit_sha is missing from git log', () async {
+      final fs = MemoryFileSystem();
+      final Directory verificationDir = fs.directory('.migration/verification')
+        ..createSync(recursive: true);
+      fs
+          .file('${verificationDir.path}/T-0.15a.json')
+          .writeAsStringSync(
+            jsonEncode(<String, dynamic>{'task_id': 'T-0.15a', 'commit_sha': 'stalesha'}),
+          );
+
+      final executor = FakeSystemCommandExecutor();
+      executor.registerCommand(
+        <String>['git', 'log', '--format=%H'],
+        exitCode: 0,
+        stdout: 'validsha1\nparentsha\n',
+      );
+
+      final runner = MigrationVerifyRunner(executor: executor, fs: fs);
+      final int exitCode = await runner.run(<String>['--audit-stack']);
+      expect(exitCode, 1);
+    });
+
     test('Req 6: evaluates outputs rendering Markdown strings structurally accurately', () async {
       final fs = MemoryFileSystem();
       final executor = FakeSystemCommandExecutor();
@@ -330,6 +374,21 @@ void main() {
         'locked_cmd',
       ]);
       expect(exitCode, 0);
+    });
+
+    test('Req 7: device-lock fails cleanly if adb get-serialno returns no device', () async {
+      const fs = LocalFileSystem();
+      final executor = FakeSystemCommandExecutor();
+      executor.registerCommand(<String>['adb', 'get-serialno'], exitCode: 0, stdout: 'unknown\n.*');
+
+      final runner = MigrationVerifyRunner(executor: executor, fs: fs);
+      final int exitCode = await runner.run(<String>[
+        '--device-lock',
+        '--',
+        '/bin/echo',
+        'locked_cmd',
+      ]);
+      expect(exitCode, 1);
     });
 
     test('Req 8: rejects execution if update-goldens parameters leak locally', () async {
