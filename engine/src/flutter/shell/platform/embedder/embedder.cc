@@ -2331,6 +2331,14 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
             intptr_t loading_unit_id) { ptr(loading_unit_id, user_data); };
   }
 
+  flutter::PlatformViewEmbedder::SetApplicationLocaleCallback
+      set_application_locale_callback = nullptr;
+  if (SAFE_ACCESS(args, set_application_locale_callback, nullptr) != nullptr) {
+    set_application_locale_callback =
+        [ptr = args->set_application_locale_callback, user_data](
+            const std::string& locale) { ptr(locale.c_str(), user_data); };
+  }
+
   auto external_view_embedder_result = InferExternalViewEmbedderFromArgs(
       SAFE_ACCESS(args, compositor, nullptr), settings.enable_impeller);
   if (!external_view_embedder_result.ok()) {
@@ -2350,6 +2358,7 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
           view_focus_change_request_callback,         //
           /*renderer_setup_callback=*/nullptr,        //
           dart_deferred_library_request_callback,     //
+          set_application_locale_callback,            //
   };
 
   impeller::Flags impeller_flags;

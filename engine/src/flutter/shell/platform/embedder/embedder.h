@@ -2063,6 +2063,23 @@ typedef void (*FlutterRequestDartDeferredLibraryCallback)(
     intptr_t loading_unit_id,
     void* user_data);
 
+/// Callback invoked by the engine when the application requests a change to
+/// the application's locale (for example, via
+/// `PlatformDispatcher.instance.setApplicationLocale`).
+///
+/// The `locale` parameter is a BCP 47 language tag (such as "en-US" or
+/// "zh-Hans-CN"). The string is null-terminated and is guaranteed to be valid
+/// for the duration of the callback invocation.
+///
+/// This callback will be invoked on the thread on which the platform task
+/// runner executes.
+///
+/// @param[in]  locale     A null-terminated BCP 47 language tag string
+///                        representing the requested application locale.
+/// @param[in]  user_data  The user data provided in `FlutterProjectArgs`.
+typedef void (*FlutterSetApplicationLocaleCallback)(const char* locale,
+                                                    void* user_data);
+
 typedef struct _FlutterTaskRunner* FlutterTaskRunner;
 
 typedef struct {
@@ -3066,6 +3083,9 @@ typedef struct {
   /// library / loading unit.
   FlutterRequestDartDeferredLibraryCallback
       dart_deferred_library_request_callback;
+  /// Callback invoked by the engine when the application requests a change to
+  /// the application's locale.
+  FlutterSetApplicationLocaleCallback set_application_locale_callback;
 } FlutterProjectArgs;
 
 typedef struct {

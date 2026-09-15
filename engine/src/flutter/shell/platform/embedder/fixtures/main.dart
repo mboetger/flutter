@@ -1512,6 +1512,15 @@ void pointer_data_packet_geometry() {
   signalNativeTest();
 }
 
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
+void set_application_locale_main() {
+  PlatformDispatcher.instance.setApplicationLocale(
+    const Locale.fromSubtags(languageCode: 'pt', countryCode: 'BR'),
+  );
+  signalNativeTest();
+}
+
 Map<int, Size> _getAllViewSizes() {
   final result = <int, Size>{};
   for (final FlutterView view in PlatformDispatcher.instance.views) {

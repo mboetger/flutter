@@ -51,6 +51,8 @@ class PlatformViewEmbedder final : public PlatformView {
   using RendererSetupCallback = std::function<bool()>;
   using RequestDartDeferredLibraryCallback =
       std::function<void(intptr_t loading_unit_id)>;
+  using SetApplicationLocaleCallback =
+      std::function<void(const std::string& locale)>;
 
   struct PlatformDispatchTable {
     UpdateSemanticsCallback update_semantics_callback;  // optional
@@ -65,7 +67,8 @@ class PlatformViewEmbedder final : public PlatformView {
         view_focus_change_request_callback;         // optional
     RendererSetupCallback renderer_setup_callback;  // optional
     RequestDartDeferredLibraryCallback
-        request_dart_deferred_library_callback;  // optional
+        request_dart_deferred_library_callback;                    // optional
+    SetApplicationLocaleCallback set_application_locale_callback;  // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -166,6 +169,9 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
+
+  // |PlatformView|
+  void SetApplicationLocale(std::string locale) override;
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewEmbedder);
 };

@@ -252,6 +252,13 @@ void PlatformViewEmbedder::RequestDartDeferredLibrary(
   }
 }
 
+// |PlatformView|
+void PlatformViewEmbedder::SetApplicationLocale(std::string locale) {
+  if (platform_dispatch_table_.set_application_locale_callback != nullptr) {
+    platform_dispatch_table_.set_application_locale_callback(locale);
+  }
+}
+
 std::shared_ptr<PlatformMessageHandler>
 PlatformViewEmbedder::GetPlatformMessageHandler() const {
   return platform_message_handler_;

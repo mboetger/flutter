@@ -4738,6 +4738,49 @@ TEST_F(EmbedderTest, DartDeferredLibraryCallbacks) {
   engine.reset();
 }
 
+/// Verify that Dart calling PlatformDispatcher.instance.setApplicationLocale
+/// dispatches to FlutterProjectArgs::set_application_locale_callback.
+TEST_F(EmbedderTest, CanReceiveApplicationLocale) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("set_application_locale_main");
+
+  fml::AutoResetWaitableEvent ready_latch, locale_latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  static std::string s_received_locale;
+  static void* s_received_user_data = nullptr;
+  static fml::AutoResetWaitableEvent* s_locale_latch = nullptr;
+  s_received_locale.clear();
+  s_received_user_data = nullptr;
+  s_locale_latch = &locale_latch;
+
+  builder.GetProjectArgs().set_application_locale_callback =
+      [](const char* locale, void* user_data) {
+        if (locale != nullptr) {
+          s_received_locale = locale;
+        }
+        s_received_user_data = user_data;
+        if (s_locale_latch != nullptr) {
+          s_locale_latch->Signal();
+        }
+      };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  ready_latch.Wait();
+  locale_latch.Wait();
+
+  EXPECT_EQ(s_received_locale, "pt-BR");
+  EXPECT_EQ(s_received_user_data, &context);
+
+  engine.reset();
+}
+
 }  // namespace testing
 }  // namespace flutter
 

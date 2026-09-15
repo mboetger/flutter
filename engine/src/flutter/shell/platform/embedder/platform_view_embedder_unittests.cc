@@ -276,5 +276,54 @@ TEST(PlatformViewEmbedderTest, DartDeferredLibraryRequestWithoutCallback) {
   latch.Wait();
 }
 
+TEST(PlatformViewEmbedderTest, DispatchesSetApplicationLocale) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "DispatchesSetApplicationLocale",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  fml::AutoResetWaitableEvent latch;
+  std::string received_locale;
+  task_runners.GetPlatformTaskRunner()->PostTask(
+      [&latch, &received_locale, task_runners] {
+        MockDelegate delegate;
+        EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+        PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+        platform_dispatch_table.set_application_locale_callback =
+            [&received_locale](const std::string& locale) {
+              received_locale = locale;
+            };
+        std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+        auto embedder = std::make_unique<PlatformViewEmbedder>(
+            delegate, task_runners, software_dispatch_table,
+            platform_dispatch_table, external_view_embedder);
+        embedder->SetApplicationLocale("pt-BR");
+        latch.Signal();
+      });
+  latch.Wait();
+  EXPECT_EQ(received_locale, "pt-BR");
+}
+
+TEST(PlatformViewEmbedderTest, SetApplicationLocaleWithoutCallback) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "SetApplicationLocaleWithoutCallback",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  fml::AutoResetWaitableEvent latch;
+  task_runners.GetPlatformTaskRunner()->PostTask([&latch, task_runners] {
+    MockDelegate delegate;
+    EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+    PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+    auto embedder = std::make_unique<PlatformViewEmbedder>(
+        delegate, task_runners, software_dispatch_table,
+        platform_dispatch_table, external_view_embedder);
+    embedder->SetApplicationLocale("pt-BR");
+    latch.Signal();
+  });
+  latch.Wait();
+}
+
 }  // namespace testing
 }  // namespace flutter
