@@ -49,6 +49,8 @@ class PlatformViewEmbedder final : public PlatformView {
   using ViewFocusChangeRequestCallback =
       std::function<void(const ViewFocusChangeRequest&)>;
   using RendererSetupCallback = std::function<bool()>;
+  using RequestDartDeferredLibraryCallback =
+      std::function<void(intptr_t loading_unit_id)>;
 
   struct PlatformDispatchTable {
     UpdateSemanticsCallback update_semantics_callback;  // optional
@@ -62,6 +64,8 @@ class PlatformViewEmbedder final : public PlatformView {
     ViewFocusChangeRequestCallback
         view_focus_change_request_callback;         // optional
     RendererSetupCallback renderer_setup_callback;  // optional
+    RequestDartDeferredLibraryCallback
+        request_dart_deferred_library_callback;  // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -159,6 +163,9 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   void RequestViewFocusChange(const ViewFocusChangeRequest& request) override;
+
+  // |PlatformView|
+  void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewEmbedder);
 };

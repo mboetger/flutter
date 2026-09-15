@@ -4533,6 +4533,108 @@ TEST_F(EmbedderTest, CanUpdateAssetResolver) {
   engine.reset();
 }
 
+TEST_F(EmbedderTest, DartDeferredLibraryCallbacks) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  static intptr_t s_requested_unit_id = -1;
+  static void* s_received_user_data = nullptr;
+  s_requested_unit_id = -1;
+  s_received_user_data = nullptr;
+
+  builder.GetProjectArgs().dart_deferred_library_request_callback =
+      [](intptr_t loading_unit_id, void* user_data) {
+        s_requested_unit_id = loading_unit_id;
+        s_received_user_data = user_data;
+      };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  // Parameter validation: FlutterEngineLoadDartDeferredLibrary
+  FlutterLoadDeferredLibraryInfo load_info = {};
+  load_info.struct_size = sizeof(FlutterLoadDeferredLibraryInfo);
+  load_info.loading_unit_id = 1;
+  const uint8_t dummy_data[] = {0x00, 0x01};
+  load_info.isolate_snapshot_data = dummy_data;
+  load_info.isolate_snapshot_data_size = sizeof(dummy_data);
+  load_info.isolate_snapshot_instructions = dummy_data;
+  load_info.isolate_snapshot_instructions_size = sizeof(dummy_data);
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(nullptr, &load_info),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), nullptr),
+            kInvalidArguments);
+
+  FlutterLoadDeferredLibraryInfo invalid_size_load = load_info;
+  invalid_size_load.struct_size = sizeof(FlutterLoadDeferredLibraryInfo) - 1;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibrary(engine.get(), &invalid_size_load),
+      kInvalidArguments);
+
+  FlutterLoadDeferredLibraryInfo null_data_load = load_info;
+  null_data_load.isolate_snapshot_data = nullptr;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &null_data_load),
+            kInvalidArguments);
+
+  FlutterLoadDeferredLibraryInfo null_instr_load = load_info;
+  null_instr_load.isolate_snapshot_instructions = nullptr;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibrary(engine.get(), &null_instr_load),
+      kInvalidArguments);
+
+  // Parameter validation: FlutterEngineLoadDartDeferredLibraryError
+  FlutterLoadDeferredLibraryErrorInfo error_info = {};
+  error_info.struct_size = sizeof(FlutterLoadDeferredLibraryErrorInfo);
+  error_info.loading_unit_id = 1;
+  error_info.error_message = "Test error";
+  error_info.transient = false;
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(nullptr, &error_info),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(), nullptr),
+            kInvalidArguments);
+
+  FlutterLoadDeferredLibraryErrorInfo invalid_size_error = error_info;
+  invalid_size_error.struct_size =
+      sizeof(FlutterLoadDeferredLibraryErrorInfo) - 1;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibraryError(engine.get(),
+                                                      &invalid_size_error),
+            kInvalidArguments);
+
+  FlutterLoadDeferredLibraryErrorInfo null_msg_error = error_info;
+  null_msg_error.error_message = nullptr;
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibraryError(engine.get(), &null_msg_error),
+      kInvalidArguments);
+
+  // Proc table verification
+  FlutterEngineProcTable ptable = {};
+  ptable.struct_size = sizeof(FlutterEngineProcTable);
+  EXPECT_EQ(FlutterEngineGetProcAddresses(&ptable), kSuccess);
+  EXPECT_NE(ptable.LoadDartDeferredLibrary, nullptr);
+  EXPECT_NE(ptable.LoadDartDeferredLibraryError, nullptr);
+
+  // Request dispatching verification
+  auto embedder_engine =
+      reinterpret_cast<flutter::EmbedderEngine*>(engine.get());
+  embedder_engine->GetShell().GetPlatformView()->RequestDartDeferredLibrary(42);
+  EXPECT_EQ(s_requested_unit_id, 42);
+  EXPECT_EQ(s_received_user_data, &context);
+
+  // Successful error notification dispatching
+  EXPECT_EQ(
+      FlutterEngineLoadDartDeferredLibraryError(engine.get(), &error_info),
+      kSuccess);
+
+  // Successful deferred library loading dispatching
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &load_info),
+            kSuccess);
+
+  engine.reset();
+}
+
 }  // namespace testing
 }  // namespace flutter
 
