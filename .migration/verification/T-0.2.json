@@ -1,0 +1,23 @@
+{
+  "task_id": "T-0.2",
+  "branch": "android-embedder-v8/t-0.2-surface-lifecycle-tests",
+  "commit_sha": "3f2d2ea9257d8d1644a33ffcc271b484d2beb606",
+  "parent_sha": "8c82f2b1a9de1cb42e26c8d4b574cd6e265271c2",
+  "timestamp": "2026-09-15T20:04:28.723879Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 214115,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
