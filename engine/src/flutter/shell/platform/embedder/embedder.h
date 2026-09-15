@@ -1426,6 +1426,43 @@ typedef struct {
   /// The maximum bound of the pressure of the current pointer, where 0.0 is the
   /// default maximum bound.
   double pressure_max;
+  /// The tilt angle of the pointer in radians in the range:
+  ///    0 <= tilt <= pi/2
+  /// giving the angle of the axis of the pointer, relative to the axis
+  /// perpendicular to the input surface (thus 0.0 indicates the pointer is
+  /// orthogonal to the plane of the input surface, while pi/2 indicates that
+  /// the pointer is flat on that surface).
+  double tilt;
+  /// The orientation angle of the pointer in radians in the range:
+  ///    -pi < orientation <= pi
+  /// giving the angle of the axis of the pointer projected onto the input
+  /// surface, relative to the positive y-axis of that surface (thus 0.0
+  /// indicates the pointer points vertically up along the positive y-axis,
+  /// pi indicates down along the negative y-axis; pi/4 indicates up and to
+  /// the right, -pi/2 indicates to the left, etc.).
+  double orientation;
+  /// The radius of the contact ellipse along the major axis in physical
+  /// pixels.
+  double radius_major;
+  /// The radius of the contact ellipse along the minor axis in physical
+  /// pixels.
+  double radius_minor;
+  /// The minimum radius of the contact ellipse in physical pixels.
+  double radius_min;
+  /// The maximum radius of the contact ellipse in physical pixels.
+  double radius_max;
+  /// The distance of the pointer from the contact surface in physical pixels.
+  /// Typically 0.0 for contact pointers or non-zero for hovering styluses.
+  double distance;
+  /// The maximum distance of the pointer from the contact surface in physical
+  /// pixels.
+  double distance_max;
+  /// The touch area size / normalized touch contact area in the range
+  /// [0.0, 1.0].
+  double size;
+  /// An optional embedder-provided identifier for tracking this pointer event
+  /// across platform boundaries (e.g. Android MotionEvent ID).
+  int64_t embedder_id;
 } FlutterPointerEvent;
 
 typedef enum {

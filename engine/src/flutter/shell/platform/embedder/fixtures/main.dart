@@ -1489,6 +1489,29 @@ void pointer_data_packet_view_id() {
   signalNativeTest();
 }
 
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
+void pointer_data_packet_geometry() {
+  PlatformDispatcher.instance.onPointerDataPacket = (PointerDataPacket packet) {
+    for (final PointerData pointerData in packet.data) {
+      signalNativeMessage(
+        'embedderId: ${pointerData.embedderId}, '
+        'tilt: ${pointerData.tilt}, '
+        'orientation: ${pointerData.orientation}, '
+        'radiusMajor: ${pointerData.radiusMajor}, '
+        'radiusMinor: ${pointerData.radiusMinor}, '
+        'radiusMin: ${pointerData.radiusMin}, '
+        'radiusMax: ${pointerData.radiusMax}, '
+        'distance: ${pointerData.distance}, '
+        'distanceMax: ${pointerData.distanceMax}, '
+        'size: ${pointerData.size}',
+      );
+    }
+  };
+
+  signalNativeTest();
+}
+
 Map<int, Size> _getAllViewSizes() {
   final result = <int, Size>{};
   for (final FlutterView view in PlatformDispatcher.instance.views) {

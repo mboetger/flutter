@@ -4179,6 +4179,109 @@ TEST_F(EmbedderTest, CanSendPointerEventWithViewId) {
   message_latch.Wait();
 }
 
+/// Send a pointer event with geometry fields (tilt, orientation, radii,
+/// distance, size, embedder_id) to Dart.
+TEST_F(EmbedderTest, CanSendPointerDataGeometry) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("pointer_data_packet_geometry");
+
+  fml::AutoResetWaitableEvent ready_latch, message_latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+  context.AddFfiNativeCallback(
+      "SignalNativeMessage",
+      CREATE_FFI_LAMBDA([&message_latch](Dart_Handle message_handle) {
+        auto message =
+            tonic::DartConverter<std::string>::FromDart(message_handle);
+        EXPECT_EQ(
+            "embedderId: 42, tilt: 0.5, orientation: 1.2, radiusMajor: 15.0, "
+            "radiusMinor: 10.0, radiusMin: 5.0, radiusMax: 20.0, distance: "
+            "2.5, "
+            "distanceMax: 10.0, size: 0.8",
+            message);
+        message_latch.Signal();
+      }));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+
+  FlutterPointerEvent pointer_event = {};
+  pointer_event.struct_size = sizeof(FlutterPointerEvent);
+  pointer_event.phase = FlutterPointerPhase::kAdd;
+  pointer_event.device_kind = kFlutterPointerDeviceKindStylus;
+  pointer_event.x = 100;
+  pointer_event.y = 200;
+  pointer_event.timestamp = static_cast<size_t>(1234567890);
+  pointer_event.view_id = 0;
+  pointer_event.embedder_id = 42;
+  pointer_event.tilt = 0.5;
+  pointer_event.orientation = 1.2;
+  pointer_event.radius_major = 15.0;
+  pointer_event.radius_minor = 10.0;
+  pointer_event.radius_min = 5.0;
+  pointer_event.radius_max = 20.0;
+  pointer_event.distance = 2.5;
+  pointer_event.distance_max = 10.0;
+  pointer_event.size = 0.8;
+
+  FlutterEngineResult result =
+      FlutterEngineSendPointerEvent(engine.get(), &pointer_event, 1);
+  ASSERT_EQ(result, kSuccess);
+
+  message_latch.Wait();
+}
+
+/// Send a pointer event with a legacy struct size (truncated before new fields)
+/// to verify backwards compatibility.
+TEST_F(EmbedderTest, CanSendPointerEventWithLegacyStructSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("pointer_data_packet_geometry");
+
+  fml::AutoResetWaitableEvent ready_latch, message_latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+  context.AddFfiNativeCallback(
+      "SignalNativeMessage",
+      CREATE_FFI_LAMBDA([&message_latch](Dart_Handle message_handle) {
+        auto message =
+            tonic::DartConverter<std::string>::FromDart(message_handle);
+        EXPECT_EQ(
+            "embedderId: 0, tilt: 0.0, orientation: 0.0, radiusMajor: 0.0, "
+            "radiusMinor: 0.0, radiusMin: 0.0, radiusMax: 0.0, distance: 0.0, "
+            "distanceMax: 0.0, size: 0.0",
+            message);
+        message_latch.Signal();
+      }));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+
+  FlutterPointerEvent pointer_event = {};
+  // Simulate an older embedder compiled when struct ended at pressure_max.
+  pointer_event.struct_size =
+      offsetof(FlutterPointerEvent, pressure_max) + sizeof(double);
+  pointer_event.phase = FlutterPointerPhase::kAdd;
+  pointer_event.device_kind = kFlutterPointerDeviceKindTouch;
+  pointer_event.x = 50;
+  pointer_event.y = 75;
+  pointer_event.timestamp = static_cast<size_t>(1234567890);
+  pointer_event.view_id = 0;
+
+  FlutterEngineResult result =
+      FlutterEngineSendPointerEvent(engine.get(), &pointer_event, 1);
+  ASSERT_EQ(result, kSuccess);
+
+  message_latch.Wait();
+}
+
 TEST_F(EmbedderTest, WindowMetricsEventDefaultsToImplicitView) {
   auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
   EmbedderConfigBuilder builder(context);
