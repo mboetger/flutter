@@ -94,6 +94,44 @@ TEST_F(EmbedderTest, CanLaunchAndShutdownWithValidProjectArgs) {
   engine.reset();
 }
 
+TEST_F(EmbedderTest, SurfaceLifecycleAndGpuAvailability) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  fml::AutoResetWaitableEvent latch;
+  context.AddIsolateCreateCallback([&latch]() { latch.Signal(); });
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  latch.Wait();
+
+  // Test SetGpuAvailability across all valid states.
+  ASSERT_EQ(FlutterEngineSetGpuAvailability(
+                engine.get(), kFlutterGpuAvailabilityFlushAndMakeUnavailable),
+            kSuccess);
+  ASSERT_EQ(FlutterEngineSetGpuAvailability(engine.get(),
+                                            kFlutterGpuAvailabilityUnavailable),
+            kSuccess);
+  ASSERT_EQ(FlutterEngineSetGpuAvailability(engine.get(),
+                                            kFlutterGpuAvailabilityAvailable),
+            kSuccess);
+
+  // Test NotifySurfaceDestroyed and NotifySurfaceCreated.
+  ASSERT_EQ(
+      FlutterEngineNotifySurfaceDestroyed(engine.get(), kFlutterImplicitViewId),
+      kSuccess);
+  ASSERT_EQ(
+      FlutterEngineNotifySurfaceCreated(engine.get(), kFlutterImplicitViewId),
+      kSuccess);
+
+  // Test invalid view ID rejection.
+  ASSERT_NE(FlutterEngineNotifySurfaceDestroyed(engine.get(), /*invalid*/ 42),
+            kSuccess);
+  ASSERT_NE(FlutterEngineNotifySurfaceCreated(engine.get(), /*invalid*/ 42),
+            kSuccess);
+
+  engine.reset();
+}
+
 // TODO(41999): Disabled because flaky.
 TEST_F(EmbedderTest, DISABLED_CanLaunchAndShutdownMultipleTimes) {
   auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();

@@ -3761,6 +3761,81 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineSetGpuAvailability(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterGpuAvailability availability) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  flutter::GpuAvailability internal_availability;
+  switch (availability) {
+    case kFlutterGpuAvailabilityAvailable:
+      internal_availability = flutter::GpuAvailability::kAvailable;
+      break;
+    case kFlutterGpuAvailabilityFlushAndMakeUnavailable:
+      internal_availability =
+          flutter::GpuAvailability::kFlushAndMakeUnavailable;
+      break;
+    case kFlutterGpuAvailabilityUnavailable:
+      internal_availability = flutter::GpuAvailability::kUnavailable;
+      break;
+    default:
+      return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                                "Unknown GPU availability state.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->SetGpuAvailability(internal_availability)) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not set GPU availability.");
+  }
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineNotifySurfaceCreated(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterViewId view_id) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (view_id != kFlutterImplicitViewId) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Only the implicit view is currently supported.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->NotifyCreated()) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not notify surface creation.");
+  }
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineNotifySurfaceDestroyed(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterViewId view_id) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (view_id != kFlutterImplicitViewId) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Only the implicit view is currently supported.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->NotifyDestroyed()) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not notify surface destruction.");
+  }
+
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -3817,6 +3892,9 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(AddView, FlutterEngineAddView);
   SET_PROC(RemoveView, FlutterEngineRemoveView);
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
+  SET_PROC(SetGpuAvailability, FlutterEngineSetGpuAvailability);
+  SET_PROC(NotifySurfaceCreated, FlutterEngineNotifySurfaceCreated);
+  SET_PROC(NotifySurfaceDestroyed, FlutterEngineNotifySurfaceDestroyed);
 #undef SET_PROC
 
   return kSuccess;

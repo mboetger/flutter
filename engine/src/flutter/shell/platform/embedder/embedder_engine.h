@@ -46,6 +46,8 @@ class EmbedderEngine {
 
   bool NotifyDestroyed();
 
+  bool SetGpuAvailability(GpuAvailability availability);
+
   bool RunRootIsolate();
 
   bool IsValid() const;

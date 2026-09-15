@@ -5,6 +5,7 @@
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 
 #include "flutter/fml/make_copyable.h"
+#include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/shell/platform/embedder/vsync_waiter_embedder.h"
 
 namespace flutter {
@@ -126,7 +127,20 @@ bool EmbedderEngine::NotifyCreated() {
     return false;
   }
 
-  shell_->GetPlatformView()->NotifyCreated();
+  if (task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread()) {
+    shell_->GetPlatformView()->NotifyCreated();
+    return true;
+  }
+
+  fml::AutoResetWaitableEvent latch;
+  fml::TaskRunner::RunNowOrPostTask(
+      task_runners_.GetPlatformTaskRunner(), [this, &latch]() {
+        if (IsValid()) {
+          shell_->GetPlatformView()->NotifyCreated();
+        }
+        latch.Signal();
+      });
+  latch.Wait();
   return true;
 }
 
@@ -135,8 +149,42 @@ bool EmbedderEngine::NotifyDestroyed() {
     return false;
   }
 
-  shell_->GetPlatformView()->NotifyDestroyed();
+  if (task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread()) {
+    shell_->GetPlatformView()->NotifyDestroyed();
+    return true;
+  }
 
+  fml::AutoResetWaitableEvent latch;
+  fml::TaskRunner::RunNowOrPostTask(
+      task_runners_.GetPlatformTaskRunner(), [this, &latch]() {
+        if (IsValid()) {
+          shell_->GetPlatformView()->NotifyDestroyed();
+        }
+        latch.Signal();
+      });
+  latch.Wait();
+  return true;
+}
+
+bool EmbedderEngine::SetGpuAvailability(GpuAvailability availability) {
+  if (!IsValid()) {
+    return false;
+  }
+
+  if (task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread()) {
+    shell_->SetGpuAvailability(availability);
+    return true;
+  }
+
+  fml::AutoResetWaitableEvent latch;
+  fml::TaskRunner::RunNowOrPostTask(
+      task_runners_.GetPlatformTaskRunner(), [this, availability, &latch]() {
+        if (IsValid()) {
+          shell_->SetGpuAvailability(availability);
+        }
+        latch.Signal();
+      });
+  latch.Wait();
   return true;
 }
 

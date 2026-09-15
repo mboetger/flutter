@@ -3660,6 +3660,67 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
+/// GPU availability states for FlutterEngineSetGpuAvailability.
+typedef enum {
+  /// Indicates that GPU operations should be permitted.
+  kFlutterGpuAvailabilityAvailable = 0,
+  /// Indicates that the GPU is about to become unavailable, and to attempt to
+  /// flush any GPU related resources now.
+  kFlutterGpuAvailabilityFlushAndMakeUnavailable = 1,
+  /// Indicates that the GPU is unavailable, and that no attempt should be made
+  /// to even flush GPU objects until it is available again.
+  kFlutterGpuAvailabilityUnavailable = 2,
+} FlutterGpuAvailability;
+
+//------------------------------------------------------------------------------
+/// @brief      Sets the GPU availability for the engine.
+///
+/// Embedders should invoke this when transitioning between foreground and
+/// background states to prevent background GPU execution violations.
+///
+/// @param[in]  engine        The running engine instance.
+/// @param[in]  availability  The new GPU availability state.
+///
+/// @return     kSuccess if the GPU availability was successfully updated.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSetGpuAvailability(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterGpuAvailability availability);
+
+//------------------------------------------------------------------------------
+/// @brief      Notifies the engine that a presentation surface has been created
+///             for the view.
+///
+/// @param[in]  engine   The running engine instance.
+/// @param[in]  view_id  The view identifier for which the surface was created.
+///                     Pass 0 (kFlutterImplicitViewId) for the implicit view.
+///
+/// @return     kSuccess if the notification was delivered.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifySurfaceCreated(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterViewId view_id);
+
+//------------------------------------------------------------------------------
+/// @brief      Synchronously notifies the engine that the presentation surface
+///             for a view is about to be destroyed.
+///
+/// The engine will flush pending raster work and destroy on-screen resources
+/// before this function returns.
+///
+/// @param[in]  engine   The running engine instance.
+/// @param[in]  view_id  The view identifier whose surface is being destroyed.
+///                     Pass 0 (kFlutterImplicitViewId) for the implicit view.
+///
+/// @return     kSuccess if the teardown completed synchronously.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifySurfaceDestroyed(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterViewId view_id);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3794,6 +3855,15 @@ typedef FlutterEngineResult (*FlutterEngineRemoveViewFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterViewFocusEvent* event);
+typedef FlutterEngineResult (*FlutterEngineSetGpuAvailabilityFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterGpuAvailability availability);
+typedef FlutterEngineResult (*FlutterEngineNotifySurfaceCreatedFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterViewId view_id);
+typedef FlutterEngineResult (*FlutterEngineNotifySurfaceDestroyedFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterViewId view_id);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3844,6 +3914,9 @@ typedef struct {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineSetGpuAvailabilityFnPtr SetGpuAvailability;
+  FlutterEngineNotifySurfaceCreatedFnPtr NotifySurfaceCreated;
+  FlutterEngineNotifySurfaceDestroyedFnPtr NotifySurfaceDestroyed;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------
