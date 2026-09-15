@@ -478,6 +478,7 @@ def run_cc_tests(
   ]
 
   if not is_windows():
+    check_android_embedder_contracts()
     unittests += [
         # https://github.com/google/googletest/issues/2490
         make_test('android_external_view_embedder_unittests'),
@@ -832,12 +833,59 @@ def run_android_unittest(test_runner_name: str, android_variant: str, adb_path: 
     raise
 
 
+def check_android_embedder_contracts() -> None:
+  """Verifies contracts for the Android embedder:
+
+  1. Orphan target check: Fails if an executable(...) target is added to
+     shell/platform/android/BUILD.gn (or subdirectories) without being wired
+     into run_tests.py.
+  2. Dependency ratchet: Runs tools/android_embedder_deps.py --check.
+  """
+  engine_root = os.path.join(BUILDROOT_DIR, 'flutter')
+  android_root = os.path.join(engine_root, 'shell', 'platform', 'android')
+  run_tests_py = os.path.join(engine_root, 'testing', 'run_tests.py')
+
+  # 1. Orphan check
+  with open(run_tests_py, 'r', encoding='utf-8') as f:
+    run_tests_content = f.read()
+
+  gn_files = []
+  for root, _, files in os.walk(android_root):
+    for file in files:
+      if file == 'BUILD.gn':
+        gn_files.append(os.path.join(root, file))
+
+  target_pattern = re.compile(r'executable\s*\(\s*"([^"]+)"\s*\)')
+  orphans = []
+  for gn_file in gn_files:
+    with open(gn_file, 'r', encoding='utf-8') as f:
+      content = f.read()
+    for match in target_pattern.finditer(content):
+      exe = match.group(1)
+      if f"'{exe}'" not in run_tests_content and f'"{exe}"' not in run_tests_content:
+        orphans.append((exe, os.path.relpath(gn_file, engine_root)))
+
+  if orphans:
+    orphan_list = '\n'.join([f'  - {exe} in {path}' for exe, path in orphans])
+    raise RuntimeError(
+        'Found Android executable targets in BUILD.gn not wired into'
+        f' run_tests.py:\n{orphan_list}\nEvery Android executable target must'
+        ' be wired into testing/run_tests.py.'
+    )
+
+  # 2. Dependency ratchet check
+  ratchet_script = os.path.join(engine_root, 'tools', 'android_embedder_deps.py')
+  cmd = ['python3', ratchet_script, '--check']
+  run_cmd(cmd, cwd=engine_root)
+
+
 def run_android_tests(
     android_variant: str = 'android_debug_unopt', adb_path: typing.Optional[str] = None
 ) -> None:
   if adb_path is None:
     adb_path = 'adb'
 
+  check_android_embedder_contracts()
   run_android_unittest('flutter_shell_native_unittests', android_variant, adb_path)
   run_android_unittest('impeller_toolkit_android_unittests', android_variant, adb_path)
   run_android_unittest('impeller_vulkan_android_unittests', android_variant, adb_path)
