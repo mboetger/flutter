@@ -1,0 +1,23 @@
+{
+  "task_id": "T-0.1",
+  "branch": "android-embedder-v8/t-0.1-test-gap",
+  "commit_sha": "f18f2da2d5fd6ab7476a237575394e19ebf090e9",
+  "parent_sha": "f641318660460896560df5c409903e8b36130bcf",
+  "timestamp": "2026-09-15T19:51:52.375023Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 208928,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
