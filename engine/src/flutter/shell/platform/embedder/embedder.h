@@ -731,6 +731,18 @@ typedef bool (*BoolPresentInfoCallback)(
     void* /* user data */,
     const FlutterPresentInfo* /* present info */);
 
+/// Callback invoked on the raster thread to perform graphics context or
+/// rendering setup before any rendering surface or Impeller context is
+/// created.
+///
+/// This callback is optional. If provided, it is invoked on the raster thread
+/// prior to the creation of the rendering surface or Impeller context.
+///
+/// @param[in]  user_data  The user data associated with the renderer config.
+///
+/// @return     True if renderer setup succeeded, false otherwise.
+typedef bool (*FlutterRendererSetupCallback)(void* /* user data */);
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterOpenGLRendererConfig).
   size_t struct_size;
@@ -811,6 +823,9 @@ typedef struct {
   /// ID. Not specifying populate_existing_damage will result in full
   /// repaint (i.e. rendering all the pixels on the screen at every frame).
   FlutterFrameBufferWithDamageCallback populate_existing_damage;
+  /// An optional callback invoked on the raster thread to perform renderer
+  /// setup before any rendering surface or Impeller context is created.
+  FlutterRendererSetupCallback setup_callback;
 } FlutterOpenGLRendererConfig;
 
 /// Alias for id<MTLDevice>.
@@ -923,6 +938,9 @@ typedef struct {
   /// that external texture details can be supplied to the engine for subsequent
   /// composition.
   FlutterMetalTextureFrameCallback external_texture_frame_callback;
+  /// An optional callback invoked on the raster thread to perform renderer
+  /// setup before any rendering surface or Impeller context is created.
+  FlutterRendererSetupCallback setup_callback;
 } FlutterMetalRendererConfig;
 
 /// Alias for VkInstance.
@@ -1031,7 +1049,9 @@ typedef struct {
   /// without any additional synchronization.
   /// Not used if a FlutterCompositor is supplied in FlutterProjectArgs.
   FlutterVulkanPresentCallback present_image_callback;
-
+  /// An optional callback invoked on the raster thread to perform renderer
+  /// setup before any rendering surface or Impeller context is created.
+  FlutterRendererSetupCallback setup_callback;
 } FlutterVulkanRendererConfig;
 
 typedef struct {

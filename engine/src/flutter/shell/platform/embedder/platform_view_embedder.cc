@@ -140,7 +140,25 @@ void PlatformViewEmbedder::HandlePlatformMessage(
 }
 
 // |PlatformView|
+void PlatformViewEmbedder::SetupImpellerContext() {
+  if (platform_dispatch_table_.renderer_setup_callback &&
+      !renderer_setup_called_) {
+    renderer_setup_called_ = true;
+    if (!platform_dispatch_table_.renderer_setup_callback()) {
+      FML_LOG(ERROR) << "Renderer setup callback failed.";
+    }
+  }
+}
+
+// |PlatformView|
 std::unique_ptr<Surface> PlatformViewEmbedder::CreateRenderingSurface() {
+  if (platform_dispatch_table_.renderer_setup_callback &&
+      !renderer_setup_called_) {
+    renderer_setup_called_ = true;
+    if (!platform_dispatch_table_.renderer_setup_callback()) {
+      FML_LOG(ERROR) << "Renderer setup callback failed.";
+    }
+  }
   if (embedder_surface_ == nullptr) {
     FML_LOG(ERROR) << "Embedder surface was null.";
     return nullptr;
