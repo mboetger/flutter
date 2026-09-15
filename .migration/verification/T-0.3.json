@@ -1,0 +1,23 @@
+{
+  "task_id": "T-0.3",
+  "branch": "android-embedder-v8/t-0.3-threading-characterization",
+  "commit_sha": "a3eaeaa71b44608d0ccb7cd3dc58bd62798a922e",
+  "parent_sha": "167ca1b86094a4d58a33198cafe09294a934998b",
+  "timestamp": "2026-09-15T20:16:48.173472Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 209459,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    }
+  }
+}
