@@ -1,0 +1,89 @@
+{
+  "traceEvents": [
+    {
+      "name": "process_name",
+      "ph": "M",
+      "pid": 1000,
+      "tid": 1001,
+      "args": { "name": "flutter.android.engine" }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1000,
+      "tid": 1001,
+      "args": { "name": "1.platform", "priority": 0 }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1000,
+      "tid": 1002,
+      "args": { "name": "1.ui", "priority": -1 }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1000,
+      "tid": 1003,
+      "args": { "name": "1.raster", "priority": -5 }
+    },
+    {
+      "name": "thread_name",
+      "ph": "M",
+      "pid": 1000,
+      "tid": 1004,
+      "args": { "name": "1.io", "priority": 0 }
+    },
+    {
+      "name": "AndroidPlatformThreadConfigSetter",
+      "cat": "flutter",
+      "ph": "X",
+      "ts": 1000,
+      "dur": 50,
+      "pid": 1000,
+      "tid": 1001,
+      "args": { "config": "platform_thread", "priority": 0 }
+    },
+    {
+      "name": "AndroidPlatformThreadConfigSetter",
+      "cat": "flutter",
+      "ph": "X",
+      "ts": 1050,
+      "dur": 50,
+      "pid": 1000,
+      "tid": 1002,
+      "args": { "config": "ui_thread", "priority": -1 }
+    },
+    {
+      "name": "AndroidPlatformThreadConfigSetter",
+      "cat": "flutter",
+      "ph": "X",
+      "ts": 1100,
+      "dur": 50,
+      "pid": 1000,
+      "tid": 1003,
+      "args": { "config": "raster_thread", "priority": -5 }
+    },
+    {
+      "name": "AndroidPlatformThreadConfigSetter",
+      "cat": "flutter",
+      "ph": "X",
+      "ts": 1150,
+      "dur": 50,
+      "pid": 1000,
+      "tid": 1004,
+      "args": { "config": "io_thread", "priority": 0 }
+    },
+    {
+      "name": "AndroidShellHolder::Create",
+      "cat": "flutter",
+      "ph": "X",
+      "ts": 1200,
+      "dur": 2500,
+      "pid": 1000,
+      "tid": 1001,
+      "args": { "rendering_api": "kImpellerOpenGLES" }
+    }
+  ]
+}
