@@ -36,7 +36,12 @@ class FakePlatformViewDelegate : public PlatformView::Delegate {
   void OnPlatformViewDispatchPlatformMessage(
       std::unique_ptr<PlatformMessage> message) override {}
   void OnPlatformViewDispatchPointerDataPacket(
-      std::unique_ptr<PointerDataPacket> packet) override {}
+      std::unique_ptr<PointerDataPacket> packet) override {
+    dispatch_pointer_data_packet_called = true;
+    last_pointer_data_packet_length = packet ? packet->GetLength() : 0;
+  }
+  bool dispatch_pointer_data_packet_called = false;
+  size_t last_pointer_data_packet_length = 0;
   HitTestResponse OnPlatformViewHitTest(
       int64_t view_id,
       const flutter::PointData offset) override {
@@ -606,6 +611,101 @@ TEST_F(PlatformViewAndroidTest, AndroidEmbedderApiFlagState) {
     ASSERT_TRUE(platform_view);
     EXPECT_TRUE(platform_view->IsAndroidEmbedderApiEnabled());
   }
+}
+
+TEST_F(PlatformViewAndroidTest, PointerDispatchLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  auto packet = std::make_unique<PointerDataPacket>(1);
+  PointerData pointer_data;
+  pointer_data.Clear();
+  pointer_data.physical_x = 100.0;
+  pointer_data.physical_y = 200.0;
+  packet->SetPointerData(0, pointer_data);
+
+  EXPECT_FALSE(fake_delegate.dispatch_pointer_data_packet_called);
+  platform_view->DispatchPointerDataPacket(std::move(packet));
+  EXPECT_TRUE(fake_delegate.dispatch_pointer_data_packet_called);
+  EXPECT_EQ(fake_delegate.last_pointer_data_packet_length, 1ul);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, PointerDispatchEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  auto packet = std::make_unique<PointerDataPacket>(1);
+  PointerData pointer_data;
+  pointer_data.Clear();
+  pointer_data.physical_x = 150.0;
+  pointer_data.physical_y = 250.0;
+  pointer_data.change = PointerData::Change::kDown;
+  pointer_data.kind = PointerData::DeviceKind::kTouch;
+  packet->SetPointerData(0, pointer_data);
+
+  // Dispatch through PlatformViewAndroid. In embedder-api mode, it routes
+  // through SendPointerEvents to the underlying platform view.
+  platform_view->DispatchPointerDataPacket(std::move(packet));
+  EXPECT_TRUE(fake_delegate.dispatch_pointer_data_packet_called);
+  EXPECT_EQ(fake_delegate.last_pointer_data_packet_length, 1ul);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, SendPointerEventsValidation) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  // Null events returns kInvalidArguments.
+  EXPECT_EQ(platform_view->SendPointerEvents(nullptr, 1), kInvalidArguments);
+
+  // Zero count returns kInvalidArguments.
+  FlutterPointerEvent event = {};
+  event.struct_size = sizeof(FlutterPointerEvent);
+  EXPECT_EQ(platform_view->SendPointerEvents(&event, 0), kInvalidArguments);
+
+  // Valid event returns kSuccess.
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  event.phase = FlutterPointerPhase::kDown;
+  event.x = 50.0;
+  event.y = 75.0;
+  event.device_kind = kFlutterPointerDeviceKindTouch;
+  EXPECT_EQ(platform_view->SendPointerEvents(&event, 1), kSuccess);
+  EXPECT_TRUE(fake_delegate.dispatch_pointer_data_packet_called);
+  EXPECT_EQ(fake_delegate.last_pointer_data_packet_length, 1ul);
+
+  platform_view->SetPlatformView(nullptr);
 }
 
 // TODO(matanlurey): Re-enable.

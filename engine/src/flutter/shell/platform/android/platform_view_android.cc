@@ -6,7 +6,9 @@
 
 #include <android/api-level.h>
 #include <sys/system_properties.h>
+#include <cstddef>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 #include "common/settings.h"
@@ -65,6 +67,133 @@ AndroidContext::ContextSettings CreateContextSettings(
   settings.enable_surface_control = p_settings.enable_surface_control;
   return settings;
 }
+
+#define ANDROID_SAFE_ACCESS(pointer, member, default_value)               \
+  ([=]() {                                                                \
+    if ((offsetof(std::remove_pointer<decltype(pointer)>::type, member) + \
+             sizeof(pointer->member) <=                                   \
+         pointer->struct_size)) {                                         \
+      return pointer->member;                                             \
+    }                                                                     \
+    return static_cast<decltype(pointer->member)>((default_value));       \
+  })()
+
+flutter::PointerData::Change ToPointerDataChange(FlutterPointerPhase phase) {
+  switch (phase) {
+    case FlutterPointerPhase::kCancel:
+      return flutter::PointerData::Change::kCancel;
+    case FlutterPointerPhase::kUp:
+      return flutter::PointerData::Change::kUp;
+    case FlutterPointerPhase::kDown:
+      return flutter::PointerData::Change::kDown;
+    case FlutterPointerPhase::kMove:
+      return flutter::PointerData::Change::kMove;
+    case FlutterPointerPhase::kAdd:
+      return flutter::PointerData::Change::kAdd;
+    case FlutterPointerPhase::kRemove:
+      return flutter::PointerData::Change::kRemove;
+    case FlutterPointerPhase::kHover:
+      return flutter::PointerData::Change::kHover;
+    case FlutterPointerPhase::kPanZoomStart:
+      return flutter::PointerData::Change::kPanZoomStart;
+    case FlutterPointerPhase::kPanZoomUpdate:
+      return flutter::PointerData::Change::kPanZoomUpdate;
+    case FlutterPointerPhase::kPanZoomEnd:
+      return flutter::PointerData::Change::kPanZoomEnd;
+  }
+  return flutter::PointerData::Change::kCancel;
+}
+
+FlutterPointerPhase ToFlutterPointerPhase(flutter::PointerData::Change change) {
+  switch (change) {
+    case flutter::PointerData::Change::kCancel:
+      return FlutterPointerPhase::kCancel;
+    case flutter::PointerData::Change::kUp:
+      return FlutterPointerPhase::kUp;
+    case flutter::PointerData::Change::kDown:
+      return FlutterPointerPhase::kDown;
+    case flutter::PointerData::Change::kMove:
+      return FlutterPointerPhase::kMove;
+    case flutter::PointerData::Change::kAdd:
+      return FlutterPointerPhase::kAdd;
+    case flutter::PointerData::Change::kRemove:
+      return FlutterPointerPhase::kRemove;
+    case flutter::PointerData::Change::kHover:
+      return FlutterPointerPhase::kHover;
+    case flutter::PointerData::Change::kPanZoomStart:
+      return FlutterPointerPhase::kPanZoomStart;
+    case flutter::PointerData::Change::kPanZoomUpdate:
+      return FlutterPointerPhase::kPanZoomUpdate;
+    case flutter::PointerData::Change::kPanZoomEnd:
+      return FlutterPointerPhase::kPanZoomEnd;
+  }
+  return FlutterPointerPhase::kCancel;
+}
+
+flutter::PointerData::DeviceKind ToPointerDataKind(
+    FlutterPointerDeviceKind device_kind) {
+  switch (device_kind) {
+    case FlutterPointerDeviceKind::kFlutterPointerDeviceKindMouse:
+      return flutter::PointerData::DeviceKind::kMouse;
+    case FlutterPointerDeviceKind::kFlutterPointerDeviceKindTouch:
+      return flutter::PointerData::DeviceKind::kTouch;
+    case FlutterPointerDeviceKind::kFlutterPointerDeviceKindStylus:
+      return flutter::PointerData::DeviceKind::kStylus;
+    case FlutterPointerDeviceKind::kFlutterPointerDeviceKindInvertedStylus:
+      return flutter::PointerData::DeviceKind::kInvertedStylus;
+    case FlutterPointerDeviceKind::kFlutterPointerDeviceKindTrackpad:
+      return flutter::PointerData::DeviceKind::kTrackpad;
+  }
+  return flutter::PointerData::DeviceKind::kTouch;
+}
+
+FlutterPointerDeviceKind ToFlutterPointerDeviceKind(
+    flutter::PointerData::DeviceKind kind) {
+  switch (kind) {
+    case flutter::PointerData::DeviceKind::kMouse:
+      return FlutterPointerDeviceKind::kFlutterPointerDeviceKindMouse;
+    case flutter::PointerData::DeviceKind::kTouch:
+      return FlutterPointerDeviceKind::kFlutterPointerDeviceKindTouch;
+    case flutter::PointerData::DeviceKind::kStylus:
+    case flutter::PointerData::DeviceKind::kInvertedStylus:
+      return FlutterPointerDeviceKind::kFlutterPointerDeviceKindStylus;
+    case flutter::PointerData::DeviceKind::kTrackpad:
+      return FlutterPointerDeviceKind::kFlutterPointerDeviceKindTrackpad;
+  }
+  return FlutterPointerDeviceKind::kFlutterPointerDeviceKindTouch;
+}
+
+flutter::PointerData::SignalKind ToPointerDataSignalKind(
+    FlutterPointerSignalKind signal_kind) {
+  switch (signal_kind) {
+    case FlutterPointerSignalKind::kFlutterPointerSignalKindNone:
+      return flutter::PointerData::SignalKind::kNone;
+    case FlutterPointerSignalKind::kFlutterPointerSignalKindScroll:
+      return flutter::PointerData::SignalKind::kScroll;
+    case FlutterPointerSignalKind::kFlutterPointerSignalKindScrollInertiaCancel:
+      return flutter::PointerData::SignalKind::kScrollInertiaCancel;
+    case FlutterPointerSignalKind::kFlutterPointerSignalKindScale:
+      return flutter::PointerData::SignalKind::kScale;
+  }
+  return flutter::PointerData::SignalKind::kNone;
+}
+
+FlutterPointerSignalKind ToFlutterPointerSignalKind(
+    flutter::PointerData::SignalKind signal_kind) {
+  switch (signal_kind) {
+    case flutter::PointerData::SignalKind::kNone:
+      return FlutterPointerSignalKind::kFlutterPointerSignalKindNone;
+    case flutter::PointerData::SignalKind::kScroll:
+      return FlutterPointerSignalKind::kFlutterPointerSignalKindScroll;
+    case flutter::PointerData::SignalKind::kScrollInertiaCancel:
+      return FlutterPointerSignalKind::
+          kFlutterPointerSignalKindScrollInertiaCancel;
+    case flutter::PointerData::SignalKind::kScale:
+      return FlutterPointerSignalKind::kFlutterPointerSignalKindScale;
+  }
+  return FlutterPointerSignalKind::kFlutterPointerSignalKindNone;
+}
+
 }  // namespace
 
 AndroidSurfaceFactoryImpl::AndroidSurfaceFactoryImpl(
@@ -300,9 +429,123 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
 
 void PlatformViewAndroid::DispatchPointerDataPacket(
     std::unique_ptr<PointerDataPacket> packet) {
+  if (android_embedder_api_) {
+    TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchPointerDataPacket",
+                 "path", "embedder_api");
+    if (!packet) {
+      return;
+    }
+    size_t count = packet->GetLength();
+    if (count == 0) {
+      return;
+    }
+    std::vector<FlutterPointerEvent> events(count);
+    for (size_t i = 0; i < count; ++i) {
+      PointerData data = packet->GetPointerData(i);
+      FlutterPointerEvent& event = events[i];
+      event.struct_size = sizeof(FlutterPointerEvent);
+      event.timestamp = data.time_stamp;
+      event.phase = ToFlutterPointerPhase(data.change);
+      event.x = data.physical_x;
+      event.y = data.physical_y;
+      event.device = data.device;
+      event.signal_kind = ToFlutterPointerSignalKind(data.signal_kind);
+      event.scroll_delta_x = data.scroll_delta_x;
+      event.scroll_delta_y = data.scroll_delta_y;
+      event.device_kind = ToFlutterPointerDeviceKind(data.kind);
+      event.buttons = data.buttons;
+      event.pan_x = data.pan_x;
+      event.pan_y = data.pan_y;
+      event.scale = data.scale;
+      event.rotation = data.rotation;
+      event.pressure = data.pressure;
+      event.pressure_min = data.pressure_min;
+      event.pressure_max = data.pressure_max;
+      event.tilt = data.tilt;
+      event.orientation = data.orientation;
+      event.radius_major = data.radius_major;
+      event.radius_minor = data.radius_minor;
+      event.radius_min = data.radius_min;
+      event.radius_max = data.radius_max;
+      event.distance = data.distance;
+      event.distance_max = data.distance_max;
+      event.size = data.size;
+      event.embedder_id = data.embedder_id;
+      event.view_id = data.view_id;
+    }
+    SendPointerEvents(events.data(), events.size());
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchPointerDataPacket",
+               "path", "legacy");
   if (platform_view_) {
     platform_view_->DispatchPointerDataPacket(std::move(packet));
   }
+}
+
+FlutterEngineResult PlatformViewAndroid::SendPointerEvents(
+    const FlutterPointerEvent* events,
+    size_t count) {
+  if (events == nullptr || count == 0) {
+    return kInvalidArguments;
+  }
+
+  auto packet = std::make_unique<PointerDataPacket>(count);
+  const FlutterPointerEvent* current = events;
+
+  for (size_t i = 0; i < count; ++i) {
+    PointerData pointer_data;
+    pointer_data.Clear();
+    pointer_data.embedder_id = ANDROID_SAFE_ACCESS(current, embedder_id, 0);
+    pointer_data.time_stamp = ANDROID_SAFE_ACCESS(current, timestamp, 0);
+    pointer_data.change = ToPointerDataChange(
+        ANDROID_SAFE_ACCESS(current, phase, FlutterPointerPhase::kCancel));
+    pointer_data.physical_x = ANDROID_SAFE_ACCESS(current, x, 0.0);
+    pointer_data.physical_y = ANDROID_SAFE_ACCESS(current, y, 0.0);
+    pointer_data.physical_delta_x = 0.0;
+    pointer_data.physical_delta_y = 0.0;
+    pointer_data.device = ANDROID_SAFE_ACCESS(current, device, 0);
+    pointer_data.pointer_identifier = 0;
+    pointer_data.signal_kind = ToPointerDataSignalKind(ANDROID_SAFE_ACCESS(
+        current, signal_kind, kFlutterPointerSignalKindNone));
+    pointer_data.scroll_delta_x =
+        ANDROID_SAFE_ACCESS(current, scroll_delta_x, 0.0);
+    pointer_data.scroll_delta_y =
+        ANDROID_SAFE_ACCESS(current, scroll_delta_y, 0.0);
+    FlutterPointerDeviceKind device_kind = ANDROID_SAFE_ACCESS(
+        current, device_kind, kFlutterPointerDeviceKindTouch);
+    pointer_data.kind = ToPointerDataKind(device_kind);
+    pointer_data.buttons = ANDROID_SAFE_ACCESS(current, buttons, 0);
+    pointer_data.pan_x = ANDROID_SAFE_ACCESS(current, pan_x, 0.0);
+    pointer_data.pan_y = ANDROID_SAFE_ACCESS(current, pan_y, 0.0);
+    pointer_data.pan_delta_x = 0.0;
+    pointer_data.pan_delta_y = 0.0;
+    pointer_data.scale = ANDROID_SAFE_ACCESS(current, scale, 0.0);
+    pointer_data.rotation = ANDROID_SAFE_ACCESS(current, rotation, 0.0);
+    pointer_data.pressure = ANDROID_SAFE_ACCESS(current, pressure, 0.0);
+    pointer_data.pressure_min = ANDROID_SAFE_ACCESS(current, pressure_min, 0.0);
+    pointer_data.pressure_max = ANDROID_SAFE_ACCESS(current, pressure_max, 0.0);
+    pointer_data.tilt = ANDROID_SAFE_ACCESS(current, tilt, 0.0);
+    pointer_data.orientation = ANDROID_SAFE_ACCESS(current, orientation, 0.0);
+    pointer_data.radius_major = ANDROID_SAFE_ACCESS(current, radius_major, 0.0);
+    pointer_data.radius_minor = ANDROID_SAFE_ACCESS(current, radius_minor, 0.0);
+    pointer_data.radius_min = ANDROID_SAFE_ACCESS(current, radius_min, 0.0);
+    pointer_data.radius_max = ANDROID_SAFE_ACCESS(current, radius_max, 0.0);
+    pointer_data.distance = ANDROID_SAFE_ACCESS(current, distance, 0.0);
+    pointer_data.distance_max = ANDROID_SAFE_ACCESS(current, distance_max, 0.0);
+    pointer_data.size = ANDROID_SAFE_ACCESS(current, size, 0.0);
+    pointer_data.view_id =
+        ANDROID_SAFE_ACCESS(current, view_id, kImplicitViewId);
+    packet->SetPointerData(i, pointer_data);
+    current = reinterpret_cast<const FlutterPointerEvent*>(
+        reinterpret_cast<const uint8_t*>(current) + current->struct_size);
+  }
+
+  if (platform_view_) {
+    platform_view_->DispatchPointerDataPacket(std::move(packet));
+  }
+  return kSuccess;
 }
 
 void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,

@@ -125,6 +125,9 @@ class PlatformViewAndroid final
 
   void DispatchPointerDataPacket(std::unique_ptr<PointerDataPacket> packet);
 
+  FlutterEngineResult SendPointerEvents(const FlutterPointerEvent* events,
+                                        size_t count);
+
   void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
 
   void DispatchSemanticsAction(JNIEnv* env,
