@@ -32,7 +32,14 @@ class FakePlatformViewDelegate : public PlatformView::Delegate {
       const fml::closure& closure) override {}
   void OnPlatformViewSetViewportMetrics(
       int64_t view_id,
-      const ViewportMetrics& metrics) override {}
+      const ViewportMetrics& metrics) override {
+    set_viewport_metrics_called = true;
+    last_view_id = view_id;
+    last_viewport_metrics = metrics;
+  }
+  bool set_viewport_metrics_called = false;
+  int64_t last_view_id = -1;
+  ViewportMetrics last_viewport_metrics = {};
   void OnPlatformViewDispatchPlatformMessage(
       std::unique_ptr<PlatformMessage> message) override {}
   void OnPlatformViewDispatchPointerDataPacket(
@@ -704,6 +711,107 @@ TEST_F(PlatformViewAndroidTest, SendPointerEventsValidation) {
   EXPECT_EQ(platform_view->SendPointerEvents(&event, 1), kSuccess);
   EXPECT_TRUE(fake_delegate.dispatch_pointer_data_packet_called);
   EXPECT_EQ(fake_delegate.last_pointer_data_packet_length, 1ul);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, WindowMetricsDispatchLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  ViewportMetrics metrics;
+  metrics.physical_width = 1080;
+  metrics.physical_height = 1920;
+  metrics.device_pixel_ratio = 2.0;
+
+  EXPECT_FALSE(fake_delegate.set_viewport_metrics_called);
+  platform_view->SetViewportMetrics(0, metrics);
+  EXPECT_TRUE(fake_delegate.set_viewport_metrics_called);
+  EXPECT_EQ(fake_delegate.last_view_id, 0);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_width, 1080);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_height, 1920);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.device_pixel_ratio, 2.0);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, WindowMetricsDispatchEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  ViewportMetrics metrics;
+  metrics.physical_width = 1200;
+  metrics.physical_height = 2000;
+  metrics.device_pixel_ratio = 2.5;
+
+  EXPECT_FALSE(fake_delegate.set_viewport_metrics_called);
+  platform_view->SetViewportMetrics(0, metrics);
+  EXPECT_TRUE(fake_delegate.set_viewport_metrics_called);
+  EXPECT_EQ(fake_delegate.last_view_id, 0);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_width, 1200);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_height, 2000);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.device_pixel_ratio, 2.5);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, SendWindowMetricsEventValidation) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  // Null event returns kInvalidArguments.
+  EXPECT_EQ(platform_view->SendWindowMetricsEvent(nullptr), kInvalidArguments);
+
+  // Invalid pixel ratio returns kInvalidArguments.
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.width = 100;
+  event.height = 100;
+  event.pixel_ratio = 0.0;
+  EXPECT_EQ(platform_view->SendWindowMetricsEvent(&event), kInvalidArguments);
+
+  // Negative insets return kInvalidArguments.
+  event.pixel_ratio = 1.0;
+  event.physical_view_inset_top = -1.0;
+  EXPECT_EQ(platform_view->SendWindowMetricsEvent(&event), kInvalidArguments);
+
+  // Valid event returns kSuccess.
+  event.physical_view_inset_top = 10.0;
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_EQ(platform_view->SendWindowMetricsEvent(&event), kSuccess);
+  EXPECT_TRUE(fake_delegate.set_viewport_metrics_called);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_width, 100);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_height, 100);
+  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_view_inset_top, 10.0);
 
   platform_view->SetPlatformView(nullptr);
 }

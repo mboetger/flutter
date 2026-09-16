@@ -130,6 +130,9 @@ class PlatformViewAndroid final
 
   void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
 
+  FlutterEngineResult SendWindowMetricsEvent(
+      const FlutterWindowMetricsEvent* event);
+
   void DispatchSemanticsAction(JNIEnv* env,
                                jint id,
                                jint action,
