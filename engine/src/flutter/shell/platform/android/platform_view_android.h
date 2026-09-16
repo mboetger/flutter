@@ -139,6 +139,11 @@ class PlatformViewAndroid final
                                jobject args,
                                jint args_position);
 
+  FlutterEngineResult DispatchSemanticsAction(uint64_t node_id,
+                                              FlutterSemanticsAction action,
+                                              const uint8_t* data,
+                                              size_t data_length);
+
   void SetSemanticsEnabled(bool enabled);
 
   void SetAccessibilityFeatures(int32_t flags);

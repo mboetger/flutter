@@ -779,6 +779,24 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
                                                   jint action,
                                                   jobject args,
                                                   jint args_position) {
+  if (android_embedder_api_) {
+    TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchSemanticsAction",
+                 "path", "embedder_api");
+    const uint8_t* args_data = nullptr;
+    size_t args_size = 0;
+    if (args != nullptr && !env->IsSameObject(args, NULL)) {
+      args_data =
+          static_cast<const uint8_t*>(env->GetDirectBufferAddress(args));
+      args_size = static_cast<size_t>(args_position);
+    }
+    DispatchSemanticsAction(node_id,
+                            static_cast<FlutterSemanticsAction>(action),
+                            args_data, args_size);
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchSemanticsAction",
+               "path", "legacy");
   if (!platform_view_) {
     return;
   }
@@ -797,6 +815,27 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
   platform_view_->DispatchSemanticsAction(
       kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
       std::move(args_vector));
+}
+
+FlutterEngineResult PlatformViewAndroid::DispatchSemanticsAction(
+    uint64_t node_id,
+    FlutterSemanticsAction action,
+    const uint8_t* data,
+    size_t data_length) {
+  if (data == nullptr && data_length > 0) {
+    return kInvalidArguments;
+  }
+
+  auto args_vector = (data != nullptr && data_length > 0)
+                         ? fml::MallocMapping::Copy(data, data_length)
+                         : fml::MallocMapping();
+
+  if (platform_view_) {
+    platform_view_->DispatchSemanticsAction(
+        kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
+        std::move(args_vector));
+  }
+  return kSuccess;
 }
 
 void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {

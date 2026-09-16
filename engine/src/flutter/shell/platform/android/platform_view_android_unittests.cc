@@ -58,7 +58,17 @@ class FakePlatformViewDelegate : public PlatformView::Delegate {
                                              int32_t node_id,
                                              SemanticsAction action,
                                              fml::MallocMapping args) override {
+    dispatch_semantics_action_called = true;
+    last_semantics_view_id = view_id;
+    last_semantics_node_id = node_id;
+    last_semantics_action = action;
+    last_semantics_args_size = args.GetSize();
   }
+  bool dispatch_semantics_action_called = false;
+  int64_t last_semantics_view_id = -1;
+  int32_t last_semantics_node_id = -1;
+  SemanticsAction last_semantics_action = SemanticsAction::kTap;
+  size_t last_semantics_args_size = 0;
   void OnPlatformViewSetSemanticsEnabled(bool enabled) override {}
   void OnPlatformViewSetAccessibilityFeatures(int32_t flags) override {}
   void OnPlatformViewRegisterTexture(
@@ -812,6 +822,65 @@ TEST_F(PlatformViewAndroidTest, SendWindowMetricsEventValidation) {
   EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_width, 100);
   EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_height, 100);
   EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_view_inset_top, 10.0);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, SemanticsActionDispatchValidation) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  // Null data with positive length returns kInvalidArguments.
+  EXPECT_EQ(platform_view->DispatchSemanticsAction(
+                1, kFlutterSemanticsActionTap, nullptr, 10),
+            kInvalidArguments);
+
+  // Null data with zero length returns kSuccess.
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.dispatch_semantics_action_called);
+  EXPECT_EQ(platform_view->DispatchSemanticsAction(
+                42, kFlutterSemanticsActionTap, nullptr, 0),
+            kSuccess);
+  EXPECT_TRUE(fake_delegate.dispatch_semantics_action_called);
+  EXPECT_EQ(fake_delegate.last_semantics_view_id, 0);
+  EXPECT_EQ(fake_delegate.last_semantics_node_id, 42);
+  EXPECT_EQ(fake_delegate.last_semantics_action, SemanticsAction::kTap);
+  EXPECT_EQ(fake_delegate.last_semantics_args_size, 0ul);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, SemanticsActionDispatchWithPayload) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  const uint8_t payload[] = {0x01, 0x02, 0x03, 0x04};
+  EXPECT_FALSE(fake_delegate.dispatch_semantics_action_called);
+  EXPECT_EQ(
+      platform_view->DispatchSemanticsAction(
+          100, kFlutterSemanticsActionCustomAction, payload, sizeof(payload)),
+      kSuccess);
+  EXPECT_TRUE(fake_delegate.dispatch_semantics_action_called);
+  EXPECT_EQ(fake_delegate.last_semantics_view_id, 0);
+  EXPECT_EQ(fake_delegate.last_semantics_node_id, 100);
+  EXPECT_EQ(fake_delegate.last_semantics_action,
+            SemanticsAction::kCustomAction);
+  EXPECT_EQ(fake_delegate.last_semantics_args_size, sizeof(payload));
 
   platform_view->SetPlatformView(nullptr);
 }
