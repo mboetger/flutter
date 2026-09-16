@@ -173,5 +173,64 @@ TEST(AndroidThreadingTest, MergeAfterLaunchPath) {
   EXPECT_NE(platform_queue, ui_queue);
 }
 
+TEST(AndroidThreadingTest, AndroidTaskRunnersCustomTaskRunnersShape) {
+  TRACE_EVENT0("flutter", "AndroidTaskRunnersCustomTaskRunnersShape");
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto task_runners = AndroidTaskRunners::Create("io.flutter.test", settings);
+  ASSERT_TRUE(task_runners);
+  ASSERT_TRUE(task_runners->IsValid());
+  EXPECT_TRUE(task_runners->GetTaskRunners().IsValid());
+
+  const FlutterCustomTaskRunners* custom_task_runners =
+      task_runners->GetCustomTaskRunners();
+  ASSERT_NE(custom_task_runners, nullptr);
+  EXPECT_EQ(custom_task_runners->struct_size, sizeof(FlutterCustomTaskRunners));
+  EXPECT_NE(custom_task_runners->platform_task_runner, nullptr);
+  EXPECT_NE(custom_task_runners->render_task_runner, nullptr);
+  EXPECT_NE(custom_task_runners->ui_task_runner, nullptr);
+  EXPECT_NE(custom_task_runners->io_task_runner, nullptr);
+  EXPECT_NE(custom_task_runners->thread_priority_setter, nullptr);
+  EXPECT_EQ(custom_task_runners->io_thread_priority,
+            FlutterThreadPriority::kNormal);
+
+  // Validate runner descriptions
+  EXPECT_EQ(custom_task_runners->platform_task_runner->struct_size,
+            sizeof(FlutterTaskRunnerDescription));
+  EXPECT_EQ(custom_task_runners->render_task_runner->struct_size,
+            sizeof(FlutterTaskRunnerDescription));
+  EXPECT_EQ(custom_task_runners->ui_task_runner->struct_size,
+            sizeof(FlutterTaskRunnerDescription));
+  EXPECT_EQ(custom_task_runners->io_task_runner->struct_size,
+            sizeof(FlutterTaskRunnerDescription));
+
+  EXPECT_EQ(custom_task_runners->platform_task_runner->priority,
+            FlutterThreadPriority::kNormal);
+  EXPECT_EQ(custom_task_runners->render_task_runner->priority,
+            FlutterThreadPriority::kRaster);
+  EXPECT_EQ(custom_task_runners->ui_task_runner->priority,
+            FlutterThreadPriority::kDisplay);
+  EXPECT_EQ(custom_task_runners->io_task_runner->priority,
+            FlutterThreadPriority::kNormal);
+}
+
+TEST(AndroidThreadingTest, AndroidShellHolderExposesTaskRunners) {
+  TRACE_EVENT0("flutter", "AndroidShellHolderExposesTaskRunners");
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<JNIMock>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+  ASSERT_NE(holder->GetTaskRunnersForTesting(), nullptr);
+  EXPECT_TRUE(holder->GetTaskRunnersForTesting()->IsValid());
+  EXPECT_NE(holder->GetTaskRunnersForTesting()->GetCustomTaskRunners(),
+            nullptr);
+}
+
 }  // namespace testing
 }  // namespace flutter

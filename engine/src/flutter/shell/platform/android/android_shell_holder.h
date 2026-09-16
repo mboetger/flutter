@@ -10,8 +10,8 @@
 #include "flutter/fml/macros.h"
 #include "flutter/shell/common/run_configuration.h"
 #include "flutter/shell/common/shell.h"
-#include "flutter/shell/common/thread_host.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
+#include "flutter/shell/platform/android/android_task_runners.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
@@ -113,13 +113,16 @@ class AndroidShellHolder {
   PlatformViewEmbedder* GetPlatformViewEmbedderForTesting() const {
     return platform_view_embedder_;
   }
+  const std::shared_ptr<AndroidTaskRunners>& GetTaskRunnersForTesting() const {
+    return task_runners_;
+  }
 
  private:
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
-  std::shared_ptr<ThreadHost> thread_host_;
+  std::shared_ptr<AndroidTaskRunners> task_runners_;
   std::unique_ptr<Shell> shell_;
   bool is_valid_ = false;
   uint64_t next_pointer_flow_id_ = 0;
@@ -140,7 +143,7 @@ class AndroidShellHolder {
   ///
   AndroidShellHolder(const flutter::Settings& settings,
                      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-                     const std::shared_ptr<ThreadHost>& thread_host,
+                     const std::shared_ptr<AndroidTaskRunners>& task_runners,
                      std::unique_ptr<Shell> shell,
                      std::unique_ptr<APKAssetProvider> apk_asset_provider,
                      std::unique_ptr<PlatformViewAndroid> platform_view_android,
