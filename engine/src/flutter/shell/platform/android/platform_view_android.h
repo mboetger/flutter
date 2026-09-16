@@ -146,6 +146,8 @@ class PlatformViewAndroid final
 
   void SetSemanticsEnabled(bool enabled);
 
+  FlutterEngineResult UpdateSemanticsEnabled(bool enabled);
+
   void SetAccessibilityFeatures(int32_t flags);
 
   void RegisterExternalTexture(

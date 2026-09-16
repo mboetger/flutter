@@ -839,9 +839,25 @@ FlutterEngineResult PlatformViewAndroid::DispatchSemanticsAction(
 }
 
 void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {
+  if (android_embedder_api_) {
+    TRACE_EVENT1("flutter", "PlatformViewAndroid::SetSemanticsEnabled", "path",
+                 "embedder_api");
+    UpdateSemanticsEnabled(enabled);
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "PlatformViewAndroid::SetSemanticsEnabled", "path",
+               "legacy");
   if (platform_view_) {
     platform_view_->SetSemanticsEnabled(enabled);
   }
+}
+
+FlutterEngineResult PlatformViewAndroid::UpdateSemanticsEnabled(bool enabled) {
+  if (platform_view_) {
+    platform_view_->SetSemanticsEnabled(enabled);
+  }
+  return kSuccess;
 }
 
 void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {

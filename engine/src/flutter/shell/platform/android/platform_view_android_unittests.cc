@@ -69,7 +69,12 @@ class FakePlatformViewDelegate : public PlatformView::Delegate {
   int32_t last_semantics_node_id = -1;
   SemanticsAction last_semantics_action = SemanticsAction::kTap;
   size_t last_semantics_args_size = 0;
-  void OnPlatformViewSetSemanticsEnabled(bool enabled) override {}
+  void OnPlatformViewSetSemanticsEnabled(bool enabled) override {
+    set_semantics_enabled_called = true;
+    last_semantics_enabled = enabled;
+  }
+  bool set_semantics_enabled_called = false;
+  bool last_semantics_enabled = false;
   void OnPlatformViewSetAccessibilityFeatures(int32_t flags) override {}
   void OnPlatformViewRegisterTexture(
       std::shared_ptr<Texture> texture) override {}
@@ -881,6 +886,79 @@ TEST_F(PlatformViewAndroidTest, SemanticsActionDispatchWithPayload) {
   EXPECT_EQ(fake_delegate.last_semantics_action,
             SemanticsAction::kCustomAction);
   EXPECT_EQ(fake_delegate.last_semantics_args_size, sizeof(payload));
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, SemanticsEnabledDispatchLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.set_semantics_enabled_called);
+  platform_view->SetSemanticsEnabled(true);
+  EXPECT_TRUE(fake_delegate.set_semantics_enabled_called);
+  EXPECT_TRUE(fake_delegate.last_semantics_enabled);
+
+  platform_view->SetSemanticsEnabled(false);
+  EXPECT_FALSE(fake_delegate.last_semantics_enabled);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, SemanticsEnabledDispatchEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.set_semantics_enabled_called);
+  platform_view->SetSemanticsEnabled(true);
+  EXPECT_TRUE(fake_delegate.set_semantics_enabled_called);
+  EXPECT_TRUE(fake_delegate.last_semantics_enabled);
+
+  platform_view->SetSemanticsEnabled(false);
+  EXPECT_FALSE(fake_delegate.last_semantics_enabled);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, UpdateSemanticsEnabledDirect) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.set_semantics_enabled_called);
+  EXPECT_EQ(platform_view->UpdateSemanticsEnabled(true), kSuccess);
+  EXPECT_TRUE(fake_delegate.set_semantics_enabled_called);
+  EXPECT_TRUE(fake_delegate.last_semantics_enabled);
+
+  EXPECT_EQ(platform_view->UpdateSemanticsEnabled(false), kSuccess);
+  EXPECT_FALSE(fake_delegate.last_semantics_enabled);
 
   platform_view->SetPlatformView(nullptr);
 }
