@@ -69,6 +69,7 @@ class PlatformViewEmbedder final : public PlatformView {
     RequestDartDeferredLibraryCallback
         request_dart_deferred_library_callback;                    // optional
     SetApplicationLocaleCallback set_application_locale_callback;  // optional
+    bool does_handle_platform_messages_on_platform_thread = true;
   };
 
   // Create a platform view that sets up a software rasterizer.

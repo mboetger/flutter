@@ -24,6 +24,7 @@
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
 #include "flutter/runtime/dart_vm.h"
+#include "flutter/shell/platform/embedder/embedder_struct_macros.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/shell/platform/embedder/tests/embedder_test.h"
@@ -5475,6 +5476,189 @@ TEST_F(EmbedderTest, CustomTaskRunnersSafeAccessTruncatedStruct) {
       reinterpret_cast<const FlutterCustomTaskRunners*>(&legacy_runners));
   ASSERT_NE(host, nullptr);
   EXPECT_TRUE(host->IsValid());
+}
+
+TEST_F(EmbedderTest, PlatformMessageRoutingDefaultPlatformThread) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  auto platform_thread = std::make_unique<fml::Thread>("test_platform_thread");
+  auto ui_thread = std::make_unique<fml::Thread>("test_ui_thread");
+
+  std::mutex ui_task_runner_mutex;
+  bool ui_task_runner_destroyed = false;
+  auto ui_task_runner = ui_thread->GetTaskRunner();
+  auto platform_task_runner = platform_thread->GetTaskRunner();
+  UniqueEngine engine;
+
+  EmbedderTestTaskRunner test_ui_task_runner =
+      EmbedderTestTaskRunnerBuilder()
+          .SetRealTaskRunner(ui_task_runner)
+          .SetTaskExpiryCallback([&](FlutterTask task) {
+            std::scoped_lock lock(ui_task_runner_mutex);
+            if (ui_task_runner_destroyed) {
+              return;
+            }
+            FlutterEngineRunTask(engine.get(), &task);
+          })
+          .SetDestructionCallback([&]() {
+            std::scoped_lock lock(ui_task_runner_mutex);
+            ui_task_runner_destroyed = true;
+          })
+          .Build();
+
+  EmbedderTestTaskRunner test_platform_task_runner =
+      EmbedderTestTaskRunnerBuilder()
+          .SetRealTaskRunner(platform_task_runner)
+          .SetTaskExpiryCallback([&](FlutterTask task) {
+            if (!engine.is_valid()) {
+              return;
+            }
+            FlutterEngineRunTask(engine.get(), &task);
+          })
+          .Build();
+
+  fml::AutoResetWaitableEvent signal_latch_ui;
+  fml::AutoResetWaitableEvent signal_latch_platform;
+
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&]() {
+        ASSERT_TRUE(ui_task_runner->RunsTasksOnCurrentThread());
+        signal_latch_ui.Signal();
+      }));
+
+  platform_task_runner->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    const auto ui_task_runner_description =
+        test_ui_task_runner.GetFlutterTaskRunnerDescription();
+    const auto platform_task_runner_description =
+        test_platform_task_runner.GetFlutterTaskRunnerDescription();
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetUITaskRunner(&ui_task_runner_description);
+    builder.SetPlatformTaskRunner(&platform_task_runner_description);
+    builder.SetDartEntrypoint("canSpecifyCustomUITaskRunner");
+    builder.SetPlatformMessageRouting(
+        kFlutterPlatformMessageRoutingPlatformThread);
+    builder.SetPlatformMessageCallback(
+        [&](const FlutterPlatformMessage* message) {
+          ASSERT_TRUE(platform_task_runner->RunsTasksOnCurrentThread());
+          ASSERT_FALSE(ui_task_runner->RunsTasksOnCurrentThread());
+          signal_latch_platform.Signal();
+        });
+    engine = builder.InitializeEngine();
+    ASSERT_EQ(FlutterEngineRunInitialized(engine.get()), kSuccess);
+    ASSERT_TRUE(engine.is_valid());
+  });
+  signal_latch_ui.Wait();
+  signal_latch_platform.Wait();
+
+  fml::AutoResetWaitableEvent kill_latch;
+  platform_task_runner->PostTask([&] {
+    engine.reset();
+    platform_task_runner->PostTask([&kill_latch] { kill_latch.Signal(); });
+  });
+  kill_latch.Wait();
+
+  ui_thread.reset();
+  platform_thread.reset();
+}
+
+TEST_F(EmbedderTest, PlatformMessageRoutingCallingThread) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  auto platform_thread = std::make_unique<fml::Thread>("test_platform_thread");
+  auto ui_thread = std::make_unique<fml::Thread>("test_ui_thread");
+
+  std::mutex ui_task_runner_mutex;
+  bool ui_task_runner_destroyed = false;
+  auto ui_task_runner = ui_thread->GetTaskRunner();
+  auto platform_task_runner = platform_thread->GetTaskRunner();
+  UniqueEngine engine;
+
+  EmbedderTestTaskRunner test_ui_task_runner =
+      EmbedderTestTaskRunnerBuilder()
+          .SetRealTaskRunner(ui_task_runner)
+          .SetTaskExpiryCallback([&](FlutterTask task) {
+            std::scoped_lock lock(ui_task_runner_mutex);
+            if (ui_task_runner_destroyed) {
+              return;
+            }
+            FlutterEngineRunTask(engine.get(), &task);
+          })
+          .SetDestructionCallback([&]() {
+            std::scoped_lock lock(ui_task_runner_mutex);
+            ui_task_runner_destroyed = true;
+          })
+          .Build();
+
+  EmbedderTestTaskRunner test_platform_task_runner =
+      EmbedderTestTaskRunnerBuilder()
+          .SetRealTaskRunner(platform_task_runner)
+          .SetTaskExpiryCallback([&](FlutterTask task) {
+            if (!engine.is_valid()) {
+              return;
+            }
+            FlutterEngineRunTask(engine.get(), &task);
+          })
+          .Build();
+
+  fml::AutoResetWaitableEvent signal_latch_ui;
+  fml::AutoResetWaitableEvent signal_latch_calling_thread;
+
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&]() {
+        ASSERT_TRUE(ui_task_runner->RunsTasksOnCurrentThread());
+        signal_latch_ui.Signal();
+      }));
+
+  platform_task_runner->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    const auto ui_task_runner_description =
+        test_ui_task_runner.GetFlutterTaskRunnerDescription();
+    const auto platform_task_runner_description =
+        test_platform_task_runner.GetFlutterTaskRunnerDescription();
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetUITaskRunner(&ui_task_runner_description);
+    builder.SetPlatformTaskRunner(&platform_task_runner_description);
+    builder.SetDartEntrypoint("canSpecifyCustomUITaskRunner");
+    builder.SetPlatformMessageRouting(
+        kFlutterPlatformMessageRoutingCallingThread);
+    builder.SetPlatformMessageCallback(
+        [&](const FlutterPlatformMessage* message) {
+          ASSERT_TRUE(ui_task_runner->RunsTasksOnCurrentThread());
+          ASSERT_FALSE(platform_task_runner->RunsTasksOnCurrentThread());
+          signal_latch_calling_thread.Signal();
+        });
+    engine = builder.InitializeEngine();
+    ASSERT_EQ(FlutterEngineRunInitialized(engine.get()), kSuccess);
+    ASSERT_TRUE(engine.is_valid());
+  });
+  signal_latch_ui.Wait();
+  signal_latch_calling_thread.Wait();
+
+  fml::AutoResetWaitableEvent kill_latch;
+  platform_task_runner->PostTask([&] {
+    engine.reset();
+    platform_task_runner->PostTask([&kill_latch] { kill_latch.Signal(); });
+  });
+  kill_latch.Wait();
+
+  ui_thread.reset();
+  platform_thread.reset();
+}
+
+TEST_F(EmbedderTest, PlatformMessageRoutingSafeAccessTruncatedStruct) {
+  FlutterProjectArgs args{};
+  const FlutterProjectArgs* args_ptr = &args;
+  args.struct_size = offsetof(FlutterProjectArgs, platform_message_routing);
+  auto routing = SAFE_ACCESS(args_ptr, platform_message_routing,
+                             kFlutterPlatformMessageRoutingPlatformThread);
+  ASSERT_EQ(routing, kFlutterPlatformMessageRoutingPlatformThread);
+
+  args.struct_size = sizeof(FlutterProjectArgs);
+  args.platform_message_routing = kFlutterPlatformMessageRoutingCallingThread;
+  routing = SAFE_ACCESS(args_ptr, platform_message_routing,
+                        kFlutterPlatformMessageRoutingPlatformThread);
+  ASSERT_EQ(routing, kFlutterPlatformMessageRoutingCallingThread);
 }
 
 }  // namespace testing

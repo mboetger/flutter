@@ -2474,6 +2474,11 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
             const std::string& locale) { ptr(locale.c_str(), user_data); };
   }
 
+  auto routing = SAFE_ACCESS(args, platform_message_routing,
+                             kFlutterPlatformMessageRoutingPlatformThread);
+  bool does_handle_platform_messages_on_platform_thread =
+      (routing == kFlutterPlatformMessageRoutingPlatformThread);
+
   return flutter::PlatformViewEmbedder::PlatformDispatchTable{
       update_semantics_callback,                  //
       platform_message_response_callback,         //
@@ -2485,6 +2490,7 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
       /*renderer_setup_callback=*/nullptr,        //
       dart_deferred_library_request_callback,     //
       set_application_locale_callback,            //
+      does_handle_platform_messages_on_platform_thread,
   };
 }
 

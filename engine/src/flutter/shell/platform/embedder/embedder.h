@@ -395,6 +395,25 @@ typedef void (*FlutterThreadPrioritySetterWithUserData)(
     FlutterThreadPriority /* priority */,
     void* /* user data */);
 
+/// Specifies the thread routing behavior for incoming platform messages
+/// delivered from the Dart application.
+typedef enum {
+  /// Default: Incoming platform messages are routed to the platform task runner
+  /// before invoking `FlutterProjectArgs.platform_message_callback`.
+  /// This is the traditional behavior expected by existing desktop and
+  /// custom embedders.
+  kFlutterPlatformMessageRoutingPlatformThread = 0,
+  /// Calling thread: Incoming platform messages are delivered directly on the
+  /// engine thread where the message arrived (typically the UI task runner)
+  /// without an automatic hop to the platform task runner.
+  ///
+  /// Embedders specifying this routing mode can inspect the incoming message
+  /// channel on the calling thread and dispatch to background task queues or
+  /// the platform thread as appropriate, avoiding main thread contention and
+  /// latency for background channels.
+  kFlutterPlatformMessageRoutingCallingThread = 1,
+} FlutterPlatformMessageRouting;
+
 typedef struct _FlutterEngine* FLUTTER_API_SYMBOL(FlutterEngine);
 
 /// Unique identifier for views.
@@ -3225,6 +3244,19 @@ typedef struct {
   /// Callback invoked by the engine when the application requests a change to
   /// the application's locale.
   FlutterSetApplicationLocaleCallback set_application_locale_callback;
+
+  /// Specifies the routing behavior for incoming platform messages delivered
+  /// from the Dart application.
+  ///
+  /// If zero-initialized or set to
+  /// `kFlutterPlatformMessageRoutingPlatformThread`, the engine routes all
+  /// incoming platform messages to the platform task runner before invoking
+  /// `platform_message_callback`.
+  ///
+  /// If set to `kFlutterPlatformMessageRoutingCallingThread`, the engine
+  /// invokes `platform_message_callback` directly on the thread on which the
+  /// message arrived (typically the UI task runner).
+  FlutterPlatformMessageRouting platform_message_routing;
 } FlutterProjectArgs;
 
 typedef struct {

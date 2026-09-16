@@ -93,6 +93,8 @@ class EmbedderConfigBuilder {
   void SetPlatformMessageCallback(
       const std::function<void(const FlutterPlatformMessage*)>& callback);
 
+  void SetPlatformMessageRouting(FlutterPlatformMessageRouting routing);
+
   void SetViewFocusChangeRequestCallback(
       const std::function<void(const FlutterViewFocusChangeRequest*)>&
           callback);

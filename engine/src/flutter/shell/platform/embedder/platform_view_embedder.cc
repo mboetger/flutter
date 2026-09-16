@@ -15,11 +15,30 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
  public:
   EmbedderPlatformMessageHandler(
       fml::WeakPtr<PlatformView> parent,
-      fml::RefPtr<fml::TaskRunner> platform_task_runner)
+      fml::RefPtr<fml::TaskRunner> platform_task_runner,
+      PlatformMessageResponseCallback platform_message_response_callback,
+      bool does_handle_platform_messages_on_platform_thread)
       : parent_(std::move(parent)),
-        platform_task_runner_(std::move(platform_task_runner)) {}
+        platform_task_runner_(std::move(platform_task_runner)),
+        platform_message_response_callback_(
+            std::move(platform_message_response_callback)),
+        does_handle_platform_messages_on_platform_thread_(
+            does_handle_platform_messages_on_platform_thread) {}
 
   virtual void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) {
+    if (!message) {
+      return;
+    }
+
+    if (!does_handle_platform_messages_on_platform_thread_) {
+      if (platform_message_response_callback_) {
+        platform_message_response_callback_(std::move(message));
+      } else if (message->response()) {
+        message->response()->CompleteEmpty();
+      }
+      return;
+    }
+
     platform_task_runner_->PostTask(fml::MakeCopyable(
         [parent = parent_, message = std::move(message)]() mutable {
           if (parent) {
@@ -32,7 +51,7 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
   }
 
   virtual bool DoesHandlePlatformMessageOnPlatformThread() const {
-    return true;
+    return does_handle_platform_messages_on_platform_thread_;
   }
 
   virtual void InvokePlatformMessageResponseCallback(
@@ -43,6 +62,8 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
  private:
   fml::WeakPtr<PlatformView> parent_;
   fml::RefPtr<fml::TaskRunner> platform_task_runner_;
+  PlatformMessageResponseCallback platform_message_response_callback_;
+  bool does_handle_platform_messages_on_platform_thread_;
 };
 
 PlatformViewEmbedder::PlatformViewEmbedder(
@@ -59,7 +80,10 @@ PlatformViewEmbedder::PlatformViewEmbedder(
                                                     external_view_embedder_)),
       platform_message_handler_(new EmbedderPlatformMessageHandler(
           GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+          task_runners.GetPlatformTaskRunner(),
+          platform_dispatch_table.platform_message_response_callback,
+          platform_dispatch_table
+              .does_handle_platform_messages_on_platform_thread)),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 
 #ifdef SHELL_ENABLE_GL
@@ -74,7 +98,10 @@ PlatformViewEmbedder::PlatformViewEmbedder(
       embedder_surface_(std::move(embedder_surface)),
       platform_message_handler_(new EmbedderPlatformMessageHandler(
           GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+          task_runners.GetPlatformTaskRunner(),
+          platform_dispatch_table.platform_message_response_callback,
+          platform_dispatch_table
+              .does_handle_platform_messages_on_platform_thread)),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -90,7 +117,10 @@ PlatformViewEmbedder::PlatformViewEmbedder(
       embedder_surface_(std::move(embedder_surface)),
       platform_message_handler_(new EmbedderPlatformMessageHandler(
           GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+          task_runners.GetPlatformTaskRunner(),
+          platform_dispatch_table.platform_message_response_callback,
+          platform_dispatch_table
+              .does_handle_platform_messages_on_platform_thread)),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -106,7 +136,10 @@ PlatformViewEmbedder::PlatformViewEmbedder(
       embedder_surface_(std::move(embedder_surface)),
       platform_message_handler_(new EmbedderPlatformMessageHandler(
           GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+          task_runners.GetPlatformTaskRunner(),
+          platform_dispatch_table.platform_message_response_callback,
+          platform_dispatch_table
+              .does_handle_platform_messages_on_platform_thread)),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 

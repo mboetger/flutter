@@ -230,6 +230,11 @@ void EmbedderConfigBuilder::SetPlatformMessageCallback(
   context_.SetPlatformMessageCallback(callback);
 }
 
+void EmbedderConfigBuilder::SetPlatformMessageRouting(
+    FlutterPlatformMessageRouting routing) {
+  project_args_.platform_message_routing = routing;
+}
+
 void EmbedderConfigBuilder::SetViewFocusChangeRequestCallback(
     const std::function<void(const FlutterViewFocusChangeRequest*)>& callback) {
   context_.SetViewFocusChangeRequestCallback(callback);
