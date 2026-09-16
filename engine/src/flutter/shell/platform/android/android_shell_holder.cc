@@ -197,24 +197,24 @@ AndroidShellHolder::AndroidShellHolder(
 
   thread_host_ = std::make_shared<ThreadHost>(host_config);
 
-  fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
-  std::unique_ptr<PlatformViewEmbedder> platform_view_embedder;
+  std::unique_ptr<PlatformViewAndroid> platform_view_android;
+  PlatformViewEmbedder* raw_platform_view_embedder = nullptr;
   AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, &weak_platform_view, &platform_view_embedder,
+      [&jni_facade, &platform_view_android, &raw_platform_view_embedder,
        rendering_api](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
         platform_view_android = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
+            shell.GetSettings(),     // settings
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
-            rendering_api            // rendering API
-        );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        platform_view_embedder = CreatePlatformViewEmbedder(
-            shell, platform_view_android.get(), jni_facade, weak_platform_view);
-        platform_view_android->SetPlatformView(platform_view_embedder.get());
-        return platform_view_android;
+            rendering_api,           // rendering API
+            shell.GetShutdownSafeIOTaskRunner());
+        auto platform_view_embedder = CreatePlatformViewEmbedder(
+            shell, platform_view_android.get(), jni_facade,
+            platform_view_android->GetWeakPtr());
+        raw_platform_view_embedder = platform_view_embedder.get();
+        platform_view_android->SetPlatformView(raw_platform_view_embedder);
+        return platform_view_embedder;
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -268,8 +268,10 @@ AndroidShellHolder::AndroidShellHolder(
     FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
   }
 
-  platform_view_ = weak_platform_view;
-  platform_view_embedder_ = std::move(platform_view_embedder);
+  platform_view_android_ = std::move(platform_view_android);
+  platform_view_ = platform_view_android_ ? platform_view_android_->GetWeakPtr()
+                                          : fml::WeakPtr<PlatformViewAndroid>();
+  platform_view_embedder_ = raw_platform_view_embedder;
   FML_DCHECK(platform_view_);
   is_valid_ = shell_ != nullptr;
 }
@@ -280,17 +282,20 @@ AndroidShellHolder::AndroidShellHolder(
     const std::shared_ptr<ThreadHost>& thread_host,
     std::unique_ptr<Shell> shell,
     std::unique_ptr<APKAssetProvider> apk_asset_provider,
-    const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+    std::unique_ptr<PlatformViewAndroid> platform_view_android,
     AndroidRenderingAPI rendering_api,
-    std::unique_ptr<PlatformViewEmbedder> platform_view_embedder)
+    PlatformViewEmbedder* platform_view_embedder)
     : settings_(settings),
       jni_facade_(jni_facade),
-      platform_view_(platform_view),
+      platform_view_android_(std::move(platform_view_android)),
+      platform_view_(platform_view_android_
+                         ? platform_view_android_->GetWeakPtr()
+                         : fml::WeakPtr<PlatformViewAndroid>()),
       thread_host_(thread_host),
       shell_(std::move(shell)),
       apk_asset_provider_(std::move(apk_asset_provider)),
       android_rendering_api_(rendering_api),
-      platform_view_embedder_(std::move(platform_view_embedder)) {
+      platform_view_embedder_(platform_view_embedder) {
   FML_DCHECK(jni_facade);
   FML_DCHECK(shell_);
   FML_DCHECK(shell_->IsSetup());
@@ -301,6 +306,7 @@ AndroidShellHolder::AndroidShellHolder(
 
 AndroidShellHolder::~AndroidShellHolder() {
   shell_.reset();
+  platform_view_android_.reset();
   thread_host_.reset();
 }
 
@@ -328,8 +334,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   //
   // It's a weak pointer because it's owned by the Shell (which we're also)
   // making below. And the AndroidShellHolder then owns the Shell.
-  fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
-  std::unique_ptr<PlatformViewEmbedder> spawned_platform_view_embedder;
+  std::unique_ptr<PlatformViewAndroid> spawned_platform_view_android;
+  PlatformViewEmbedder* raw_spawned_platform_view_embedder = nullptr;
 
   // Take out the old AndroidContext to reuse inside the PlatformViewAndroid
   // of the new Shell.
@@ -344,21 +350,21 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   // This is a synchronous call, so the captures don't have race checks.
   Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, android_context, &weak_platform_view,
-       &spawned_platform_view_embedder](Shell& shell) {
-        std::unique_ptr<PlatformViewAndroid> platform_view_android;
-        platform_view_android = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
+      [&jni_facade, android_context, &spawned_platform_view_android,
+       &raw_spawned_platform_view_embedder](Shell& shell) {
+        spawned_platform_view_android = std::make_unique<PlatformViewAndroid>(
+            shell.GetSettings(),     // settings
             shell.GetTaskRunners(),  // task runners
             jni_facade,              // JNI interop
             android_context          // Android context
         );
-        weak_platform_view = platform_view_android->GetWeakPtr();
-        spawned_platform_view_embedder = CreatePlatformViewEmbedder(
-            shell, platform_view_android.get(), jni_facade, weak_platform_view);
-        platform_view_android->SetPlatformView(
-            spawned_platform_view_embedder.get());
-        return platform_view_android;
+        auto platform_view_embedder = CreatePlatformViewEmbedder(
+            shell, spawned_platform_view_android.get(), jni_facade,
+            spawned_platform_view_android->GetWeakPtr());
+        raw_spawned_platform_view_embedder = platform_view_embedder.get();
+        spawned_platform_view_android->SetPlatformView(
+            raw_spawned_platform_view_embedder);
+        return platform_view_embedder;
       };
 
   Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
@@ -379,9 +385,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
       GetSettings(), jni_facade, thread_host_, std::move(shell),
-      apk_asset_provider_->Clone(), weak_platform_view,
-      android_context->RenderingApi(),
-      std::move(spawned_platform_view_embedder)));
+      apk_asset_provider_->Clone(), std::move(spawned_platform_view_android),
+      android_context->RenderingApi(), raw_spawned_platform_view_embedder));
 }
 
 void AndroidShellHolder::Launch(

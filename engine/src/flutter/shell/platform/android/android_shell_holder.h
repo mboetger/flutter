@@ -110,14 +110,14 @@ class AndroidShellHolder {
 
   // Visible for testing.
   const std::unique_ptr<Shell>& GetShellForTesting() const { return shell_; }
-  const std::unique_ptr<PlatformViewEmbedder>&
-  GetPlatformViewEmbedderForTesting() const {
+  PlatformViewEmbedder* GetPlatformViewEmbedderForTesting() const {
     return platform_view_embedder_;
   }
 
  private:
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
+  std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
   std::shared_ptr<ThreadHost> thread_host_;
   std::unique_ptr<Shell> shell_;
@@ -125,7 +125,7 @@ class AndroidShellHolder {
   uint64_t next_pointer_flow_id_ = 0;
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
   const AndroidRenderingAPI android_rendering_api_;
-  std::unique_ptr<PlatformViewEmbedder> platform_view_embedder_;
+  PlatformViewEmbedder* platform_view_embedder_ = nullptr;
 
   //----------------------------------------------------------------------------
   /// @brief      Constructor with its components injected.
@@ -138,15 +138,14 @@ class AndroidShellHolder {
   ///             Used when constructing the Shell from the inside out when
   ///             spawning from an existing Shell.
   ///
-  AndroidShellHolder(
-      const flutter::Settings& settings,
-      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-      const std::shared_ptr<ThreadHost>& thread_host,
-      std::unique_ptr<Shell> shell,
-      std::unique_ptr<APKAssetProvider> apk_asset_provider,
-      const fml::WeakPtr<PlatformViewAndroid>& platform_view,
-      AndroidRenderingAPI rendering_api,
-      std::unique_ptr<PlatformViewEmbedder> platform_view_embedder = nullptr);
+  AndroidShellHolder(const flutter::Settings& settings,
+                     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+                     const std::shared_ptr<ThreadHost>& thread_host,
+                     std::unique_ptr<Shell> shell,
+                     std::unique_ptr<APKAssetProvider> apk_asset_provider,
+                     std::unique_ptr<PlatformViewAndroid> platform_view_android,
+                     AndroidRenderingAPI rendering_api,
+                     PlatformViewEmbedder* platform_view_embedder = nullptr);
   static void ThreadDestructCallback(void* value);
   std::optional<RunConfiguration> BuildRunConfiguration(
       const std::string& entrypoint,

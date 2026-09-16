@@ -167,11 +167,11 @@ TEST(AndroidShellHolder, Create) {
   EXPECT_TRUE(holder->IsValid());
   EXPECT_NE(holder->GetPlatformView().get(), nullptr);
   EXPECT_NE(holder->GetPlatformView()->GetPlatformViewDelegate(), nullptr);
-  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting().get(), nullptr);
-  EXPECT_EQ(static_cast<const void*>(
-                holder->GetPlatformView()->GetPlatformViewDelegate()),
-            static_cast<const void*>(
-                holder->GetPlatformViewEmbedderForTesting().get()));
+  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting(), nullptr);
+  EXPECT_EQ(
+      static_cast<const void*>(
+          holder->GetPlatformView()->GetPlatformViewDelegate()),
+      static_cast<const void*>(holder->GetPlatformViewEmbedderForTesting()));
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   holder->GetPlatformView()->NotifyCreated(window);
@@ -187,11 +187,11 @@ TEST(AndroidShellHolder, PlatformViewEmbedderDelegateWired) {
   ASSERT_TRUE(holder->IsValid());
   ASSERT_NE(holder->GetPlatformView().get(), nullptr);
   EXPECT_NE(holder->GetPlatformView()->GetPlatformViewDelegate(), nullptr);
-  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting().get(), nullptr);
-  EXPECT_EQ(static_cast<const void*>(
-                holder->GetPlatformView()->GetPlatformViewDelegate()),
-            static_cast<const void*>(
-                holder->GetPlatformViewEmbedderForTesting().get()));
+  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting(), nullptr);
+  EXPECT_EQ(
+      static_cast<const void*>(
+          holder->GetPlatformView()->GetPlatformViewDelegate()),
+      static_cast<const void*>(holder->GetPlatformViewEmbedderForTesting()));
 }
 
 TEST(AndroidShellHolder, HandlePlatformMessage) {

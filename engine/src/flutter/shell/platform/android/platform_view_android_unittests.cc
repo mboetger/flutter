@@ -243,8 +243,10 @@ class PlatformViewAndroidTest : public ::testing::Test {
     if (!jni) {
       jni = std::make_shared<JNIMock>();
     }
-    return std::make_unique<AndroidShellHolder>(
+    auto holder = std::make_unique<AndroidShellHolder>(
         settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+    holder->GetPlatformView()->SetPlatformView(nullptr);
+    return holder;
   }
 };
 
