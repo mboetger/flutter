@@ -157,6 +157,19 @@ class EmbedderTestTaskRunner {
     return task_runner_description_;
   }
 
+  void SetThreadPriority(FlutterThreadPriority priority) {
+    task_runner_description_.priority = priority;
+  }
+
+  void SetThreadPrioritySetter(FlutterThreadPrioritySetter setter) {
+    task_runner_description_.thread_priority_setter = setter;
+  }
+
+  void SetThreadPrioritySetterWithUserData(
+      FlutterThreadPrioritySetterWithUserData setter) {
+    task_runner_description_.thread_priority_setter_with_user_data = setter;
+  }
+
  private:
   static std::atomic_size_t sEmbedderTaskRunnerIdentifiers;
   const size_t identifier_;

@@ -386,6 +386,15 @@ typedef enum {
   kRaster = 3,
 } FlutterThreadPriority;
 
+/// Callback invoked to set thread priority for a thread.
+typedef void (*FlutterThreadPrioritySetter)(
+    FlutterThreadPriority /* priority */);
+
+/// Callback invoked to set thread priority with user data context.
+typedef void (*FlutterThreadPrioritySetterWithUserData)(
+    FlutterThreadPriority /* priority */,
+    void* /* user data */);
+
 typedef struct _FlutterEngine* FLUTTER_API_SYMBOL(FlutterEngine);
 
 /// Unique identifier for views.
@@ -2227,6 +2236,14 @@ typedef struct {
   size_t identifier;
   /// The callback invoked when the task runner is destroyed.
   VoidCallback destruction_callback;
+  /// The thread priority hint associated with this custom task runner.
+  FlutterThreadPriority priority;
+  /// Specify a callback that is used to set the thread priority for this task
+  /// runner.
+  FlutterThreadPrioritySetter thread_priority_setter;
+  /// Specify a callback that is used to set the thread priority for this task
+  /// runner with user data context.
+  FlutterThreadPrioritySetterWithUserData thread_priority_setter_with_user_data;
 } FlutterTaskRunnerDescription;
 
 typedef struct {
@@ -2249,6 +2266,22 @@ typedef struct {
   /// This may be same as platform_task_runner, in which case the Flutter engine
   /// will run the UI isolate on platform thread.
   const FlutterTaskRunnerDescription* ui_task_runner;
+  /// Specify a callback that is used to set the thread priority for embedder
+  /// task runners with user data context.
+  FlutterThreadPrioritySetterWithUserData thread_priority_setter_with_user_data;
+  /// User data passed to `thread_priority_setter_with_user_data`.
+  void* user_data;
+  /// Specify the task runner for the thread on which the IO tasks will be run.
+  /// If not specified (nullptr), the Flutter engine will create and manage an
+  /// IO thread.
+  const FlutterTaskRunnerDescription* io_task_runner;
+  /// The thread priority configuration for the engine-managed IO thread.
+  /// If `io_task_runner` is specified, this field is ignored.
+  /// If zero-initialized or set to `kBackground`, the engine default of
+  /// `kBackground` (priority 10 / background efficiency) is used.
+  /// Embedders requiring normal priority for IO tasks (such as Android) can
+  /// set this to `kNormal`.
+  FlutterThreadPriority io_thread_priority;
 } FlutterCustomTaskRunners;
 
 typedef struct {

@@ -2820,10 +2820,10 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   auto external_texture_resolver =
       CreateExternalTextureResolver(config, user_data);
   auto custom_task_runners = SAFE_ACCESS(args, custom_task_runners, nullptr);
-  auto thread_config_callback = [&custom_task_runners](
+  auto thread_config_callback = [custom_task_runners](
                                     const fml::Thread::ThreadConfig& config) {
     fml::Thread::SetCurrentThreadName(config);
-    if (!custom_task_runners || !custom_task_runners->thread_priority_setter) {
+    if (!custom_task_runners) {
       return;
     }
     FlutterThreadPriority priority = FlutterThreadPriority::kNormal;
@@ -2841,7 +2841,18 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
         priority = FlutterThreadPriority::kRaster;
         break;
     }
-    custom_task_runners->thread_priority_setter(priority);
+    auto setter_with_user_data = SAFE_ACCESS(
+        custom_task_runners, thread_priority_setter_with_user_data, nullptr);
+    if (setter_with_user_data != nullptr) {
+      setter_with_user_data(
+          priority, SAFE_ACCESS(custom_task_runners, user_data, nullptr));
+    } else {
+      auto setter =
+          SAFE_ACCESS(custom_task_runners, thread_priority_setter, nullptr);
+      if (setter != nullptr) {
+        setter(priority);
+      }
+    }
   };
   auto thread_host =
       flutter::EmbedderThreadHost::CreateEmbedderOrEngineManagedThreadHost(

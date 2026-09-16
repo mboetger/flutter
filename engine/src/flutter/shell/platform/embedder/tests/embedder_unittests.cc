@@ -5203,6 +5203,280 @@ TEST_F(EmbedderTest, CanReceiveApplicationLocale) {
   engine.reset();
 }
 
+TEST_F(EmbedderTest, CanSpecifyCustomIOTaskRunner) {
+  std::mutex engine_mutex;
+  UniqueEngine engine;
+  auto io_task_runner = CreateNewThread("test_io_thread");
+  std::atomic<bool> io_task_ran = false;
+
+  EmbedderTestTaskRunner test_io_task_runner(
+      io_task_runner, [&](FlutterTask task) {
+        std::scoped_lock engine_lock(engine_mutex);
+        if (engine.is_valid()) {
+          ASSERT_EQ(FlutterEngineRunTask(engine.get(), &task), kSuccess);
+          io_task_ran = true;
+        }
+      });
+
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  const auto io_desc = test_io_task_runner.GetFlutterTaskRunnerDescription();
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetIOTaskRunner(&io_desc);
+
+  {
+    std::scoped_lock lock(engine_mutex);
+    engine = builder.InitializeEngine();
+  }
+  ASSERT_TRUE(engine.is_valid());
+  ASSERT_EQ(FlutterEngineRunInitialized(engine.get()), kSuccess);
+
+  EXPECT_TRUE(io_task_ran.load());
+
+  ASSERT_EQ(FlutterEngineDeinitialize(engine.get()), kSuccess);
+  {
+    std::scoped_lock engine_lock(engine_mutex);
+    engine.reset();
+  }
+}
+
+TEST_F(EmbedderTest, CanSpecifyCustomTaskRunnerThreadPriorities) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  auto platform_task_runner = CreateNewThread("test_platform_thread");
+  UniqueEngine engine;
+
+  fml::AutoResetWaitableEvent priority_latch;
+  std::atomic<FlutterThreadPriority> recorded_priority =
+      FlutterThreadPriority::kNormal;
+
+  EmbedderTestTaskRunner test_platform_task_runner(
+      platform_task_runner, [&](FlutterTask task) {
+        if (!engine.is_valid()) {
+          return;
+        }
+        FlutterEngineRunTask(engine.get(), &task);
+      });
+  test_platform_task_runner.SetThreadPriority(FlutterThreadPriority::kRaster);
+  static fml::AutoResetWaitableEvent* s_priority_latch = &priority_latch;
+  static std::atomic<FlutterThreadPriority>* s_recorded_priority =
+      &recorded_priority;
+  test_platform_task_runner.SetThreadPrioritySetter(
+      [](FlutterThreadPriority priority) {
+        s_recorded_priority->store(priority);
+        if (s_priority_latch != nullptr) {
+          s_priority_latch->Signal();
+        }
+      });
+
+  platform_task_runner->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    const auto platform_desc =
+        test_platform_task_runner.GetFlutterTaskRunnerDescription();
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetPlatformTaskRunner(&platform_desc);
+    engine = builder.LaunchEngine();
+    ASSERT_TRUE(engine.is_valid());
+  });
+
+  priority_latch.Wait();
+  EXPECT_EQ(recorded_priority.load(), FlutterThreadPriority::kRaster);
+
+  fml::AutoResetWaitableEvent kill_latch;
+  platform_task_runner->PostTask([&] {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, CanSpecifyCustomTaskRunnerThreadPriorityWithUserData) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  auto platform_task_runner = CreateNewThread("test_platform_thread");
+  UniqueEngine engine;
+
+  fml::AutoResetWaitableEvent priority_latch;
+  std::atomic<FlutterThreadPriority> recorded_priority =
+      FlutterThreadPriority::kNormal;
+  void* recorded_user_data = nullptr;
+
+  EmbedderTestTaskRunner test_platform_task_runner(
+      platform_task_runner, [&](FlutterTask task) {
+        if (!engine.is_valid()) {
+          return;
+        }
+        FlutterEngineRunTask(engine.get(), &task);
+      });
+  test_platform_task_runner.SetThreadPriority(FlutterThreadPriority::kDisplay);
+  static fml::AutoResetWaitableEvent* s_priority_latch2 = &priority_latch;
+  static std::atomic<FlutterThreadPriority>* s_recorded_priority2 =
+      &recorded_priority;
+  static void** s_recorded_user_data2 = &recorded_user_data;
+  test_platform_task_runner.SetThreadPrioritySetterWithUserData(
+      [](FlutterThreadPriority priority, void* user_data) {
+        s_recorded_priority2->store(priority);
+        *s_recorded_user_data2 = user_data;
+        if (s_priority_latch2 != nullptr) {
+          s_priority_latch2->Signal();
+        }
+      });
+
+  platform_task_runner->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    const auto platform_desc =
+        test_platform_task_runner.GetFlutterTaskRunnerDescription();
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetPlatformTaskRunner(&platform_desc);
+    engine = builder.LaunchEngine();
+    ASSERT_TRUE(engine.is_valid());
+  });
+
+  priority_latch.Wait();
+  EXPECT_EQ(recorded_priority.load(), FlutterThreadPriority::kDisplay);
+  EXPECT_EQ(recorded_user_data, &test_platform_task_runner);
+
+  fml::AutoResetWaitableEvent kill_latch;
+  platform_task_runner->PostTask([&] {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, CanSetEngineThreadPrioritiesWithGlobalSetter) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  static std::vector<FlutterThreadPriority> s_priorities;
+  static std::mutex s_priorities_mutex;
+  s_priorities.clear();
+
+  builder.SetThreadPrioritySetter([](FlutterThreadPriority priority) {
+    std::scoped_lock lock(s_priorities_mutex);
+    s_priorities.push_back(priority);
+  });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  {
+    std::scoped_lock lock(s_priorities_mutex);
+    EXPECT_FALSE(s_priorities.empty());
+  }
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, CanSetEngineThreadPrioritiesWithUserDataSetter) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  int dummy_context = 42;
+  static std::vector<std::pair<FlutterThreadPriority, void*>> s_calls;
+  static std::mutex s_calls_mutex;
+  s_calls.clear();
+
+  builder.SetThreadPrioritySetterWithUserData(
+      [](FlutterThreadPriority priority, void* user_data) {
+        std::scoped_lock lock(s_calls_mutex);
+        s_calls.emplace_back(priority, user_data);
+      },
+      &dummy_context);
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  {
+    std::scoped_lock lock(s_calls_mutex);
+    EXPECT_FALSE(s_calls.empty());
+    for (const auto& call : s_calls) {
+      EXPECT_EQ(call.second, &dummy_context);
+    }
+  }
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, EngineManagedIOThreadPriorityConfig) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  static std::vector<FlutterThreadPriority> s_observed_priorities;
+  static std::mutex s_priorities_mutex;
+  s_observed_priorities.clear();
+
+  builder.SetIOThreadPriority(FlutterThreadPriority::kNormal);
+  builder.SetThreadPrioritySetter([](FlutterThreadPriority priority) {
+    std::scoped_lock lock(s_priorities_mutex);
+    s_observed_priorities.push_back(priority);
+  });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  {
+    std::scoped_lock lock(s_priorities_mutex);
+    bool found_normal = false;
+    for (auto p : s_observed_priorities) {
+      if (p == FlutterThreadPriority::kNormal) {
+        found_normal = true;
+        break;
+      }
+    }
+    EXPECT_TRUE(found_normal);
+  }
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, EmbedderTaskRunnerSetThreadPriorityAtRuntime) {
+  fml::AutoResetWaitableEvent latch;
+  std::atomic<FlutterThreadPriority> updated_priority =
+      FlutterThreadPriority::kNormal;
+
+  EmbedderTaskRunner::DispatchTable table = {
+      .post_task_callback = [](EmbedderTaskRunner* runner, uint64_t baton,
+                               fml::TimePoint time) {},
+      .runs_task_on_current_thread_callback = []() { return true; },
+      .destruction_callback = []() {},
+      .thread_priority_setter =
+          [&](FlutterThreadPriority priority) {
+            updated_priority.store(priority);
+            latch.Signal();
+          },
+  };
+
+  auto runner = fml::MakeRefCounted<EmbedderTaskRunner>(
+      table, 123u, FlutterThreadPriority::kBackground);
+  EXPECT_EQ(runner->GetThreadPriority(), FlutterThreadPriority::kBackground);
+
+  runner->SetThreadPriority(FlutterThreadPriority::kRaster);
+  latch.Wait();
+
+  EXPECT_EQ(runner->GetThreadPriority(), FlutterThreadPriority::kRaster);
+  EXPECT_EQ(updated_priority.load(), FlutterThreadPriority::kRaster);
+}
+
+TEST_F(EmbedderTest, CustomTaskRunnersSafeAccessTruncatedStruct) {
+  struct LegacyFlutterCustomTaskRunners {
+    size_t struct_size;
+    const FlutterTaskRunnerDescription* platform_task_runner;
+    const FlutterTaskRunnerDescription* render_task_runner;
+    void (*thread_priority_setter)(FlutterThreadPriority);
+    const FlutterTaskRunnerDescription* ui_task_runner;
+  };
+
+  LegacyFlutterCustomTaskRunners legacy_runners = {};
+  legacy_runners.struct_size = sizeof(LegacyFlutterCustomTaskRunners);
+
+  auto host = EmbedderThreadHost::CreateEmbedderOrEngineManagedThreadHost(
+      reinterpret_cast<const FlutterCustomTaskRunners*>(&legacy_runners));
+  ASSERT_NE(host, nullptr);
+  EXPECT_TRUE(host->IsValid());
+}
+
 }  // namespace testing
 }  // namespace flutter
 

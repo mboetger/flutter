@@ -38,6 +38,11 @@ CreateEmbedderTaskRunner(const FlutterTaskRunnerDescription* description) {
     return {true, {}};
   }
 
+  if (SAFE_ACCESS(description, struct_size, 0) == 0) {
+    FML_LOG(ERROR) << "Invalid FlutterTaskRunnerDescription struct_size.";
+    return {false, {}};
+  }
+
   if (SAFE_ACCESS(description, runs_task_on_current_thread_callback, nullptr) ==
       nullptr) {
     FML_LOG(ERROR) << "FlutterTaskRunnerDescription.runs_task_on_current_"
@@ -63,6 +68,24 @@ CreateEmbedderTaskRunner(const FlutterTaskRunnerDescription* description) {
     destruction_callback_c = description->destruction_callback;
   }
 
+  FlutterThreadPriority priority =
+      SAFE_ACCESS(description, priority, FlutterThreadPriority::kNormal);
+
+  auto thread_priority_setter_c =
+      SAFE_ACCESS(description, thread_priority_setter, nullptr);
+  auto thread_priority_setter_with_user_data_c =
+      SAFE_ACCESS(description, thread_priority_setter_with_user_data, nullptr);
+
+  auto invoke_priority_setter = [thread_priority_setter_c,
+                                 thread_priority_setter_with_user_data_c,
+                                 user_data](FlutterThreadPriority prio) {
+    if (thread_priority_setter_with_user_data_c != nullptr) {
+      thread_priority_setter_with_user_data_c(prio, user_data);
+    } else if (thread_priority_setter_c != nullptr) {
+      thread_priority_setter_c(prio);
+    }
+  };
+
   EmbedderTaskRunner::DispatchTable task_runner_dispatch_table = {
       .post_task_callback = [post_task_callback_c, user_data](
                                 EmbedderTaskRunner* task_runner,
@@ -85,11 +108,26 @@ CreateEmbedderTaskRunner(const FlutterTaskRunnerDescription* description) {
           [destruction_callback_c, user_data]() {
             destruction_callback_c(user_data);
           },
+      .thread_priority_setter = invoke_priority_setter,
   };
 
-  return {true, fml::MakeRefCounted<EmbedderTaskRunner>(
-                    task_runner_dispatch_table,
-                    SAFE_ACCESS(description, identifier, 0u))};
+  auto runner = fml::MakeRefCounted<EmbedderTaskRunner>(
+      task_runner_dispatch_table, SAFE_ACCESS(description, identifier, 0u),
+      priority);
+
+  if (thread_priority_setter_with_user_data_c != nullptr ||
+      thread_priority_setter_c != nullptr) {
+    fml::TaskRunner* task_runner = runner.get();
+    if (task_runner->RunsTasksOnCurrentThread()) {
+      invoke_priority_setter(priority);
+    } else {
+      task_runner->PostTask([invoke_priority_setter, priority]() {
+        invoke_priority_setter(priority);
+      });
+    }
+  }
+
+  return {true, std::move(runner)};
 }
 
 std::unique_ptr<EmbedderThreadHost>
@@ -143,14 +181,12 @@ EmbedderThreadHost::CreateEmbedderManagedThreadHost(
     return nullptr;
   }
 
-  auto thread_host_config = ThreadHost::ThreadHostConfig(config_setter);
+  if (SAFE_ACCESS(custom_task_runners, struct_size, 0) == 0) {
+    FML_LOG(ERROR) << "Invalid FlutterCustomTaskRunners struct_size.";
+    return nullptr;
+  }
 
-  // The IO threads are always created by the engine and the embedder has
-  // no opportunity to specify task runners for the same.
-  //
-  // If/when more task runners are exposed, this mask will need to be updated.
-  thread_host_config.SetIOConfig(MakeThreadConfig(
-      ThreadHost::Type::kIo, fml::Thread::ThreadPriority::kBackground));
+  auto thread_host_config = ThreadHost::ThreadHostConfig(config_setter);
 
   auto ui_task_runner_pair = CreateEmbedderTaskRunner(
       SAFE_ACCESS(custom_task_runners, ui_task_runner, nullptr));
@@ -158,8 +194,11 @@ EmbedderThreadHost::CreateEmbedderManagedThreadHost(
       SAFE_ACCESS(custom_task_runners, platform_task_runner, nullptr));
   auto render_task_runner_pair = CreateEmbedderTaskRunner(
       SAFE_ACCESS(custom_task_runners, render_task_runner, nullptr));
+  auto io_task_runner_pair = CreateEmbedderTaskRunner(
+      SAFE_ACCESS(custom_task_runners, io_task_runner, nullptr));
 
-  if (!platform_task_runner_pair.first || !render_task_runner_pair.first) {
+  if (!platform_task_runner_pair.first || !render_task_runner_pair.first ||
+      !ui_task_runner_pair.first || !io_task_runner_pair.first) {
     // User error while supplying a custom task runner. Return an invalid thread
     // host. This will abort engine initialization. Don't fallback to defaults
     // if the user wanted to specify a task runner but just messed up instead.
@@ -179,6 +218,32 @@ EmbedderThreadHost::CreateEmbedderManagedThreadHost(
         ThreadHost::Type::kRaster, fml::Thread::ThreadPriority::kRaster));
   }
 
+  // If the embedder has not supplied an IO task runner, one needs to be
+  // created by the engine.
+  if (!io_task_runner_pair.second) {
+    FlutterThreadPriority io_priority =
+        SAFE_ACCESS(custom_task_runners, io_thread_priority,
+                    FlutterThreadPriority::kBackground);
+    fml::Thread::ThreadPriority fml_io_priority =
+        fml::Thread::ThreadPriority::kBackground;
+    switch (io_priority) {
+      case FlutterThreadPriority::kBackground:
+        fml_io_priority = fml::Thread::ThreadPriority::kBackground;
+        break;
+      case FlutterThreadPriority::kNormal:
+        fml_io_priority = fml::Thread::ThreadPriority::kNormal;
+        break;
+      case FlutterThreadPriority::kDisplay:
+        fml_io_priority = fml::Thread::ThreadPriority::kDisplay;
+        break;
+      case FlutterThreadPriority::kRaster:
+        fml_io_priority = fml::Thread::ThreadPriority::kRaster;
+        break;
+    }
+    thread_host_config.SetIOConfig(
+        MakeThreadConfig(ThreadHost::Type::kIo, fml_io_priority));
+  }
+
   // If both the platform task runner and the raster task runner are specified
   // and have the same identifier, store only one.
   if (platform_task_runner_pair.second && render_task_runner_pair.second) {
@@ -194,6 +259,15 @@ EmbedderThreadHost::CreateEmbedderManagedThreadHost(
     if (platform_task_runner_pair.second->GetEmbedderIdentifier() ==
         ui_task_runner_pair.second->GetEmbedderIdentifier()) {
       ui_task_runner_pair.second = platform_task_runner_pair.second;
+    }
+  }
+
+  // If both platform task runner and IO task runner are specified and have
+  // the same identifier, store only one.
+  if (platform_task_runner_pair.second && io_task_runner_pair.second) {
+    if (platform_task_runner_pair.second->GetEmbedderIdentifier() ==
+        io_task_runner_pair.second->GetEmbedderIdentifier()) {
+      io_task_runner_pair.second = platform_task_runner_pair.second;
     }
   }
 
@@ -220,12 +294,16 @@ EmbedderThreadHost::CreateEmbedderManagedThreadHost(
                                   ui_task_runner_pair.second)
                             : thread_host.ui_thread->GetTaskRunner();
 
-  flutter::TaskRunners task_runners(
-      kFlutterThreadName,
-      platform_task_runner,                   // platform
-      render_task_runner,                     // raster
-      ui_task_runner,                         // ui
-      thread_host.io_thread->GetTaskRunner()  // io (always engine managed)
+  auto io_task_runner = io_task_runner_pair.second
+                            ? static_cast<fml::RefPtr<fml::TaskRunner>>(
+                                  io_task_runner_pair.second)
+                            : thread_host.io_thread->GetTaskRunner();
+
+  flutter::TaskRunners task_runners(kFlutterThreadName,
+                                    platform_task_runner,  // platform
+                                    render_task_runner,    // raster
+                                    ui_task_runner,        // ui
+                                    io_task_runner         // io
   );
 
   if (!task_runners.IsValid()) {
@@ -244,6 +322,10 @@ EmbedderThreadHost::CreateEmbedderManagedThreadHost(
 
   if (ui_task_runner_pair.second) {
     embedder_task_runners.insert(ui_task_runner_pair.second);
+  }
+
+  if (io_task_runner_pair.second) {
+    embedder_task_runners.insert(io_task_runner_pair.second);
   }
 
   auto embedder_host = std::make_unique<EmbedderThreadHost>(
