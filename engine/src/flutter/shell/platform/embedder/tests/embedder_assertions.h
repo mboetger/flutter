@@ -84,6 +84,13 @@ inline bool operator==(const FlutterVulkanImage& a,
   return a.image == b.image && a.format == b.format;
 }
 
+inline bool operator==(const FlutterVulkanExternalTexture& a,
+                       const FlutterVulkanExternalTexture& b) {
+  return a.width == b.width && a.height == b.height && a.image == b.image &&
+         a.format == b.format && a.user_data == b.user_data &&
+         a.destruction_callback == b.destruction_callback;
+}
+
 inline bool operator==(const FlutterVulkanBackingStore& a,
                        const FlutterVulkanBackingStore& b) {
   return a.image == b.image;
@@ -449,6 +456,15 @@ inline std::ostream& operator<<(std::ostream& out,
 inline std::ostream& operator<<(std::ostream& out,
                                 const FlutterVulkanBackingStore& item) {
   return out << "(FlutterVulkanBackingStore) Image: " << item.image;
+}
+
+inline std::ostream& operator<<(std::ostream& out,
+                                const FlutterVulkanExternalTexture& item) {
+  return out << "(FlutterVulkanExternalTexture) Width: " << item.width
+             << " Height: " << item.height << " Image: " << item.image
+             << " Format: " << item.format << " User Data: " << item.user_data
+             << " Destruction Callback: "
+             << reinterpret_cast<void*>(item.destruction_callback);
 }
 
 inline std::ostream& operator<<(std::ostream& out,

@@ -33,6 +33,9 @@ class EmbedderTestContextVulkan : public EmbedderTestContext {
   void SetVulkanInstanceProcAddressCallback(
       FlutterVulkanInstanceProcAddressCallback callback);
 
+  void SetVulkanExternalTextureFrameCallback(
+      FlutterVulkanTextureFrameCallback callback);
+
   static void* InstanceProcAddr(void* user_data,
                                 FlutterVulkanInstanceHandle instance,
                                 const char* name);

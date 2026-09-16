@@ -81,6 +81,38 @@ TEST(EmbedderTestNoFixture, RendererConfigSetupCallbackFields) {
   ASSERT_NE(metal_config.setup_callback, nullptr);
 }
 
+TEST(EmbedderTestNoFixture, RendererConfigVulkanExternalTextureFields) {
+  FlutterVulkanExternalTexture texture = {};
+  texture.struct_size = sizeof(texture);
+  texture.width = 100;
+  texture.height = 100;
+  texture.image = 42;
+  texture.format = 37;  // VK_FORMAT_R8G8B8A8_UNORM
+  texture.user_data = reinterpret_cast<void*>(0x1234);
+  texture.destruction_callback = [](void* user_data) {};
+
+  EXPECT_EQ(texture.width, 100u);
+  EXPECT_EQ(texture.height, 100u);
+  EXPECT_EQ(texture.image, 42u);
+  EXPECT_EQ(texture.format, 37u);
+  EXPECT_EQ(texture.user_data, reinterpret_cast<void*>(0x1234));
+  EXPECT_NE(texture.destruction_callback, nullptr);
+
+  FlutterVulkanRendererConfig vk_config = {};
+  vk_config.struct_size = sizeof(vk_config);
+  vk_config.vulkan_external_texture_frame_callback =
+      [](void* user_data, int64_t texture_identifier, size_t width,
+         size_t height, FlutterVulkanExternalTexture* out) -> bool {
+    out->struct_size = sizeof(FlutterVulkanExternalTexture);
+    out->width = width;
+    out->height = height;
+    out->image = 1;
+    out->format = 37;
+    return true;
+  };
+  ASSERT_NE(vk_config.vulkan_external_texture_frame_callback, nullptr);
+}
+
 TEST_F(EmbedderTest, CanLaunchAndShutdownWithValidProjectArgs) {
   auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
   fml::AutoResetWaitableEvent latch;

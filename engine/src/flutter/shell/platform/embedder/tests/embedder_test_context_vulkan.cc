@@ -63,6 +63,11 @@ void EmbedderTestContextVulkan::SetVulkanInstanceProcAddressCallback(
   renderer_config_.vulkan.get_instance_proc_address_callback = callback;
 }
 
+void EmbedderTestContextVulkan::SetVulkanExternalTextureFrameCallback(
+    FlutterVulkanTextureFrameCallback callback) {
+  renderer_config_.vulkan.vulkan_external_texture_frame_callback = callback;
+}
+
 size_t EmbedderTestContextVulkan::GetSurfacePresentCount() const {
   return present_count_;
 }

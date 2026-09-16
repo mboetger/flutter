@@ -105,6 +105,15 @@ extern const intptr_t kPlatformStrongDillSize;
 #ifdef SHELL_ENABLE_VULKAN
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkTypes.h"
+#ifdef IMPELLER_SUPPORTS_RENDERING
+#include "impeller/core/formats.h"
+#include "impeller/core/texture_descriptor.h"
+#include "impeller/renderer/backend/vulkan/context_vk.h"
+#include "impeller/renderer/backend/vulkan/formats_vk.h"
+#include "impeller/renderer/backend/vulkan/swapchain/khr/khr_swapchain_image_vk.h"
+#include "impeller/renderer/backend/vulkan/texture_source_vk.h"
+#include "impeller/renderer/backend/vulkan/texture_vk.h"
+#endif  // IMPELLER_SUPPORTS_RENDERING
 #endif  // SHELL_ENABLE_VULKAN
 
 const int32_t kFlutterSemanticsNodeIdBatchEnd = -1;
@@ -1335,6 +1344,96 @@ MakeRenderTargetFromBackingStoreImpeller(
 #endif
 }
 
+static std::unique_ptr<flutter::EmbedderRenderTarget>
+MakeRenderTargetFromBackingStoreImpeller(
+    FlutterBackingStore backing_store,
+    const fml::closure& on_release,
+    const std::shared_ptr<impeller::AiksContext>& aiks_context,
+    const FlutterBackingStoreConfig& config,
+    const FlutterVulkanBackingStore* vulkan) {
+#if defined(SHELL_ENABLE_VULKAN) && defined(IMPELLER_SUPPORTS_RENDERING)
+  if (!vulkan || !vulkan->image) {
+    FML_LOG(ERROR) << "Embedder supplied null Vulkan image.";
+    return nullptr;
+  }
+  if (!vulkan->image->image) {
+    FML_LOG(ERROR) << "Embedder supplied null Vulkan image handle.";
+    return nullptr;
+  }
+
+  impeller::vk::Format vk_format =
+      static_cast<impeller::vk::Format>(vulkan->image->format);
+  std::optional<impeller::PixelFormat> format =
+      impeller::VkFormatToImpellerFormat(vk_format);
+  if (!format.has_value()) {
+    FML_LOG(ERROR) << "Unsupported pixel format: "
+                   << impeller::vk::to_string(vk_format);
+    return nullptr;
+  }
+
+  const auto& context_vk =
+      impeller::ContextVK::Cast(*aiks_context->GetContext());
+  impeller::vk::Image vk_image =
+      impeller::vk::Image(reinterpret_cast<VkImage>(vulkan->image->image));
+
+  const auto size = impeller::ISize(config.size.width, config.size.height);
+
+  impeller::TextureDescriptor desc;
+  desc.format = format.value();
+  desc.size = size;
+  desc.storage_mode = impeller::StorageMode::kDevicePrivate;
+  desc.mip_count = 1;
+  desc.compression_type = impeller::CompressionType::kLossless;
+  desc.usage = impeller::TextureUsage::kRenderTarget |
+               impeller::TextureUsage::kShaderRead;
+
+  auto texture_source = std::make_shared<impeller::KHRSwapchainImageVK>(
+      desc, context_vk.GetDevice(), vk_image);
+  if (!texture_source->IsValid()) {
+    FML_LOG(ERROR) << "Could not create valid Vulkan texture source.";
+    return nullptr;
+  }
+
+  auto resolve_tex = std::make_shared<impeller::TextureVK>(
+      aiks_context->GetContext(), texture_source);
+  if (!resolve_tex) {
+    FML_LOG(ERROR) << "Could not wrap embedder supplied Vulkan render texture.";
+    return nullptr;
+  }
+  resolve_tex->SetLabel("ImpellerVulkanBackingStoreResolve");
+
+  aiks_context->GetContext()->UpdateOffscreenLayerPixelFormat(
+      resolve_tex->GetTextureDescriptor().format);
+
+  impeller::ColorAttachment color0;
+  color0.texture = resolve_tex;
+  color0.clear_color = impeller::Color::DarkSlateGray();
+  color0.load_action = impeller::LoadAction::kClear;
+  color0.store_action = impeller::StoreAction::kStore;
+
+  impeller::RenderTarget render_target_desc;
+  render_target_desc.SetColorAttachment(color0, 0u);
+  render_target_desc.SetupDepthStencilAttachments(
+      *aiks_context->GetContext(),
+      *aiks_context->GetContext()->GetResourceAllocator(), size,
+      /*msaa=*/false, "ImpellerVulkanBackingStore");
+
+  fml::closure framebuffer_destruct = [callback = vulkan->destruction_callback,
+                                       user_data = vulkan->user_data]() {
+    if (callback) {
+      callback(user_data);
+    }
+  };
+
+  return std::make_unique<flutter::EmbedderRenderTargetImpeller>(
+      backing_store, aiks_context,
+      std::make_unique<impeller::RenderTarget>(std::move(render_target_desc)),
+      on_release, framebuffer_destruct);
+#else
+  return nullptr;
+#endif
+}
+
 static sk_sp<SkSurface> MakeSkSurfaceFromBackingStore(
     GrDirectContext* context,
     const FlutterBackingStoreConfig& config,
@@ -1547,7 +1646,9 @@ CreateEmbedderRenderTarget(
     }
     case kFlutterBackingStoreTypeVulkan: {
       if (enable_impeller) {
-        FML_LOG(ERROR) << "Unimplemented";
+        render_target = MakeRenderTargetFromBackingStoreImpeller(
+            backing_store, collect_callback.Release(), aiks_context, config,
+            &backing_store.vulkan);
         break;
       } else {
         auto skia_surface = MakeSkSurfaceFromBackingStore(
@@ -2503,6 +2604,31 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
       };
       external_texture_resolver = std::make_unique<ExternalTextureResolver>(
           external_texture_metal_callback);
+    }
+  }
+#endif
+#ifdef SHELL_ENABLE_VULKAN
+  flutter::EmbedderExternalTextureVK::ExternalTextureCallback
+      external_texture_vulkan_callback;
+  if (config->type == kVulkan) {
+    const FlutterVulkanRendererConfig* vulkan_config = &config->vulkan;
+    if (SAFE_ACCESS(vulkan_config, vulkan_external_texture_frame_callback,
+                    nullptr)) {
+      external_texture_vulkan_callback =
+          [ptr = vulkan_config->vulkan_external_texture_frame_callback,
+           user_data](
+              int64_t texture_identifier, size_t width,
+              size_t height) -> std::unique_ptr<FlutterVulkanExternalTexture> {
+        std::unique_ptr<FlutterVulkanExternalTexture> texture =
+            std::make_unique<FlutterVulkanExternalTexture>();
+        texture->struct_size = sizeof(FlutterVulkanExternalTexture);
+        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
+          return nullptr;
+        }
+        return texture;
+      };
+      external_texture_resolver = std::make_unique<ExternalTextureResolver>(
+          external_texture_vulkan_callback);
     }
   }
 #endif

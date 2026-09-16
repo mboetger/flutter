@@ -968,6 +968,32 @@ typedef struct {
   uint32_t format;
 } FlutterVulkanImage;
 
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterVulkanExternalTexture).
+  size_t struct_size;
+  /// Width of the texture.
+  size_t width;
+  /// Height of the texture.
+  size_t height;
+  /// Handle to the VkImage that is owned by the embedder.
+  FlutterVulkanImageHandle image;
+  /// The VkFormat of the image (for example: VK_FORMAT_R8G8B8A8_UNORM).
+  uint32_t format;
+  /// Embedder baton returned on destruction_callback invocation.
+  void* user_data;
+  /// Callback invoked when the engine no longer needs this external texture.
+  VoidCallback destruction_callback;
+} FlutterVulkanExternalTexture;
+
+/// Callback to provide a Vulkan external texture for a given texture_id.
+/// See: vulkan_external_texture_frame_callback.
+typedef bool (*FlutterVulkanTextureFrameCallback)(
+    void* /* user data */,
+    int64_t /* texture identifier */,
+    size_t /* width */,
+    size_t /* height */,
+    FlutterVulkanExternalTexture* /* texture out */);
+
 /// Callback to fetch a Vulkan function pointer for a given instance. Normally,
 /// this should return the results of vkGetInstanceProcAddr.
 typedef void* (*FlutterVulkanInstanceProcAddressCallback)(
@@ -1052,6 +1078,11 @@ typedef struct {
   /// An optional callback invoked on the raster thread to perform renderer
   /// setup before any rendering surface or Impeller context is created.
   FlutterRendererSetupCallback setup_callback;
+  /// When the embedder specifies that a texture has a frame available, the
+  /// engine will call this method (on an internal engine managed thread) so
+  /// that external texture details can be supplied to the engine for subsequent
+  /// composition.
+  FlutterVulkanTextureFrameCallback vulkan_external_texture_frame_callback;
 } FlutterVulkanRendererConfig;
 
 typedef struct {
