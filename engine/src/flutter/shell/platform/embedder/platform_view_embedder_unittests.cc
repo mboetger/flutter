@@ -325,5 +325,57 @@ TEST(PlatformViewEmbedderTest, SetApplicationLocaleWithoutCallback) {
   latch.Wait();
 }
 
+TEST(PlatformViewEmbedderTest, DispatchesGetScaledFontSize) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "DispatchesGetScaledFontSize",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  fml::AutoResetWaitableEvent latch;
+  double scaled_font_size = 0.0;
+  task_runners.GetPlatformTaskRunner()->PostTask(
+      [&latch, &scaled_font_size, task_runners] {
+        MockDelegate delegate;
+        EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+        PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+        platform_dispatch_table.get_scaled_font_size_callback =
+            [](double font_size, int configuration_id) {
+              return font_size * 2.0 + configuration_id;
+            };
+        std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+        auto embedder = std::make_unique<PlatformViewEmbedder>(
+            delegate, task_runners, software_dispatch_table,
+            platform_dispatch_table, external_view_embedder);
+        scaled_font_size = embedder->GetScaledFontSize(16.0, 42);
+        latch.Signal();
+      });
+  latch.Wait();
+  EXPECT_DOUBLE_EQ(scaled_font_size, 74.0);
+}
+
+TEST(PlatformViewEmbedderTest, GetScaledFontSizeWithoutCallback) {
+  ThreadHost thread_host("io.flutter.test." + GetCurrentTestName() + ".",
+                         ThreadHost::Type::kPlatform);
+  flutter::TaskRunners task_runners = flutter::TaskRunners(
+      "GetScaledFontSizeWithoutCallback",
+      thread_host.platform_thread->GetTaskRunner(), nullptr, nullptr, nullptr);
+  fml::AutoResetWaitableEvent latch;
+  double scaled_font_size = 0.0;
+  task_runners.GetPlatformTaskRunner()->PostTask(
+      [&latch, &scaled_font_size, task_runners] {
+        MockDelegate delegate;
+        EmbedderSurfaceSoftware::SoftwareDispatchTable software_dispatch_table;
+        PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table;
+        std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder;
+        auto embedder = std::make_unique<PlatformViewEmbedder>(
+            delegate, task_runners, software_dispatch_table,
+            platform_dispatch_table, external_view_embedder);
+        scaled_font_size = embedder->GetScaledFontSize(16.0, 42);
+        latch.Signal();
+      });
+  latch.Wait();
+  EXPECT_DOUBLE_EQ(scaled_font_size, 16.0);
+}
+
 }  // namespace testing
 }  // namespace flutter

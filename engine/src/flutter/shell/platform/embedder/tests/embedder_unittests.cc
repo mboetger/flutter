@@ -5205,6 +5205,64 @@ TEST_F(EmbedderTest, CanReceiveApplicationLocale) {
   engine.reset();
 }
 
+/// Verify that FlutterProjectArgs::get_scaled_font_size_callback is dispatched
+/// by PlatformView::GetScaledFontSize.
+TEST_F(EmbedderTest, CanGetScaledFontSize) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  static double s_received_font_size = 0.0;
+  static int s_received_configuration_id = -1;
+  static void* s_received_user_data = nullptr;
+  s_received_font_size = 0.0;
+  s_received_configuration_id = -1;
+  s_received_user_data = nullptr;
+
+  builder.GetProjectArgs().get_scaled_font_size_callback =
+      [](double font_size, int configuration_id, void* user_data) -> double {
+    s_received_font_size = font_size;
+    s_received_configuration_id = configuration_id;
+    s_received_user_data = user_data;
+    return font_size * 2.5;
+  };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  auto embedder_engine =
+      reinterpret_cast<flutter::EmbedderEngine*>(engine.get());
+  double scaled =
+      embedder_engine->GetShell().GetPlatformView()->GetScaledFontSize(16.0,
+                                                                       101);
+
+  EXPECT_DOUBLE_EQ(scaled, 40.0);
+  EXPECT_DOUBLE_EQ(s_received_font_size, 16.0);
+  EXPECT_EQ(s_received_configuration_id, 101);
+  EXPECT_EQ(s_received_user_data, &context);
+
+  engine.reset();
+}
+
+TEST_F(EmbedderTest, GetScaledFontSizeDefaultsToUnscaled) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  auto embedder_engine =
+      reinterpret_cast<flutter::EmbedderEngine*>(engine.get());
+  double scaled =
+      embedder_engine->GetShell().GetPlatformView()->GetScaledFontSize(18.5,
+                                                                       101);
+
+  EXPECT_DOUBLE_EQ(scaled, 18.5);
+
+  engine.reset();
+}
+
 TEST_F(EmbedderTest, CanSpecifyCustomIOTaskRunner) {
   std::mutex engine_mutex;
   UniqueEngine engine;

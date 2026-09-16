@@ -2475,6 +2475,16 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
             const std::string& locale) { ptr(locale.c_str(), user_data); };
   }
 
+  flutter::PlatformViewEmbedder::GetScaledFontSizeCallback
+      get_scaled_font_size_callback = nullptr;
+  if (SAFE_ACCESS(args, get_scaled_font_size_callback, nullptr) != nullptr) {
+    get_scaled_font_size_callback = [ptr = args->get_scaled_font_size_callback,
+                                     user_data](double unscaled_font_size,
+                                                int configuration_id) {
+      return ptr(unscaled_font_size, configuration_id, user_data);
+    };
+  }
+
   auto routing = SAFE_ACCESS(args, platform_message_routing,
                              kFlutterPlatformMessageRoutingPlatformThread);
   bool does_handle_platform_messages_on_platform_thread =
@@ -2491,6 +2501,7 @@ CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
       /*renderer_setup_callback=*/nullptr,        //
       dart_deferred_library_request_callback,     //
       set_application_locale_callback,            //
+      get_scaled_font_size_callback,              //
       does_handle_platform_messages_on_platform_thread,
   };
 }

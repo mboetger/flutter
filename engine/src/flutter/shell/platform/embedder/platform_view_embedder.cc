@@ -292,6 +292,16 @@ void PlatformViewEmbedder::SetApplicationLocale(std::string locale) {
   }
 }
 
+// |PlatformView|
+double PlatformViewEmbedder::GetScaledFontSize(double unscaled_font_size,
+                                               int configuration_id) const {
+  if (platform_dispatch_table_.get_scaled_font_size_callback != nullptr) {
+    return platform_dispatch_table_.get_scaled_font_size_callback(
+        unscaled_font_size, configuration_id);
+  }
+  return unscaled_font_size;
+}
+
 std::shared_ptr<PlatformMessageHandler>
 PlatformViewEmbedder::GetPlatformMessageHandler() const {
   return platform_message_handler_;

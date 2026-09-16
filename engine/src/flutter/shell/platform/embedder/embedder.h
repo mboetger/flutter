@@ -2214,6 +2214,26 @@ typedef void (*FlutterRequestDartDeferredLibraryCallback)(
 typedef void (*FlutterSetApplicationLocaleCallback)(const char* locale,
                                                     void* user_data);
 
+/// Callback invoked by the engine to compute the scaled font size for
+/// non-linear font scaling (for example, via
+/// `PlatformDispatcher.instance.getScaledFontSize`).
+///
+/// If the embedder does not support non-linear font scaling or this callback is
+/// null, the engine returns `unscaled_font_size` unchanged.
+///
+/// This callback will be invoked synchronously on the thread on which the UI
+/// task runner executes.
+///
+/// @param[in]  unscaled_font_size  The unscaled font size in logical pixels.
+/// @param[in]  configuration_id    The system font configuration identifier.
+/// @param[in]  user_data           The user data provided in
+/// `FlutterProjectArgs`.
+///
+/// @return The scaled font size in logical pixels.
+typedef double (*FlutterGetScaledFontSizeCallback)(double unscaled_font_size,
+                                                   int configuration_id,
+                                                   void* user_data);
+
 typedef struct _FlutterTaskRunner* FlutterTaskRunner;
 
 typedef struct {
@@ -3257,6 +3277,10 @@ typedef struct {
   /// invokes `platform_message_callback` directly on the thread on which the
   /// message arrived (typically the UI task runner).
   FlutterPlatformMessageRouting platform_message_routing;
+
+  /// Callback invoked by the engine when the application requests non-linear
+  /// font scaling calculations.
+  FlutterGetScaledFontSizeCallback get_scaled_font_size_callback;
 } FlutterProjectArgs;
 
 typedef struct {

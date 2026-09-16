@@ -53,6 +53,8 @@ class PlatformViewEmbedder final : public PlatformView {
       std::function<void(intptr_t loading_unit_id)>;
   using SetApplicationLocaleCallback =
       std::function<void(const std::string& locale)>;
+  using GetScaledFontSizeCallback =
+      std::function<double(double unscaled_font_size, int configuration_id)>;
 
   struct PlatformDispatchTable {
     UpdateSemanticsCallback update_semantics_callback;  // optional
@@ -69,6 +71,7 @@ class PlatformViewEmbedder final : public PlatformView {
     RequestDartDeferredLibraryCallback
         request_dart_deferred_library_callback;                    // optional
     SetApplicationLocaleCallback set_application_locale_callback;  // optional
+    GetScaledFontSizeCallback get_scaled_font_size_callback;       // optional
     bool does_handle_platform_messages_on_platform_thread = true;
   };
 
@@ -131,6 +134,10 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   void SetApplicationLocale(std::string locale) override;
+
+  // |PlatformView|
+  double GetScaledFontSize(double unscaled_font_size,
+                           int configuration_id) const override;
 
  private:
   class EmbedderPlatformMessageHandler;
