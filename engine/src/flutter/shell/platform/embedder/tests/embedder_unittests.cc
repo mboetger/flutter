@@ -5790,6 +5790,183 @@ TEST_F(EmbedderTest, CallbackInfoProcTable) {
   ASSERT_STREQ(info.library_path, "package:test/proc_table.dart");
 }
 
+TEST_F(EmbedderTest, DynamicThreadMergingNullCallbackError) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("render_implicit_view");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  // Enabling dynamic thread merging without post_preroll_callback must fail
+  // (Invariant I-1).
+  builder.GetCompositor().supports_dynamic_thread_merging = true;
+  builder.GetCompositor().post_preroll_callback = nullptr;
+
+  auto engine = builder.InitializeEngine();
+  EXPECT_FALSE(engine.is_valid());
+}
+
+TEST_F(EmbedderTest, DynamicThreadMergingNullMergerSafe) {
+  EXPECT_FALSE(FlutterRasterThreadMergerIsMerged(nullptr));
+  EXPECT_FALSE(FlutterRasterThreadMergerIsOnPlatformThread(nullptr));
+  // These should be safe no-ops and not crash.
+  FlutterRasterThreadMergerMergeWithLease(nullptr, 2);
+  FlutterRasterThreadMergerExtendLeaseTo(nullptr, 5);
+}
+
+TEST_F(EmbedderTest, DynamicThreadMergingProcTable) {
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  ASSERT_NE(table.RasterThreadMergerIsMerged, nullptr);
+  ASSERT_NE(table.RasterThreadMergerIsOnPlatformThread, nullptr);
+  ASSERT_NE(table.RasterThreadMergerMergeWithLease, nullptr);
+  ASSERT_NE(table.RasterThreadMergerExtendLeaseTo, nullptr);
+}
+
+struct DynamicThreadMergingState {
+  std::atomic<size_t> begin_frame_count{0};
+  std::atomic<size_t> post_preroll_count{0};
+  std::atomic<size_t> end_frame_count{0};
+  std::atomic<bool> begin_frame_saw_merger{false};
+  std::atomic<bool> post_preroll_saw_merger{false};
+  std::atomic<bool> end_frame_saw_merger{false};
+  std::atomic<bool> saw_initial_unmerged{false};
+  std::atomic<bool> saw_merged_on_retry{false};
+  fml::AutoResetWaitableEvent* end_frame_latch = nullptr;
+};
+
+static DynamicThreadMergingState* g_dynamic_thread_merging_state = nullptr;
+
+TEST_F(EmbedderTest, DynamicThreadMergingLifecycle) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  fml::Thread thread;
+  UniqueEngine engine;
+
+  DynamicThreadMergingState state;
+  g_dynamic_thread_merging_state = &state;
+
+  fml::AutoResetWaitableEvent present_latch;
+  fml::AutoResetWaitableEvent end_frame_latch;
+  state.end_frame_latch = &end_frame_latch;
+
+  thread.GetTaskRunner()->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    builder.SetSurface(DlISize(800, 600));
+    builder.SetCompositor();
+    builder.SetDartEntrypoint("render_implicit_view");
+    builder.SetRenderTargetType(
+        EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+    builder.GetCompositor().supports_dynamic_thread_merging = true;
+    builder.GetCompositor().begin_frame_callback =
+        [](const FlutterFrameThreadingInfo* info) {
+          if (!g_dynamic_thread_merging_state || !info) {
+            return;
+          }
+          EXPECT_EQ(info->struct_size, sizeof(FlutterFrameThreadingInfo));
+          g_dynamic_thread_merging_state->begin_frame_count++;
+          if (info->thread_merger != nullptr) {
+            g_dynamic_thread_merging_state->begin_frame_saw_merger = true;
+          }
+        };
+    builder.GetCompositor().post_preroll_callback =
+        [](const FlutterFrameThreadingInfo* info) -> FlutterPostPrerollResult {
+      if (!g_dynamic_thread_merging_state || !info) {
+        return kFlutterPostPrerollResultSuccess;
+      }
+      EXPECT_EQ(info->struct_size, sizeof(FlutterFrameThreadingInfo));
+      size_t count = ++g_dynamic_thread_merging_state->post_preroll_count;
+      if (info->thread_merger != nullptr) {
+        g_dynamic_thread_merging_state->post_preroll_saw_merger = true;
+        if (!FlutterRasterThreadMergerIsMerged(info->thread_merger)) {
+          g_dynamic_thread_merging_state->saw_initial_unmerged = true;
+        }
+      }
+
+      if (count == 1) {
+        // Frame 1: Merge threads with a lease and retry the frame.
+        if (info->thread_merger != nullptr) {
+          FlutterRasterThreadMergerMergeWithLease(info->thread_merger, 2);
+        }
+        return kFlutterPostPrerollResultSkipAndRetryFrame;
+      } else if (count == 2) {
+        // Frame 2 (retry): Verify threads are now merged, extend lease, and
+        // resubmit.
+        if (info->thread_merger != nullptr) {
+          if (FlutterRasterThreadMergerIsMerged(info->thread_merger) &&
+              FlutterRasterThreadMergerIsOnPlatformThread(
+                  info->thread_merger)) {
+            g_dynamic_thread_merging_state->saw_merged_on_retry = true;
+          }
+          FlutterRasterThreadMergerExtendLeaseTo(info->thread_merger, 5);
+        }
+        return kFlutterPostPrerollResultResubmitFrame;
+      }
+
+      // Frame 3 (resubmit): Proceed to rasterize and present.
+      return kFlutterPostPrerollResultSuccess;
+    };
+    builder.GetCompositor().end_frame_callback =
+        [](const FlutterFrameThreadingInfo* info) {
+          if (!g_dynamic_thread_merging_state || !info) {
+            return;
+          }
+          EXPECT_EQ(info->struct_size, sizeof(FlutterFrameThreadingInfo));
+          size_t end_count = ++g_dynamic_thread_merging_state->end_frame_count;
+          if (info->thread_merger != nullptr) {
+            g_dynamic_thread_merging_state->end_frame_saw_merger = true;
+          }
+          if (end_count >= 3 &&
+              g_dynamic_thread_merging_state->end_frame_latch != nullptr) {
+            g_dynamic_thread_merging_state->end_frame_latch->Signal();
+          }
+        };
+
+    context.GetCompositor().SetNextPresentCallback(
+        [&](FlutterViewId view_id, const FlutterLayer** layers,
+            size_t layers_count) {
+          ASSERT_EQ(view_id, kFlutterImplicitViewId);
+          present_latch.Signal();
+        });
+
+    engine = builder.LaunchEngine();
+    ASSERT_TRUE(engine.is_valid());
+
+    FlutterWindowMetricsEvent event = {};
+    event.struct_size = sizeof(event);
+    event.width = 300;
+    event.height = 200;
+    event.pixel_ratio = 1.0;
+    ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+              kSuccess);
+  });
+
+  present_latch.Wait();
+  end_frame_latch.Wait();
+
+  EXPECT_GE(state.begin_frame_count.load(), 3u);
+  EXPECT_GE(state.post_preroll_count.load(), 3u);
+  EXPECT_GE(state.end_frame_count.load(), 3u);
+  EXPECT_TRUE(state.begin_frame_saw_merger.load());
+  EXPECT_TRUE(state.post_preroll_saw_merger.load());
+  EXPECT_TRUE(state.end_frame_saw_merger.load());
+  EXPECT_TRUE(state.saw_initial_unmerged.load());
+  EXPECT_TRUE(state.saw_merged_on_retry.load());
+
+  fml::AutoResetWaitableEvent kill_latch;
+  thread.GetTaskRunner()->PostTask([&] {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+
+  g_dynamic_thread_merging_state = nullptr;
+}
+
 }  // namespace testing
 }  // namespace flutter
 
