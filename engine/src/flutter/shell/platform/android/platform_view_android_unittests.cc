@@ -1466,6 +1466,63 @@ TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceInvalidArguments) {
             kInvalidArguments);
 }
 
+TEST_F(PlatformViewAndroidTest, DisplayVirtualDisplayPlatformViewLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->OnDisplayVirtualDisplayPlatformView(1, 10, 20, 100, 200);
+}
+
+TEST_F(PlatformViewAndroidTest,
+       DisplayVirtualDisplayPlatformViewEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->OnDisplayVirtualDisplayPlatformView(2, 10, 20, 100, 200);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayVirtualDisplayPlatformViewDirectSeam) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(
+      platform_view->DisplayVirtualDisplayPlatformView(3, 10, 20, 100, 200),
+      kSuccess);
+  EXPECT_EQ(platform_view->DisplayVirtualDisplayPlatformViewEmbedder(3, 10, 20,
+                                                                     100, 200),
+            kSuccess);
+}
+
+TEST_F(PlatformViewAndroidTest,
+       DisplayVirtualDisplayPlatformViewInvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(
+      platform_view->DisplayVirtualDisplayPlatformView(-1, 0, 0, 100, 100),
+      kInvalidArguments);
+  EXPECT_EQ(platform_view->DisplayVirtualDisplayPlatformView(1, 0, 0, -1, 100),
+            kInvalidArguments);
+  EXPECT_EQ(platform_view->DisplayVirtualDisplayPlatformView(1, 0, 0, 100, -1),
+            kInvalidArguments);
+}
+
 // TODO(matanlurey): Re-enable.
 //
 // This test (and the entire suite) was skipped on CI (see

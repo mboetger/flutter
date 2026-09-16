@@ -1187,6 +1187,45 @@ FlutterEngineResult PlatformViewAndroid::DisplayOverlaySurface(
   return kInternalInconsistency;
 }
 
+void PlatformViewAndroid::OnDisplayVirtualDisplayPlatformView(int32_t view_id,
+                                                              int32_t x,
+                                                              int32_t y,
+                                                              int32_t width,
+                                                              int32_t height) {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter",
+                 "PlatformViewAndroid::OnDisplayVirtualDisplayPlatformView",
+                 "mode", "VD", "path", "embedder_api");
+    DisplayVirtualDisplayPlatformView(view_id, x, y, width, height);
+    return;
+  }
+
+  TRACE_EVENT2("flutter",
+               "PlatformViewAndroid::OnDisplayVirtualDisplayPlatformView",
+               "mode", "VD", "path", "legacy");
+}
+
+FlutterEngineResult PlatformViewAndroid::DisplayVirtualDisplayPlatformView(
+    int32_t view_id,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height) {
+  if (view_id < 0 || width < 0 || height < 0) {
+    return kInvalidArguments;
+  }
+  return kSuccess;
+}
+
+FlutterEngineResult
+PlatformViewAndroid::DisplayVirtualDisplayPlatformViewEmbedder(int32_t view_id,
+                                                               int32_t x,
+                                                               int32_t y,
+                                                               int32_t width,
+                                                               int32_t height) {
+  return DisplayVirtualDisplayPlatformView(view_id, x, y, width, height);
+}
+
 // |PlatformView|
 std::unique_ptr<VsyncWaiter> PlatformViewAndroid::CreateVSyncWaiter() {
   return std::make_unique<VsyncWaiterAndroid>(task_runners_);

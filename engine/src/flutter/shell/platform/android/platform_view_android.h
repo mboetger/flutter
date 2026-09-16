@@ -218,6 +218,24 @@ class PlatformViewAndroid final
                                             int32_t width,
                                             int32_t height);
 
+  void OnDisplayVirtualDisplayPlatformView(int32_t view_id,
+                                           int32_t x,
+                                           int32_t y,
+                                           int32_t width,
+                                           int32_t height);
+
+  FlutterEngineResult DisplayVirtualDisplayPlatformView(int32_t view_id,
+                                                        int32_t x,
+                                                        int32_t y,
+                                                        int32_t width,
+                                                        int32_t height);
+
+  FlutterEngineResult DisplayVirtualDisplayPlatformViewEmbedder(int32_t view_id,
+                                                                int32_t x,
+                                                                int32_t y,
+                                                                int32_t width,
+                                                                int32_t height);
+
   void ScheduleFrame();
 
   void LoadDartDeferredLibrary(
