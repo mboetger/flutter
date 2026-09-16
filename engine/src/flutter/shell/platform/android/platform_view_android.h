@@ -162,6 +162,11 @@ class PlatformViewAndroid final
       const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
       ImageExternalTexture::ImageLifecycle lifecycle);
 
+  FlutterEngineResult RegisterImageExternalTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
+      ImageExternalTexture::ImageLifecycle lifecycle);
+
   void UnregisterTexture(int64_t texture_id);
 
   FlutterEngineResult UnregisterExternalTexture(int64_t texture_id);

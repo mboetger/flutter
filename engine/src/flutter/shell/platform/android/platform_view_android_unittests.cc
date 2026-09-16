@@ -1208,6 +1208,65 @@ TEST_F(PlatformViewAndroidTest, TextureSeamInvalidArguments) {
             kInvalidArguments);
 }
 
+TEST_F(PlatformViewAndroidTest, RegisterImageTextureLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  platform_view->RegisterImageTexture(
+      301, null_ref, ImageExternalTexture::ImageLifecycle::kKeepAlive);
+}
+
+TEST_F(PlatformViewAndroidTest, RegisterImageTextureEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  platform_view->RegisterImageTexture(
+      302, null_ref, ImageExternalTexture::ImageLifecycle::kKeepAlive);
+}
+
+TEST_F(PlatformViewAndroidTest, RegisterImageExternalTextureDirect) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  // Null image_texture_entry returns kInvalidArguments.
+  EXPECT_EQ(
+      platform_view->RegisterImageExternalTexture(
+          303, null_ref, ImageExternalTexture::ImageLifecycle::kKeepAlive),
+      kInvalidArguments);
+}
+
+TEST_F(PlatformViewAndroidTest, RegisterImageExternalTextureInvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  EXPECT_EQ(platform_view->RegisterImageExternalTexture(
+                0, null_ref, ImageExternalTexture::ImageLifecycle::kKeepAlive),
+            kInvalidArguments);
+  EXPECT_EQ(platform_view->RegisterImageExternalTexture(
+                -1, null_ref, ImageExternalTexture::ImageLifecycle::kKeepAlive),
+            kInvalidArguments);
+}
+
 // TODO(matanlurey): Re-enable.
 //
 // This test (and the entire suite) was skipped on CI (see

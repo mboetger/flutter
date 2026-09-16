@@ -1033,10 +1033,35 @@ void PlatformViewAndroid::RegisterImageTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
     ImageExternalTexture::ImageLifecycle lifecycle) {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterImageTexture", "mode",
+                 "SurfaceProducer", "path", "embedder_api");
+    RegisterImageExternalTexture(texture_id, image_texture_entry, lifecycle);
+    return;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterImageTexture", "mode",
+               "SurfaceProducer", "path", "legacy");
   if (external_texture_adapter_) {
     external_texture_adapter_->RegisterImageTexture(
         texture_id, image_texture_entry, lifecycle);
   }
+}
+
+FlutterEngineResult PlatformViewAndroid::RegisterImageExternalTexture(
+    int64_t texture_id,
+    const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
+    ImageExternalTexture::ImageLifecycle lifecycle) {
+  if (texture_id <= 0 || image_texture_entry.is_null()) {
+    return kInvalidArguments;
+  }
+
+  if (external_texture_adapter_) {
+    bool success = external_texture_adapter_->RegisterImageTexture(
+        texture_id, image_texture_entry, lifecycle);
+    return success ? kSuccess : kInternalInconsistency;
+  }
+  return kInternalInconsistency;
 }
 
 // |PlatformView|
