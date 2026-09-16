@@ -1,0 +1,35 @@
+{
+  "task_id": "T-2.4",
+  "branch": "android-embedder-v8/t-2.4-break-platform-view-inheritance",
+  "commit_sha": "2d5617c3ea42bc6cb58fbf3c6170b1632109d97a",
+  "parent_sha": "ab9e5212f4e8cf6f5c2bab6b6d7876cb37879100",
+  "timestamp": "2026-09-16T13:12:44.073659Z",
+  "host": {
+    "os": "linux",
+    "device": "n/a",
+    "android": "n/a"
+  },
+  "dirty": false,
+  "gates": {
+    "analysis": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "bin/cache/dart-sdk/bin/dart",
+      "exit-code": 0,
+      "wall-clock": 248754,
+      "log": "Analyzing tools...\nNo issues found!\n"
+    },
+    "ratchet": {
+      "ran": true,
+      "passed": true,
+      "absolute-path": "/usr/bin/python3",
+      "exit-code": 0,
+      "wall-clock": 97,
+      "log": "Target                                                            | Deps  | Includes | nogncheck\n-----------------------------------------------------------------------------------------------\n//shell/platform/android/context:context                          | 3     | 2        | 0        \n//shell/platform/android/external_view_embedder:android_external_view_embedder_unittests | 5     | 5        | 0        \n//shell/platform/android/external_view_embedder:external_view_embedder | 3     | 5        | 0        \n//shell/platform/android/jni:jni                                  | 3     | 2        | 0        \n//shell/platform/android/jni:jni_mock                             | 0     | 0        | 0        \n//shell/platform/android/jni:jni_unittests                        | 3     | 0        | 0        \n//shell/platform/android/jni:mock_jni_env                         | 0     | 0        | 0        \n//shell/platform/android/platform_view_android_delegate:platform_view_android_delegate | 3     | 1        | 0        \n//shell/platform/android/platform_view_android_delegate:platform_view_android_delegate_unittests | 3     | 0        | 0        \n//shell/platform/android/surface:native_window                    | 2     | 1        | 0        \n//shell/platform/android/surface:surface                          | 3     | 4        | 0        \n//shell/platform/android/surface:surface_mock                     | 5     | 1        | 0        \n//shell/platform/android:flutter_shell_native                     | 0     | 0        | 0        \n//shell/platform/android:flutter_shell_native_src                 | 26    | 97       | 0        \n//shell/platform/android:flutter_shell_native_unittests           | 2     | 3        | 0        \n//shell/platform/android:image_generator                          | 2     | 1        | 0        \n-----------------------------------------------------------------------------------------------\nTOTAL                                                             | 63    | 122      | 0        \nDependency ratchet check PASSED (all counts <= baseline).\n"
+    },
+    "native": {
+      "ran": false,
+      "reason": "requires ninja engine build or attached device"
+    }
+  }
+}
