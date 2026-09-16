@@ -168,7 +168,7 @@ bool AndroidSurfaceSoftware::SetNativeWindow(
   return true;
 }
 
-AndroidSurface::Screenshot AndroidSurfaceSoftware::Screenshot() {
+AndroidSurface::ScreenshotResult AndroidSurfaceSoftware::Screenshot() {
   if (!sk_surface_) {
     return {};
   }
@@ -185,7 +185,8 @@ AndroidSurface::Screenshot AndroidSurfaceSoftware::Screenshot() {
                                0)) {
     return {};
   }
-  return AndroidSurface::Screenshot{data, DlISize(info.width(), info.height())};
+  return AndroidSurface::ScreenshotResult{data,
+                                          DlISize(info.width(), info.height())};
 }
 
 }  // namespace flutter

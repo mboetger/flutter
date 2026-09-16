@@ -118,7 +118,7 @@ AndroidSurfaceDynamicImpeller::GetImpellerContext() {
   return android_context_->GetImpellerContext();
 }
 
-AndroidSurface::Screenshot AndroidSurfaceDynamicImpeller::Screenshot() {
+AndroidSurface::ScreenshotResult AndroidSurfaceDynamicImpeller::Screenshot() {
   if (vulkan_surface_) {
     return vulkan_surface_->Screenshot();
   }

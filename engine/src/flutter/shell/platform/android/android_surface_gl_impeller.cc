@@ -265,7 +265,7 @@ bool AndroidSurfaceGLImpeller::
   return OnGLContextMakeCurrent();
 }
 
-AndroidSurface::Screenshot AndroidSurfaceGLImpeller::Screenshot() {
+AndroidSurface::ScreenshotResult AndroidSurfaceGLImpeller::Screenshot() {
   if (!onscreen_surface_ || !onscreen_surface_->IsValid() || !native_window_) {
     return {};
   }
@@ -289,7 +289,7 @@ AndroidSurface::Screenshot AndroidSurfaceGLImpeller::Screenshot() {
     memcpy(pixels + y * row_bytes,
            temp.data() + (size.height - 1 - y) * row_bytes, row_bytes);
   }
-  return AndroidSurface::Screenshot{data, size};
+  return AndroidSurface::ScreenshotResult{data, size};
 }
 
 }  // namespace flutter

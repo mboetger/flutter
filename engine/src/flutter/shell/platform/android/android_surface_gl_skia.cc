@@ -218,12 +218,12 @@ std::unique_ptr<Surface> AndroidSurfaceGLSkia::CreateSnapshotSurface() {
   return std::make_unique<GPUSurfaceGLSkia>(main_skia_context, this, true);
 }
 
-AndroidSurface::Screenshot AndroidSurfaceGLSkia::Screenshot() {
+AndroidSurface::ScreenshotResult AndroidSurfaceGLSkia::Screenshot() {
   if (!onscreen_surface_ || !onscreen_surface_->IsValid()) {
     return {};
   }
-  if (onscreen_surface_->MakeCurrent() !=
-      AndroidEGLSurfaceMakeCurrentStatus::kSuccess) {
+  if (onscreen_surface_->MakeCurrent() ==
+      AndroidEGLSurfaceMakeCurrentStatus::kFailure) {
     return {};
   }
   DlISize size = onscreen_surface_->GetSize();
@@ -243,7 +243,7 @@ AndroidSurface::Screenshot AndroidSurfaceGLSkia::Screenshot() {
     memcpy(pixels + y * row_bytes,
            temp.data() + (size.height - 1 - y) * row_bytes, row_bytes);
   }
-  return AndroidSurface::Screenshot{data, size};
+  return AndroidSurface::ScreenshotResult{data, size};
 }
 
 }  // namespace flutter

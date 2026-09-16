@@ -21,7 +21,7 @@ std::shared_ptr<impeller::Context> AndroidSurface::GetImpellerContext() {
 
 void AndroidSurface::SetupImpellerSurface() {}
 
-AndroidSurface::Screenshot AndroidSurface::Screenshot() {
+AndroidSurface::ScreenshotResult AndroidSurface::Screenshot() {
   return {};
 }
 

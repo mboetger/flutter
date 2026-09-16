@@ -181,6 +181,14 @@ PlatformViewAndroid::PlatformViewAndroid(
 
 PlatformViewAndroid::~PlatformViewAndroid() = default;
 
+void PlatformViewAndroid::SetPlatformView(PlatformView* platform_view) {
+  platform_view_ = platform_view;
+}
+
+PlatformView* PlatformViewAndroid::GetPlatformViewDelegate() const {
+  return platform_view_;
+}
+
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
   if (android_surface_) {
@@ -219,7 +227,11 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
-  PlatformView::NotifyDestroyed();
+  if (platform_view_) {
+    platform_view_->NotifyDestroyed();
+  } else {
+    PlatformView::NotifyDestroyed();
+  }
 
   if (android_surface_) {
     fml::AutoResetWaitableEvent latch;
@@ -569,11 +581,11 @@ void PlatformViewAndroid::SetupImpellerContext() {
   android_surface_->SetupImpellerSurface();
 }
 
-AndroidSurface::Screenshot PlatformViewAndroid::Screenshot() {
+AndroidSurface::ScreenshotResult PlatformViewAndroid::Screenshot() {
   if (!android_surface_) {
     return {};
   }
-  AndroidSurface::Screenshot screenshot;
+  AndroidSurface::ScreenshotResult screenshot;
   fml::AutoResetWaitableEvent latch;
   fml::TaskRunner::RunNowOrPostTask(
       task_runners_.GetRasterTaskRunner(),

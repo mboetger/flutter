@@ -62,6 +62,10 @@ class PlatformViewAndroid final : public PlatformView {
 
   ~PlatformViewAndroid() override;
 
+  void SetPlatformView(PlatformView* platform_view);
+
+  PlatformView* GetPlatformViewDelegate() const;
+
   void NotifyCreated(fml::RefPtr<AndroidNativeWindow> native_window);
 
   void NotifySurfaceWindowChanged(
@@ -127,7 +131,7 @@ class PlatformViewAndroid final : public PlatformView {
   // |PlatformView|
   void SetupImpellerContext() override;
 
-  AndroidSurface::Screenshot Screenshot();
+  AndroidSurface::ScreenshotResult Screenshot();
 
  private:
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
@@ -138,6 +142,7 @@ class PlatformViewAndroid final : public PlatformView {
 
   std::unique_ptr<AndroidSurface> android_surface_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
+  PlatformView* platform_view_ = nullptr;
   bool android_meets_hcpp_criteria_ = false;
 
   // |PlatformView|
@@ -159,6 +164,7 @@ class PlatformViewAndroid final : public PlatformView {
   // |PlatformView|
   void OnPreEngineRestart() const override;
 
+ public:
   // |PlatformView|
   std::unique_ptr<VsyncWaiter> CreateVSyncWaiter() override;
 

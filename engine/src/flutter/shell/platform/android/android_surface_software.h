@@ -54,7 +54,7 @@ class AndroidSurfaceSoftware final : public AndroidSurface,
   bool PresentBackingStore(sk_sp<SkSurface> backing_store) override;
 
   // |AndroidSurface|
-  Screenshot Screenshot() override;
+  ScreenshotResult Screenshot() override;
 
  private:
   sk_sp<SkSurface> sk_surface_;

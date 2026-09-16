@@ -24,7 +24,7 @@ class AndroidExternalViewEmbedder;
 
 class AndroidSurface {
  public:
-  struct Screenshot {
+  struct ScreenshotResult {
     sk_sp<SkData> data;
     DlISize frame_size;
   };
@@ -54,7 +54,7 @@ class AndroidSurface {
 
   virtual void SetupImpellerSurface();
 
-  virtual Screenshot Screenshot();
+  virtual ScreenshotResult Screenshot();
 
  protected:
   AndroidSurface();
