@@ -1321,6 +1321,151 @@ TEST_F(PlatformViewAndroidTest,
             kInvalidArguments);
 }
 
+TEST_F(PlatformViewAndroidTest, DisplayPlatformViewLegacyPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewOnDisplayPlatformView(1, 10, 20, 100, 200, 300,
+                                                     400, ::testing::_))
+      .Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack;
+  platform_view->OnDisplayPlatformView(1, 10, 20, 100, 200, 300, 400, stack);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayPlatformViewEmbedderApiPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewOnDisplayPlatformView(2, 10, 20, 100, 200, 300,
+                                                     400, ::testing::_))
+      .Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack;
+  platform_view->OnDisplayPlatformView(2, 10, 20, 100, 200, 300, 400, stack);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayPlatformViewDirectSeam) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewOnDisplayPlatformView(3, 10, 20, 100, 200, 300,
+                                                     400, ::testing::_))
+      .Times(2);
+
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack1;
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView(3, 10, 20, 100, 200, 300, 400, stack1),
+      kSuccess);
+
+  MutatorsStack stack2;
+  EXPECT_EQ(platform_view->DisplayPlatformViewEmbedder(3, 10, 20, 100, 200, 300,
+                                                       400, stack2),
+            kSuccess);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayPlatformViewInvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack;
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView(-1, 0, 0, 100, 100, 100, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView(1, 0, 0, -1, 100, 100, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView(1, 0, 0, 100, -1, 100, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView(1, 0, 0, 100, 100, -1, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView(1, 0, 0, 100, 100, 100, -1, stack),
+      kInvalidArguments);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceLegacyPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewDisplayOverlaySurface(10, 5, 15, 50, 60))
+      .Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->OnDisplayOverlaySurface(10, 5, 15, 50, 60);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceEmbedderApiPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewDisplayOverlaySurface(20, 5, 15, 50, 60))
+      .Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->OnDisplayOverlaySurface(20, 5, 15, 50, 60);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceDirectSeam) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewDisplayOverlaySurface(30, 5, 15, 50, 60))
+      .Times(1);
+
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(platform_view->DisplayOverlaySurface(30, 5, 15, 50, 60), kSuccess);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceInvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(platform_view->DisplayOverlaySurface(-1, 0, 0, 50, 60),
+            kInvalidArguments);
+  EXPECT_EQ(platform_view->DisplayOverlaySurface(1, 0, 0, -1, 60),
+            kInvalidArguments);
+  EXPECT_EQ(platform_view->DisplayOverlaySurface(1, 0, 0, 50, -1),
+            kInvalidArguments);
+}
+
 // TODO(matanlurey): Re-enable.
 //
 // This test (and the entire suite) was skipped on CI (see

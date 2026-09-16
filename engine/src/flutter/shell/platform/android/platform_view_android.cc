@@ -1088,6 +1088,105 @@ FlutterEngineResult PlatformViewAndroid::RegisterImageExternalTexture(
   return kInternalInconsistency;
 }
 
+void PlatformViewAndroid::OnDisplayPlatformView(int32_t view_id,
+                                                int32_t x,
+                                                int32_t y,
+                                                int32_t width,
+                                                int32_t height,
+                                                int32_t view_width,
+                                                int32_t view_height,
+                                                MutatorsStack mutators_stack) {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayPlatformView",
+                 "mode", "TLHC", "path", "embedder_api");
+    DisplayPlatformView(view_id, x, y, width, height, view_width, view_height,
+                        std::move(mutators_stack));
+    return;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayPlatformView", "mode",
+               "TLHC", "path", "legacy");
+  if (jni_facade_) {
+    jni_facade_->FlutterViewOnDisplayPlatformView(view_id, x, y, width, height,
+                                                  view_width, view_height,
+                                                  std::move(mutators_stack));
+  }
+}
+
+FlutterEngineResult PlatformViewAndroid::DisplayPlatformView(
+    int32_t view_id,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height,
+    int32_t view_width,
+    int32_t view_height,
+    MutatorsStack mutators_stack) {
+  if (view_id < 0 || width < 0 || height < 0 || view_width < 0 ||
+      view_height < 0) {
+    return kInvalidArguments;
+  }
+
+  if (jni_facade_) {
+    jni_facade_->FlutterViewOnDisplayPlatformView(view_id, x, y, width, height,
+                                                  view_width, view_height,
+                                                  std::move(mutators_stack));
+    return kSuccess;
+  }
+  return kInternalInconsistency;
+}
+
+FlutterEngineResult PlatformViewAndroid::DisplayPlatformViewEmbedder(
+    int32_t view_id,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height,
+    int32_t view_width,
+    int32_t view_height,
+    MutatorsStack mutators_stack) {
+  return DisplayPlatformView(view_id, x, y, width, height, view_width,
+                             view_height, std::move(mutators_stack));
+}
+
+void PlatformViewAndroid::OnDisplayOverlaySurface(int32_t surface_id,
+                                                  int32_t x,
+                                                  int32_t y,
+                                                  int32_t width,
+                                                  int32_t height) {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayOverlaySurface",
+                 "mode", "TLHC", "path", "embedder_api");
+    DisplayOverlaySurface(surface_id, x, y, width, height);
+    return;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayOverlaySurface",
+               "mode", "TLHC", "path", "legacy");
+  if (jni_facade_) {
+    jni_facade_->FlutterViewDisplayOverlaySurface(surface_id, x, y, width,
+                                                  height);
+  }
+}
+
+FlutterEngineResult PlatformViewAndroid::DisplayOverlaySurface(
+    int32_t surface_id,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height) {
+  if (surface_id < 0 || width < 0 || height < 0) {
+    return kInvalidArguments;
+  }
+
+  if (jni_facade_) {
+    jni_facade_->FlutterViewDisplayOverlaySurface(surface_id, x, y, width,
+                                                  height);
+    return kSuccess;
+  }
+  return kInternalInconsistency;
+}
+
 // |PlatformView|
 std::unique_ptr<VsyncWaiter> PlatformViewAndroid::CreateVSyncWaiter() {
   return std::make_unique<VsyncWaiterAndroid>(task_runners_);

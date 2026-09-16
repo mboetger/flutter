@@ -179,6 +179,45 @@ class PlatformViewAndroid final
 
   FlutterEngineResult MarkExternalTextureFrameAvailable(int64_t texture_id);
 
+  void OnDisplayPlatformView(int32_t view_id,
+                             int32_t x,
+                             int32_t y,
+                             int32_t width,
+                             int32_t height,
+                             int32_t view_width,
+                             int32_t view_height,
+                             MutatorsStack mutators_stack);
+
+  FlutterEngineResult DisplayPlatformView(int32_t view_id,
+                                          int32_t x,
+                                          int32_t y,
+                                          int32_t width,
+                                          int32_t height,
+                                          int32_t view_width,
+                                          int32_t view_height,
+                                          MutatorsStack mutators_stack);
+
+  FlutterEngineResult DisplayPlatformViewEmbedder(int32_t view_id,
+                                                  int32_t x,
+                                                  int32_t y,
+                                                  int32_t width,
+                                                  int32_t height,
+                                                  int32_t view_width,
+                                                  int32_t view_height,
+                                                  MutatorsStack mutators_stack);
+
+  void OnDisplayOverlaySurface(int32_t surface_id,
+                               int32_t x,
+                               int32_t y,
+                               int32_t width,
+                               int32_t height);
+
+  FlutterEngineResult DisplayOverlaySurface(int32_t surface_id,
+                                            int32_t x,
+                                            int32_t y,
+                                            int32_t width,
+                                            int32_t height);
+
   void ScheduleFrame();
 
   void LoadDartDeferredLibrary(
