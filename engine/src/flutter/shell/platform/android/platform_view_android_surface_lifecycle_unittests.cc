@@ -199,5 +199,100 @@ TEST_F(PlatformViewAndroidSurfaceLifecycleTest,
   platform_view->NotifyDestroyed();
 }
 
+// Tests that AndroidSurfaceLifecycle tracks surface availability correctly
+// across PlatformViewAndroid lifecycle calls.
+TEST_F(PlatformViewAndroidSurfaceLifecycleTest,
+       SurfaceLifecycleAvailabilityTracking) {
+  TRACE_EVENT0("flutter", "SurfaceLifecycleAvailabilityTracking");
+  auto holder = CreateShellHolder();
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  auto surface_lifecycle = platform_view->GetSurfaceLifecycleForTesting();
+  ASSERT_NE(surface_lifecycle, nullptr);
+  EXPECT_FALSE(surface_lifecycle->IsSurfaceAvailable());
+
+  auto window = CreateFakeWindow();
+  platform_view->NotifyCreated(window);
+  EXPECT_TRUE(surface_lifecycle->IsSurfaceAvailable());
+
+  platform_view->NotifyDestroyed();
+  EXPECT_FALSE(surface_lifecycle->IsSurfaceAvailable());
+}
+
+// Tests that GPU availability transitions are tracked in
+// AndroidSurfaceLifecycle.
+TEST_F(PlatformViewAndroidSurfaceLifecycleTest, GpuAvailabilityTransitions) {
+  TRACE_EVENT0("flutter", "GpuAvailabilityTransitions");
+  auto holder = CreateShellHolder();
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  auto surface_lifecycle = platform_view->GetSurfaceLifecycleForTesting();
+  ASSERT_NE(surface_lifecycle, nullptr);
+  EXPECT_EQ(surface_lifecycle->GetGpuAvailability(),
+            kFlutterGpuAvailabilityAvailable);
+
+  platform_view->SetGpuAvailability(
+      kFlutterGpuAvailabilityFlushAndMakeUnavailable);
+  EXPECT_EQ(surface_lifecycle->GetGpuAvailability(),
+            kFlutterGpuAvailabilityFlushAndMakeUnavailable);
+
+  platform_view->SetGpuAvailability(kFlutterGpuAvailabilityUnavailable);
+  EXPECT_EQ(surface_lifecycle->GetGpuAvailability(),
+            kFlutterGpuAvailabilityUnavailable);
+
+  platform_view->SetGpuAvailability(kFlutterGpuAvailabilityAvailable);
+  EXPECT_EQ(surface_lifecycle->GetGpuAvailability(),
+            kFlutterGpuAvailabilityAvailable);
+}
+
+// Tests direct delegate callbacks and state management on
+// AndroidSurfaceLifecycle.
+TEST_F(PlatformViewAndroidSurfaceLifecycleTest,
+       DirectLifecycleDelegateCallbacks) {
+  TRACE_EVENT0("flutter", "DirectLifecycleDelegateCallbacks");
+  class TestLifecycleDelegate : public AndroidSurfaceLifecycle::Delegate {
+   public:
+    int surface_created_calls = 0;
+    int surface_destroyed_calls = 0;
+    int schedule_frame_calls = 0;
+    int install_first_frame_calls = 0;
+    int set_gpu_availability_calls = 0;
+
+    void OnSurfaceCreated() override { surface_created_calls++; }
+    void OnSurfaceDestroyed() override { surface_destroyed_calls++; }
+    void OnScheduleFrame() override { schedule_frame_calls++; }
+    void OnInstallFirstFrameCallback() override { install_first_frame_calls++; }
+    void OnSetGpuAvailability(FlutterGpuAvailability availability) override {
+      set_gpu_availability_calls++;
+    }
+  };
+
+  TestLifecycleDelegate delegate;
+  AndroidSurfaceLifecycle lifecycle(nullptr, nullptr, nullptr, &delegate);
+
+  EXPECT_FALSE(lifecycle.IsSurfaceAvailable());
+  EXPECT_EQ(lifecycle.GetGpuAvailability(), kFlutterGpuAvailabilityAvailable);
+
+  auto window = CreateFakeWindow();
+  lifecycle.NotifyCreated(window);
+  EXPECT_TRUE(lifecycle.IsSurfaceAvailable());
+  EXPECT_EQ(delegate.surface_created_calls, 1);
+
+  lifecycle.NotifySurfaceWindowChanged(window);
+  EXPECT_TRUE(lifecycle.IsSurfaceAvailable());
+  EXPECT_EQ(delegate.schedule_frame_calls, 1);
+
+  lifecycle.SetGpuAvailability(kFlutterGpuAvailabilityFlushAndMakeUnavailable);
+  EXPECT_EQ(lifecycle.GetGpuAvailability(),
+            kFlutterGpuAvailabilityFlushAndMakeUnavailable);
+  EXPECT_EQ(delegate.set_gpu_availability_calls, 1);
+
+  lifecycle.NotifyDestroyed();
+  EXPECT_FALSE(lifecycle.IsSurfaceAvailable());
+  EXPECT_EQ(delegate.surface_destroyed_calls, 1);
+}
+
 }  // namespace testing
 }  // namespace flutter

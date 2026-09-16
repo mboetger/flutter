@@ -17,12 +17,14 @@
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/shell/common/snapshot_surface_producer.h"
+#include "flutter/shell/platform/android/android_surface_lifecycle.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_message_handler_android.h"
 #include "flutter/shell/platform/android/platform_view_android_delegate/platform_view_android_delegate.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 #include "shell/platform/android/image_external_texture.h"
 
 namespace flutter {
@@ -48,7 +50,7 @@ class AndroidSurfaceFactoryImpl : public AndroidSurfaceFactory {
   const bool lazy_shader_mode_;
 };
 
-class PlatformViewAndroid final {
+class PlatformViewAndroid final : public AndroidSurfaceLifecycle::Delegate {
  public:
   static bool Register(JNIEnv* env);
 
@@ -90,6 +92,12 @@ class PlatformViewAndroid final {
   void NotifyChanged(const DlISize& size);
 
   void NotifyDestroyed();
+
+  void SetGpuAvailability(FlutterGpuAvailability availability);
+
+  AndroidSurfaceLifecycle* GetSurfaceLifecycleForTesting() const {
+    return surface_lifecycle_.get();
+  }
 
   void DispatchPlatformMessage(JNIEnv* env,
                                std::string name,
@@ -179,12 +187,19 @@ class PlatformViewAndroid final {
   PlatformViewAndroidDelegate platform_view_android_delegate_;
 
   std::unique_ptr<AndroidSurface> android_surface_;
+  std::unique_ptr<AndroidSurfaceLifecycle> surface_lifecycle_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   PlatformView* platform_view_ = nullptr;
   bool android_meets_hcpp_criteria_ = false;
   fml::WeakPtrFactory<PlatformViewAndroid> weak_factory_{this};
 
  public:
+  // |AndroidSurfaceLifecycle::Delegate|
+  void OnSurfaceCreated() override;
+  void OnSurfaceDestroyed() override;
+  void OnScheduleFrame() override;
+  void OnInstallFirstFrameCallback() override;
+
   void UpdateSemantics(int64_t view_id,
                        flutter::SemanticsNodeUpdates update,
                        flutter::CustomAccessibilityActionUpdates actions);

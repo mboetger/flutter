@@ -181,6 +181,9 @@ PlatformViewAndroid::PlatformViewAndroid(
            "up "
            "rendering.";
   }
+  surface_lifecycle_ = std::make_unique<AndroidSurfaceLifecycle>(
+      task_runners_.GetRasterTaskRunner(), jni_facade_, android_surface_.get(),
+      this);
 }
 
 PlatformViewAndroid::~PlatformViewAndroid() = default;
@@ -195,74 +198,57 @@ PlatformView* PlatformViewAndroid::GetPlatformViewDelegate() const {
 
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
-  if (android_surface_) {
-    InstallFirstFrameCallback();
-
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->SetNativeWindow(native_window, jni_facade);
-          latch.Signal();
-        });
-    latch.Wait();
-  }
-
-  if (platform_view_) {
-    platform_view_->NotifyCreated();
+  if (surface_lifecycle_) {
+    surface_lifecycle_->NotifyCreated(std::move(native_window));
   }
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
     fml::RefPtr<AndroidNativeWindow> native_window) {
-  if (android_surface_) {
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->TeardownOnScreenContext();
-          surface->SetNativeWindow(native_window, jni_facade);
-          latch.Signal();
-        });
-    latch.Wait();
+  if (surface_lifecycle_) {
+    surface_lifecycle_->NotifySurfaceWindowChanged(std::move(native_window));
   }
+}
 
+void PlatformViewAndroid::NotifyDestroyed() {
+  if (surface_lifecycle_) {
+    surface_lifecycle_->NotifyDestroyed();
+  }
+}
+
+void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
+  if (surface_lifecycle_) {
+    surface_lifecycle_->NotifyChanged(size);
+  }
+}
+
+void PlatformViewAndroid::SetGpuAvailability(
+    FlutterGpuAvailability availability) {
+  if (surface_lifecycle_) {
+    surface_lifecycle_->SetGpuAvailability(availability);
+  }
+}
+
+void PlatformViewAndroid::OnSurfaceCreated() {
+  if (platform_view_) {
+    platform_view_->NotifyCreated();
+  }
+}
+
+void PlatformViewAndroid::OnSurfaceDestroyed() {
+  if (platform_view_) {
+    platform_view_->NotifyDestroyed();
+  }
+}
+
+void PlatformViewAndroid::OnScheduleFrame() {
   if (platform_view_) {
     platform_view_->ScheduleFrame();
   }
 }
 
-void PlatformViewAndroid::NotifyDestroyed() {
-  if (platform_view_) {
-    platform_view_->NotifyDestroyed();
-  }
-
-  if (android_surface_) {
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get()]() {
-          surface->TeardownOnScreenContext();
-          latch.Signal();
-        });
-    latch.Wait();
-  }
-}
-
-void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
-  if (!android_surface_) {
-    return;
-  }
-  fml::AutoResetWaitableEvent latch;
-  fml::TaskRunner::RunNowOrPostTask(
-      task_runners_.GetRasterTaskRunner(),  //
-      [&latch, surface = android_surface_.get(), size]() {
-        surface->OnScreenSurfaceResize(size);
-        latch.Signal();
-      });
-  latch.Wait();
+void PlatformViewAndroid::OnInstallFirstFrameCallback() {
+  InstallFirstFrameCallback();
 }
 
 void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
