@@ -132,69 +132,9 @@ AndroidShellHolder::AndroidShellHolder(
 
   task_runners_ = AndroidTaskRunners::Create(thread_label, settings);
 
-  if (settings_.android_embedder_api) {
-    TRACE_EVENT1("flutter", "AndroidShellHolder::Initialize", "path",
-                 "embedder_api");
-    InitializeEngine();
-    return;
-  }
-
-  TRACE_EVENT1("flutter", "AndroidShellHolder::Initialize", "path", "legacy");
-  std::unique_ptr<PlatformViewAndroid> platform_view_android;
-  PlatformViewEmbedder* raw_platform_view_embedder = nullptr;
-  AndroidRenderingAPI rendering_api = android_rendering_api_;
-  Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, &platform_view_android, &raw_platform_view_embedder,
-       rendering_api](Shell& shell) {
-        platform_view_android = std::make_unique<PlatformViewAndroid>(
-            shell.GetSettings(),     // settings
-            shell.GetTaskRunners(),  // task runners
-            jni_facade,              // JNI interop
-            rendering_api,           // rendering API
-            shell.GetShutdownSafeIOTaskRunner());
-        auto platform_view_embedder = CreatePlatformViewEmbedder(
-            shell, platform_view_android.get(), jni_facade,
-            platform_view_android->GetWeakPtr());
-        raw_platform_view_embedder = platform_view_embedder.get();
-        platform_view_android->SetPlatformView(raw_platform_view_embedder);
-        return platform_view_embedder;
-      };
-
-  Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
-    return std::make_unique<Rasterizer>(shell);
-  };
-
-  shell_ =
-      Shell::Create(GetDefaultPlatformData(),         // window data
-                    task_runners_->GetTaskRunners(),  // task runners
-                    settings_,                        // settings
-                    on_create_platform_view,  // platform view create callback
-                    on_create_rasterizer      // rasterizer create callback
-      );
-
-  if (shell_) {
-    shell_->GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers([]() {
-      if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
-        FML_LOG(ERROR) << "Failed to set Workers task runner priority";
-      }
-    });
-
-    shell_->RegisterImageDecoder(
-        [runner = task_runners_->GetTaskRunners().GetIOTaskRunner()](
-            sk_sp<SkData> buffer) {
-          return AndroidImageGenerator::MakeFromData(std::move(buffer), runner);
-        },
-        -1);
-    FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
-  }
-
-  platform_view_android_ = std::move(platform_view_android);
-  platform_view_ = platform_view_android_ ? platform_view_android_->GetWeakPtr()
-                                          : fml::WeakPtr<PlatformViewAndroid>();
-  platform_view_embedder_ = raw_platform_view_embedder;
-  FML_DCHECK(platform_view_);
-  is_valid_ = shell_ != nullptr;
-  InitializeProjectArgs();
+  TRACE_EVENT1("flutter", "AndroidShellHolder::Initialize", "path",
+               "embedder_api");
+  InitializeEngine();
 }
 
 FlutterEngineResult AndroidShellHolder::InitializeEngine() {
@@ -312,105 +252,31 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
     const std::string& initial_route,
     const std::vector<std::string>& entrypoint_args,
     int64_t engine_id) const {
-  if (settings_.android_embedder_api) {
-    TRACE_EVENT1("flutter", "AndroidShellHolder::Spawn", "path",
-                 "embedder_api");
-    std::vector<const char*> argv;
-    argv.reserve(entrypoint_args.size());
-    for (const auto& arg : entrypoint_args) {
-      argv.push_back(arg.c_str());
-    }
-
-    FlutterProjectArgs custom_project_args = CreateFlutterProjectArgs(
-        entrypoint, libraryUrl, entrypoint_args, engine_id);
-
-    FlutterEngineSpawnConfig spawn_config = {};
-    spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
-    spawn_config.entrypoint = entrypoint.empty() ? nullptr : entrypoint.c_str();
-    spawn_config.library_path =
-        libraryUrl.empty() ? nullptr : libraryUrl.c_str();
-    spawn_config.initial_route =
-        initial_route.empty() ? nullptr : initial_route.c_str();
-    spawn_config.argc = static_cast<int64_t>(argv.size());
-    spawn_config.argv = argv.empty() ? nullptr : argv.data();
-    spawn_config.custom_args = &custom_project_args;
-
-    std::unique_ptr<AndroidShellHolder> spawned_holder;
-    FlutterEngineResult result =
-        SpawnEngine(&spawn_config, jni_facade, &spawned_holder);
-    if (result != kSuccess) {
-      return nullptr;
-    }
-    return spawned_holder;
+  TRACE_EVENT1("flutter", "AndroidShellHolder::Spawn", "path", "embedder_api");
+  std::vector<const char*> argv;
+  argv.reserve(entrypoint_args.size());
+  for (const auto& arg : entrypoint_args) {
+    argv.push_back(arg.c_str());
   }
 
-  TRACE_EVENT1("flutter", "AndroidShellHolder::Spawn", "path", "legacy");
-  FML_DCHECK(shell_ && shell_->IsSetup())
-      << "A new Shell can only be spawned "
-         "if the current Shell is properly constructed";
+  FlutterProjectArgs custom_project_args = CreateFlutterProjectArgs(
+      entrypoint, libraryUrl, entrypoint_args, engine_id);
 
-  // Pull out the new PlatformViewAndroid from the new Shell to feed to it to
-  // the new AndroidShellHolder.
-  //
-  // It's a weak pointer because it's owned by the Shell (which we're also)
-  // making below. And the AndroidShellHolder then owns the Shell.
-  std::unique_ptr<PlatformViewAndroid> spawned_platform_view_android;
-  PlatformViewEmbedder* raw_spawned_platform_view_embedder = nullptr;
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  spawn_config.entrypoint = entrypoint.empty() ? nullptr : entrypoint.c_str();
+  spawn_config.library_path = libraryUrl.empty() ? nullptr : libraryUrl.c_str();
+  spawn_config.initial_route =
+      initial_route.empty() ? nullptr : initial_route.c_str();
+  spawn_config.argc = static_cast<int64_t>(argv.size());
+  spawn_config.argv = argv.empty() ? nullptr : argv.data();
+  spawn_config.custom_args = &custom_project_args;
 
-  // Take out the old AndroidContext to reuse inside the PlatformViewAndroid
-  // of the new Shell.
-  PlatformViewAndroid* android_platform_view = platform_view_.get();
-  // There's some indirection with platform_view_ being a weak pointer but
-  // we just checked that the shell_ exists above and a valid shell is the
-  // owner of the platform view so this weak pointer always exists.
-  FML_DCHECK(android_platform_view);
-  std::shared_ptr<flutter::AndroidContext> android_context =
-      android_platform_view->GetAndroidContext();
-  FML_DCHECK(android_context);
-
-  // This is a synchronous call, so the captures don't have race checks.
-  Shell::CreateCallback<PlatformView> on_create_platform_view =
-      [&jni_facade, android_context, &spawned_platform_view_android,
-       &raw_spawned_platform_view_embedder](Shell& shell) {
-        spawned_platform_view_android = std::make_unique<PlatformViewAndroid>(
-            shell.GetSettings(),     // settings
-            shell.GetTaskRunners(),  // task runners
-            jni_facade,              // JNI interop
-            android_context          // Android context
-        );
-        auto platform_view_embedder = CreatePlatformViewEmbedder(
-            shell, spawned_platform_view_android.get(), jni_facade,
-            spawned_platform_view_android->GetWeakPtr());
-        raw_spawned_platform_view_embedder = platform_view_embedder.get();
-        spawned_platform_view_android->SetPlatformView(
-            raw_spawned_platform_view_embedder);
-        return platform_view_embedder;
-      };
-
-  Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
-    return std::make_unique<Rasterizer>(shell);
-  };
-
-  auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
-  if (!config) {
-    // If the RunConfiguration was null, the kernel blob wasn't readable.
-    // Fail the whole thing.
+  std::unique_ptr<AndroidShellHolder> spawned_holder;
+  FlutterEngineResult result =
+      SpawnEngine(&spawn_config, jni_facade, &spawned_holder);
+  if (result != kSuccess) {
     return nullptr;
-  }
-  config->SetEngineId(engine_id);
-
-  std::unique_ptr<flutter::Shell> shell =
-      shell_->Spawn(std::move(config.value()), initial_route,
-                    on_create_platform_view, on_create_rasterizer);
-
-  auto spawned_holder =
-      std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
-          GetSettings(), jni_facade, task_runners_, std::move(shell),
-          apk_asset_provider_->Clone(),
-          std::move(spawned_platform_view_android),
-          android_context->RenderingApi(), raw_spawned_platform_view_embedder));
-  if (spawned_holder) {
-    spawned_holder->project_args_.engine_id = engine_id;
   }
   return spawned_holder;
 }
@@ -433,21 +299,8 @@ void AndroidShellHolder::Launch(
   }
   project_args_.engine_id = engine_id;
 
-  if (settings_.android_embedder_api) {
-    TRACE_EVENT1("flutter", "AndroidShellHolder::Launch", "path",
-                 "embedder_api");
-    RunEngine(entrypoint, libraryUrl, entrypoint_args, engine_id);
-    return;
-  }
-
-  TRACE_EVENT1("flutter", "AndroidShellHolder::Launch", "path", "legacy");
-  auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
-  if (!config) {
-    return;
-  }
-  config->SetEngineId(engine_id);
-  UpdateDisplayMetrics();
-  shell_->RunEngine(std::move(config.value()));
+  TRACE_EVENT1("flutter", "AndroidShellHolder::Launch", "path", "embedder_api");
+  RunEngine(entrypoint, libraryUrl, entrypoint_args, engine_id);
 }
 
 FlutterEngineResult AndroidShellHolder::RunEngine(
@@ -650,10 +503,6 @@ void AndroidShellHolder::UpdateDisplayMetrics() {
 
 bool AndroidShellHolder::IsSurfaceControlEnabled() {
   return GetPlatformView()->IsSurfaceControlEnabled();
-}
-
-bool AndroidShellHolder::IsAndroidEmbedderApiEnabled() const {
-  return settings_.android_embedder_api;
 }
 
 void AndroidShellHolder::InitializeProjectArgs() {

@@ -263,10 +263,6 @@ struct Settings {
   // Data set by platform-specific embedders for use in font initialization.
   uint32_t font_initialization_data = 0;
 
-  // Whether to enable the Android Embedder API adherence path (Stage 3/4
-  // migration). Defaults to true in Stage 4.
-  bool android_embedder_api = true;
-
   // All shells in the process share the same VM. The last shell to shutdown
   // should typically shut down the VM as well. However, applications depend on
   // the behavior of "warming-up" the VM by creating a shell that does not do

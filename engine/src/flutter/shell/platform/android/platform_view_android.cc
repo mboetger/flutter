@@ -294,7 +294,6 @@ PlatformViewAndroid::PlatformViewAndroid(
       android_context_(android_context),
       platform_view_android_delegate_(jni_facade),
       platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)),
-      android_embedder_api_(settings.android_embedder_api),
       weak_factory_(this) {
   if (android_context_) {
     FML_CHECK(android_context_->IsValid())
@@ -319,8 +318,7 @@ PlatformViewAndroid::PlatformViewAndroid(
       this);
   external_texture_adapter_ = std::make_unique<AndroidExternalTextureAdapter>(
       android_context_, jni_facade_, this);
-  TRACE_EVENT1("flutter", "AndroidEmbedderApiState", "enabled",
-               android_embedder_api_ ? "true" : "false");
+  TRACE_EVENT1("flutter", "AndroidEmbedderApiState", "enabled", "true");
 }
 
 PlatformViewAndroid::~PlatformViewAndroid() = default;
@@ -429,59 +427,50 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
 
 void PlatformViewAndroid::DispatchPointerDataPacket(
     std::unique_ptr<PointerDataPacket> packet) {
-  if (android_embedder_api_) {
-    TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchPointerDataPacket",
-                 "path", "embedder_api");
-    if (!packet) {
-      return;
-    }
-    size_t count = packet->GetLength();
-    if (count == 0) {
-      return;
-    }
-    std::vector<FlutterPointerEvent> events(count);
-    for (size_t i = 0; i < count; ++i) {
-      PointerData data = packet->GetPointerData(i);
-      FlutterPointerEvent& event = events[i];
-      event.struct_size = sizeof(FlutterPointerEvent);
-      event.timestamp = data.time_stamp;
-      event.phase = ToFlutterPointerPhase(data.change);
-      event.x = data.physical_x;
-      event.y = data.physical_y;
-      event.device = data.device;
-      event.signal_kind = ToFlutterPointerSignalKind(data.signal_kind);
-      event.scroll_delta_x = data.scroll_delta_x;
-      event.scroll_delta_y = data.scroll_delta_y;
-      event.device_kind = ToFlutterPointerDeviceKind(data.kind);
-      event.buttons = data.buttons;
-      event.pan_x = data.pan_x;
-      event.pan_y = data.pan_y;
-      event.scale = data.scale;
-      event.rotation = data.rotation;
-      event.pressure = data.pressure;
-      event.pressure_min = data.pressure_min;
-      event.pressure_max = data.pressure_max;
-      event.tilt = data.tilt;
-      event.orientation = data.orientation;
-      event.radius_major = data.radius_major;
-      event.radius_minor = data.radius_minor;
-      event.radius_min = data.radius_min;
-      event.radius_max = data.radius_max;
-      event.distance = data.distance;
-      event.distance_max = data.distance_max;
-      event.size = data.size;
-      event.embedder_id = data.embedder_id;
-      event.view_id = data.view_id;
-    }
-    SendPointerEvents(events.data(), events.size());
+  TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchPointerDataPacket",
+               "path", "embedder_api");
+  if (!packet) {
     return;
   }
-
-  TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchPointerDataPacket",
-               "path", "legacy");
-  if (platform_view_) {
-    platform_view_->DispatchPointerDataPacket(std::move(packet));
+  size_t count = packet->GetLength();
+  if (count == 0) {
+    return;
   }
+  std::vector<FlutterPointerEvent> events(count);
+  for (size_t i = 0; i < count; ++i) {
+    PointerData data = packet->GetPointerData(i);
+    FlutterPointerEvent& event = events[i];
+    event.struct_size = sizeof(FlutterPointerEvent);
+    event.timestamp = data.time_stamp;
+    event.phase = ToFlutterPointerPhase(data.change);
+    event.x = data.physical_x;
+    event.y = data.physical_y;
+    event.device = data.device;
+    event.signal_kind = ToFlutterPointerSignalKind(data.signal_kind);
+    event.scroll_delta_x = data.scroll_delta_x;
+    event.scroll_delta_y = data.scroll_delta_y;
+    event.device_kind = ToFlutterPointerDeviceKind(data.kind);
+    event.buttons = data.buttons;
+    event.pan_x = data.pan_x;
+    event.pan_y = data.pan_y;
+    event.scale = data.scale;
+    event.rotation = data.rotation;
+    event.pressure = data.pressure;
+    event.pressure_min = data.pressure_min;
+    event.pressure_max = data.pressure_max;
+    event.tilt = data.tilt;
+    event.orientation = data.orientation;
+    event.radius_major = data.radius_major;
+    event.radius_minor = data.radius_minor;
+    event.radius_min = data.radius_min;
+    event.radius_max = data.radius_max;
+    event.distance = data.distance;
+    event.distance_max = data.distance_max;
+    event.size = data.size;
+    event.embedder_id = data.embedder_id;
+    event.view_id = data.view_id;
+  }
+  SendPointerEvents(events.data(), events.size());
 }
 
 FlutterEngineResult PlatformViewAndroid::SendPointerEvents(
@@ -550,80 +539,70 @@ FlutterEngineResult PlatformViewAndroid::SendPointerEvents(
 
 void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
                                              const ViewportMetrics& metrics) {
-  if (android_embedder_api_) {
-    TRACE_EVENT1("flutter", "PlatformViewAndroid::SetViewportMetrics", "path",
-                 "embedder_api");
-    FlutterWindowMetricsEvent event = {};
-    event.struct_size = sizeof(FlutterWindowMetricsEvent);
-    event.view_id = view_id;
-    event.width = static_cast<size_t>(metrics.physical_width);
-    event.height = static_cast<size_t>(metrics.physical_height);
-    event.pixel_ratio = metrics.device_pixel_ratio;
-    event.left = 0;
-    event.top = 0;
-    event.physical_view_inset_top = metrics.physical_view_inset_top;
-    event.physical_view_inset_right = metrics.physical_view_inset_right;
-    event.physical_view_inset_bottom = metrics.physical_view_inset_bottom;
-    event.physical_view_inset_left = metrics.physical_view_inset_left;
-    event.display_id = metrics.display_id;
-    event.has_constraints =
-        (metrics.physical_min_width_constraint != metrics.physical_width ||
-         metrics.physical_max_width_constraint != metrics.physical_width ||
-         metrics.physical_min_height_constraint != metrics.physical_height ||
-         metrics.physical_max_height_constraint != metrics.physical_height);
-    event.min_width_constraint =
-        static_cast<size_t>(metrics.physical_min_width_constraint);
-    event.max_width_constraint =
-        static_cast<size_t>(metrics.physical_max_width_constraint);
-    event.min_height_constraint =
-        static_cast<size_t>(metrics.physical_min_height_constraint);
-    event.max_height_constraint =
-        static_cast<size_t>(metrics.physical_max_height_constraint);
-    event.display_features_count =
-        metrics.physical_display_features_type.size();
-    event.display_features_bounds =
-        metrics.physical_display_features_bounds.empty()
-            ? nullptr
-            : metrics.physical_display_features_bounds.data();
-    event.display_features_type =
-        metrics.physical_display_features_type.empty()
-            ? nullptr
-            : metrics.physical_display_features_type.data();
-    event.display_features_state =
-        metrics.physical_display_features_state.empty()
-            ? nullptr
-            : metrics.physical_display_features_state.data();
-    event.physical_padding_top = metrics.physical_padding_top;
-    event.physical_padding_right = metrics.physical_padding_right;
-    event.physical_padding_bottom = metrics.physical_padding_bottom;
-    event.physical_padding_left = metrics.physical_padding_left;
-    event.physical_system_gesture_inset_top =
-        metrics.physical_system_gesture_inset_top;
-    event.physical_system_gesture_inset_right =
-        metrics.physical_system_gesture_inset_right;
-    event.physical_system_gesture_inset_bottom =
-        metrics.physical_system_gesture_inset_bottom;
-    event.physical_system_gesture_inset_left =
-        metrics.physical_system_gesture_inset_left;
-    event.physical_touch_slop = metrics.physical_touch_slop;
-    event.physical_display_corner_radius_top_left =
-        metrics.physical_display_corner_radius_top_left;
-    event.physical_display_corner_radius_top_right =
-        metrics.physical_display_corner_radius_top_right;
-    event.physical_display_corner_radius_bottom_right =
-        metrics.physical_display_corner_radius_bottom_right;
-    event.physical_display_corner_radius_bottom_left =
-        metrics.physical_display_corner_radius_bottom_left;
-
-    SendWindowMetricsEvent(&event);
-    return;
-  }
-
   TRACE_EVENT1("flutter", "PlatformViewAndroid::SetViewportMetrics", "path",
-               "legacy");
-  if (platform_view_) {
-    platform_view_->SetViewportMetrics(view_id, metrics);
-  }
+               "embedder_api");
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.view_id = view_id;
+  event.width = static_cast<size_t>(metrics.physical_width);
+  event.height = static_cast<size_t>(metrics.physical_height);
+  event.pixel_ratio = metrics.device_pixel_ratio;
+  event.left = 0;
+  event.top = 0;
+  event.physical_view_inset_top = metrics.physical_view_inset_top;
+  event.physical_view_inset_right = metrics.physical_view_inset_right;
+  event.physical_view_inset_bottom = metrics.physical_view_inset_bottom;
+  event.physical_view_inset_left = metrics.physical_view_inset_left;
+  event.display_id = metrics.display_id;
+  event.has_constraints =
+      (metrics.physical_min_width_constraint != metrics.physical_width ||
+       metrics.physical_max_width_constraint != metrics.physical_width ||
+       metrics.physical_min_height_constraint != metrics.physical_height ||
+       metrics.physical_max_height_constraint != metrics.physical_height);
+  event.min_width_constraint =
+      static_cast<size_t>(metrics.physical_min_width_constraint);
+  event.max_width_constraint =
+      static_cast<size_t>(metrics.physical_max_width_constraint);
+  event.min_height_constraint =
+      static_cast<size_t>(metrics.physical_min_height_constraint);
+  event.max_height_constraint =
+      static_cast<size_t>(metrics.physical_max_height_constraint);
+  event.display_features_count = metrics.physical_display_features_type.size();
+  event.display_features_bounds =
+      metrics.physical_display_features_bounds.empty()
+          ? nullptr
+          : metrics.physical_display_features_bounds.data();
+  event.display_features_type =
+      metrics.physical_display_features_type.empty()
+          ? nullptr
+          : metrics.physical_display_features_type.data();
+  event.display_features_state =
+      metrics.physical_display_features_state.empty()
+          ? nullptr
+          : metrics.physical_display_features_state.data();
+  event.physical_padding_top = metrics.physical_padding_top;
+  event.physical_padding_right = metrics.physical_padding_right;
+  event.physical_padding_bottom = metrics.physical_padding_bottom;
+  event.physical_padding_left = metrics.physical_padding_left;
+  event.physical_system_gesture_inset_top =
+      metrics.physical_system_gesture_inset_top;
+  event.physical_system_gesture_inset_right =
+      metrics.physical_system_gesture_inset_right;
+  event.physical_system_gesture_inset_bottom =
+      metrics.physical_system_gesture_inset_bottom;
+  event.physical_system_gesture_inset_left =
+      metrics.physical_system_gesture_inset_left;
+  event.physical_touch_slop = metrics.physical_touch_slop;
+  event.physical_display_corner_radius_top_left =
+      metrics.physical_display_corner_radius_top_left;
+  event.physical_display_corner_radius_top_right =
+      metrics.physical_display_corner_radius_top_right;
+  event.physical_display_corner_radius_bottom_right =
+      metrics.physical_display_corner_radius_bottom_right;
+  event.physical_display_corner_radius_bottom_left =
+      metrics.physical_display_corner_radius_bottom_left;
+
+  SendWindowMetricsEvent(&event);
 }
 
 FlutterEngineResult PlatformViewAndroid::SendWindowMetricsEvent(
@@ -779,42 +758,16 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
                                                   jint action,
                                                   jobject args,
                                                   jint args_position) {
-  if (android_embedder_api_) {
-    TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchSemanticsAction",
-                 "path", "embedder_api");
-    const uint8_t* args_data = nullptr;
-    size_t args_size = 0;
-    if (args != nullptr && !env->IsSameObject(args, NULL)) {
-      args_data =
-          static_cast<const uint8_t*>(env->GetDirectBufferAddress(args));
-      args_size = static_cast<size_t>(args_position);
-    }
-    DispatchSemanticsAction(node_id,
-                            static_cast<FlutterSemanticsAction>(action),
-                            args_data, args_size);
-    return;
-  }
-
   TRACE_EVENT1("flutter", "PlatformViewAndroid::DispatchSemanticsAction",
-               "path", "legacy");
-  if (!platform_view_) {
-    return;
+               "path", "embedder_api");
+  const uint8_t* args_data = nullptr;
+  size_t args_size = 0;
+  if (args != nullptr && !env->IsSameObject(args, NULL)) {
+    args_data = static_cast<const uint8_t*>(env->GetDirectBufferAddress(args));
+    args_size = static_cast<size_t>(args_position);
   }
-  // TODO(team-android): Remove implicit view assumption.
-  // https://github.com/flutter/flutter/issues/142845
-  if (env->IsSameObject(args, NULL)) {
-    platform_view_->DispatchSemanticsAction(
-        kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
-        fml::MallocMapping());
-    return;
-  }
-
-  uint8_t* args_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(args));
-  auto args_vector = fml::MallocMapping::Copy(args_data, args_position);
-
-  platform_view_->DispatchSemanticsAction(
-      kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
-      std::move(args_vector));
+  DispatchSemanticsAction(node_id, static_cast<FlutterSemanticsAction>(action),
+                          args_data, args_size);
 }
 
 FlutterEngineResult PlatformViewAndroid::DispatchSemanticsAction(
@@ -839,18 +792,9 @@ FlutterEngineResult PlatformViewAndroid::DispatchSemanticsAction(
 }
 
 void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {
-  if (android_embedder_api_) {
-    TRACE_EVENT1("flutter", "PlatformViewAndroid::SetSemanticsEnabled", "path",
-                 "embedder_api");
-    UpdateSemanticsEnabled(enabled);
-    return;
-  }
-
   TRACE_EVENT1("flutter", "PlatformViewAndroid::SetSemanticsEnabled", "path",
-               "legacy");
-  if (platform_view_) {
-    platform_view_->SetSemanticsEnabled(enabled);
-  }
+               "embedder_api");
+  UpdateSemanticsEnabled(enabled);
 }
 
 FlutterEngineResult PlatformViewAndroid::UpdateSemanticsEnabled(bool enabled) {
@@ -861,19 +805,9 @@ FlutterEngineResult PlatformViewAndroid::UpdateSemanticsEnabled(bool enabled) {
 }
 
 void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
-  if (android_embedder_api_) {
-    TRACE_EVENT1("flutter", "PlatformViewAndroid::SetAccessibilityFeatures",
-                 "path", "embedder_api");
-    UpdateAccessibilityFeatures(
-        static_cast<FlutterAccessibilityFeature>(flags));
-    return;
-  }
-
   TRACE_EVENT1("flutter", "PlatformViewAndroid::SetAccessibilityFeatures",
-               "path", "legacy");
-  if (platform_view_) {
-    platform_view_->SetAccessibilityFeatures(flags);
-  }
+               "path", "embedder_api");
+  UpdateAccessibilityFeatures(static_cast<FlutterAccessibilityFeature>(flags));
 }
 
 FlutterEngineResult PlatformViewAndroid::UpdateAccessibilityFeatures(
@@ -892,22 +826,9 @@ void PlatformViewAndroid::RegisterTexture(
 }
 
 void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
-  if (android_embedder_api_) {
-    TRACE_EVENT1("flutter", "PlatformViewAndroid::UnregisterTexture", "path",
-                 "embedder_api");
-    UnregisterExternalTexture(texture_id);
-    return;
-  }
-
   TRACE_EVENT1("flutter", "PlatformViewAndroid::UnregisterTexture", "path",
-               "legacy");
-  if (external_texture_adapter_) {
-    external_texture_adapter_->UnregisterExternalTexture(texture_id);
-    return;
-  }
-  if (platform_view_) {
-    platform_view_->UnregisterTexture(texture_id);
-  }
+               "embedder_api");
+  UnregisterExternalTexture(texture_id);
 }
 
 FlutterEngineResult PlatformViewAndroid::UnregisterExternalTexture(
@@ -925,22 +846,9 @@ FlutterEngineResult PlatformViewAndroid::UnregisterExternalTexture(
 }
 
 void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
-  if (android_embedder_api_) {
-    TRACE_EVENT1("flutter", "PlatformViewAndroid::MarkTextureFrameAvailable",
-                 "path", "embedder_api");
-    MarkExternalTextureFrameAvailable(texture_id);
-    return;
-  }
-
   TRACE_EVENT1("flutter", "PlatformViewAndroid::MarkTextureFrameAvailable",
-               "path", "legacy");
-  if (external_texture_adapter_) {
-    external_texture_adapter_->MarkExternalTextureFrameAvailable(texture_id);
-    return;
-  }
-  if (platform_view_) {
-    platform_view_->MarkTextureFrameAvailable(texture_id);
-  }
+               "path", "embedder_api");
+  MarkExternalTextureFrameAvailable(texture_id);
 }
 
 FlutterEngineResult PlatformViewAndroid::MarkExternalTextureFrameAvailable(
@@ -1023,19 +931,9 @@ void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
 void PlatformViewAndroid::RegisterExternalTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterExternalTexture",
-                 "mode", "SurfaceTexture", "path", "embedder_api");
-    RegisterSurfaceExternalTexture(texture_id, surface_texture);
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterExternalTexture",
-               "mode", "SurfaceTexture", "path", "legacy");
-  if (external_texture_adapter_) {
-    external_texture_adapter_->RegisterSurfaceTexture(texture_id,
-                                                      surface_texture);
-  }
+               "mode", "SurfaceTexture", "path", "embedder_api");
+  RegisterSurfaceExternalTexture(texture_id, surface_texture);
 }
 
 FlutterEngineResult PlatformViewAndroid::RegisterSurfaceExternalTexture(
@@ -1057,19 +955,9 @@ void PlatformViewAndroid::RegisterImageTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
     ImageExternalTexture::ImageLifecycle lifecycle) {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterImageTexture", "mode",
-                 "SurfaceProducer", "path", "embedder_api");
-    RegisterImageExternalTexture(texture_id, image_texture_entry, lifecycle);
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterImageTexture", "mode",
-               "SurfaceProducer", "path", "legacy");
-  if (external_texture_adapter_) {
-    external_texture_adapter_->RegisterImageTexture(
-        texture_id, image_texture_entry, lifecycle);
-  }
+               "SurfaceProducer", "path", "embedder_api");
+  RegisterImageExternalTexture(texture_id, image_texture_entry, lifecycle);
 }
 
 FlutterEngineResult PlatformViewAndroid::RegisterImageExternalTexture(
@@ -1096,21 +984,10 @@ void PlatformViewAndroid::OnDisplayPlatformView(int32_t view_id,
                                                 int32_t view_width,
                                                 int32_t view_height,
                                                 MutatorsStack mutators_stack) {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayPlatformView",
-                 "mode", "TLHC", "path", "embedder_api");
-    DisplayPlatformView(view_id, x, y, width, height, view_width, view_height,
-                        std::move(mutators_stack));
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayPlatformView", "mode",
-               "TLHC", "path", "legacy");
-  if (jni_facade_) {
-    jni_facade_->FlutterViewOnDisplayPlatformView(view_id, x, y, width, height,
-                                                  view_width, view_height,
-                                                  std::move(mutators_stack));
-  }
+               "TLHC", "path", "embedder_api");
+  DisplayPlatformView(view_id, x, y, width, height, view_width, view_height,
+                      std::move(mutators_stack));
 }
 
 FlutterEngineResult PlatformViewAndroid::DisplayPlatformView(
@@ -1154,19 +1031,9 @@ void PlatformViewAndroid::OnDisplayOverlaySurface(int32_t surface_id,
                                                   int32_t y,
                                                   int32_t width,
                                                   int32_t height) {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayOverlaySurface",
-                 "mode", "TLHC", "path", "embedder_api");
-    DisplayOverlaySurface(surface_id, x, y, width, height);
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayOverlaySurface",
-               "mode", "TLHC", "path", "legacy");
-  if (jni_facade_) {
-    jni_facade_->FlutterViewDisplayOverlaySurface(surface_id, x, y, width,
-                                                  height);
-  }
+               "mode", "TLHC", "path", "embedder_api");
+  DisplayOverlaySurface(surface_id, x, y, width, height);
 }
 
 FlutterEngineResult PlatformViewAndroid::DisplayOverlaySurface(
@@ -1192,17 +1059,10 @@ void PlatformViewAndroid::OnDisplayVirtualDisplayPlatformView(int32_t view_id,
                                                               int32_t y,
                                                               int32_t width,
                                                               int32_t height) {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter",
-                 "PlatformViewAndroid::OnDisplayVirtualDisplayPlatformView",
-                 "mode", "VD", "path", "embedder_api");
-    DisplayVirtualDisplayPlatformView(view_id, x, y, width, height);
-    return;
-  }
-
   TRACE_EVENT2("flutter",
                "PlatformViewAndroid::OnDisplayVirtualDisplayPlatformView",
-               "mode", "VD", "path", "legacy");
+               "mode", "VD", "path", "embedder_api");
+  DisplayVirtualDisplayPlatformView(view_id, x, y, width, height);
 }
 
 FlutterEngineResult PlatformViewAndroid::DisplayVirtualDisplayPlatformView(
@@ -1234,21 +1094,10 @@ void PlatformViewAndroid::OnDisplayPlatformView2(int32_t view_id,
                                                  int32_t view_width,
                                                  int32_t view_height,
                                                  MutatorsStack mutators_stack) {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayPlatformView2",
-                 "mode", "HCPP", "path", "embedder_api");
-    DisplayPlatformView2(view_id, x, y, width, height, view_width, view_height,
-                         std::move(mutators_stack));
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::OnDisplayPlatformView2", "mode",
-               "HCPP", "path", "legacy");
-  if (jni_facade_) {
-    jni_facade_->onDisplayPlatformView2(view_id, x, y, width, height,
-                                        view_width, view_height,
-                                        std::move(mutators_stack));
-  }
+               "HCPP", "path", "embedder_api");
+  DisplayPlatformView2(view_id, x, y, width, height, view_width, view_height,
+                       std::move(mutators_stack));
 }
 
 FlutterEngineResult PlatformViewAndroid::DisplayPlatformView2(
@@ -1288,18 +1137,9 @@ FlutterEngineResult PlatformViewAndroid::DisplayPlatformView2Embedder(
 }
 
 void PlatformViewAndroid::OnHidePlatformView2(int32_t view_id) {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::OnHidePlatformView2", "mode",
-                 "HCPP", "path", "embedder_api");
-    HidePlatformView2(view_id);
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::OnHidePlatformView2", "mode",
-               "HCPP", "path", "legacy");
-  if (jni_facade_) {
-    jni_facade_->hidePlatformView2(view_id);
-  }
+               "HCPP", "path", "embedder_api");
+  HidePlatformView2(view_id);
 }
 
 FlutterEngineResult PlatformViewAndroid::HidePlatformView2(int32_t view_id) {
@@ -1315,18 +1155,9 @@ FlutterEngineResult PlatformViewAndroid::HidePlatformView2(int32_t view_id) {
 }
 
 void PlatformViewAndroid::BeginFrameHC() {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::BeginFrameHC", "mode", "HC",
-                 "path", "embedder_api");
-    BeginFrameHCEmbedder();
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::BeginFrameHC", "mode", "HC",
-               "path", "legacy");
-  if (jni_facade_) {
-    jni_facade_->FlutterViewBeginFrame();
-  }
+               "path", "embedder_api");
+  BeginFrameHCEmbedder();
 }
 
 FlutterEngineResult PlatformViewAndroid::BeginFrameHCEmbedder() {
@@ -1338,18 +1169,9 @@ FlutterEngineResult PlatformViewAndroid::BeginFrameHCEmbedder() {
 }
 
 void PlatformViewAndroid::EndFrameHC() {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::EndFrameHC", "mode", "HC",
-                 "path", "embedder_api");
-    EndFrameHCEmbedder();
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::EndFrameHC", "mode", "HC",
-               "path", "legacy");
-  if (jni_facade_) {
-    jni_facade_->FlutterViewEndFrame();
-  }
+               "path", "embedder_api");
+  EndFrameHCEmbedder();
 }
 
 FlutterEngineResult PlatformViewAndroid::EndFrameHCEmbedder() {
@@ -1362,20 +1184,11 @@ FlutterEngineResult PlatformViewAndroid::EndFrameHCEmbedder() {
 
 std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
 PlatformViewAndroid::CreateOverlaySurfaceHC() {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::CreateOverlaySurfaceHC",
-                 "mode", "HC", "path", "embedder_api");
-    std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> metadata;
-    CreateOverlaySurfaceHCEmbedder(&metadata);
-    return metadata;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::CreateOverlaySurfaceHC", "mode",
-               "HC", "path", "legacy");
-  if (jni_facade_) {
-    return jni_facade_->FlutterViewCreateOverlaySurface();
-  }
-  return nullptr;
+               "HC", "path", "embedder_api");
+  std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> metadata;
+  CreateOverlaySurfaceHCEmbedder(&metadata);
+  return metadata;
 }
 
 FlutterEngineResult PlatformViewAndroid::CreateOverlaySurfaceHCEmbedder(
@@ -1391,18 +1204,9 @@ FlutterEngineResult PlatformViewAndroid::CreateOverlaySurfaceHCEmbedder(
 }
 
 void PlatformViewAndroid::DestroyOverlaySurfacesHC() {
-  if (android_embedder_api_) {
-    TRACE_EVENT2("flutter", "PlatformViewAndroid::DestroyOverlaySurfacesHC",
-                 "mode", "HC", "path", "embedder_api");
-    DestroyOverlaySurfacesHCEmbedder();
-    return;
-  }
-
   TRACE_EVENT2("flutter", "PlatformViewAndroid::DestroyOverlaySurfacesHC",
-               "mode", "HC", "path", "legacy");
-  if (jni_facade_) {
-    jni_facade_->FlutterViewDestroyOverlaySurfaces();
-  }
+               "mode", "HC", "path", "embedder_api");
+  DestroyOverlaySurfacesHCEmbedder();
 }
 
 FlutterEngineResult PlatformViewAndroid::DestroyOverlaySurfacesHCEmbedder() {

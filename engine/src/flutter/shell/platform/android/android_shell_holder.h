@@ -97,8 +97,6 @@ class AndroidShellHolder {
 
   bool IsSurfaceControlEnabled();
 
-  bool IsAndroidEmbedderApiEnabled() const;
-
   FlutterEngineResult InitializeEngine();
 
   FlutterEngineResult RunEngine(

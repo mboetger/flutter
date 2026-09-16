@@ -626,64 +626,8 @@ TEST_F(PlatformViewAndroidTest, PlatformViewDelegateSurfaceAndContextFallback) {
   platform_view->SetupImpellerContext();
 }
 
-TEST_F(PlatformViewAndroidTest, AndroidEmbedderApiFlagState) {
-  // Flag on by default in Stage 4:
-  {
-    auto holder = CreateShellHolder();
-    ASSERT_NE(holder, nullptr);
-    EXPECT_TRUE(holder->IsAndroidEmbedderApiEnabled());
-    auto platform_view = holder->GetPlatformView();
-    ASSERT_TRUE(platform_view);
-    EXPECT_TRUE(platform_view->IsAndroidEmbedderApiEnabled());
-  }
-
-  // Flag off when explicitly disabled in Settings:
-  {
-    Settings settings;
-    settings.android_embedder_api = false;
-    auto holder = CreateShellHolder(nullptr, settings);
-    ASSERT_NE(holder, nullptr);
-    EXPECT_FALSE(holder->IsAndroidEmbedderApiEnabled());
-    auto platform_view = holder->GetPlatformView();
-    ASSERT_TRUE(platform_view);
-    EXPECT_FALSE(platform_view->IsAndroidEmbedderApiEnabled());
-  }
-}
-
-TEST_F(PlatformViewAndroidTest, PointerDispatchLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  FakePlatformViewDelegate fake_delegate;
-  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
-  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
-
-  platform_view->SetPlatformView(&delegate_platform_view);
-
-  auto packet = std::make_unique<PointerDataPacket>(1);
-  PointerData pointer_data;
-  pointer_data.Clear();
-  pointer_data.physical_x = 100.0;
-  pointer_data.physical_y = 200.0;
-  packet->SetPointerData(0, pointer_data);
-
-  EXPECT_FALSE(fake_delegate.dispatch_pointer_data_packet_called);
-  platform_view->DispatchPointerDataPacket(std::move(packet));
-  EXPECT_TRUE(fake_delegate.dispatch_pointer_data_packet_called);
-  EXPECT_EQ(fake_delegate.last_pointer_data_packet_length, 1ul);
-
-  platform_view->SetPlatformView(nullptr);
-}
-
 TEST_F(PlatformViewAndroidTest, PointerDispatchEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -745,41 +689,8 @@ TEST_F(PlatformViewAndroidTest, SendPointerEventsValidation) {
   platform_view->SetPlatformView(nullptr);
 }
 
-TEST_F(PlatformViewAndroidTest, WindowMetricsDispatchLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  FakePlatformViewDelegate fake_delegate;
-  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
-  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
-
-  platform_view->SetPlatformView(&delegate_platform_view);
-
-  ViewportMetrics metrics;
-  metrics.physical_width = 1080;
-  metrics.physical_height = 1920;
-  metrics.device_pixel_ratio = 2.0;
-
-  EXPECT_FALSE(fake_delegate.set_viewport_metrics_called);
-  platform_view->SetViewportMetrics(0, metrics);
-  EXPECT_TRUE(fake_delegate.set_viewport_metrics_called);
-  EXPECT_EQ(fake_delegate.last_view_id, 0);
-  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_width, 1080);
-  EXPECT_EQ(fake_delegate.last_viewport_metrics.physical_height, 1920);
-  EXPECT_EQ(fake_delegate.last_viewport_metrics.device_pixel_ratio, 2.0);
-
-  platform_view->SetPlatformView(nullptr);
-}
-
 TEST_F(PlatformViewAndroidTest, WindowMetricsDispatchEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -905,35 +816,8 @@ TEST_F(PlatformViewAndroidTest, SemanticsActionDispatchWithPayload) {
   platform_view->SetPlatformView(nullptr);
 }
 
-TEST_F(PlatformViewAndroidTest, SemanticsEnabledDispatchLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  FakePlatformViewDelegate fake_delegate;
-  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
-  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
-  platform_view->SetPlatformView(&delegate_platform_view);
-
-  EXPECT_FALSE(fake_delegate.set_semantics_enabled_called);
-  platform_view->SetSemanticsEnabled(true);
-  EXPECT_TRUE(fake_delegate.set_semantics_enabled_called);
-  EXPECT_TRUE(fake_delegate.last_semantics_enabled);
-
-  platform_view->SetSemanticsEnabled(false);
-  EXPECT_FALSE(fake_delegate.last_semantics_enabled);
-
-  platform_view->SetPlatformView(nullptr);
-}
-
 TEST_F(PlatformViewAndroidTest, SemanticsEnabledDispatchEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -978,39 +862,8 @@ TEST_F(PlatformViewAndroidTest, UpdateSemanticsEnabledDirect) {
   platform_view->SetPlatformView(nullptr);
 }
 
-TEST_F(PlatformViewAndroidTest, AccessibilityFeaturesDispatchLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  FakePlatformViewDelegate fake_delegate;
-  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
-  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
-  platform_view->SetPlatformView(&delegate_platform_view);
-
-  EXPECT_FALSE(fake_delegate.set_accessibility_features_called);
-  platform_view->SetAccessibilityFeatures(
-      kFlutterAccessibilityFeatureAccessibleNavigation |
-      kFlutterAccessibilityFeatureInvertColors);
-  EXPECT_TRUE(fake_delegate.set_accessibility_features_called);
-  EXPECT_EQ(fake_delegate.last_accessibility_features,
-            kFlutterAccessibilityFeatureAccessibleNavigation |
-                kFlutterAccessibilityFeatureInvertColors);
-
-  platform_view->SetAccessibilityFeatures(0);
-  EXPECT_EQ(fake_delegate.last_accessibility_features, 0);
-
-  platform_view->SetPlatformView(nullptr);
-}
-
 TEST_F(PlatformViewAndroidTest, AccessibilityFeaturesDispatchEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1064,32 +917,8 @@ TEST_F(PlatformViewAndroidTest, UpdateAccessibilityFeaturesDirect) {
   platform_view->SetPlatformView(nullptr);
 }
 
-TEST_F(PlatformViewAndroidTest, UnregisterTextureDispatchLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  FakePlatformViewDelegate fake_delegate;
-  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
-  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
-  platform_view->SetPlatformView(&delegate_platform_view);
-
-  EXPECT_FALSE(fake_delegate.unregister_texture_called);
-  platform_view->UnregisterTexture(101);
-  EXPECT_TRUE(fake_delegate.unregister_texture_called);
-  EXPECT_EQ(fake_delegate.last_unregistered_texture_id, 101);
-
-  platform_view->SetPlatformView(nullptr);
-}
-
 TEST_F(PlatformViewAndroidTest, UnregisterTextureDispatchEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1128,33 +957,9 @@ TEST_F(PlatformViewAndroidTest, UnregisterExternalTextureDirect) {
   platform_view->SetPlatformView(nullptr);
 }
 
-TEST_F(PlatformViewAndroidTest, MarkTextureFrameAvailableDispatchLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  FakePlatformViewDelegate fake_delegate;
-  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
-  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
-  platform_view->SetPlatformView(&delegate_platform_view);
-
-  EXPECT_FALSE(fake_delegate.mark_texture_frame_available_called);
-  platform_view->MarkTextureFrameAvailable(201);
-  EXPECT_TRUE(fake_delegate.mark_texture_frame_available_called);
-  EXPECT_EQ(fake_delegate.last_frame_available_texture_id, 201);
-
-  platform_view->SetPlatformView(nullptr);
-}
-
 TEST_F(PlatformViewAndroidTest,
        MarkTextureFrameAvailableDispatchEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1208,24 +1013,8 @@ TEST_F(PlatformViewAndroidTest, TextureSeamInvalidArguments) {
             kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, RegisterImageTextureLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
-  platform_view->RegisterImageTexture(
-      301, null_ref, ImageExternalTexture::ImageLifecycle::kKeepAlive);
-}
-
 TEST_F(PlatformViewAndroidTest, RegisterImageTextureEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1267,23 +1056,8 @@ TEST_F(PlatformViewAndroidTest, RegisterImageExternalTextureInvalidArguments) {
             kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, RegisterSurfaceTextureLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
-  platform_view->RegisterExternalTexture(401, null_ref);
-}
-
 TEST_F(PlatformViewAndroidTest, RegisterSurfaceTextureEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1321,33 +1095,13 @@ TEST_F(PlatformViewAndroidTest,
             kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, DisplayPlatformViewLegacyPath) {
-  auto jni = std::make_shared<JNIMock>();
-  EXPECT_CALL(*jni, FlutterViewOnDisplayPlatformView(1, 10, 20, 100, 200, 300,
-                                                     400, ::testing::_))
-      .Times(1);
-
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  MutatorsStack stack;
-  platform_view->OnDisplayPlatformView(1, 10, 20, 100, 200, 300, 400, stack);
-}
-
 TEST_F(PlatformViewAndroidTest, DisplayPlatformViewEmbedderApiPath) {
   auto jni = std::make_shared<JNIMock>();
   EXPECT_CALL(*jni, FlutterViewOnDisplayPlatformView(2, 10, 20, 100, 200, 300,
                                                      400, ::testing::_))
       .Times(1);
 
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(jni, settings);
+  auto holder = CreateShellHolder(jni);
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1405,30 +1159,12 @@ TEST_F(PlatformViewAndroidTest, DisplayPlatformViewInvalidArguments) {
       kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceLegacyPath) {
-  auto jni = std::make_shared<JNIMock>();
-  EXPECT_CALL(*jni, FlutterViewDisplayOverlaySurface(10, 5, 15, 50, 60))
-      .Times(1);
-
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  platform_view->OnDisplayOverlaySurface(10, 5, 15, 50, 60);
-}
-
 TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceEmbedderApiPath) {
   auto jni = std::make_shared<JNIMock>();
   EXPECT_CALL(*jni, FlutterViewDisplayOverlaySurface(20, 5, 15, 50, 60))
       .Times(1);
 
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(jni, settings);
+  auto holder = CreateShellHolder(jni);
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1466,23 +1202,9 @@ TEST_F(PlatformViewAndroidTest, DisplayOverlaySurfaceInvalidArguments) {
             kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, DisplayVirtualDisplayPlatformViewLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(nullptr, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  platform_view->OnDisplayVirtualDisplayPlatformView(1, 10, 20, 100, 200);
-}
-
 TEST_F(PlatformViewAndroidTest,
        DisplayVirtualDisplayPlatformViewEmbedderApiPath) {
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(nullptr, settings);
+  auto holder = CreateShellHolder();
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1523,33 +1245,13 @@ TEST_F(PlatformViewAndroidTest,
             kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, DisplayPlatformView2LegacyPath) {
-  auto jni = std::make_shared<JNIMock>();
-  EXPECT_CALL(
-      *jni, onDisplayPlatformView2(1, 10, 20, 100, 200, 300, 400, ::testing::_))
-      .Times(1);
-
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  MutatorsStack stack;
-  platform_view->OnDisplayPlatformView2(1, 10, 20, 100, 200, 300, 400, stack);
-}
-
 TEST_F(PlatformViewAndroidTest, DisplayPlatformView2EmbedderApiPath) {
   auto jni = std::make_shared<JNIMock>();
   EXPECT_CALL(
       *jni, onDisplayPlatformView2(2, 10, 20, 100, 200, 300, 400, ::testing::_))
       .Times(1);
 
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(jni, settings);
+  auto holder = CreateShellHolder(jni);
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1607,28 +1309,11 @@ TEST_F(PlatformViewAndroidTest, DisplayPlatformView2InvalidArguments) {
       kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, HidePlatformView2LegacyPath) {
-  auto jni = std::make_shared<JNIMock>();
-  EXPECT_CALL(*jni, hidePlatformView2(10)).Times(1);
-
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  platform_view->OnHidePlatformView2(10);
-}
-
 TEST_F(PlatformViewAndroidTest, HidePlatformView2EmbedderApiPath) {
   auto jni = std::make_shared<JNIMock>();
   EXPECT_CALL(*jni, hidePlatformView2(20)).Times(1);
 
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(jni, settings);
+  auto holder = CreateShellHolder(jni);
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1660,28 +1345,11 @@ TEST_F(PlatformViewAndroidTest, HidePlatformView2InvalidArguments) {
   EXPECT_EQ(platform_view->HidePlatformView2(-1), kInvalidArguments);
 }
 
-TEST_F(PlatformViewAndroidTest, BeginFrameHCLegacyPath) {
-  auto jni = std::make_shared<JNIMock>();
-  EXPECT_CALL(*jni, FlutterViewBeginFrame()).Times(1);
-
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  platform_view->BeginFrameHC();
-}
-
 TEST_F(PlatformViewAndroidTest, BeginFrameHCEmbedderApiPath) {
   auto jni = std::make_shared<JNIMock>();
   EXPECT_CALL(*jni, FlutterViewBeginFrame()).Times(1);
 
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(jni, settings);
+  auto holder = CreateShellHolder(jni);
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1703,28 +1371,11 @@ TEST_F(PlatformViewAndroidTest, BeginFrameHCDirectSeam) {
   EXPECT_EQ(platform_view->BeginFrameHCEmbedder(), kSuccess);
 }
 
-TEST_F(PlatformViewAndroidTest, EndFrameHCLegacyPath) {
-  auto jni = std::make_shared<JNIMock>();
-  EXPECT_CALL(*jni, FlutterViewEndFrame()).Times(1);
-
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder, nullptr);
-
-  auto platform_view = holder->GetPlatformView();
-  ASSERT_TRUE(platform_view);
-
-  platform_view->EndFrameHC();
-}
-
 TEST_F(PlatformViewAndroidTest, EndFrameHCEmbedderApiPath) {
   auto jni = std::make_shared<JNIMock>();
   EXPECT_CALL(*jni, FlutterViewEndFrame()).Times(1);
 
-  Settings settings;
-  settings.android_embedder_api = true;
-  auto holder = CreateShellHolder(jni, settings);
+  auto holder = CreateShellHolder(jni);
   ASSERT_NE(holder, nullptr);
 
   auto platform_view = holder->GetPlatformView();
@@ -1749,58 +1400,39 @@ TEST_F(PlatformViewAndroidTest, EndFrameHCDirectSeam) {
 TEST_F(PlatformViewAndroidTest, CreateOverlaySurfaceHC) {
   auto jni = std::make_shared<JNIMock>();
   EXPECT_CALL(*jni, FlutterViewCreateOverlaySurface())
-      .Times(3)
+      .Times(2)
       .WillRepeatedly(::testing::Return(::testing::ByMove(
           std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(
               1, fml::MakeRefCounted<AndroidNativeWindow>(nullptr)))));
 
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder_legacy = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder_legacy, nullptr);
-  auto pv_legacy = holder_legacy->GetPlatformView();
-  ASSERT_TRUE(pv_legacy);
-  auto meta_legacy = pv_legacy->CreateOverlaySurfaceHC();
-  EXPECT_NE(meta_legacy, nullptr);
-  EXPECT_EQ(meta_legacy->id, 1);
-
-  settings.android_embedder_api = true;
-  auto holder_embedder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder_embedder, nullptr);
-  auto pv_embedder = holder_embedder->GetPlatformView();
-  ASSERT_TRUE(pv_embedder);
-  auto meta_embedder = pv_embedder->CreateOverlaySurfaceHC();
-  EXPECT_NE(meta_embedder, nullptr);
-  EXPECT_EQ(meta_embedder->id, 1);
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  auto meta = platform_view->CreateOverlaySurfaceHC();
+  EXPECT_NE(meta, nullptr);
+  EXPECT_EQ(meta->id, 1);
 
   std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> meta_seam;
-  EXPECT_EQ(pv_embedder->CreateOverlaySurfaceHCEmbedder(nullptr),
+  EXPECT_EQ(platform_view->CreateOverlaySurfaceHCEmbedder(nullptr),
             kInvalidArguments);
-  EXPECT_EQ(pv_embedder->CreateOverlaySurfaceHCEmbedder(&meta_seam), kSuccess);
+  EXPECT_EQ(platform_view->CreateOverlaySurfaceHCEmbedder(&meta_seam),
+            kSuccess);
   EXPECT_NE(meta_seam, nullptr);
   EXPECT_EQ(meta_seam->id, 1);
 }
 
 TEST_F(PlatformViewAndroidTest, DestroyOverlaySurfacesHC) {
   auto jni = std::make_shared<JNIMock>();
-  EXPECT_CALL(*jni, FlutterViewDestroyOverlaySurfaces()).Times(3);
+  EXPECT_CALL(*jni, FlutterViewDestroyOverlaySurfaces()).Times(2);
 
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto holder_legacy = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder_legacy, nullptr);
-  auto pv_legacy = holder_legacy->GetPlatformView();
-  ASSERT_TRUE(pv_legacy);
-  pv_legacy->DestroyOverlaySurfacesHC();
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  platform_view->DestroyOverlaySurfacesHC();
 
-  settings.android_embedder_api = true;
-  auto holder_embedder = CreateShellHolder(jni, settings);
-  ASSERT_NE(holder_embedder, nullptr);
-  auto pv_embedder = holder_embedder->GetPlatformView();
-  ASSERT_TRUE(pv_embedder);
-  pv_embedder->DestroyOverlaySurfacesHC();
-
-  EXPECT_EQ(pv_embedder->DestroyOverlaySurfacesHCEmbedder(), kSuccess);
+  EXPECT_EQ(platform_view->DestroyOverlaySurfacesHCEmbedder(), kSuccess);
 }
 
 // TODO(matanlurey): Re-enable.

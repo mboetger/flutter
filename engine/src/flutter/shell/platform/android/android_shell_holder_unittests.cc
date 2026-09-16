@@ -369,28 +369,13 @@ TEST(AndroidShellHolder, CreateFlutterProjectArgsCustomization) {
   EXPECT_NE(custom_args.custom_task_runners, nullptr);
 }
 
-TEST(AndroidShellHolder, InitializeEngineLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
-  auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
-
-  EXPECT_TRUE(holder->IsValid());
-  EXPECT_FALSE(holder->IsAndroidEmbedderApiEnabled());
-  EXPECT_TRUE(holder->GetPlatformView());
-  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting(), nullptr);
-}
-
 TEST(AndroidShellHolder, InitializeEngineEmbedderApiPath) {
   Settings settings;
-  settings.android_embedder_api = true;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
       settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
 
   EXPECT_TRUE(holder->IsValid());
-  EXPECT_TRUE(holder->IsAndroidEmbedderApiEnabled());
   EXPECT_TRUE(holder->GetPlatformView());
   EXPECT_NE(holder->GetPlatformViewEmbedderForTesting(), nullptr);
 }
@@ -416,22 +401,8 @@ TEST(AndroidShellHolder, RunEngineDirect) {
   EXPECT_EQ(holder->RunEngine("main", "", {}, 1), kInvalidArguments);
 }
 
-TEST(AndroidShellHolder, SpawnLegacyPath) {
-  Settings settings;
-  settings.android_embedder_api = false;
-  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
-  auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
-
-  auto spawned = holder->Spawn(jni, "main", "", "", {}, 1);
-  // Without a kernel blob in the test environment, BuildRunConfiguration
-  // returns std::nullopt and Spawn returns nullptr.
-  EXPECT_EQ(spawned, nullptr);
-}
-
 TEST(AndroidShellHolder, SpawnEmbedderApiPath) {
   Settings settings;
-  settings.android_embedder_api = true;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
       settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);

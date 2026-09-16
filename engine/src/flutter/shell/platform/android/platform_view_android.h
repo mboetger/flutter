@@ -111,8 +111,6 @@ class PlatformViewAndroid final
     return external_texture_adapter_.get();
   }
 
-  bool IsAndroidEmbedderApiEnabled() const { return android_embedder_api_; }
-
   void DispatchPlatformMessage(JNIEnv* env,
                                std::string name,
                                jobject message_data,
@@ -343,7 +341,6 @@ class PlatformViewAndroid final
   bool android_meets_hcpp_criteria_ = false;
   std::shared_ptr<AndroidCompositorAdapter> compositor_adapter_;
   std::unique_ptr<AndroidExternalTextureAdapter> external_texture_adapter_;
-  const bool android_embedder_api_;
   fml::WeakPtrFactory<PlatformViewAndroid> weak_factory_{this};
 
  public:
