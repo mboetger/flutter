@@ -1484,7 +1484,8 @@ MakeRenderTargetFromBackingStoreImpeller(
     FML_LOG(ERROR) << "Could not wrap embedder supplied Vulkan render texture.";
     return nullptr;
   }
-  resolve_tex->SetLabel("ImpellerVulkanBackingStoreResolve");
+  static_cast<impeller::Texture*>(resolve_tex.get())
+      ->SetLabel("ImpellerVulkanBackingStoreResolve");
 
   aiks_context->GetContext()->UpdateOffscreenLayerPixelFormat(
       resolve_tex->GetTextureDescriptor().format);
@@ -2312,6 +2313,332 @@ FlutterEngineResult FlutterEngineRun(size_t version,
   return FlutterEngineRunInitialized(*engine_out);
 }
 
+static fml::StatusOr<flutter::PlatformViewEmbedder::PlatformDispatchTable>
+CreatePlatformDispatchTable(const FlutterProjectArgs* args, void* user_data) {
+  if (!args) {
+    return flutter::PlatformViewEmbedder::PlatformDispatchTable{};
+  }
+
+  bool has_update_semantics_2_callback =
+      SAFE_ACCESS(args, update_semantics_callback2, nullptr) != nullptr;
+  bool has_update_semantics_callback =
+      SAFE_ACCESS(args, update_semantics_callback, nullptr) != nullptr;
+  bool has_legacy_update_semantics_callback =
+      SAFE_ACCESS(args, update_semantics_node_callback, nullptr) != nullptr ||
+      SAFE_ACCESS(args, update_semantics_custom_action_callback, nullptr) !=
+          nullptr;
+
+  int semantic_callback_count = (has_update_semantics_2_callback ? 1 : 0) +
+                                (has_update_semantics_callback ? 1 : 0) +
+                                (has_legacy_update_semantics_callback ? 1 : 0);
+
+  if (semantic_callback_count > 1) {
+    return fml::Status(
+        fml::StatusCode::kInvalidArgument,
+        "Multiple semantics update callbacks provided. "
+        "Embedders should provide either `update_semantics_callback2`, "
+        "`update_semantics_callback`, or both "
+        "`update_semantics_node_callback` and "
+        "`update_semantics_custom_action_callback`.");
+  }
+
+  flutter::PlatformViewEmbedder::UpdateSemanticsCallback
+      update_semantics_callback =
+          CreateEmbedderSemanticsUpdateCallback(args, user_data);
+
+  flutter::PlatformViewEmbedder::PlatformMessageResponseCallback
+      platform_message_response_callback = nullptr;
+  if (SAFE_ACCESS(args, platform_message_callback, nullptr) != nullptr) {
+    platform_message_response_callback =
+        [ptr = args->platform_message_callback,
+         user_data](std::unique_ptr<flutter::PlatformMessage> message) {
+          auto handle = new FlutterPlatformMessageResponseHandle();
+          const FlutterPlatformMessage incoming_message = {
+              sizeof(FlutterPlatformMessage),  // struct_size
+              message->channel().c_str(),      // channel
+              message->data().GetMapping(),    // message
+              message->data().GetSize(),       // message_size
+              handle,                          // response_handle
+          };
+          handle->message = std::move(message);
+          return ptr(&incoming_message, user_data);
+        };
+  }
+
+  flutter::VsyncWaiterEmbedder::VsyncCallback vsync_callback = nullptr;
+  if (SAFE_ACCESS(args, vsync_callback, nullptr) != nullptr) {
+    vsync_callback = [ptr = args->vsync_callback, user_data](intptr_t baton) {
+      return ptr(user_data, baton);
+    };
+  }
+
+  flutter::PlatformViewEmbedder::ComputePlatformResolvedLocaleCallback
+      compute_platform_resolved_locale_callback = nullptr;
+  if (SAFE_ACCESS(args, compute_platform_resolved_locale_callback, nullptr) !=
+      nullptr) {
+    compute_platform_resolved_locale_callback =
+        [ptr = args->compute_platform_resolved_locale_callback](
+            const std::vector<std::string>& supported_locales_data) {
+          const size_t number_of_strings_per_locale = 3;
+          size_t locale_count =
+              supported_locales_data.size() / number_of_strings_per_locale;
+          std::vector<FlutterLocale> supported_locales;
+          std::vector<const FlutterLocale*> supported_locales_ptr;
+          for (size_t i = 0; i < locale_count; ++i) {
+            supported_locales.push_back(
+                {.struct_size = sizeof(FlutterLocale),
+                 .language_code =
+                     supported_locales_data[i * number_of_strings_per_locale +
+                                            0]
+                         .c_str(),
+                 .country_code =
+                     supported_locales_data[i * number_of_strings_per_locale +
+                                            1]
+                         .c_str(),
+                 .script_code =
+                     supported_locales_data[i * number_of_strings_per_locale +
+                                            2]
+                         .c_str(),
+                 .variant_code = nullptr});
+            supported_locales_ptr.push_back(&supported_locales[i]);
+          }
+
+          const FlutterLocale* result =
+              ptr(supported_locales_ptr.data(), locale_count);
+
+          std::unique_ptr<std::vector<std::string>> out =
+              std::make_unique<std::vector<std::string>>();
+          if (result) {
+            std::string language_code(SAFE_ACCESS(result, language_code, ""));
+            if (language_code != "") {
+              out->push_back(language_code);
+              out->emplace_back(SAFE_ACCESS(result, country_code, ""));
+              out->emplace_back(SAFE_ACCESS(result, script_code, ""));
+            }
+          }
+          return out;
+        };
+  }
+
+  flutter::PlatformViewEmbedder::OnPreEngineRestartCallback
+      on_pre_engine_restart_callback = nullptr;
+  if (SAFE_ACCESS(args, on_pre_engine_restart_callback, nullptr) != nullptr) {
+    on_pre_engine_restart_callback = [ptr =
+                                          args->on_pre_engine_restart_callback,
+                                      user_data]() { return ptr(user_data); };
+  }
+
+  flutter::PlatformViewEmbedder::ChanneUpdateCallback channel_update_callback =
+      nullptr;
+  if (SAFE_ACCESS(args, channel_update_callback, nullptr) != nullptr) {
+    channel_update_callback = [ptr = args->channel_update_callback, user_data](
+                                  const std::string& name, bool listening) {
+      FlutterChannelUpdate update{sizeof(FlutterChannelUpdate), name.c_str(),
+                                  listening};
+      ptr(&update, user_data);
+    };
+  }
+
+  flutter::PlatformViewEmbedder::ViewFocusChangeRequestCallback
+      view_focus_change_request_callback = nullptr;
+  if (SAFE_ACCESS(args, view_focus_change_request_callback, nullptr) !=
+      nullptr) {
+    view_focus_change_request_callback =
+        [ptr = args->view_focus_change_request_callback,
+         user_data](const flutter::ViewFocusChangeRequest& request) {
+          FlutterViewFocusChangeRequest embedder_request{
+              .struct_size = sizeof(FlutterViewFocusChangeRequest),
+              .view_id = request.view_id(),
+              .state = static_cast<FlutterViewFocusState>(request.state()),
+              .direction =
+                  static_cast<FlutterViewFocusDirection>(request.direction()),
+          };
+          ptr(&embedder_request, user_data);
+        };
+  }
+
+  flutter::PlatformViewEmbedder::RequestDartDeferredLibraryCallback
+      dart_deferred_library_request_callback = nullptr;
+  if (SAFE_ACCESS(args, dart_deferred_library_request_callback, nullptr) !=
+      nullptr) {
+    dart_deferred_library_request_callback =
+        [ptr = args->dart_deferred_library_request_callback, user_data](
+            intptr_t loading_unit_id) { ptr(loading_unit_id, user_data); };
+  }
+
+  flutter::PlatformViewEmbedder::SetApplicationLocaleCallback
+      set_application_locale_callback = nullptr;
+  if (SAFE_ACCESS(args, set_application_locale_callback, nullptr) != nullptr) {
+    set_application_locale_callback =
+        [ptr = args->set_application_locale_callback, user_data](
+            const std::string& locale) { ptr(locale.c_str(), user_data); };
+  }
+
+  return flutter::PlatformViewEmbedder::PlatformDispatchTable{
+      update_semantics_callback,                  //
+      platform_message_response_callback,         //
+      vsync_callback,                             //
+      compute_platform_resolved_locale_callback,  //
+      on_pre_engine_restart_callback,             //
+      channel_update_callback,                    //
+      view_focus_change_request_callback,         //
+      /*renderer_setup_callback=*/nullptr,        //
+      dart_deferred_library_request_callback,     //
+      set_application_locale_callback,            //
+  };
+}
+
+static std::unique_ptr<flutter::EmbedderExternalTextureResolver>
+CreateExternalTextureResolver(const FlutterRendererConfig* config,
+                              void* user_data) {
+  using ExternalTextureResolver = flutter::EmbedderExternalTextureResolver;
+  if (!config) {
+    return std::make_unique<ExternalTextureResolver>();
+  }
+
+#ifdef SHELL_ENABLE_GL
+  if (config->type == kOpenGL) {
+    const FlutterOpenGLRendererConfig* open_gl_config = &config->open_gl;
+    if (SAFE_ACCESS(open_gl_config, gl_external_texture_frame_callback,
+                    nullptr) != nullptr) {
+      auto external_texture_callback =
+          [ptr = open_gl_config->gl_external_texture_frame_callback, user_data](
+              int64_t texture_identifier, size_t width,
+              size_t height) -> std::unique_ptr<FlutterOpenGLTexture> {
+        std::unique_ptr<FlutterOpenGLTexture> texture =
+            std::make_unique<FlutterOpenGLTexture>();
+        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
+          return nullptr;
+        }
+        return texture;
+      };
+      return std::make_unique<ExternalTextureResolver>(
+          external_texture_callback);
+    }
+  }
+#endif
+#ifdef SHELL_ENABLE_METAL
+  if (config->type == kMetal) {
+    const FlutterMetalRendererConfig* metal_config = &config->metal;
+    if (SAFE_ACCESS(metal_config, external_texture_frame_callback, nullptr)) {
+      auto external_texture_metal_callback =
+          [ptr = metal_config->external_texture_frame_callback, user_data](
+              int64_t texture_identifier, size_t width,
+              size_t height) -> std::unique_ptr<FlutterMetalExternalTexture> {
+        std::unique_ptr<FlutterMetalExternalTexture> texture =
+            std::make_unique<FlutterMetalExternalTexture>();
+        texture->struct_size = sizeof(FlutterMetalExternalTexture);
+        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
+          return nullptr;
+        }
+        return texture;
+      };
+      return std::make_unique<ExternalTextureResolver>(
+          external_texture_metal_callback);
+    }
+  }
+#endif
+#ifdef SHELL_ENABLE_VULKAN
+  if (config->type == kVulkan) {
+    const FlutterVulkanRendererConfig* vulkan_config = &config->vulkan;
+    if (SAFE_ACCESS(vulkan_config, vulkan_external_texture_frame_callback,
+                    nullptr)) {
+      auto external_texture_vulkan_callback =
+          [ptr = vulkan_config->vulkan_external_texture_frame_callback,
+           user_data](
+              int64_t texture_identifier, size_t width,
+              size_t height) -> std::unique_ptr<FlutterVulkanExternalTexture> {
+        std::unique_ptr<FlutterVulkanExternalTexture> texture =
+            std::make_unique<FlutterVulkanExternalTexture>();
+        texture->struct_size = sizeof(FlutterVulkanExternalTexture);
+        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
+          return nullptr;
+        }
+        return texture;
+      };
+      return std::make_unique<ExternalTextureResolver>(
+          external_texture_vulkan_callback);
+    }
+  }
+#endif
+  return std::make_unique<ExternalTextureResolver>();
+}
+
+static bool ApplyCustomArgsToRunConfiguration(
+    const FlutterProjectArgs* args,
+    flutter::RunConfiguration& run_configuration) {
+  if (!args) {
+    return true;
+  }
+  if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
+    auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
+    if (!dart_entrypoint.empty()) {
+      run_configuration.SetEntrypoint(std::move(dart_entrypoint));
+    }
+  }
+
+  if (SAFE_ACCESS(args, dart_entrypoint_argc, 0) > 0) {
+    if (SAFE_ACCESS(args, dart_entrypoint_argv, nullptr) == nullptr) {
+      LOG_EMBEDDER_ERROR(kInvalidArguments,
+                         "Could not determine Dart entrypoint arguments "
+                         "as dart_entrypoint_argc "
+                         "was set, but dart_entrypoint_argv was null.");
+      return false;
+    }
+    std::vector<std::string> arguments(args->dart_entrypoint_argc);
+    for (int i = 0; i < args->dart_entrypoint_argc; ++i) {
+      if (args->dart_entrypoint_argv[i] == nullptr) {
+        LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "An element in the Dart entrypoint argv array was null.");
+        return false;
+      }
+      arguments[i] = std::string{args->dart_entrypoint_argv[i]};
+    }
+    run_configuration.SetEntrypointArgs(std::move(arguments));
+  }
+
+  if (SAFE_ACCESS(args, engine_id, 0) != 0) {
+    run_configuration.SetEngineId(args->engine_id);
+  }
+
+  if (SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
+    for (size_t i = 0; i < args->asset_resolvers_count; ++i) {
+      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
+      if (resolver == nullptr) {
+        LOG_EMBEDDER_ERROR(kInvalidArguments,
+                           "An element in the asset_resolvers array was null.");
+        return false;
+      }
+      if (SAFE_ACCESS(resolver, struct_size, 0) <
+          sizeof(FlutterAssetResolver)) {
+        LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "An element in the asset_resolvers array had an invalid struct "
+            "size.");
+        return false;
+      }
+      if (SAFE_ACCESS(resolver, get_asset_callback, nullptr) == nullptr) {
+        LOG_EMBEDDER_ERROR(kInvalidArguments,
+                           "An element in the asset_resolvers array had a null "
+                           "get_asset_callback.");
+        return false;
+      }
+      run_configuration.AddAssetResolver(
+          std::make_unique<flutter::EmbedderAssetResolver>(*resolver));
+    }
+  } else if (SAFE_ACCESS(args, asset_resolvers, nullptr) == nullptr &&
+             SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
+    LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "asset_resolvers_count was greater than zero, but asset_resolvers "
+        "array was null.");
+    return false;
+  }
+  return true;
+}
+
 FlutterEngineResult FlutterEngineInitialize(size_t version,
                                             const FlutterRendererConfig* config,
                                             const FlutterProjectArgs* args,
@@ -2452,160 +2779,16 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     settings.log_tag = SAFE_ACCESS(args, log_tag, nullptr);
   }
 
-  bool has_update_semantics_2_callback =
-      SAFE_ACCESS(args, update_semantics_callback2, nullptr) != nullptr;
-  bool has_update_semantics_callback =
-      SAFE_ACCESS(args, update_semantics_callback, nullptr) != nullptr;
-  bool has_legacy_update_semantics_callback =
-      SAFE_ACCESS(args, update_semantics_node_callback, nullptr) != nullptr ||
-      SAFE_ACCESS(args, update_semantics_custom_action_callback, nullptr) !=
-          nullptr;
-
-  int semantic_callback_count = (has_update_semantics_2_callback ? 1 : 0) +
-                                (has_update_semantics_callback ? 1 : 0) +
-                                (has_legacy_update_semantics_callback ? 1 : 0);
-
-  if (semantic_callback_count > 1) {
+  auto platform_dispatch_table_result =
+      CreatePlatformDispatchTable(args, user_data);
+  if (!platform_dispatch_table_result.ok()) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
-        "Multiple semantics update callbacks provided. "
-        "Embedders should provide either `update_semantics_callback2`, "
-        "`update_semantics_callback`, or both "
-        "`update_semantics_node_callback` and "
-        "`update_semantics_custom_action_callback`.");
+        std::string(platform_dispatch_table_result.status().message()).c_str());
   }
 
-  flutter::PlatformViewEmbedder::UpdateSemanticsCallback
-      update_semantics_callback =
-          CreateEmbedderSemanticsUpdateCallback(args, user_data);
-
-  flutter::PlatformViewEmbedder::PlatformMessageResponseCallback
-      platform_message_response_callback = nullptr;
-  if (SAFE_ACCESS(args, platform_message_callback, nullptr) != nullptr) {
-    platform_message_response_callback =
-        [ptr = args->platform_message_callback,
-         user_data](std::unique_ptr<flutter::PlatformMessage> message) {
-          auto handle = new FlutterPlatformMessageResponseHandle();
-          const FlutterPlatformMessage incoming_message = {
-              sizeof(FlutterPlatformMessage),  // struct_size
-              message->channel().c_str(),      // channel
-              message->data().GetMapping(),    // message
-              message->data().GetSize(),       // message_size
-              handle,                          // response_handle
-          };
-          handle->message = std::move(message);
-          return ptr(&incoming_message, user_data);
-        };
-  }
-
-  flutter::VsyncWaiterEmbedder::VsyncCallback vsync_callback = nullptr;
-  if (SAFE_ACCESS(args, vsync_callback, nullptr) != nullptr) {
-    vsync_callback = [ptr = args->vsync_callback, user_data](intptr_t baton) {
-      return ptr(user_data, baton);
-    };
-  }
-
-  flutter::PlatformViewEmbedder::ComputePlatformResolvedLocaleCallback
-      compute_platform_resolved_locale_callback = nullptr;
-  if (SAFE_ACCESS(args, compute_platform_resolved_locale_callback, nullptr) !=
-      nullptr) {
-    compute_platform_resolved_locale_callback =
-        [ptr = args->compute_platform_resolved_locale_callback](
-            const std::vector<std::string>& supported_locales_data) {
-          const size_t number_of_strings_per_locale = 3;
-          size_t locale_count =
-              supported_locales_data.size() / number_of_strings_per_locale;
-          std::vector<FlutterLocale> supported_locales;
-          std::vector<const FlutterLocale*> supported_locales_ptr;
-          for (size_t i = 0; i < locale_count; ++i) {
-            supported_locales.push_back(
-                {.struct_size = sizeof(FlutterLocale),
-                 .language_code =
-                     supported_locales_data[i * number_of_strings_per_locale +
-                                            0]
-                         .c_str(),
-                 .country_code =
-                     supported_locales_data[i * number_of_strings_per_locale +
-                                            1]
-                         .c_str(),
-                 .script_code =
-                     supported_locales_data[i * number_of_strings_per_locale +
-                                            2]
-                         .c_str(),
-                 .variant_code = nullptr});
-            supported_locales_ptr.push_back(&supported_locales[i]);
-          }
-
-          const FlutterLocale* result =
-              ptr(supported_locales_ptr.data(), locale_count);
-
-          std::unique_ptr<std::vector<std::string>> out =
-              std::make_unique<std::vector<std::string>>();
-          if (result) {
-            std::string language_code(SAFE_ACCESS(result, language_code, ""));
-            if (language_code != "") {
-              out->push_back(language_code);
-              out->emplace_back(SAFE_ACCESS(result, country_code, ""));
-              out->emplace_back(SAFE_ACCESS(result, script_code, ""));
-            }
-          }
-          return out;
-        };
-  }
-
-  flutter::PlatformViewEmbedder::OnPreEngineRestartCallback
-      on_pre_engine_restart_callback = nullptr;
-  if (SAFE_ACCESS(args, on_pre_engine_restart_callback, nullptr) != nullptr) {
-    on_pre_engine_restart_callback = [ptr =
-                                          args->on_pre_engine_restart_callback,
-                                      user_data]() { return ptr(user_data); };
-  }
-
-  flutter::PlatformViewEmbedder::ChanneUpdateCallback channel_update_callback =
-      nullptr;
-  if (SAFE_ACCESS(args, channel_update_callback, nullptr) != nullptr) {
-    channel_update_callback = [ptr = args->channel_update_callback, user_data](
-                                  const std::string& name, bool listening) {
-      FlutterChannelUpdate update{sizeof(FlutterChannelUpdate), name.c_str(),
-                                  listening};
-      ptr(&update, user_data);
-    };
-  }
-
-  flutter::PlatformViewEmbedder::ViewFocusChangeRequestCallback
-      view_focus_change_request_callback = nullptr;
-  if (SAFE_ACCESS(args, view_focus_change_request_callback, nullptr) !=
-      nullptr) {
-    view_focus_change_request_callback =
-        [ptr = args->view_focus_change_request_callback,
-         user_data](const flutter::ViewFocusChangeRequest& request) {
-          FlutterViewFocusChangeRequest embedder_request{
-              .struct_size = sizeof(FlutterViewFocusChangeRequest),
-              .view_id = request.view_id(),
-              .state = static_cast<FlutterViewFocusState>(request.state()),
-              .direction =
-                  static_cast<FlutterViewFocusDirection>(request.direction()),
-          };
-          ptr(&embedder_request, user_data);
-        };
-  }
-
-  flutter::PlatformViewEmbedder::RequestDartDeferredLibraryCallback
-      dart_deferred_library_request_callback = nullptr;
-  if (SAFE_ACCESS(args, dart_deferred_library_request_callback, nullptr) !=
-      nullptr) {
-    dart_deferred_library_request_callback =
-        [ptr = args->dart_deferred_library_request_callback, user_data](
-            intptr_t loading_unit_id) { ptr(loading_unit_id, user_data); };
-  }
-
-  flutter::PlatformViewEmbedder::SetApplicationLocaleCallback
-      set_application_locale_callback = nullptr;
-  if (SAFE_ACCESS(args, set_application_locale_callback, nullptr) != nullptr) {
-    set_application_locale_callback =
-        [ptr = args->set_application_locale_callback, user_data](
-            const std::string& locale) { ptr(locale.c_str(), user_data); };
-  }
+  flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
+      platform_dispatch_table_result.value();
 
   auto external_view_embedder_result = InferExternalViewEmbedderFromArgs(
       SAFE_ACCESS(args, compositor, nullptr), settings.enable_impeller);
@@ -2614,20 +2797,6 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     return LOG_EMBEDDER_ERROR(kInvalidArguments,
                               "Compositor arguments were invalid.");
   }
-
-  flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
-      {
-          update_semantics_callback,                  //
-          platform_message_response_callback,         //
-          vsync_callback,                             //
-          compute_platform_resolved_locale_callback,  //
-          on_pre_engine_restart_callback,             //
-          channel_update_callback,                    //
-          view_focus_change_request_callback,         //
-          /*renderer_setup_callback=*/nullptr,        //
-          dart_deferred_library_request_callback,     //
-          set_application_locale_callback,            //
-  };
 
   impeller::Flags impeller_flags;
   impeller_flags.use_sdfs = settings.impeller_use_sdfs;
@@ -2648,81 +2817,8 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
         return std::make_unique<flutter::Rasterizer>(shell);
       };
 
-  using ExternalTextureResolver = flutter::EmbedderExternalTextureResolver;
-  std::unique_ptr<ExternalTextureResolver> external_texture_resolver;
-  external_texture_resolver = std::make_unique<ExternalTextureResolver>();
-
-#ifdef SHELL_ENABLE_GL
-  flutter::EmbedderExternalTextureGL::ExternalTextureCallback
-      external_texture_callback;
-  if (config->type == kOpenGL) {
-    const FlutterOpenGLRendererConfig* open_gl_config = &config->open_gl;
-    if (SAFE_ACCESS(open_gl_config, gl_external_texture_frame_callback,
-                    nullptr) != nullptr) {
-      external_texture_callback =
-          [ptr = open_gl_config->gl_external_texture_frame_callback, user_data](
-              int64_t texture_identifier, size_t width,
-              size_t height) -> std::unique_ptr<FlutterOpenGLTexture> {
-        std::unique_ptr<FlutterOpenGLTexture> texture =
-            std::make_unique<FlutterOpenGLTexture>();
-        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
-          return nullptr;
-        }
-        return texture;
-      };
-      external_texture_resolver =
-          std::make_unique<ExternalTextureResolver>(external_texture_callback);
-    }
-  }
-#endif
-#ifdef SHELL_ENABLE_METAL
-  flutter::EmbedderExternalTextureMetal::ExternalTextureCallback
-      external_texture_metal_callback;
-  if (config->type == kMetal) {
-    const FlutterMetalRendererConfig* metal_config = &config->metal;
-    if (SAFE_ACCESS(metal_config, external_texture_frame_callback, nullptr)) {
-      external_texture_metal_callback =
-          [ptr = metal_config->external_texture_frame_callback, user_data](
-              int64_t texture_identifier, size_t width,
-              size_t height) -> std::unique_ptr<FlutterMetalExternalTexture> {
-        std::unique_ptr<FlutterMetalExternalTexture> texture =
-            std::make_unique<FlutterMetalExternalTexture>();
-        texture->struct_size = sizeof(FlutterMetalExternalTexture);
-        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
-          return nullptr;
-        }
-        return texture;
-      };
-      external_texture_resolver = std::make_unique<ExternalTextureResolver>(
-          external_texture_metal_callback);
-    }
-  }
-#endif
-#ifdef SHELL_ENABLE_VULKAN
-  flutter::EmbedderExternalTextureVK::ExternalTextureCallback
-      external_texture_vulkan_callback;
-  if (config->type == kVulkan) {
-    const FlutterVulkanRendererConfig* vulkan_config = &config->vulkan;
-    if (SAFE_ACCESS(vulkan_config, vulkan_external_texture_frame_callback,
-                    nullptr)) {
-      external_texture_vulkan_callback =
-          [ptr = vulkan_config->vulkan_external_texture_frame_callback,
-           user_data](
-              int64_t texture_identifier, size_t width,
-              size_t height) -> std::unique_ptr<FlutterVulkanExternalTexture> {
-        std::unique_ptr<FlutterVulkanExternalTexture> texture =
-            std::make_unique<FlutterVulkanExternalTexture>();
-        texture->struct_size = sizeof(FlutterVulkanExternalTexture);
-        if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
-          return nullptr;
-        }
-        return texture;
-      };
-      external_texture_resolver = std::make_unique<ExternalTextureResolver>(
-          external_texture_vulkan_callback);
-    }
-  }
-#endif
+  auto external_texture_resolver =
+      CreateExternalTextureResolver(config, user_data);
   auto custom_task_runners = SAFE_ACCESS(args, custom_task_runners, nullptr);
   auto thread_config_callback = [&custom_task_runners](
                                     const fml::Thread::ThreadConfig& config) {
@@ -2787,62 +2883,8 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   auto run_configuration =
       flutter::RunConfiguration::InferFromSettings(settings);
 
-  if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
-    auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
-    if (!dart_entrypoint.empty()) {
-      run_configuration.SetEntrypoint(std::move(dart_entrypoint));
-    }
-  }
-
-  if (SAFE_ACCESS(args, dart_entrypoint_argc, 0) > 0) {
-    if (SAFE_ACCESS(args, dart_entrypoint_argv, nullptr) == nullptr) {
-      return LOG_EMBEDDER_ERROR(kInvalidArguments,
-                                "Could not determine Dart entrypoint arguments "
-                                "as dart_entrypoint_argc "
-                                "was set, but dart_entrypoint_argv was null.");
-    }
-    std::vector<std::string> arguments(args->dart_entrypoint_argc);
-    for (int i = 0; i < args->dart_entrypoint_argc; ++i) {
-      arguments[i] = std::string{args->dart_entrypoint_argv[i]};
-    }
-    run_configuration.SetEntrypointArgs(std::move(arguments));
-  }
-
-  if (SAFE_ACCESS(args, engine_id, 0) != 0) {
-    run_configuration.SetEngineId(args->engine_id);
-  }
-
-  if (SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
-      SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
-    for (size_t i = 0; i < args->asset_resolvers_count; ++i) {
-      const FlutterAssetResolver* resolver = args->asset_resolvers[i];
-      if (resolver == nullptr) {
-        return LOG_EMBEDDER_ERROR(
-            kInvalidArguments,
-            "An element in the asset_resolvers array was null.");
-      }
-      if (SAFE_ACCESS(resolver, struct_size, 0) <
-          sizeof(FlutterAssetResolver)) {
-        return LOG_EMBEDDER_ERROR(
-            kInvalidArguments,
-            "An element in the asset_resolvers array had an invalid struct "
-            "size.");
-      }
-      if (SAFE_ACCESS(resolver, get_asset_callback, nullptr) == nullptr) {
-        return LOG_EMBEDDER_ERROR(
-            kInvalidArguments,
-            "An element in the asset_resolvers array had a null "
-            "get_asset_callback.");
-      }
-      run_configuration.AddAssetResolver(
-          std::make_unique<flutter::EmbedderAssetResolver>(*resolver));
-    }
-  } else if (SAFE_ACCESS(args, asset_resolvers, nullptr) == nullptr &&
-             SAFE_ACCESS(args, asset_resolvers_count, 0) > 0) {
-    return LOG_EMBEDDER_ERROR(
-        kInvalidArguments,
-        "asset_resolvers_count was greater than zero, but asset_resolvers "
-        "array was null.");
+  if (!ApplyCustomArgsToRunConfiguration(args, run_configuration)) {
+    return kInvalidArguments;
   }
 
   if (!run_configuration.IsValid()) {
@@ -2853,13 +2895,15 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
 
   // Create the engine but don't launch the shell or run the root isolate.
   auto embedder_engine = std::make_unique<flutter::EmbedderEngine>(
-      std::move(thread_host),               //
-      std::move(task_runners),              //
-      std::move(settings),                  //
-      std::move(run_configuration),         //
-      on_create_platform_view,              //
-      on_create_rasterizer,                 //
-      std::move(external_texture_resolver)  //
+      std::move(thread_host),                //
+      std::move(task_runners),               //
+      std::move(settings),                   //
+      std::move(run_configuration),          //
+      on_create_platform_view,               //
+      on_create_rasterizer,                  //
+      std::move(external_texture_resolver),  //
+      *config,                               //
+      user_data                              //
   );
 
   // Release the ownership of the embedder engine to the caller.
@@ -2903,6 +2947,172 @@ FlutterEngineResult FlutterEngineRunInitialized(
         "project arguments specified.");
   }
 
+  return kSuccess;
+}
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
+                                           parent_engine,
+                                       const FlutterEngineSpawnConfig* config,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out) {
+  if (parent_engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Parent engine handle was invalid.");
+  }
+
+  auto parent_embedder_engine =
+      reinterpret_cast<flutter::EmbedderEngine*>(parent_engine);
+  if (!parent_embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Parent engine is not valid or not running.");
+  }
+
+  if (engine_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine out parameter was missing.");
+  }
+
+  if (config == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "The engine spawn configuration was missing.");
+  }
+
+  if (SAFE_ACCESS(config, struct_size, 0) == 0) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "The engine spawn configuration had an invalid struct size.");
+  }
+
+  const flutter::Settings& settings =
+      parent_embedder_engine->GetShell().GetSettings();
+
+  const FlutterRendererConfig* renderer_config =
+      SAFE_ACCESS(config, custom_renderer_config, nullptr);
+  if (renderer_config == nullptr &&
+      parent_embedder_engine->GetRendererConfig().has_value()) {
+    renderer_config = &parent_embedder_engine->GetRendererConfig().value();
+  }
+
+  if (!IsRendererValid(renderer_config)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "The renderer configuration was invalid.");
+  }
+
+  void* user_data = SAFE_ACCESS(config, user_data, nullptr);
+  if (user_data == nullptr) {
+    user_data = parent_embedder_engine->GetUserData();
+  }
+
+  const FlutterProjectArgs* custom_args =
+      SAFE_ACCESS(config, custom_args, nullptr);
+
+  auto platform_dispatch_table_result =
+      CreatePlatformDispatchTable(custom_args, user_data);
+  if (!platform_dispatch_table_result.ok()) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        std::string(platform_dispatch_table_result.status().message()).c_str());
+  }
+
+  const FlutterCompositor* compositor =
+      custom_args ? SAFE_ACCESS(custom_args, compositor, nullptr) : nullptr;
+  auto external_view_embedder_result =
+      InferExternalViewEmbedderFromArgs(compositor, settings.enable_impeller);
+  if (!external_view_embedder_result.ok()) {
+    FML_LOG(ERROR) << external_view_embedder_result.status().message();
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Compositor arguments were invalid.");
+  }
+
+  impeller::Flags impeller_flags;
+  impeller_flags.use_sdfs = settings.impeller_use_sdfs;
+
+  auto on_create_platform_view = InferPlatformViewCreationCallback(
+      renderer_config, user_data, platform_dispatch_table_result.value(),
+      std::move(external_view_embedder_result.value()),
+      settings.enable_impeller, impeller_flags);
+
+  if (!on_create_platform_view) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not infer platform view creation callback.");
+  }
+
+  flutter::Shell::CreateCallback<flutter::Rasterizer> on_create_rasterizer =
+      [](flutter::Shell& shell) {
+        return std::make_unique<flutter::Rasterizer>(shell);
+      };
+
+  auto external_texture_resolver =
+      CreateExternalTextureResolver(renderer_config, user_data);
+
+  auto run_configuration =
+      flutter::RunConfiguration::InferFromSettings(settings);
+
+  if (!ApplyCustomArgsToRunConfiguration(custom_args, run_configuration)) {
+    return kInvalidArguments;
+  }
+
+  const char* entrypoint = SAFE_ACCESS(config, entrypoint, nullptr);
+  const char* library_path = SAFE_ACCESS(config, library_path, nullptr);
+  if (entrypoint != nullptr && entrypoint[0] != '\0') {
+    if (library_path != nullptr && library_path[0] != '\0') {
+      run_configuration.SetEntrypointAndLibrary(entrypoint, library_path);
+    } else {
+      run_configuration.SetEntrypoint(entrypoint);
+    }
+  }
+
+  int64_t argc = SAFE_ACCESS(config, argc, 0);
+  const char* const* argv = SAFE_ACCESS(config, argv, nullptr);
+  if (argc > 0) {
+    if (argv == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          "Could not determine Dart entrypoint arguments as argc was set, but "
+          "argv was null.");
+    }
+    std::vector<std::string> arguments(argc);
+    for (int64_t i = 0; i < argc; ++i) {
+      if (argv[i] == nullptr) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "An element in the Dart entrypoint argv array was null.");
+      }
+      arguments[i] = std::string{argv[i]};
+    }
+    run_configuration.SetEntrypointArgs(std::move(arguments));
+  } else if (argc < 0) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "argc cannot be negative in FlutterEngineSpawnConfig.");
+  }
+
+  if (!run_configuration.IsValid()) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Could not infer the Flutter project to run for spawned engine.");
+  }
+
+  const char* initial_route_ptr = SAFE_ACCESS(config, initial_route, nullptr);
+  std::string initial_route =
+      (initial_route_ptr != nullptr && initial_route_ptr[0] != '\0')
+          ? initial_route_ptr
+          : "/";
+
+  auto spawned_engine = parent_embedder_engine->Spawn(
+      std::move(run_configuration), initial_route, on_create_platform_view,
+      on_create_rasterizer, std::move(external_texture_resolver),
+      *renderer_config, user_data);
+
+  if (!spawned_engine) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not spawn Flutter engine.");
+  }
+
+  *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
+      spawned_engine.release());
   return kSuccess;
 }
 
@@ -4379,6 +4589,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
   SET_PROC(LoadDartDeferredLibraryError,
            FlutterEngineLoadDartDeferredLibraryError);
+  SET_PROC(Spawn, FlutterEngineSpawn);
 #undef SET_PROC
 
   return kSuccess;

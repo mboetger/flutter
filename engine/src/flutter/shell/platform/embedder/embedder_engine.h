@@ -6,6 +6,7 @@
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_ENGINE_H_
 
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "flutter/assets/asset_resolver.h"
@@ -24,14 +25,25 @@ struct ShellArgs;
 class EmbedderEngine {
  public:
   EmbedderEngine(
-      std::unique_ptr<EmbedderThreadHost> thread_host,
+      std::shared_ptr<EmbedderThreadHost> thread_host,
       const TaskRunners& task_runners,
       const Settings& settings,
       RunConfiguration run_configuration,
       const Shell::CreateCallback<PlatformView>& on_create_platform_view,
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
-          external_texture_resolver);
+          external_texture_resolver,
+      std::optional<FlutterRendererConfig> renderer_config = std::nullopt,
+      void* user_data = nullptr);
+
+  EmbedderEngine(
+      std::shared_ptr<EmbedderThreadHost> thread_host,
+      const TaskRunners& task_runners,
+      std::unique_ptr<Shell> shell,
+      std::unique_ptr<EmbedderExternalTextureResolver>
+          external_texture_resolver,
+      std::optional<FlutterRendererConfig> renderer_config = std::nullopt,
+      void* user_data = nullptr);
 
   ~EmbedderEngine();
 
@@ -106,13 +118,29 @@ class EmbedderEngine {
 
   Shell& GetShell();
 
+  const std::optional<FlutterRendererConfig>& GetRendererConfig() const;
+
+  void* GetUserData() const;
+
+  std::unique_ptr<EmbedderEngine> Spawn(
+      RunConfiguration run_configuration,
+      const std::string& initial_route,
+      const Shell::CreateCallback<PlatformView>& on_create_platform_view,
+      const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+      std::unique_ptr<EmbedderExternalTextureResolver>
+          external_texture_resolver,
+      std::optional<FlutterRendererConfig> renderer_config,
+      void* user_data) const;
+
  private:
-  std::unique_ptr<EmbedderThreadHost> thread_host_;
+  std::shared_ptr<EmbedderThreadHost> thread_host_;
   TaskRunners task_runners_;
-  RunConfiguration run_configuration_;
+  std::optional<RunConfiguration> run_configuration_;
   std::unique_ptr<ShellArgs> shell_args_;
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
+  std::optional<FlutterRendererConfig> renderer_config_;
+  void* user_data_ = nullptr;
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderEngine);
 };

@@ -12,8 +12,8 @@ namespace testing {
 
 TEST(EmbedderAssetResolverTest, BasicMappingAndReleaseCallback) {
   bool release_called = false;
-  static const char* kData = "hello asset world";
-  const size_t kDataSize = std::strlen(kData);
+  static constexpr char kData[] = "hello asset world";
+  static constexpr size_t kDataSize = sizeof(kData) - 1;
 
   auto get_asset = [](const char* asset_name, FlutterMapping* mapping,
                       void* user_data) -> bool {
@@ -62,8 +62,8 @@ TEST(EmbedderAssetResolverTest, BasicMappingAndReleaseCallback) {
 }
 
 TEST(EmbedderAssetResolverTest, MappingWithoutReleaseCallback) {
-  static const char* kData = "static buffer";
-  const size_t kDataSize = std::strlen(kData);
+  static constexpr char kData[] = "static buffer";
+  static constexpr size_t kDataSize = sizeof(kData) - 1;
 
   auto get_asset = [](const char* asset_name, FlutterMapping* mapping,
                       void* user_data) -> bool {

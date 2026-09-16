@@ -1610,6 +1610,239 @@ TEST_F(EmbedderTest, CanDeinitializeAnEngine) {
 }
 
 //------------------------------------------------------------------------------
+/// Test that an engine can be spawned from a running engine.
+///
+TEST_F(EmbedderTest, SpawnEngine) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  fml::AutoResetWaitableEvent latch;
+  auto native_entrypoint = [&latch]() { latch.Signal(); };
+  context.AddFfiNativeCallback("SayHiFromCustomEntrypoint",
+                               CREATE_FFI_LAMBDA(native_entrypoint));
+
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(spawn_config);
+  spawn_config.entrypoint = "customEntrypoint";
+  spawn_config.initial_route = "/spawned";
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_config, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  latch.Wait();
+
+  ASSERT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+}
+
+//------------------------------------------------------------------------------
+/// Test that an engine can be spawned with custom arguments.
+///
+TEST_F(EmbedderTest, SpawnEngineWithArgs) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  fml::AutoResetWaitableEvent callback_latch;
+  std::vector<std::string> callback_args;
+  auto nativeArgumentsCallback = [&callback_args,
+                                  &callback_latch](Dart_Handle args) {
+    callback_args =
+        tonic::DartConverter<std::vector<std::string>>::FromDart(args);
+    callback_latch.Signal();
+  };
+  context.AddFfiNativeCallback("NativeArgumentsCallback",
+                               CREATE_FFI_LAMBDA(nativeArgumentsCallback));
+
+  const char* argv[] = {"spawn_arg_1", "spawn_arg_2"};
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(spawn_config);
+  spawn_config.entrypoint = "dart_entrypoint_args";
+  spawn_config.argc = 2;
+  spawn_config.argv = argv;
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_config, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  callback_latch.Wait();
+  ASSERT_EQ(callback_args.size(), 2u);
+  ASSERT_EQ(callback_args[0], "spawn_arg_1");
+  ASSERT_EQ(callback_args[1], "spawn_arg_2");
+
+  ASSERT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+}
+
+//------------------------------------------------------------------------------
+/// Test out-of-order shutdown where parent engine is shut down before spawned
+/// child engine.
+///
+TEST_F(EmbedderTest, SpawnEngineOutOfOrderShutdownParentFirst) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  fml::AutoResetWaitableEvent latch;
+  auto native_entrypoint = [&latch]() { latch.Signal(); };
+  context.AddFfiNativeCallback("SayHiFromCustomEntrypoint",
+                               CREATE_FFI_LAMBDA(native_entrypoint));
+
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(spawn_config);
+  spawn_config.entrypoint = "customEntrypoint";
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_config, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  latch.Wait();
+
+  // Shut down parent engine first while child engine is still alive.
+  parent_engine.reset();
+
+  // Verify child engine shuts down cleanly without crash or deadlock.
+  ASSERT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+}
+
+//------------------------------------------------------------------------------
+/// Test spawning multiple child engines and out-of-order teardown.
+///
+TEST_F(EmbedderTest, SpawnMultipleEngines) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  fml::CountDownLatch latch(2);
+  auto native_entrypoint = [&latch]() { latch.CountDown(); };
+  context.AddFfiNativeCallback("SayHiFromCustomEntrypoint",
+                               CREATE_FFI_LAMBDA(native_entrypoint));
+
+  FlutterEngineSpawnConfig spawn_config1 = {};
+  spawn_config1.struct_size = sizeof(spawn_config1);
+  spawn_config1.entrypoint = "customEntrypoint";
+
+  FlutterEngine child1 = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), &spawn_config1, &child1),
+            kSuccess);
+  ASSERT_NE(child1, nullptr);
+
+  FlutterEngineSpawnConfig spawn_config2 = {};
+  spawn_config2.struct_size = sizeof(spawn_config2);
+  spawn_config2.entrypoint = "customEntrypoint";
+
+  FlutterEngine child2 = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), &spawn_config2, &child2),
+            kSuccess);
+  ASSERT_NE(child2, nullptr);
+
+  latch.Wait();
+
+  // Shut down child 1 first.
+  ASSERT_EQ(FlutterEngineShutdown(child1), kSuccess);
+  // Shut down parent second.
+  parent_engine.reset();
+  // Shut down child 2 last.
+  ASSERT_EQ(FlutterEngineShutdown(child2), kSuccess);
+}
+
+//------------------------------------------------------------------------------
+/// Test forward compatibility with truncated FlutterEngineSpawnConfig struct.
+///
+TEST_F(EmbedderTest, SpawnEngineSafeAccessTruncatedStruct) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  fml::AutoResetWaitableEvent latch;
+  auto native_entrypoint = [&latch]() { latch.Signal(); };
+  context.AddFfiNativeCallback("SayHiFromCustomEntrypoint",
+                               CREATE_FFI_LAMBDA(native_entrypoint));
+
+  // Truncate struct_size to only include struct_size and entrypoint.
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(size_t) + sizeof(const char*);
+  spawn_config.entrypoint = "customEntrypoint";
+
+  FlutterEngine spawned_engine = nullptr;
+  ASSERT_EQ(
+      FlutterEngineSpawn(parent_engine.get(), &spawn_config, &spawned_engine),
+      kSuccess);
+  ASSERT_NE(spawned_engine, nullptr);
+
+  latch.Wait();
+
+  ASSERT_EQ(FlutterEngineShutdown(spawned_engine), kSuccess);
+}
+
+//------------------------------------------------------------------------------
+/// Test invalid arguments passed to FlutterEngineSpawn.
+///
+TEST_F(EmbedderTest, SpawnEngineInvalidArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto parent_engine = builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  FlutterEngine spawned_engine = nullptr;
+  FlutterEngineSpawnConfig spawn_config = {};
+  spawn_config.struct_size = sizeof(spawn_config);
+
+  // Null parent engine.
+  ASSERT_EQ(FlutterEngineSpawn(nullptr, &spawn_config, &spawned_engine),
+            kInvalidArguments);
+
+  // Null config.
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), nullptr, &spawned_engine),
+            kInvalidArguments);
+
+  // Null out parameter.
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), &spawn_config, nullptr),
+            kInvalidArguments);
+
+  // Zero struct_size.
+  FlutterEngineSpawnConfig zero_size_config = {};
+  zero_size_config.struct_size = 0;
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), &zero_size_config,
+                               &spawned_engine),
+            kInvalidArguments);
+
+  // Negative argc.
+  FlutterEngineSpawnConfig negative_argc_config = {};
+  negative_argc_config.struct_size = sizeof(negative_argc_config);
+  negative_argc_config.argc = -1;
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), &negative_argc_config,
+                               &spawned_engine),
+            kInvalidArguments);
+
+  // argc > 0 but argv is null.
+  FlutterEngineSpawnConfig null_argv_config = {};
+  null_argv_config.struct_size = sizeof(null_argv_config);
+  null_argv_config.argc = 1;
+  null_argv_config.argv = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), &null_argv_config,
+                               &spawned_engine),
+            kInvalidArguments);
+}
+
+//------------------------------------------------------------------------------
 /// Test that a view can be added to a running engine.
 ///
 TEST_F(EmbedderTest, CanAddView) {

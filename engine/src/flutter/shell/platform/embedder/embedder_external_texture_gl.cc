@@ -5,9 +5,9 @@
 #include "flutter/shell/platform/embedder/embedder_external_texture_gl.h"
 
 #include "flutter/display_list/dl_canvas.h"
+#include "flutter/display_list/dl_paint.h"
 #include "flutter/display_list/effects/dl_color_source.h"
 #include "flutter/display_list/image/dl_image_skia.h"
-#include "flutter/display_list/paint/dl_paint.h"
 #include "flutter/fml/logging.h"
 #include "impeller/core/texture_descriptor.h"
 #include "impeller/display_list/aiks_context.h"

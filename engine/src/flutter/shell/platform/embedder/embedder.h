@@ -3258,6 +3258,56 @@ typedef struct {
   bool transient;
 } FlutterLoadDeferredLibraryErrorInfo;
 
+/// GPU availability states for FlutterEngineSetGpuAvailability.
+typedef enum {
+  /// Indicates that GPU operations should be permitted.
+  kFlutterGpuAvailabilityAvailable = 0,
+  /// Indicates that the GPU is about to become unavailable, and to attempt to
+  /// flush any GPU related resources now.
+  kFlutterGpuAvailabilityFlushAndMakeUnavailable = 1,
+  /// Indicates that the GPU is unavailable, and that no attempt should be made
+  /// to even flush GPU objects until it is available again.
+  kFlutterGpuAvailabilityUnavailable = 2,
+} FlutterGpuAvailability;
+
+/// Configuration for spawning a new engine instance.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineSpawnConfig).
+  size_t struct_size;
+
+  /// Dart entrypoint to run in the spawned isolate.
+  /// If null or empty, defaults to "main" (or entrypoint specified in
+  /// custom_args).
+  const char* entrypoint;
+
+  /// The URI of the Dart library containing the entrypoint.
+  /// If null or empty, defaults to the root library.
+  const char* library_path;
+
+  /// Initial route for the spawned engine isolate.
+  /// If null or empty, defaults to "/".
+  const char* initial_route;
+
+  /// Number of arguments in argv.
+  int64_t argc;
+
+  /// Arguments passed to the Dart entrypoint.
+  const char* const* argv;
+
+  /// User data baton passed back to embedders in callbacks for the spawned
+  /// engine. This field is optional. If null, parent engine user data is used.
+  void* user_data;
+
+  /// Custom project arguments for the spawned engine (e.g. callbacks,
+  /// compositor). This field is optional; nullptr may be specified.
+  const FlutterProjectArgs* custom_args;
+
+  /// Custom renderer configuration for the spawned engine.
+  /// This field is optional; if nullptr, renderer configuration from the parent
+  /// engine is inherited.
+  const FlutterRendererConfig* custom_renderer_config;
+} FlutterEngineSpawnConfig;
+
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 // NOLINTBEGIN(google-objc-function-naming)
@@ -3402,6 +3452,36 @@ FlutterEngineResult FlutterEngineDeinitialize(FLUTTER_API_SYMBOL(FlutterEngine)
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineRunInitialized(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
+//------------------------------------------------------------------------------
+/// @brief      Spawns a new Flutter engine instance sharing the same Dart VM
+///             and task runners with the parent engine.
+///
+///             The spawned engine runs the isolate specified in the
+///             `FlutterEngineSpawnConfig` in the same VM / isolate group.
+///             If unspecified in `FlutterEngineSpawnConfig`, the entrypoint
+///             defaults to "main" with empty arguments. The new engine
+///             starts in a running state.
+///
+///             NOTE: This function must be called on the platform task runner
+///             thread.
+///
+/// @param[in]  parent_engine  The parent Flutter engine instance. Must be a
+///                            valid running engine instance.
+/// @param[in]  config         The configuration for spawning the new engine.
+///                            Must not be null and must have a valid
+///                            struct_size.
+/// @param[out] engine_out     The engine handle for the spawned engine on
+///                            success.
+///
+/// @return     The result of the call to spawn the Flutter engine.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
+                                           parent_engine,
+                                       const FlutterEngineSpawnConfig* config,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           engine_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Adds a view.
@@ -4037,18 +4117,6 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
-/// GPU availability states for FlutterEngineSetGpuAvailability.
-typedef enum {
-  /// Indicates that GPU operations should be permitted.
-  kFlutterGpuAvailabilityAvailable = 0,
-  /// Indicates that the GPU is about to become unavailable, and to attempt to
-  /// flush any GPU related resources now.
-  kFlutterGpuAvailabilityFlushAndMakeUnavailable = 1,
-  /// Indicates that the GPU is unavailable, and that no attempt should be made
-  /// to even flush GPU objects until it is available again.
-  kFlutterGpuAvailabilityUnavailable = 2,
-} FlutterGpuAvailability;
-
 //------------------------------------------------------------------------------
 /// @brief      Sets the GPU availability for the engine.
 ///
@@ -4302,6 +4370,10 @@ typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterLoadDeferredLibraryErrorInfo* info);
+typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
+    const FlutterEngineSpawnConfig* config,
+    FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4358,6 +4430,7 @@ typedef struct {
   FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
+  FlutterEngineSpawnFnPtr Spawn;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

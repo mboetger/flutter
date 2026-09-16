@@ -61,6 +61,14 @@ TEST(EmbedderProcTable, CallProc) {
   EXPECT_NE(procs.GetCurrentTime(), 0ULL);
 }
 
+TEST(EmbedderProcTable, SpawnEngineProc) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+
+  EXPECT_NE(procs.Spawn, nullptr);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

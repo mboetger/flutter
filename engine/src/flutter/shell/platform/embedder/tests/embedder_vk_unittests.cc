@@ -132,13 +132,14 @@ TEST_F(EmbedderTest, CanSwapOutVulkanCalls) {
 TEST_F(EmbedderTest, VulkanExternalTextureRegistrationAndLifecycle) {
   auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
   const int64_t texture_id = 42;
-  bool callback_called = false;
-  bool destruction_called = false;
+  static bool callback_called = false;
+  static bool destruction_called = false;
+  callback_called = false;
+  destruction_called = false;
 
-  context.SetVulkanExternalTextureFrameCallback(CREATE_FFI_LAMBDA(
-      [&callback_called, &destruction_called](
-          void* user_data, int64_t texture_identifier, size_t width,
-          size_t height, FlutterVulkanExternalTexture* texture_out) -> bool {
+  context.SetVulkanExternalTextureFrameCallback(
+      [](void* user_data, int64_t texture_identifier, size_t width,
+         size_t height, FlutterVulkanExternalTexture* texture_out) -> bool {
         callback_called = true;
         texture_out->struct_size = sizeof(FlutterVulkanExternalTexture);
         texture_out->width = width;
@@ -150,7 +151,7 @@ TEST_F(EmbedderTest, VulkanExternalTextureRegistrationAndLifecycle) {
           *reinterpret_cast<bool*>(baton) = true;
         };
         return true;
-      }));
+      });
 
   EmbedderConfigBuilder builder(context);
   builder.SetSurface(DlISize(100, 100));
@@ -194,15 +195,15 @@ TEST_F(EmbedderTest, VulkanExternalTextureWithLegacyStructSize) {
 TEST_F(EmbedderTest, VulkanExternalTextureCallbackFailureHandling) {
   auto& context = GetEmbedderContext<EmbedderTestContextVulkan>();
   const int64_t texture_id = 44;
-  bool callback_called = false;
+  static bool callback_called = false;
+  callback_called = false;
 
-  context.SetVulkanExternalTextureFrameCallback(CREATE_FFI_LAMBDA(
-      [&callback_called](void* user_data, int64_t texture_identifier,
-                         size_t width, size_t height,
-                         FlutterVulkanExternalTexture* texture_out) -> bool {
+  context.SetVulkanExternalTextureFrameCallback(
+      [](void* user_data, int64_t texture_identifier, size_t width,
+         size_t height, FlutterVulkanExternalTexture* texture_out) -> bool {
         callback_called = true;
         return false;
-      }));
+      });
 
   EmbedderConfigBuilder builder(context);
   builder.SetSurface(DlISize(100, 100));

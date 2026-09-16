@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "flutter/display_list/image/dl_image_skia.h"
-#include "flutter/fml/cleanup.h"
+#include "flutter/fml/closure.h"
 #include "flutter/fml/logging.h"
 
 #ifdef SHELL_ENABLE_VULKAN
@@ -225,9 +225,7 @@ sk_sp<DlImage> EmbedderExternalTextureVK::ResolveTextureImpeller(
 
   impeller::TextureDescriptor desc;
   desc.format = format.value();
-  desc.size = impeller::ISize{
-      static_cast<impeller::ISize::DimensionType>(texture->width),
-      static_cast<impeller::ISize::DimensionType>(texture->height)};
+  desc.size = impeller::ISize(texture->width, texture->height);
   desc.storage_mode = impeller::StorageMode::kDevicePrivate;
   desc.mip_count = 1;
   desc.compression_type = impeller::CompressionType::kLossless;

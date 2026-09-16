@@ -125,6 +125,12 @@ class PlatformViewEmbedder final : public PlatformView {
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override;
 
+  // |PlatformView|
+  void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
+
+  // |PlatformView|
+  void SetApplicationLocale(std::string locale) override;
+
  private:
   class EmbedderPlatformMessageHandler;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
@@ -166,12 +172,6 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   void RequestViewFocusChange(const ViewFocusChangeRequest& request) override;
-
-  // |PlatformView|
-  void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
-
-  // |PlatformView|
-  void SetApplicationLocale(std::string locale) override;
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewEmbedder);
 };
