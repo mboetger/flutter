@@ -145,6 +145,7 @@ class PlatformViewAndroid final : public PlatformView {
   PlatformView* platform_view_ = nullptr;
   bool android_meets_hcpp_criteria_ = false;
 
+ public:
   // |PlatformView|
   void UpdateSemantics(
       int64_t view_id,
@@ -157,6 +158,7 @@ class PlatformViewAndroid final : public PlatformView {
   // |PlatformView|
   void SetSemanticsTreeEnabled(bool enabled) override;
 
+ private:
   // |PlatformView|
   void HandlePlatformMessage(
       std::unique_ptr<flutter::PlatformMessage> message) override;

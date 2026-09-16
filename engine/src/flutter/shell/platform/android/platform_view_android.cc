@@ -333,16 +333,29 @@ void PlatformViewAndroid::UpdateSemantics(
     int64_t view_id,
     flutter::SemanticsNodeUpdates update,
     flutter::CustomAccessibilityActionUpdates actions) {
+  if (platform_view_) {
+    platform_view_->UpdateSemantics(view_id, std::move(update),
+                                    std::move(actions));
+    return;
+  }
   platform_view_android_delegate_.UpdateSemantics(update, actions);
 }
 
 // |PlatformView|
 void PlatformViewAndroid::SetApplicationLocale(std::string locale) {
+  if (platform_view_) {
+    platform_view_->SetApplicationLocale(locale);
+    return;
+  }
   jni_facade_->FlutterViewSetApplicationLocale(std::move(locale));
 }
 
 // |PlatformView|
 void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
+  if (platform_view_) {
+    platform_view_->SetSemanticsTreeEnabled(enabled);
+    return;
+  }
   jni_facade_->FlutterViewSetSemanticsTreeEnabled(enabled);
 }
 
@@ -504,6 +517,10 @@ std::shared_ptr<impeller::Context> PlatformViewAndroid::GetImpellerContext()
 std::unique_ptr<std::vector<std::string>>
 PlatformViewAndroid::ComputePlatformResolvedLocales(
     const std::vector<std::string>& supported_locale_data) {
+  if (platform_view_) {
+    return platform_view_->ComputePlatformResolvedLocales(
+        supported_locale_data);
+  }
   return jni_facade_->FlutterViewComputePlatformResolvedLocale(
       supported_locale_data);
 }
@@ -563,6 +580,10 @@ void PlatformViewAndroid::FireFirstFrameCallback() {
 
 double PlatformViewAndroid::GetScaledFontSize(double unscaled_font_size,
                                               int configuration_id) const {
+  if (platform_view_) {
+    return platform_view_->GetScaledFontSize(unscaled_font_size,
+                                             configuration_id);
+  }
   return jni_facade_->FlutterViewGetScaledFontSize(unscaled_font_size,
                                                    configuration_id);
 }
