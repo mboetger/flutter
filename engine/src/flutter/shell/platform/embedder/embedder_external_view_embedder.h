@@ -12,8 +12,13 @@
 #include "flutter/flow/embedded_views.h"
 #include "flutter/fml/hash_combine.h"
 #include "flutter/fml/macros.h"
+#include "flutter/fml/raster_thread_merger.h"
 #include "flutter/shell/platform/embedder/embedder_external_view.h"
 #include "flutter/shell/platform/embedder/embedder_render_target_cache.h"
+
+struct _FlutterRasterThreadMerger {
+  fml::RefPtr<fml::RasterThreadMerger> merger;
+};
 
 namespace flutter {
 
@@ -59,7 +64,12 @@ class EmbedderExternalViewEmbedder final : public ExternalViewEmbedder {
   EmbedderExternalViewEmbedder(
       bool avoid_backing_store_cache,
       const CreateRenderTargetCallback& create_render_target_callback,
-      const PresentCallback& present_callback);
+      const PresentCallback& present_callback,
+      bool supports_dynamic_thread_merging = false,
+      FlutterPostPrerollCallback post_preroll_callback = nullptr,
+      FlutterCompositorFrameCallback begin_frame_callback = nullptr,
+      FlutterCompositorFrameCallback end_frame_callback = nullptr,
+      void* user_data = nullptr);
 
   //----------------------------------------------------------------------------
   /// @brief      Collects the external view embedder.
@@ -99,6 +109,11 @@ class EmbedderExternalViewEmbedder final : public ExternalViewEmbedder {
       std::unique_ptr<EmbeddedViewParams> params) override;
 
   // |ExternalViewEmbedder|
+  PostPrerollResult PostPrerollAction(
+      const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger)
+      override;
+
+  // |ExternalViewEmbedder|
   DlCanvas* CompositeEmbeddedView(int64_t view_id) override;
 
   // |ExternalViewEmbedder|
@@ -109,12 +124,25 @@ class EmbedderExternalViewEmbedder final : public ExternalViewEmbedder {
       std::unique_ptr<SurfaceFrame> frame) override;
 
   // |ExternalViewEmbedder|
+  void EndFrame(bool should_resubmit_frame,
+                const fml::RefPtr<fml::RasterThreadMerger>&
+                    raster_thread_merger) override;
+
+  // |ExternalViewEmbedder|
   DlCanvas* GetRootCanvas() override;
+
+  // |ExternalViewEmbedder|
+  bool SupportsDynamicThreadMerging() override;
 
  private:
   const bool avoid_backing_store_cache_;
   const CreateRenderTargetCallback create_render_target_callback_;
   const PresentCallback present_callback_;
+  const bool supports_dynamic_thread_merging_;
+  const FlutterPostPrerollCallback post_preroll_callback_;
+  const FlutterCompositorFrameCallback begin_frame_callback_;
+  const FlutterCompositorFrameCallback end_frame_callback_;
+  void* const user_data_;
   SurfaceTransformationCallback surface_transformation_callback_;
   DlISize pending_frame_size_;
   double pending_device_pixel_ratio_ = 1.0;

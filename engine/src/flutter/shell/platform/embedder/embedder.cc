@@ -60,6 +60,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/platform/embedder/embedder_asset_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
+#include "flutter/shell/platform/embedder/embedder_external_view_embedder.h"
 #include "flutter/shell/platform/embedder/embedder_platform_message_response.h"
 #include "flutter/shell/platform/embedder/embedder_render_target.h"
 #include "flutter/shell/platform/embedder/embedder_render_target_skia.h"
@@ -1781,6 +1782,14 @@ InferExternalViewEmbedderFromArgs(const FlutterCompositor* compositor,
       SAFE_ACCESS(compositor, present_view_callback, nullptr);
   bool avoid_backing_store_cache =
       SAFE_ACCESS(compositor, avoid_backing_store_cache, false);
+  bool supports_dynamic_thread_merging =
+      SAFE_ACCESS(compositor, supports_dynamic_thread_merging, false);
+  auto c_post_preroll_callback =
+      SAFE_ACCESS(compositor, post_preroll_callback, nullptr);
+  auto c_begin_frame_callback =
+      SAFE_ACCESS(compositor, begin_frame_callback, nullptr);
+  auto c_end_frame_callback =
+      SAFE_ACCESS(compositor, end_frame_callback, nullptr);
 
   // Make sure the required callbacks are present
   if (!c_create_callback || !c_collect_callback) {
@@ -1793,6 +1802,11 @@ InferExternalViewEmbedderFromArgs(const FlutterCompositor* compositor,
     return fml::Status(fml::StatusCode::kInvalidArgument,
                        "Either present_layers_callback or "
                        "present_view_callback must be provided but not both.");
+  }
+  if (supports_dynamic_thread_merging && !c_post_preroll_callback) {
+    return fml::Status(fml::StatusCode::kInvalidArgument,
+                       "post_preroll_callback must be provided if "
+                       "supports_dynamic_thread_merging is true.");
   }
 
   FlutterCompositor captured_compositor = *compositor;
@@ -1837,7 +1851,9 @@ InferExternalViewEmbedderFromArgs(const FlutterCompositor* compositor,
 
   return std::make_unique<flutter::EmbedderExternalViewEmbedder>(
       avoid_backing_store_cache, create_render_target_callback,
-      present_callback);
+      present_callback, supports_dynamic_thread_merging,
+      c_post_preroll_callback, c_begin_frame_callback, c_end_frame_callback,
+      compositor->user_data);
 }
 
 // Translates embedder metrics to engine metrics, or returns a string on error.
@@ -4585,10 +4601,6 @@ FlutterEngineResult FlutterEngineGetCallbackInformation(
 
   return kSuccess;
 }
-
-struct _FlutterRasterThreadMerger {
-  fml::RefPtr<fml::RasterThreadMerger> merger;
-};
 
 bool FlutterRasterThreadMergerIsMerged(FlutterRasterThreadMergerRef merger) {
   if (!merger || !merger->merger) {

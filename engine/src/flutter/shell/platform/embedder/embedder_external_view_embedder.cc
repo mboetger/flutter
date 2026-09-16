@@ -18,15 +18,38 @@
 
 namespace flutter {
 
+static PostPrerollResult ToPostPrerollResult(FlutterPostPrerollResult result) {
+  switch (result) {
+    case kFlutterPostPrerollResultSuccess:
+      return PostPrerollResult::kSuccess;
+    case kFlutterPostPrerollResultResubmitFrame:
+      return PostPrerollResult::kResubmitFrame;
+    case kFlutterPostPrerollResultSkipAndRetryFrame:
+      return PostPrerollResult::kSkipAndRetryFrame;
+  }
+  FML_LOG(ERROR) << "Unknown FlutterPostPrerollResult: " << result;
+  return PostPrerollResult::kSuccess;
+}
+
 static const auto kRootViewIdentifier = EmbedderExternalView::ViewIdentifier{};
 
 EmbedderExternalViewEmbedder::EmbedderExternalViewEmbedder(
     bool avoid_backing_store_cache,
     const CreateRenderTargetCallback& create_render_target_callback,
-    const PresentCallback& present_callback)
+    const PresentCallback& present_callback,
+    bool supports_dynamic_thread_merging,
+    FlutterPostPrerollCallback post_preroll_callback,
+    FlutterCompositorFrameCallback begin_frame_callback,
+    FlutterCompositorFrameCallback end_frame_callback,
+    void* user_data)
     : avoid_backing_store_cache_(avoid_backing_store_cache),
       create_render_target_callback_(create_render_target_callback),
-      present_callback_(present_callback) {
+      present_callback_(present_callback),
+      supports_dynamic_thread_merging_(supports_dynamic_thread_merging),
+      post_preroll_callback_(post_preroll_callback),
+      begin_frame_callback_(begin_frame_callback),
+      end_frame_callback_(end_frame_callback),
+      user_data_(user_data) {
   FML_DCHECK(create_render_target_callback_);
   FML_DCHECK(present_callback_);
 }
@@ -63,7 +86,25 @@ void EmbedderExternalViewEmbedder::CancelFrame() {
 // |ExternalViewEmbedder|
 void EmbedderExternalViewEmbedder::BeginFrame(
     GrDirectContext* context,
-    const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {}
+    const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
+  Reset();
+
+  if (!begin_frame_callback_) {
+    return;
+  }
+
+  _FlutterRasterThreadMerger merger_wrapper = {raster_thread_merger};
+  FlutterFrameThreadingInfo threading_info = {
+      .struct_size = sizeof(FlutterFrameThreadingInfo),
+      .thread_merger = raster_thread_merger ? &merger_wrapper : nullptr,
+      .is_on_platform_thread = raster_thread_merger
+                                   ? raster_thread_merger->IsOnPlatformThread()
+                                   : false,
+      .user_data = user_data_,
+  };
+
+  begin_frame_callback_(&threading_info);
+}
 
 // |ExternalViewEmbedder|
 void EmbedderExternalViewEmbedder::PrepareFlutterView(
@@ -94,6 +135,26 @@ void EmbedderExternalViewEmbedder::PrerollCompositeEmbeddedView(
       std::move(params)                 // embedded view params
   );
   composition_order_.push_back(vid);
+}
+
+// |ExternalViewEmbedder|
+PostPrerollResult EmbedderExternalViewEmbedder::PostPrerollAction(
+    const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
+  if (!post_preroll_callback_) {
+    return PostPrerollResult::kSuccess;
+  }
+
+  _FlutterRasterThreadMerger merger_wrapper = {raster_thread_merger};
+  FlutterFrameThreadingInfo threading_info = {
+      .struct_size = sizeof(FlutterFrameThreadingInfo),
+      .thread_merger = raster_thread_merger ? &merger_wrapper : nullptr,
+      .is_on_platform_thread = raster_thread_merger
+                                   ? raster_thread_merger->IsOnPlatformThread()
+                                   : false,
+      .user_data = user_data_,
+  };
+
+  return ToPostPrerollResult(post_preroll_callback_(&threading_info));
 }
 
 // |ExternalViewEmbedder|
@@ -641,6 +702,32 @@ void EmbedderExternalViewEmbedder::SubmitFlutterView(
   }
 
   frame->Submit();
+}
+
+// |ExternalViewEmbedder|
+void EmbedderExternalViewEmbedder::EndFrame(
+    bool should_resubmit_frame,
+    const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
+  if (!end_frame_callback_) {
+    return;
+  }
+
+  _FlutterRasterThreadMerger merger_wrapper = {raster_thread_merger};
+  FlutterFrameThreadingInfo threading_info = {
+      .struct_size = sizeof(FlutterFrameThreadingInfo),
+      .thread_merger = raster_thread_merger ? &merger_wrapper : nullptr,
+      .is_on_platform_thread = raster_thread_merger
+                                   ? raster_thread_merger->IsOnPlatformThread()
+                                   : false,
+      .user_data = user_data_,
+  };
+
+  end_frame_callback_(&threading_info);
+}
+
+// |ExternalViewEmbedder|
+bool EmbedderExternalViewEmbedder::SupportsDynamicThreadMerging() {
+  return supports_dynamic_thread_merging_;
 }
 
 }  // namespace flutter
