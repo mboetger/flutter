@@ -21,15 +21,13 @@
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
-#include "flutter/shell/platform/android/platform_view_android.h"
 
-#define ANDROID_SHELL_HOLDER \
-  (reinterpret_cast<AndroidShellHolder*>(shell_holder))
+#define ANDROID_ENGINE (reinterpret_cast<AndroidEngine*>(shell_holder))
+#define ANDROID_SHELL_HOLDER ANDROID_ENGINE
 
 namespace flutter {
 
@@ -186,7 +184,7 @@ static jlong AttachJNI(JNIEnv* env, jclass clazz, jobject flutterJNI) {
   fml::jni::JavaObjectWeakGlobalRef java_object(env, flutterJNI);
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade =
       std::make_shared<PlatformViewAndroidJNIImpl>(java_object);
-  auto shell_holder = std::make_unique<AndroidShellHolder>(
+  auto shell_holder = std::make_unique<AndroidEngine>(
       FlutterMain::Get().GetSettings(), jni_facade,
       FlutterMain::Get().GetAndroidRenderingAPI());
   if (shell_holder->IsValid()) {
@@ -197,7 +195,7 @@ static jlong AttachJNI(JNIEnv* env, jclass clazz, jobject flutterJNI) {
 }
 
 static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
-  delete ANDROID_SHELL_HOLDER;
+  delete ANDROID_ENGINE;
 }
 
 // Signature is similar to RunBundleAndSnapshotFromLibrary but it can't change
@@ -205,10 +203,10 @@ static void DestroyJNI(JNIEnv* env, jobject jcaller, jlong shell_holder) {
 // AOT.
 //
 // The shell_holder instance must be a pointer address to the current
-// AndroidShellHolder whose Shell will be used to spawn a new Shell.
+// AndroidEngine whose Shell will be used to spawn a new Shell.
 //
 // This creates a Java Long that points to the newly created
-// AndroidShellHolder's raw pointer, connects that Long to a newly created
+// AndroidEngine's raw pointer, connects that Long to a newly created
 // FlutterJNI instance, then returns the FlutterJNI instance.
 static jobject SpawnJNI(JNIEnv* env,
                         jobject jcaller,
@@ -1047,7 +1045,7 @@ bool RegisterApi(JNIEnv* env) {
   return true;
 }
 
-bool PlatformViewAndroid::Register(JNIEnv* env) {
+bool AndroidEngine::Register(JNIEnv* env) {
   if (env == nullptr) {
     FML_LOG(ERROR) << "No JNIEnv provided";
     return false;

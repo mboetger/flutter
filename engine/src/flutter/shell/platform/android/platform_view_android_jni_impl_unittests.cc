@@ -8,10 +8,9 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
-#include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 
 namespace flutter {
@@ -79,7 +78,7 @@ void PlatformViewAndroidJNIImplTest::SetUpJVM() {
   EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
   EXPECT_CALL(mock_env, RegisterNatives(_, _, _)).WillRepeatedly(Return(0));
 
-  PlatformViewAndroid::Register(&mock_env);
+  AndroidEngine::Register(&mock_env);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest, ImageGetHardwareBufferException) {

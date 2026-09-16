@@ -147,7 +147,7 @@ Some notable files include:
   the `flutter.jar` file for the engine.
 - [`ndk_helpers.h`](./ndk_helpers.h): Helper functions for dynamically loading
   and calling Android NDK (C/C++) functions.
-- [`platform_view_android.h`](./platform_view_android.h): The main entry point
+- [`android_engine.h`](./android_engine.h): The main entry point
   for the Android embedder.
 
 See [VSCode with C/C++ Intellisense](https://github.com/flutter/flutter/blob/main/docs/engine/contributing/Setting-up-the-Engine-development-environment.md#vscode-with-cc-intellisense-cc)

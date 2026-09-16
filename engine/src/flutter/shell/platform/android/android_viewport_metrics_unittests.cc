@@ -7,10 +7,8 @@
 
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/trace_event.h"
-#include "flutter/lib/ui/window/viewport_metrics.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/android_engine.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
-#include "flutter/shell/platform/android/platform_view_android.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 

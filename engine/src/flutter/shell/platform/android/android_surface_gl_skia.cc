@@ -10,7 +10,6 @@
 #include "flutter/fml/logging.h"
 #include "flutter/fml/memory/ref_ptr.h"
 #include "flutter/shell/platform/android/android_egl_surface.h"
-#include "flutter/shell/platform/android/android_shell_holder.h"
 
 namespace flutter {
 
