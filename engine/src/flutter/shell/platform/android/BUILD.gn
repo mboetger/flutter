@@ -43,6 +43,7 @@ executable("flutter_shell_native_unittests") {
   visibility = [ "*" ]
   testonly = true
   sources = [
+    "android_compositor_adapter_unittests.cc",
     "android_context_gl_impeller_unittests.cc",
     "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
@@ -90,6 +91,8 @@ source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
   sources = [
+    "android_compositor_adapter.cc",
+    "android_compositor_adapter.h",
     "android_context_dynamic_impeller.cc",
     "android_context_dynamic_impeller.h",
     "android_context_gl_impeller.cc",

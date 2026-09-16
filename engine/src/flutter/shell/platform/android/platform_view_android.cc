@@ -39,6 +39,7 @@
 #include "flutter/shell/platform/android/android_surface_vk_impeller.h"
 #include "flutter/shell/platform/android/image_external_texture_vk_impeller.h"
 #endif
+#include "flutter/shell/platform/android/android_compositor_adapter.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_wrapper.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -543,9 +544,12 @@ PlatformViewAndroid::CreateExternalViewEmbedder() {
       return embedder;
     }
   }
-  return std::make_shared<AndroidExternalViewEmbedderWrapper>(
+  auto view_embedder = std::make_shared<AndroidExternalViewEmbedderWrapper>(
       android_meets_hcpp_criteria_, *android_context_, jni_facade_,
       surface_factory_, task_runners_);
+  compositor_adapter_ =
+      std::make_shared<AndroidCompositorAdapter>(std::move(view_embedder));
+  return compositor_adapter_;
 }
 
 // |PlatformView|

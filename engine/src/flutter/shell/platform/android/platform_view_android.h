@@ -29,6 +29,7 @@
 
 namespace flutter {
 
+class AndroidCompositorAdapter;
 class PlatformView;
 class PointerDataPacket;
 struct ViewportMetrics;
@@ -97,6 +98,10 @@ class PlatformViewAndroid final : public AndroidSurfaceLifecycle::Delegate {
 
   AndroidSurfaceLifecycle* GetSurfaceLifecycleForTesting() const {
     return surface_lifecycle_.get();
+  }
+
+  AndroidCompositorAdapter* GetCompositorAdapterForTesting() const {
+    return compositor_adapter_.get();
   }
 
   void DispatchPlatformMessage(JNIEnv* env,
@@ -191,6 +196,7 @@ class PlatformViewAndroid final : public AndroidSurfaceLifecycle::Delegate {
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   PlatformView* platform_view_ = nullptr;
   bool android_meets_hcpp_criteria_ = false;
+  std::shared_ptr<AndroidCompositorAdapter> compositor_adapter_;
   fml::WeakPtrFactory<PlatformViewAndroid> weak_factory_{this};
 
  public:
