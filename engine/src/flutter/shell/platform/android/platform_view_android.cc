@@ -892,6 +892,15 @@ void PlatformViewAndroid::RegisterTexture(
 }
 
 void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
+  if (android_embedder_api_) {
+    TRACE_EVENT1("flutter", "PlatformViewAndroid::UnregisterTexture", "path",
+                 "embedder_api");
+    UnregisterExternalTexture(texture_id);
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "PlatformViewAndroid::UnregisterTexture", "path",
+               "legacy");
   if (external_texture_adapter_) {
     external_texture_adapter_->UnregisterExternalTexture(texture_id);
     return;
@@ -901,7 +910,30 @@ void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
   }
 }
 
+FlutterEngineResult PlatformViewAndroid::UnregisterExternalTexture(
+    int64_t texture_id) {
+  if (texture_id <= 0) {
+    return kInvalidArguments;
+  }
+  if (external_texture_adapter_) {
+    return external_texture_adapter_->UnregisterExternalTexture(texture_id);
+  }
+  if (platform_view_) {
+    platform_view_->UnregisterTexture(texture_id);
+  }
+  return kSuccess;
+}
+
 void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
+  if (android_embedder_api_) {
+    TRACE_EVENT1("flutter", "PlatformViewAndroid::MarkTextureFrameAvailable",
+                 "path", "embedder_api");
+    MarkExternalTextureFrameAvailable(texture_id);
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "PlatformViewAndroid::MarkTextureFrameAvailable",
+               "path", "legacy");
   if (external_texture_adapter_) {
     external_texture_adapter_->MarkExternalTextureFrameAvailable(texture_id);
     return;
@@ -909,6 +941,21 @@ void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
   if (platform_view_) {
     platform_view_->MarkTextureFrameAvailable(texture_id);
   }
+}
+
+FlutterEngineResult PlatformViewAndroid::MarkExternalTextureFrameAvailable(
+    int64_t texture_id) {
+  if (texture_id <= 0) {
+    return kInvalidArguments;
+  }
+  if (external_texture_adapter_) {
+    return external_texture_adapter_->MarkExternalTextureFrameAvailable(
+        texture_id);
+  }
+  if (platform_view_) {
+    platform_view_->MarkTextureFrameAvailable(texture_id);
+  }
+  return kSuccess;
 }
 
 // |AndroidExternalTextureAdapter::Delegate|

@@ -164,7 +164,11 @@ class PlatformViewAndroid final
 
   void UnregisterTexture(int64_t texture_id);
 
+  FlutterEngineResult UnregisterExternalTexture(int64_t texture_id);
+
   void MarkTextureFrameAvailable(int64_t texture_id);
+
+  FlutterEngineResult MarkExternalTextureFrameAvailable(int64_t texture_id);
 
   void ScheduleFrame();
 

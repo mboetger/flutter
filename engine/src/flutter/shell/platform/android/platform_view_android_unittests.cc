@@ -83,8 +83,18 @@ class FakePlatformViewDelegate : public PlatformView::Delegate {
   int32_t last_accessibility_features = 0;
   void OnPlatformViewRegisterTexture(
       std::shared_ptr<Texture> texture) override {}
-  void OnPlatformViewUnregisterTexture(int64_t texture_id) override {}
-  void OnPlatformViewMarkTextureFrameAvailable(int64_t texture_id) override {}
+  void OnPlatformViewUnregisterTexture(int64_t texture_id) override {
+    unregister_texture_called = true;
+    last_unregistered_texture_id = texture_id;
+  }
+  bool unregister_texture_called = false;
+  int64_t last_unregistered_texture_id = -1;
+  void OnPlatformViewMarkTextureFrameAvailable(int64_t texture_id) override {
+    mark_texture_frame_available_called = true;
+    last_frame_available_texture_id = texture_id;
+  }
+  bool mark_texture_frame_available_called = false;
+  int64_t last_frame_available_texture_id = -1;
   void LoadDartDeferredLibrary(
       intptr_t loading_unit_id,
       std::unique_ptr<const fml::Mapping> snapshot_data,
@@ -1052,6 +1062,150 @@ TEST_F(PlatformViewAndroidTest, UpdateAccessibilityFeaturesDirect) {
   EXPECT_EQ(fake_delegate.last_accessibility_features, 0);
 
   platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, UnregisterTextureDispatchLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.unregister_texture_called);
+  platform_view->UnregisterTexture(101);
+  EXPECT_TRUE(fake_delegate.unregister_texture_called);
+  EXPECT_EQ(fake_delegate.last_unregistered_texture_id, 101);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, UnregisterTextureDispatchEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.unregister_texture_called);
+  platform_view->UnregisterTexture(102);
+  EXPECT_TRUE(fake_delegate.unregister_texture_called);
+  EXPECT_EQ(fake_delegate.last_unregistered_texture_id, 102);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, UnregisterExternalTextureDirect) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.unregister_texture_called);
+  EXPECT_EQ(platform_view->UnregisterExternalTexture(103), kSuccess);
+  EXPECT_TRUE(fake_delegate.unregister_texture_called);
+  EXPECT_EQ(fake_delegate.last_unregistered_texture_id, 103);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, MarkTextureFrameAvailableDispatchLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.mark_texture_frame_available_called);
+  platform_view->MarkTextureFrameAvailable(201);
+  EXPECT_TRUE(fake_delegate.mark_texture_frame_available_called);
+  EXPECT_EQ(fake_delegate.last_frame_available_texture_id, 201);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest,
+       MarkTextureFrameAvailableDispatchEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.mark_texture_frame_available_called);
+  platform_view->MarkTextureFrameAvailable(202);
+  EXPECT_TRUE(fake_delegate.mark_texture_frame_available_called);
+  EXPECT_EQ(fake_delegate.last_frame_available_texture_id, 202);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, MarkExternalTextureFrameAvailableDirect) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.mark_texture_frame_available_called);
+  EXPECT_EQ(platform_view->MarkExternalTextureFrameAvailable(203), kSuccess);
+  EXPECT_TRUE(fake_delegate.mark_texture_frame_available_called);
+  EXPECT_EQ(fake_delegate.last_frame_available_texture_id, 203);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, TextureSeamInvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(platform_view->UnregisterExternalTexture(0), kInvalidArguments);
+  EXPECT_EQ(platform_view->UnregisterExternalTexture(-1), kInvalidArguments);
+  EXPECT_EQ(platform_view->MarkExternalTextureFrameAvailable(0),
+            kInvalidArguments);
+  EXPECT_EQ(platform_view->MarkExternalTextureFrameAvailable(-1),
+            kInvalidArguments);
 }
 
 // TODO(matanlurey): Re-enable.
