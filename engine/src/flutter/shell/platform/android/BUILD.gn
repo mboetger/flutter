@@ -158,7 +158,7 @@ source_set("flutter_shell_native_src") {
     ]
   }
 
-  sources += get_target_outputs(":icudtl_asm")
+  # Note: icudtl.dat.S is compiled by embedder_as_internal_library, avoiding duplicate symbol definitions.
 
   public_deps = [
     ":android_gpu_configuration",
@@ -184,6 +184,7 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface",
     "//flutter/shell/platform/android/surface:native_window",
+    "//flutter/shell/platform/embedder:embedder_as_internal_library",
     "//flutter/skia",
     "//flutter/txt",
     "//flutter/vulkan",

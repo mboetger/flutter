@@ -166,9 +166,32 @@ TEST(AndroidShellHolder, Create) {
   EXPECT_NE(holder.get(), nullptr);
   EXPECT_TRUE(holder->IsValid());
   EXPECT_NE(holder->GetPlatformView().get(), nullptr);
+  EXPECT_NE(holder->GetPlatformView()->GetPlatformViewDelegate(), nullptr);
+  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting().get(), nullptr);
+  EXPECT_EQ(static_cast<const void*>(
+                holder->GetPlatformView()->GetPlatformViewDelegate()),
+            static_cast<const void*>(
+                holder->GetPlatformViewEmbedderForTesting().get()));
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   holder->GetPlatformView()->NotifyCreated(window);
+}
+
+TEST(AndroidShellHolder, PlatformViewEmbedderDelegateWired) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_NE(holder.get(), nullptr);
+  ASSERT_TRUE(holder->IsValid());
+  ASSERT_NE(holder->GetPlatformView().get(), nullptr);
+  EXPECT_NE(holder->GetPlatformView()->GetPlatformViewDelegate(), nullptr);
+  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting().get(), nullptr);
+  EXPECT_EQ(static_cast<const void*>(
+                holder->GetPlatformView()->GetPlatformViewDelegate()),
+            static_cast<const void*>(
+                holder->GetPlatformViewEmbedderForTesting().get()));
 }
 
 TEST(AndroidShellHolder, HandlePlatformMessage) {

@@ -336,6 +336,12 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
       std::move(args_vector));
 }
 
+void PlatformViewAndroid::UpdateSemanticsLegacy(
+    flutter::SemanticsNodeUpdates update,
+    flutter::CustomAccessibilityActionUpdates actions) {
+  platform_view_android_delegate_.UpdateSemantics(update, actions);
+}
+
 // |PlatformView|
 void PlatformViewAndroid::UpdateSemantics(
     int64_t view_id,
@@ -346,7 +352,7 @@ void PlatformViewAndroid::UpdateSemantics(
                                     std::move(actions));
     return;
   }
-  platform_view_android_delegate_.UpdateSemantics(update, actions);
+  UpdateSemanticsLegacy(std::move(update), std::move(actions));
 }
 
 // |PlatformView|
@@ -362,7 +368,6 @@ void PlatformViewAndroid::SetApplicationLocale(std::string locale) {
 void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
   if (platform_view_) {
     platform_view_->SetSemanticsTreeEnabled(enabled);
-    return;
   }
   jni_facade_->FlutterViewSetSemanticsTreeEnabled(enabled);
 }
@@ -452,9 +457,6 @@ void PlatformViewAndroid::RegisterImageTexture(
 
 // |PlatformView|
 std::unique_ptr<VsyncWaiter> PlatformViewAndroid::CreateVSyncWaiter() {
-  if (platform_view_) {
-    return platform_view_->CreateVSyncWaiter();
-  }
   return std::make_unique<VsyncWaiterAndroid>(task_runners_);
 }
 
@@ -465,12 +467,7 @@ class PlatformViewProtectedAccessor : public PlatformView {
 };
 }  // namespace
 
-// |PlatformView|
-std::unique_ptr<Surface> PlatformViewAndroid::CreateRenderingSurface() {
-  if (platform_view_) {
-    return static_cast<PlatformViewProtectedAccessor*>(platform_view_)
-        ->CreateRenderingSurface();
-  }
+std::unique_ptr<Surface> PlatformViewAndroid::CreateGPUSurface() {
   if (!android_surface_) {
     return nullptr;
   }
@@ -479,10 +476,22 @@ std::unique_ptr<Surface> PlatformViewAndroid::CreateRenderingSurface() {
 }
 
 // |PlatformView|
+std::unique_ptr<Surface> PlatformViewAndroid::CreateRenderingSurface() {
+  if (platform_view_) {
+    return static_cast<PlatformViewProtectedAccessor*>(platform_view_)
+        ->CreateRenderingSurface();
+  }
+  return CreateGPUSurface();
+}
+
+// |PlatformView|
 std::shared_ptr<ExternalViewEmbedder>
 PlatformViewAndroid::CreateExternalViewEmbedder() {
   if (platform_view_) {
-    return platform_view_->CreateExternalViewEmbedder();
+    auto embedder = platform_view_->CreateExternalViewEmbedder();
+    if (embedder) {
+      return embedder;
+    }
   }
   return std::make_shared<AndroidExternalViewEmbedderWrapper>(
       android_meets_hcpp_criteria_, *android_context_, jni_facade_,
@@ -493,7 +502,10 @@ PlatformViewAndroid::CreateExternalViewEmbedder() {
 std::unique_ptr<SnapshotSurfaceProducer>
 PlatformViewAndroid::CreateSnapshotSurfaceProducer() {
   if (platform_view_) {
-    return platform_view_->CreateSnapshotSurfaceProducer();
+    auto producer = platform_view_->CreateSnapshotSurfaceProducer();
+    if (producer) {
+      return producer;
+    }
   }
   if (!android_surface_) {
     return nullptr;
@@ -501,11 +513,8 @@ PlatformViewAndroid::CreateSnapshotSurfaceProducer() {
   return std::make_unique<AndroidSnapshotSurfaceProducer>(*android_surface_);
 }
 
-// |PlatformView|
-sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
-  if (platform_view_) {
-    return platform_view_->CreateResourceContext();
-  }
+sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContextLegacy()
+    const {
   if (!android_surface_) {
     return nullptr;
   }
@@ -529,14 +538,34 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
 }
 
 // |PlatformView|
+sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
+  if (platform_view_) {
+    return platform_view_->CreateResourceContext();
+  }
+  return CreateResourceContextLegacy();
+}
+
+void PlatformViewAndroid::ReleaseResourceContextLegacy() const {
+  if (android_surface_) {
+    android_surface_->ResourceContextClearCurrent();
+  }
+}
+
+// |PlatformView|
 void PlatformViewAndroid::ReleaseResourceContext() const {
   if (platform_view_) {
     platform_view_->ReleaseResourceContext();
     return;
   }
+  ReleaseResourceContextLegacy();
+}
+
+std::shared_ptr<impeller::Context>
+PlatformViewAndroid::GetImpellerContextLegacy() const {
   if (android_surface_) {
-    android_surface_->ResourceContextClearCurrent();
+    return android_surface_->GetImpellerContext();
   }
+  return android_context_->GetImpellerContext();
 }
 
 // |PlatformView|
@@ -545,10 +574,7 @@ std::shared_ptr<impeller::Context> PlatformViewAndroid::GetImpellerContext()
   if (platform_view_) {
     return platform_view_->GetImpellerContext();
   }
-  if (android_surface_) {
-    return android_surface_->GetImpellerContext();
-  }
-  return android_context_->GetImpellerContext();
+  return GetImpellerContextLegacy();
 }
 
 // |PlatformView|
@@ -658,7 +684,6 @@ bool PlatformViewAndroid::IsSurfaceControlEnabled() const {
 void PlatformViewAndroid::SetupImpellerContext() {
   if (platform_view_) {
     platform_view_->SetupImpellerContext();
-    return;
   }
   android_context_->SetupImpellerContext();
   android_surface_->SetupImpellerSurface();
