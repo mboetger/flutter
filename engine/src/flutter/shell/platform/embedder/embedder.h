@@ -2607,6 +2607,50 @@ typedef bool (*FlutterLayersPresentCallback)(const FlutterLayer** layers,
 typedef bool (*FlutterPresentViewCallback)(
     const FlutterPresentViewInfo* /* present info */);
 
+/// Opaque handle to the engine-owned raster thread merger.
+/// Lifetime: Valid ONLY for the duration of the callback to which it is passed.
+/// Embedders MUST NOT store or retain this pointer across callback invocations.
+typedef struct _FlutterRasterThreadMerger* FlutterRasterThreadMergerRef;
+
+/// Result returned from FlutterPostPrerollCallback to guide frame scheduling.
+typedef enum {
+  /// The frame may proceed to rasterization normally.
+  kFlutterPostPrerollResultSuccess,
+  /// The frame composition changed; resubmit the frame immediately.
+  kFlutterPostPrerollResultResubmitFrame,
+  /// Threads were just merged; cancel current rasterization and retry on the
+  /// merged thread.
+  kFlutterPostPrerollResultSkipAndRetryFrame,
+} FlutterPostPrerollResult;
+
+/// Threading state provided to compositor lifecycle callbacks.
+typedef struct {
+  /// Size of this struct in bytes. Must be initialized to
+  /// sizeof(FlutterFrameThreadingInfo).
+  size_t struct_size;
+
+  /// Handle to the raster thread merger. NULL if the engine was not initialized
+  /// with dynamic thread merging support or if task runners are statically
+  /// merged.
+  FlutterRasterThreadMergerRef thread_merger;
+
+  /// True if the callback is executing on the platform task runner.
+  bool is_on_platform_thread;
+
+  /// Reserved for user context pointer.
+  void* user_data;
+} FlutterFrameThreadingInfo;
+
+/// Callback invoked after scene preroll to allow the embedder to inspect
+/// composition layers and request thread merging if platform views are
+/// present.
+typedef FlutterPostPrerollResult (*FlutterPostPrerollCallback)(
+    const FlutterFrameThreadingInfo* threading_info);
+
+/// Callback invoked before and after rasterizing a compositor frame.
+typedef void (*FlutterCompositorFrameCallback)(
+    const FlutterFrameThreadingInfo* threading_info);
+
 typedef struct {
   /// This size of this struct. Must be sizeof(FlutterCompositor).
   size_t struct_size;
@@ -2663,6 +2707,21 @@ typedef struct {
   ///
   /// The callback should return true if the operation was successful.
   FlutterPresentViewCallback present_view_callback;
+
+  /// Declares whether this compositor supports dynamic merging of the raster
+  /// and platform threads. Read once during FlutterEngineInitialize.
+  /// If true, post_preroll_callback must also be provided.
+  bool supports_dynamic_thread_merging;
+
+  /// Invoked after preroll to determine if thread merging is needed.
+  /// Required if supports_dynamic_thread_merging is true.
+  FlutterPostPrerollCallback post_preroll_callback;
+
+  /// Invoked prior to rasterizing the frame.
+  FlutterCompositorFrameCallback begin_frame_callback;
+
+  /// Invoked after completing frame rasterization and recycling surfaces.
+  FlutterCompositorFrameCallback end_frame_callback;
 } FlutterCompositor;
 
 typedef struct {
@@ -4353,6 +4412,55 @@ FlutterEngineResult FlutterEngineGetCallbackInformation(
     int64_t handle,
     FlutterCallbackInformation* info_out);
 
+//------------------------------------------------------------------------------
+/// @brief      Returns true if the raster and platform threads are currently
+///             merged.
+///
+/// @param[in]  merger  The raster thread merger handle provided in
+///                     FlutterFrameThreadingInfo. Must not be null.
+///
+/// @return     True if the raster and platform threads are merged.
+///
+FLUTTER_EXPORT
+bool FlutterRasterThreadMergerIsMerged(FlutterRasterThreadMergerRef merger);
+
+//------------------------------------------------------------------------------
+/// @brief      Returns true if the caller is currently executing on the
+///             platform thread.
+///
+/// @param[in]  merger  The raster thread merger handle provided in
+///                     FlutterFrameThreadingInfo. Must not be null.
+///
+/// @return     True if executing on the platform thread.
+///
+FLUTTER_EXPORT
+bool FlutterRasterThreadMergerIsOnPlatformThread(
+    FlutterRasterThreadMergerRef merger);
+
+//------------------------------------------------------------------------------
+/// @brief      Merges the raster thread onto the platform thread with the
+///             specified lease term in frames.
+///
+/// @param[in]  merger             The raster thread merger handle provided in
+///                                FlutterFrameThreadingInfo. Must not be null.
+/// @param[in]  lease_term_frames  Number of frames to keep threads merged.
+///
+FLUTTER_EXPORT
+void FlutterRasterThreadMergerMergeWithLease(
+    FlutterRasterThreadMergerRef merger,
+    size_t lease_term_frames);
+
+//------------------------------------------------------------------------------
+/// @brief      Extends the current merged lease to the specified frame count.
+///
+/// @param[in]  merger             The raster thread merger handle provided in
+///                                FlutterFrameThreadingInfo. Must not be null.
+/// @param[in]  lease_term_frames  Number of frames to extend the lease to.
+///
+FLUTTER_EXPORT
+void FlutterRasterThreadMergerExtendLeaseTo(FlutterRasterThreadMergerRef merger,
+                                            size_t lease_term_frames);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4512,6 +4620,16 @@ typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineGetCallbackInformationFnPtr)(
     int64_t handle,
     FlutterCallbackInformation* info_out);
+typedef bool (*FlutterRasterThreadMergerIsMergedFnPtr)(
+    FlutterRasterThreadMergerRef merger);
+typedef bool (*FlutterRasterThreadMergerIsOnPlatformThreadFnPtr)(
+    FlutterRasterThreadMergerRef merger);
+typedef void (*FlutterRasterThreadMergerMergeWithLeaseFnPtr)(
+    FlutterRasterThreadMergerRef merger,
+    size_t lease_term_frames);
+typedef void (*FlutterRasterThreadMergerExtendLeaseToFnPtr)(
+    FlutterRasterThreadMergerRef merger,
+    size_t lease_term_frames);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4570,6 +4688,11 @@ typedef struct {
   FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
   FlutterEngineSpawnFnPtr Spawn;
   FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
+  FlutterRasterThreadMergerIsMergedFnPtr RasterThreadMergerIsMerged;
+  FlutterRasterThreadMergerIsOnPlatformThreadFnPtr
+      RasterThreadMergerIsOnPlatformThread;
+  FlutterRasterThreadMergerMergeWithLeaseFnPtr RasterThreadMergerMergeWithLease;
+  FlutterRasterThreadMergerExtendLeaseToFnPtr RasterThreadMergerExtendLeaseTo;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

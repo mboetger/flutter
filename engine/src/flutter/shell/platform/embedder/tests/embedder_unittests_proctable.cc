@@ -69,6 +69,23 @@ TEST(EmbedderProcTable, SpawnEngineProc) {
   EXPECT_NE(procs.Spawn, nullptr);
 }
 
+TEST(EmbedderProcTable, RasterThreadMergerProcs) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+
+  EXPECT_NE(procs.RasterThreadMergerIsMerged, nullptr);
+  EXPECT_NE(procs.RasterThreadMergerIsOnPlatformThread, nullptr);
+  EXPECT_NE(procs.RasterThreadMergerMergeWithLease, nullptr);
+  EXPECT_NE(procs.RasterThreadMergerExtendLeaseTo, nullptr);
+
+  // Calling with nullptr safely returns/no-ops.
+  EXPECT_FALSE(procs.RasterThreadMergerIsMerged(nullptr));
+  EXPECT_FALSE(procs.RasterThreadMergerIsOnPlatformThread(nullptr));
+  procs.RasterThreadMergerMergeWithLease(nullptr, 10);
+  procs.RasterThreadMergerExtendLeaseTo(nullptr, 10);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

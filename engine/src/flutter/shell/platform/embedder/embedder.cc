@@ -18,6 +18,7 @@
 #include "flutter/fml/closure.h"
 #include "flutter/fml/make_copyable.h"
 #include "flutter/fml/native_library.h"
+#include "flutter/fml/raster_thread_merger.h"
 #include "flutter/fml/status_or.h"
 #include "flutter/fml/thread.h"
 #include "third_party/dart/runtime/bin/elf_loader.h"
@@ -4585,6 +4586,42 @@ FlutterEngineResult FlutterEngineGetCallbackInformation(
   return kSuccess;
 }
 
+struct _FlutterRasterThreadMerger {
+  fml::RefPtr<fml::RasterThreadMerger> merger;
+};
+
+bool FlutterRasterThreadMergerIsMerged(FlutterRasterThreadMergerRef merger) {
+  if (!merger || !merger->merger) {
+    return false;
+  }
+  return merger->merger->IsMerged();
+}
+
+bool FlutterRasterThreadMergerIsOnPlatformThread(
+    FlutterRasterThreadMergerRef merger) {
+  if (!merger || !merger->merger) {
+    return false;
+  }
+  return merger->merger->IsOnPlatformThread();
+}
+
+void FlutterRasterThreadMergerMergeWithLease(
+    FlutterRasterThreadMergerRef merger,
+    size_t lease_term_frames) {
+  if (!merger || !merger->merger) {
+    return;
+  }
+  merger->merger->MergeWithLease(lease_term_frames);
+}
+
+void FlutterRasterThreadMergerExtendLeaseTo(FlutterRasterThreadMergerRef merger,
+                                            size_t lease_term_frames) {
+  if (!merger || !merger->merger) {
+    return;
+  }
+  merger->merger->ExtendLeaseTo(lease_term_frames);
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4650,6 +4687,13 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
            FlutterEngineLoadDartDeferredLibraryError);
   SET_PROC(Spawn, FlutterEngineSpawn);
   SET_PROC(GetCallbackInformation, FlutterEngineGetCallbackInformation);
+  SET_PROC(RasterThreadMergerIsMerged, FlutterRasterThreadMergerIsMerged);
+  SET_PROC(RasterThreadMergerIsOnPlatformThread,
+           FlutterRasterThreadMergerIsOnPlatformThread);
+  SET_PROC(RasterThreadMergerMergeWithLease,
+           FlutterRasterThreadMergerMergeWithLease);
+  SET_PROC(RasterThreadMergerExtendLeaseTo,
+           FlutterRasterThreadMergerExtendLeaseTo);
 #undef SET_PROC
 
   return kSuccess;
