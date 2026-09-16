@@ -15,6 +15,7 @@
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -120,8 +121,27 @@ class AndroidShellHolder {
     return apk_asset_provider_ ? apk_asset_provider_->GetFlutterAssetResolver()
                                : nullptr;
   }
+  const FlutterProjectArgs* GetProjectArgsForTesting() const {
+    return &project_args_;
+  }
+
+  FlutterProjectArgs CreateFlutterProjectArgs(
+      const std::string& entrypoint = "",
+      const std::string& library_url = "",
+      const std::vector<std::string>& entrypoint_args = {},
+      int64_t engine_id = 0) const;
 
  private:
+  void InitializeProjectArgs();
+
+  static void OnPreEngineRestart(void* user_data);
+  static void OnSetApplicationLocale(const char* locale, void* user_data);
+  static double OnGetScaledFontSize(double unscaled_font_size,
+                                    int configuration_id,
+                                    void* user_data);
+  static void OnRequestDartDeferredLibrary(intptr_t loading_unit_id,
+                                           void* user_data);
+
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::unique_ptr<PlatformViewAndroid> platform_view_android_;
@@ -133,6 +153,8 @@ class AndroidShellHolder {
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
   const AndroidRenderingAPI android_rendering_api_;
   PlatformViewEmbedder* platform_view_embedder_ = nullptr;
+  FlutterProjectArgs project_args_ = {};
+  const FlutterAssetResolver* asset_resolvers_[1] = {nullptr};
 
   //----------------------------------------------------------------------------
   /// @brief      Constructor with its components injected.

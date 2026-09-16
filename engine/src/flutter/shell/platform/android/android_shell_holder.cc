@@ -186,6 +186,7 @@ AndroidShellHolder::AndroidShellHolder(
   platform_view_embedder_ = raw_platform_view_embedder;
   FML_DCHECK(platform_view_);
   is_valid_ = shell_ != nullptr;
+  InitializeProjectArgs();
 }
 
 AndroidShellHolder::AndroidShellHolder(
@@ -214,6 +215,7 @@ AndroidShellHolder::AndroidShellHolder(
   FML_DCHECK(platform_view_);
   FML_DCHECK(task_runners_);
   is_valid_ = shell_ != nullptr;
+  InitializeProjectArgs();
 }
 
 AndroidShellHolder::~AndroidShellHolder() {
@@ -295,10 +297,16 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
       shell_->Spawn(std::move(config.value()), initial_route,
                     on_create_platform_view, on_create_rasterizer);
 
-  return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
-      GetSettings(), jni_facade, task_runners_, std::move(shell),
-      apk_asset_provider_->Clone(), std::move(spawned_platform_view_android),
-      android_context->RenderingApi(), raw_spawned_platform_view_embedder));
+  auto spawned_holder =
+      std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
+          GetSettings(), jni_facade, task_runners_, std::move(shell),
+          apk_asset_provider_->Clone(),
+          std::move(spawned_platform_view_android),
+          android_context->RenderingApi(), raw_spawned_platform_view_embedder));
+  if (spawned_holder) {
+    spawned_holder->project_args_.engine_id = engine_id;
+  }
+  return spawned_holder;
 }
 
 void AndroidShellHolder::Launch(
@@ -312,6 +320,12 @@ void AndroidShellHolder::Launch(
   }
 
   apk_asset_provider_ = std::move(apk_asset_provider);
+  if (apk_asset_provider_) {
+    asset_resolvers_[0] = apk_asset_provider_->GetFlutterAssetResolver();
+    project_args_.asset_resolvers = asset_resolvers_;
+    project_args_.asset_resolvers_count = 1;
+  }
+  project_args_.engine_id = engine_id;
   auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
   if (!config) {
     return;
@@ -388,6 +402,82 @@ void AndroidShellHolder::UpdateDisplayMetrics() {
 
 bool AndroidShellHolder::IsSurfaceControlEnabled() {
   return GetPlatformView()->IsSurfaceControlEnabled();
+}
+
+void AndroidShellHolder::InitializeProjectArgs() {
+  project_args_.struct_size = sizeof(FlutterProjectArgs);
+  project_args_.assets_path = settings_.assets_path.c_str();
+  project_args_.icu_data_path = settings_.icu_data_path.c_str();
+
+  project_args_.command_line_argc = 0;
+  project_args_.command_line_argv = nullptr;
+
+  if (task_runners_) {
+    project_args_.custom_task_runners = task_runners_->GetCustomTaskRunners();
+  }
+
+  if (apk_asset_provider_) {
+    asset_resolvers_[0] = apk_asset_provider_->GetFlutterAssetResolver();
+    project_args_.asset_resolvers = asset_resolvers_;
+    project_args_.asset_resolvers_count = 1;
+  } else {
+    asset_resolvers_[0] = nullptr;
+    project_args_.asset_resolvers = nullptr;
+    project_args_.asset_resolvers_count = 0;
+  }
+
+  project_args_.on_pre_engine_restart_callback = OnPreEngineRestart;
+  project_args_.set_application_locale_callback = OnSetApplicationLocale;
+  project_args_.get_scaled_font_size_callback = OnGetScaledFontSize;
+  project_args_.dart_deferred_library_request_callback =
+      OnRequestDartDeferredLibrary;
+}
+
+void AndroidShellHolder::OnPreEngineRestart(void* user_data) {
+  auto* holder = static_cast<AndroidShellHolder*>(user_data);
+  if (holder && holder->jni_facade_) {
+    holder->jni_facade_->FlutterViewOnPreEngineRestart();
+  }
+}
+
+void AndroidShellHolder::OnSetApplicationLocale(const char* locale,
+                                                void* user_data) {
+  auto* holder = static_cast<AndroidShellHolder*>(user_data);
+  if (holder && holder->jni_facade_ && locale) {
+    holder->jni_facade_->FlutterViewSetApplicationLocale(locale);
+  }
+}
+
+double AndroidShellHolder::OnGetScaledFontSize(double unscaled_font_size,
+                                               int configuration_id,
+                                               void* user_data) {
+  auto* holder = static_cast<AndroidShellHolder*>(user_data);
+  if (holder && holder->jni_facade_) {
+    return holder->jni_facade_->FlutterViewGetScaledFontSize(unscaled_font_size,
+                                                             configuration_id);
+  }
+  return unscaled_font_size;
+}
+
+void AndroidShellHolder::OnRequestDartDeferredLibrary(intptr_t loading_unit_id,
+                                                      void* user_data) {
+  auto* holder = static_cast<AndroidShellHolder*>(user_data);
+  if (holder && holder->jni_facade_) {
+    holder->jni_facade_->RequestDartDeferredLibrary(loading_unit_id);
+  }
+}
+
+FlutterProjectArgs AndroidShellHolder::CreateFlutterProjectArgs(
+    const std::string& entrypoint,
+    const std::string& library_url,
+    const std::vector<std::string>& entrypoint_args,
+    int64_t engine_id) const {
+  FlutterProjectArgs args = project_args_;
+  args.engine_id = engine_id;
+  if (!entrypoint.empty()) {
+    args.custom_dart_entrypoint = entrypoint.c_str();
+  }
+  return args;
 }
 
 }  // namespace flutter

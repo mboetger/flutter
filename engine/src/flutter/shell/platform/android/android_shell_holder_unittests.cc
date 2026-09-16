@@ -294,5 +294,80 @@ TEST(AndroidShellHolder, ScreenshotEmptyWhenNoFrame) {
   EXPECT_EQ(screenshot.data, nullptr);
 }
 
+TEST(AndroidShellHolder, ProjectArgsConstruction) {
+  Settings settings;
+  settings.assets_path = "/data/flutter_assets";
+  settings.icu_data_path = "/data/icudtl.dat";
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  const FlutterProjectArgs* project_args = holder->GetProjectArgsForTesting();
+  ASSERT_NE(project_args, nullptr);
+  EXPECT_EQ(project_args->struct_size, sizeof(FlutterProjectArgs));
+  EXPECT_STREQ(project_args->assets_path, "/data/flutter_assets");
+  EXPECT_STREQ(project_args->icu_data_path, "/data/icudtl.dat");
+
+  // Custom task runners verification (from T-2.5)
+  ASSERT_NE(project_args->custom_task_runners, nullptr);
+  EXPECT_EQ(project_args->custom_task_runners->struct_size,
+            sizeof(FlutterCustomTaskRunners));
+  EXPECT_NE(project_args->custom_task_runners->platform_task_runner, nullptr);
+  EXPECT_NE(project_args->custom_task_runners->render_task_runner, nullptr);
+  EXPECT_NE(project_args->custom_task_runners->ui_task_runner, nullptr);
+  EXPECT_NE(project_args->custom_task_runners->io_task_runner, nullptr);
+
+  // Callbacks verification
+  EXPECT_NE(project_args->on_pre_engine_restart_callback, nullptr);
+  EXPECT_NE(project_args->set_application_locale_callback, nullptr);
+  EXPECT_NE(project_args->get_scaled_font_size_callback, nullptr);
+  EXPECT_NE(project_args->dart_deferred_library_request_callback, nullptr);
+
+  // Before launch, asset resolvers are empty
+  EXPECT_EQ(project_args->asset_resolvers_count, 0u);
+  EXPECT_EQ(project_args->asset_resolvers, nullptr);
+}
+
+TEST(AndroidShellHolder, ProjectArgsCallbacksForwardToJNI) {
+  Settings settings;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  const FlutterProjectArgs* project_args = holder->GetProjectArgsForTesting();
+  ASSERT_NE(project_args, nullptr);
+
+  EXPECT_CALL(*jni, FlutterViewOnPreEngineRestart()).Times(1);
+  project_args->on_pre_engine_restart_callback(holder.get());
+
+  EXPECT_CALL(*jni, FlutterViewSetApplicationLocale(std::string("fr-FR")))
+      .Times(1);
+  project_args->set_application_locale_callback("fr-FR", holder.get());
+
+  EXPECT_CALL(*jni, FlutterViewGetScaledFontSize(16.0, 2))
+      .WillOnce(::testing::Return(18.5));
+  double scaled =
+      project_args->get_scaled_font_size_callback(16.0, 2, holder.get());
+  EXPECT_DOUBLE_EQ(scaled, 18.5);
+
+  EXPECT_CALL(*jni, RequestDartDeferredLibrary(123)).Times(1);
+  project_args->dart_deferred_library_request_callback(123, holder.get());
+}
+
+TEST(AndroidShellHolder, CreateFlutterProjectArgsCustomization) {
+  Settings settings;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  FlutterProjectArgs custom_args = holder->CreateFlutterProjectArgs(
+      "customMain", "package:custom/main.dart", {"--arg1"}, 42);
+
+  EXPECT_EQ(custom_args.struct_size, sizeof(FlutterProjectArgs));
+  EXPECT_EQ(custom_args.engine_id, 42);
+  EXPECT_STREQ(custom_args.custom_dart_entrypoint, "customMain");
+  EXPECT_NE(custom_args.custom_task_runners, nullptr);
+}
+
 }  // namespace testing
 }  // namespace flutter
