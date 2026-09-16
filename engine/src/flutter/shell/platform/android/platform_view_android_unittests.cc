@@ -1523,6 +1523,143 @@ TEST_F(PlatformViewAndroidTest,
             kInvalidArguments);
 }
 
+TEST_F(PlatformViewAndroidTest, DisplayPlatformView2LegacyPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(
+      *jni, onDisplayPlatformView2(1, 10, 20, 100, 200, 300, 400, ::testing::_))
+      .Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack;
+  platform_view->OnDisplayPlatformView2(1, 10, 20, 100, 200, 300, 400, stack);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayPlatformView2EmbedderApiPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(
+      *jni, onDisplayPlatformView2(2, 10, 20, 100, 200, 300, 400, ::testing::_))
+      .Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack;
+  platform_view->OnDisplayPlatformView2(2, 10, 20, 100, 200, 300, 400, stack);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayPlatformView2DirectSeam) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(
+      *jni, onDisplayPlatformView2(3, 10, 20, 100, 200, 300, 400, ::testing::_))
+      .Times(2);
+
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack1;
+  EXPECT_EQ(platform_view->DisplayPlatformView2(3, 10, 20, 100, 200, 300, 400,
+                                                stack1),
+            kSuccess);
+
+  MutatorsStack stack2;
+  EXPECT_EQ(platform_view->DisplayPlatformView2Embedder(3, 10, 20, 100, 200,
+                                                        300, 400, stack2),
+            kSuccess);
+}
+
+TEST_F(PlatformViewAndroidTest, DisplayPlatformView2InvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  MutatorsStack stack;
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView2(-1, 0, 0, 100, 100, 100, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView2(1, 0, 0, -1, 100, 100, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView2(1, 0, 0, 100, -1, 100, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView2(1, 0, 0, 100, 100, -1, 100, stack),
+      kInvalidArguments);
+  EXPECT_EQ(
+      platform_view->DisplayPlatformView2(1, 0, 0, 100, 100, 100, -1, stack),
+      kInvalidArguments);
+}
+
+TEST_F(PlatformViewAndroidTest, HidePlatformView2LegacyPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, hidePlatformView2(10)).Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->OnHidePlatformView2(10);
+}
+
+TEST_F(PlatformViewAndroidTest, HidePlatformView2EmbedderApiPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, hidePlatformView2(20)).Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->OnHidePlatformView2(20);
+}
+
+TEST_F(PlatformViewAndroidTest, HidePlatformView2DirectSeam) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, hidePlatformView2(30)).Times(1);
+
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(platform_view->HidePlatformView2(30), kSuccess);
+}
+
+TEST_F(PlatformViewAndroidTest, HidePlatformView2InvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(platform_view->HidePlatformView2(-1), kInvalidArguments);
+}
+
 // TODO(matanlurey): Re-enable.
 //
 // This test (and the entire suite) was skipped on CI (see

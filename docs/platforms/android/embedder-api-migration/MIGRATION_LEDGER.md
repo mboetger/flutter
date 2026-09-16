@@ -351,7 +351,7 @@ Status values: `legacy` · `embedder-behind-flag` · `embedder-default` · `depr
 | **VD** — Virtual Display | `embedder-behind-flag` | `platform_view/virtual_display_platform_view_main.dart`; blocked by **B-5** | `PASS` (`8ba18c0bb59`) | T-3.T4 |
 | **TLHC** — Texture Layer HC *(default)* | `embedder-behind-flag` | `platform_view/texture_layer_hybrid_composition_platform_view_main.dart` | `PASS` (`8ba18c0bb59`) | T-3.T3 |
 | **HC** — Hybrid Composition | `legacy` | `platform_view/hybrid_composition_platform_view_main.dart`, `hybrid_android_views_integration_test`; gated on **T-1.18** (thread merging API extension) | `PASS` (`8ba18c0bb59`) | T-0.12 |
-| **HCPP** *(Impeller Vulkan + API 34 only)* | `legacy` | `hcpp/*` (14 mains, Vulkan); GLES fallback test (T-0.11) | `PASS` (`8ba18c0bb59`) | T-0.12 |
+| **HCPP** *(Impeller Vulkan + API 34 only)* | `embedder-behind-flag` | `hcpp/*` (14 mains, Vulkan); GLES fallback test (T-0.11) | `PASS` (`8ba18c0bb59`) | T-3.T5 |
 | **SurfaceTexture** ext. texture | `embedder-behind-flag` | `external_texture/surface_texture_smiley_face_main.dart`; blocked by **B-5** | `PASS` (`8ba18c0bb59`) | T-3.T2 |
 | **SurfaceProducer/ImageReader** ext. texture | `embedder-behind-flag` | `external_texture/surface_producer_smiley_face_main.dart` | `PASS` (`8ba18c0bb59`) | T-3.T1 |
 

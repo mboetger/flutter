@@ -236,6 +236,38 @@ class PlatformViewAndroid final
                                                                 int32_t width,
                                                                 int32_t height);
 
+  void OnDisplayPlatformView2(int32_t view_id,
+                              int32_t x,
+                              int32_t y,
+                              int32_t width,
+                              int32_t height,
+                              int32_t view_width,
+                              int32_t view_height,
+                              MutatorsStack mutators_stack);
+
+  FlutterEngineResult DisplayPlatformView2(int32_t view_id,
+                                           int32_t x,
+                                           int32_t y,
+                                           int32_t width,
+                                           int32_t height,
+                                           int32_t view_width,
+                                           int32_t view_height,
+                                           MutatorsStack mutators_stack);
+
+  FlutterEngineResult DisplayPlatformView2Embedder(
+      int32_t view_id,
+      int32_t x,
+      int32_t y,
+      int32_t width,
+      int32_t height,
+      int32_t view_width,
+      int32_t view_height,
+      MutatorsStack mutators_stack);
+
+  void OnHidePlatformView2(int32_t view_id);
+
+  FlutterEngineResult HidePlatformView2(int32_t view_id);
+
   void ScheduleFrame();
 
   void LoadDartDeferredLibrary(
