@@ -11,6 +11,7 @@
 #include "flutter/assets/asset_resolver.h"
 #include "flutter/fml/memory/ref_counted.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -43,10 +44,18 @@ class APKAssetProvider final : public AssetResolver {
   // delete the returned pointer.
   APKAssetProviderInternal* GetImpl() const { return impl_.get(); }
 
+  // Obtain a pointer to the FlutterAssetResolver C-ABI representation.
+  const FlutterAssetResolver* GetFlutterAssetResolver() const {
+    return &flutter_asset_resolver_;
+  }
+
   bool operator==(const AssetResolver& other) const override;
 
  private:
+  void InitializeFlutterAssetResolver();
+
   std::shared_ptr<APKAssetProviderInternal> impl_;
+  FlutterAssetResolver flutter_asset_resolver_ = {};
 
   // |flutter::AssetResolver|
   bool IsValid() const override;

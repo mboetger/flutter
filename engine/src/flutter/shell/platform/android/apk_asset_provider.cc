@@ -73,11 +73,43 @@ APKAssetProvider::APKAssetProvider(JNIEnv* env,
                                    std::string directory)
     : impl_(std::make_shared<APKAssetProviderImpl>(env,
                                                    assetManager,
-                                                   std::move(directory))) {}
+                                                   std::move(directory))) {
+  InitializeFlutterAssetResolver();
+}
 
 APKAssetProvider::APKAssetProvider(
     std::shared_ptr<APKAssetProviderInternal> impl)
-    : impl_(std::move(impl)) {}
+    : impl_(std::move(impl)) {
+  InitializeFlutterAssetResolver();
+}
+
+void APKAssetProvider::InitializeFlutterAssetResolver() {
+  flutter_asset_resolver_.struct_size = sizeof(FlutterAssetResolver);
+  flutter_asset_resolver_.user_data = impl_.get();
+  flutter_asset_resolver_.type = kFlutterAssetResolverTypeAPK;
+  flutter_asset_resolver_.get_asset_callback = [](const char* full_path,
+                                                  FlutterMapping* mapping_out,
+                                                  void* user_data) -> bool {
+    if (!user_data || !full_path || !mapping_out) {
+      return false;
+    }
+    auto* impl = static_cast<APKAssetProviderInternal*>(user_data);
+    std::unique_ptr<fml::Mapping> mapping = impl->GetAsMapping(full_path);
+    if (!mapping) {
+      return false;
+    }
+    mapping_out->struct_size = sizeof(FlutterMapping);
+    mapping_out->mapping = mapping->GetMapping();
+    mapping_out->size = mapping->GetSize();
+    mapping_out->user_data = mapping.release();
+    mapping_out->release_callback = [](void* data) {
+      delete static_cast<fml::Mapping*>(data);
+    };
+    return true;
+  };
+  flutter_asset_resolver_.is_valid_after_asset_manager_change =
+      [](void* user_data) -> bool { return true; };
+}
 
 // |AssetResolver|
 bool APKAssetProvider::IsValid() const {

@@ -116,6 +116,10 @@ class AndroidShellHolder {
   const std::shared_ptr<AndroidTaskRunners>& GetTaskRunnersForTesting() const {
     return task_runners_;
   }
+  const FlutterAssetResolver* GetAssetResolverForTesting() const {
+    return apk_asset_provider_ ? apk_asset_provider_->GetFlutterAssetResolver()
+                               : nullptr;
+  }
 
  private:
   const flutter::Settings settings_;
