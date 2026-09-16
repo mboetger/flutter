@@ -132,6 +132,14 @@ AndroidShellHolder::AndroidShellHolder(
 
   task_runners_ = AndroidTaskRunners::Create(thread_label, settings);
 
+  if (settings_.android_embedder_api) {
+    TRACE_EVENT1("flutter", "AndroidShellHolder::Initialize", "path",
+                 "embedder_api");
+    InitializeEngine();
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "AndroidShellHolder::Initialize", "path", "legacy");
   std::unique_ptr<PlatformViewAndroid> platform_view_android;
   PlatformViewEmbedder* raw_platform_view_embedder = nullptr;
   AndroidRenderingAPI rendering_api = android_rendering_api_;
@@ -187,6 +195,71 @@ AndroidShellHolder::AndroidShellHolder(
   FML_DCHECK(platform_view_);
   is_valid_ = shell_ != nullptr;
   InitializeProjectArgs();
+}
+
+FlutterEngineResult AndroidShellHolder::InitializeEngine() {
+  if (shell_) {
+    return kSuccess;
+  }
+
+  std::unique_ptr<PlatformViewAndroid> platform_view_android;
+  PlatformViewEmbedder* raw_platform_view_embedder = nullptr;
+  AndroidRenderingAPI rendering_api = android_rendering_api_;
+  Shell::CreateCallback<PlatformView> on_create_platform_view =
+      [this, &platform_view_android, &raw_platform_view_embedder,
+       rendering_api](Shell& shell) {
+        platform_view_android = std::make_unique<PlatformViewAndroid>(
+            shell.GetSettings(),     // settings
+            shell.GetTaskRunners(),  // task runners
+            jni_facade_,             // JNI interop
+            rendering_api,           // rendering API
+            shell.GetShutdownSafeIOTaskRunner());
+        auto platform_view_embedder = CreatePlatformViewEmbedder(
+            shell, platform_view_android.get(), jni_facade_,
+            platform_view_android->GetWeakPtr());
+        raw_platform_view_embedder = platform_view_embedder.get();
+        platform_view_android->SetPlatformView(raw_platform_view_embedder);
+        return platform_view_embedder;
+      };
+
+  Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
+    return std::make_unique<Rasterizer>(shell);
+  };
+
+  shell_ =
+      Shell::Create(GetDefaultPlatformData(),         // window data
+                    task_runners_->GetTaskRunners(),  // task runners
+                    settings_,                        // settings
+                    on_create_platform_view,  // platform view create callback
+                    on_create_rasterizer      // rasterizer create callback
+      );
+
+  if (!shell_) {
+    is_valid_ = false;
+    return kInternalInconsistency;
+  }
+
+  shell_->GetDartVM()->GetConcurrentMessageLoop()->PostTaskToAllWorkers([]() {
+    if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
+      FML_LOG(ERROR) << "Failed to set Workers task runner priority";
+    }
+  });
+
+  shell_->RegisterImageDecoder(
+      [runner = task_runners_->GetTaskRunners().GetIOTaskRunner()](
+          sk_sp<SkData> buffer) {
+        return AndroidImageGenerator::MakeFromData(std::move(buffer), runner);
+      },
+      -1);
+
+  platform_view_android_ = std::move(platform_view_android);
+  platform_view_ = platform_view_android_ ? platform_view_android_->GetWeakPtr()
+                                          : fml::WeakPtr<PlatformViewAndroid>();
+  platform_view_embedder_ = raw_platform_view_embedder;
+  FML_DCHECK(platform_view_);
+  is_valid_ = true;
+  InitializeProjectArgs();
+  return kSuccess;
 }
 
 AndroidShellHolder::AndroidShellHolder(
@@ -326,6 +399,15 @@ void AndroidShellHolder::Launch(
     project_args_.asset_resolvers_count = 1;
   }
   project_args_.engine_id = engine_id;
+
+  if (settings_.android_embedder_api) {
+    TRACE_EVENT1("flutter", "AndroidShellHolder::Launch", "path",
+                 "embedder_api");
+    RunEngine(entrypoint, libraryUrl, entrypoint_args, engine_id);
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "AndroidShellHolder::Launch", "path", "legacy");
   auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
   if (!config) {
     return;
@@ -333,6 +415,24 @@ void AndroidShellHolder::Launch(
   config->SetEngineId(engine_id);
   UpdateDisplayMetrics();
   shell_->RunEngine(std::move(config.value()));
+}
+
+FlutterEngineResult AndroidShellHolder::RunEngine(
+    const std::string& entrypoint,
+    const std::string& library_url,
+    const std::vector<std::string>& entrypoint_args,
+    int64_t engine_id) {
+  if (!IsValid() || !shell_) {
+    return kInternalInconsistency;
+  }
+  auto config = BuildRunConfiguration(entrypoint, library_url, entrypoint_args);
+  if (!config) {
+    return kInvalidArguments;
+  }
+  config->SetEngineId(engine_id);
+  UpdateDisplayMetrics();
+  shell_->RunEngine(std::move(config.value()));
+  return kSuccess;
 }
 
 Rasterizer::Screenshot AndroidShellHolder::Screenshot(

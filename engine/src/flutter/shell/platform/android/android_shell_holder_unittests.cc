@@ -369,5 +369,52 @@ TEST(AndroidShellHolder, CreateFlutterProjectArgsCustomization) {
   EXPECT_NE(custom_args.custom_task_runners, nullptr);
 }
 
+TEST(AndroidShellHolder, InitializeEngineLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  EXPECT_TRUE(holder->IsValid());
+  EXPECT_FALSE(holder->IsAndroidEmbedderApiEnabled());
+  EXPECT_TRUE(holder->GetPlatformView());
+  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting(), nullptr);
+}
+
+TEST(AndroidShellHolder, InitializeEngineEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  EXPECT_TRUE(holder->IsValid());
+  EXPECT_TRUE(holder->IsAndroidEmbedderApiEnabled());
+  EXPECT_TRUE(holder->GetPlatformView());
+  EXPECT_NE(holder->GetPlatformViewEmbedderForTesting(), nullptr);
+}
+
+TEST(AndroidShellHolder, InitializeEngineDirect) {
+  Settings settings;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  EXPECT_EQ(holder->InitializeEngine(), kSuccess);
+  EXPECT_TRUE(holder->IsValid());
+}
+
+TEST(AndroidShellHolder, RunEngineDirect) {
+  Settings settings;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  // In test environment without kernel blob, BuildRunConfiguration returns
+  // nullopt -> kInvalidArguments.
+  EXPECT_EQ(holder->RunEngine("main", "", {}, 1), kInvalidArguments);
+}
+
 }  // namespace testing
 }  // namespace flutter

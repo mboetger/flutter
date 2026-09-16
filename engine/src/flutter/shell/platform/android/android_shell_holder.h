@@ -99,6 +99,14 @@ class AndroidShellHolder {
 
   bool IsAndroidEmbedderApiEnabled() const;
 
+  FlutterEngineResult InitializeEngine();
+
+  FlutterEngineResult RunEngine(
+      const std::string& entrypoint = "",
+      const std::string& library_url = "",
+      const std::vector<std::string>& entrypoint_args = {},
+      int64_t engine_id = 0);
+
   Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
                                     bool base64_encode);
 
