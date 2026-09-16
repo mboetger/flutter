@@ -1023,10 +1023,34 @@ void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
 void PlatformViewAndroid::RegisterExternalTexture(
     int64_t texture_id,
     const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterExternalTexture",
+                 "mode", "SurfaceTexture", "path", "embedder_api");
+    RegisterSurfaceExternalTexture(texture_id, surface_texture);
+    return;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::RegisterExternalTexture",
+               "mode", "SurfaceTexture", "path", "legacy");
   if (external_texture_adapter_) {
     external_texture_adapter_->RegisterSurfaceTexture(texture_id,
                                                       surface_texture);
   }
+}
+
+FlutterEngineResult PlatformViewAndroid::RegisterSurfaceExternalTexture(
+    int64_t texture_id,
+    const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+  if (texture_id <= 0 || surface_texture.is_null()) {
+    return kInvalidArguments;
+  }
+
+  if (external_texture_adapter_) {
+    bool success = external_texture_adapter_->RegisterSurfaceTexture(
+        texture_id, surface_texture);
+    return success ? kSuccess : kInternalInconsistency;
+  }
+  return kInternalInconsistency;
 }
 
 void PlatformViewAndroid::RegisterImageTexture(

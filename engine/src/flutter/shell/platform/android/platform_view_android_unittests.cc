@@ -1267,6 +1267,60 @@ TEST_F(PlatformViewAndroidTest, RegisterImageExternalTextureInvalidArguments) {
             kInvalidArguments);
 }
 
+TEST_F(PlatformViewAndroidTest, RegisterSurfaceTextureLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  platform_view->RegisterExternalTexture(401, null_ref);
+}
+
+TEST_F(PlatformViewAndroidTest, RegisterSurfaceTextureEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  platform_view->RegisterExternalTexture(402, null_ref);
+}
+
+TEST_F(PlatformViewAndroidTest, RegisterSurfaceExternalTextureDirect) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  // Null surface_texture returns kInvalidArguments.
+  EXPECT_EQ(platform_view->RegisterSurfaceExternalTexture(403, null_ref),
+            kInvalidArguments);
+}
+
+TEST_F(PlatformViewAndroidTest,
+       RegisterSurfaceExternalTextureInvalidArguments) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  fml::jni::ScopedJavaGlobalRef<jobject> null_ref;
+  EXPECT_EQ(platform_view->RegisterSurfaceExternalTexture(0, null_ref),
+            kInvalidArguments);
+  EXPECT_EQ(platform_view->RegisterSurfaceExternalTexture(-1, null_ref),
+            kInvalidArguments);
+}
+
 // TODO(matanlurey): Re-enable.
 //
 // This test (and the entire suite) was skipped on CI (see

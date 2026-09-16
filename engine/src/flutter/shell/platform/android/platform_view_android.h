@@ -157,6 +157,10 @@ class PlatformViewAndroid final
       int64_t texture_id,
       const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);
 
+  FlutterEngineResult RegisterSurfaceExternalTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);
+
   void RegisterImageTexture(
       int64_t texture_id,
       const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
