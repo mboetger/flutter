@@ -153,6 +153,49 @@ class MockPlatformViewDelegate final : public PlatformView {
     last_asset_resolver_type = type;
   }
 
+  std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
+      const override {
+    get_platform_message_handler_called = true;
+    return nullptr;
+  }
+
+  void SetupImpellerContext() override { setup_impeller_context_called = true; }
+
+  std::unique_ptr<VsyncWaiter> CreateVSyncWaiter() override {
+    create_vsync_waiter_called = true;
+    return nullptr;
+  }
+
+  std::unique_ptr<Surface> CreateRenderingSurface() override {
+    create_rendering_surface_called = true;
+    return nullptr;
+  }
+
+  std::shared_ptr<ExternalViewEmbedder> CreateExternalViewEmbedder() override {
+    create_external_view_embedder_called = true;
+    return nullptr;
+  }
+
+  std::unique_ptr<SnapshotSurfaceProducer> CreateSnapshotSurfaceProducer()
+      override {
+    create_snapshot_surface_producer_called = true;
+    return nullptr;
+  }
+
+  sk_sp<GrDirectContext> CreateResourceContext() const override {
+    create_resource_context_called = true;
+    return nullptr;
+  }
+
+  void ReleaseResourceContext() const override {
+    release_resource_context_called = true;
+  }
+
+  std::shared_ptr<impeller::Context> GetImpellerContext() const override {
+    get_impeller_context_called = true;
+    return nullptr;
+  }
+
   bool notify_destroyed_called = false;
   bool update_semantics_called = false;
   int64_t last_semantics_view_id = -1;
@@ -176,6 +219,15 @@ class MockPlatformViewDelegate final : public PlatformView {
   bool update_asset_resolver_by_type_called = false;
   AssetResolver::AssetResolverType last_asset_resolver_type =
       AssetResolver::AssetResolverType::kApkAssetProvider;
+  mutable bool get_platform_message_handler_called = false;
+  bool setup_impeller_context_called = false;
+  bool create_vsync_waiter_called = false;
+  bool create_rendering_surface_called = false;
+  bool create_external_view_embedder_called = false;
+  bool create_snapshot_surface_producer_called = false;
+  mutable bool create_resource_context_called = false;
+  mutable bool release_resource_context_called = false;
+  mutable bool get_impeller_context_called = false;
 };
 
 class PlatformViewAndroidTest : public ::testing::Test {
@@ -432,6 +484,95 @@ TEST_F(PlatformViewAndroidTest,
   platform_view->LoadDartDeferredLibraryError(103, "test_err", false);
   platform_view->UpdateAssetResolverByType(
       nullptr, AssetResolver::AssetResolverType::kApkAssetProvider);
+}
+
+// Characterization: verify that GetPlatformMessageHandler,
+// SetupImpellerContext, CreateVSyncWaiter, CreateRenderingSurface,
+// CreateExternalViewEmbedder, CreateSnapshotSurfaceProducer,
+// CreateResourceContext, ReleaseResourceContext, and GetImpellerContext forward
+// to the registered PlatformView delegate when present.
+TEST_F(PlatformViewAndroidTest, PlatformViewDelegateSurfaceAndContextSeam) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  // 1. GetPlatformMessageHandler
+  EXPECT_FALSE(delegate_platform_view.get_platform_message_handler_called);
+  platform_view->GetPlatformMessageHandler();
+  EXPECT_TRUE(delegate_platform_view.get_platform_message_handler_called);
+
+  // 2. SetupImpellerContext
+  EXPECT_FALSE(delegate_platform_view.setup_impeller_context_called);
+  platform_view->SetupImpellerContext();
+  EXPECT_TRUE(delegate_platform_view.setup_impeller_context_called);
+
+  // 3. CreateVSyncWaiter
+  EXPECT_FALSE(delegate_platform_view.create_vsync_waiter_called);
+  platform_view->CreateVSyncWaiter();
+  EXPECT_TRUE(delegate_platform_view.create_vsync_waiter_called);
+
+  // 4. CreateRenderingSurface
+  EXPECT_FALSE(delegate_platform_view.create_rendering_surface_called);
+  platform_view->CreateRenderingSurface();
+  EXPECT_TRUE(delegate_platform_view.create_rendering_surface_called);
+
+  // 5. CreateExternalViewEmbedder
+  EXPECT_FALSE(delegate_platform_view.create_external_view_embedder_called);
+  platform_view->CreateExternalViewEmbedder();
+  EXPECT_TRUE(delegate_platform_view.create_external_view_embedder_called);
+
+  // 6. CreateSnapshotSurfaceProducer
+  EXPECT_FALSE(delegate_platform_view.create_snapshot_surface_producer_called);
+  platform_view->CreateSnapshotSurfaceProducer();
+  EXPECT_TRUE(delegate_platform_view.create_snapshot_surface_producer_called);
+
+  // 7. CreateResourceContext
+  EXPECT_FALSE(delegate_platform_view.create_resource_context_called);
+  platform_view->CreateResourceContext();
+  EXPECT_TRUE(delegate_platform_view.create_resource_context_called);
+
+  // 8. ReleaseResourceContext
+  EXPECT_FALSE(delegate_platform_view.release_resource_context_called);
+  platform_view->ReleaseResourceContext();
+  EXPECT_TRUE(delegate_platform_view.release_resource_context_called);
+
+  // 9. GetImpellerContext
+  EXPECT_FALSE(delegate_platform_view.get_impeller_context_called);
+  platform_view->GetImpellerContext();
+  EXPECT_TRUE(delegate_platform_view.get_impeller_context_called);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+// Characterization: verify that GetPlatformMessageHandler,
+// SetupImpellerContext, CreateVSyncWaiter, CreateExternalViewEmbedder,
+// ReleaseResourceContext, and GetImpellerContext execute default fallback
+// behavior when platform_view_ is null.
+TEST_F(PlatformViewAndroidTest, PlatformViewDelegateSurfaceAndContextFallback) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  EXPECT_EQ(platform_view->GetPlatformViewDelegate(), nullptr);
+
+  // Fallback calls:
+  EXPECT_NE(platform_view->GetPlatformMessageHandler(), nullptr);
+  EXPECT_NE(platform_view->CreateVSyncWaiter(), nullptr);
+  EXPECT_NE(platform_view->CreateExternalViewEmbedder(), nullptr);
+  platform_view->ReleaseResourceContext();
+  EXPECT_NE(platform_view->GetImpellerContext(), nullptr);
+  platform_view->SetupImpellerContext();
 }
 
 // TODO(matanlurey): Re-enable.

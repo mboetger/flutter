@@ -122,6 +122,9 @@ class PlatformViewAndroid final : public PlatformView {
 
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override {
+    if (platform_view_) {
+      return platform_view_->GetPlatformMessageHandler();
+    }
     return platform_message_handler_;
   }
 
