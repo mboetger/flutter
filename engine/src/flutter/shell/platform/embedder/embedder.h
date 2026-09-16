@@ -3373,6 +3373,24 @@ typedef struct {
   const FlutterRendererConfig* custom_renderer_config;
 } FlutterEngineSpawnConfig;
 
+/// Information describing a Dart callback lookup result.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterCallbackInformation).
+  size_t struct_size;
+
+  /// The name of the callback function. This string is guaranteed to be valid
+  /// for the lifetime of the process as it points into the static callback
+  /// cache.
+  const char* callback_name;
+
+  /// The class name containing the callback method if it is a static method,
+  /// or an empty string / NULL if it is a top-level function.
+  const char* class_name;
+
+  /// The library path containing the callback function.
+  const char* library_path;
+} FlutterCallbackInformation;
+
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 // NOLINTBEGIN(google-objc-function-naming)
@@ -4283,6 +4301,34 @@ FlutterEngineResult FlutterEngineLoadDartDeferredLibraryError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterLoadDeferredLibraryErrorInfo* info);
 
+//------------------------------------------------------------------------------
+/// @brief      Retrieves callback information for a given callback handle.
+///
+///             Callback handles are created by
+///             `PluginUtilities.getCallbackHandle` in `dart:ui`.
+///
+///             The returned string pointers in `info_out` remain valid for the
+///             lifetime of the process as they point into the static callback
+///             cache.
+///
+/// @param[in]  handle    The 64-bit integer handle identifying the Dart
+///                       callback.
+/// @param[out] info_out  Pointer to a `FlutterCallbackInformation` struct to be
+///                       filled with information. Must not be null and must
+///                       have its `struct_size` field initialized to
+///                       `sizeof(FlutterCallbackInformation)`.
+///
+/// @return     `kSuccess` if the callback information was successfully found
+///             and retrieved;
+///             `kInvalidArguments` if `info_out` is null or `struct_size` is
+///             invalid; `kInternalInconsistency` if the callback handle was not
+///             found in the cache.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineGetCallbackInformation(
+    int64_t handle,
+    FlutterCallbackInformation* info_out);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4439,6 +4485,9 @@ typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
     const FlutterEngineSpawnConfig* config,
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
+typedef FlutterEngineResult (*FlutterEngineGetCallbackInformationFnPtr)(
+    int64_t handle,
+    FlutterCallbackInformation* info_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4496,6 +4545,7 @@ typedef struct {
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineLoadDartDeferredLibraryErrorFnPtr LoadDartDeferredLibraryError;
   FlutterEngineSpawnFnPtr Spawn;
+  FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

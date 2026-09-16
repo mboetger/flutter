@@ -23,6 +23,7 @@
 #include "flutter/fml/thread.h"
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
+#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/runtime/dart_vm.h"
 #include "flutter/shell/platform/embedder/embedder_struct_macros.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
@@ -5659,6 +5660,76 @@ TEST_F(EmbedderTest, PlatformMessageRoutingSafeAccessTruncatedStruct) {
   routing = SAFE_ACCESS(args_ptr, platform_message_routing,
                         kFlutterPlatformMessageRoutingPlatformThread);
   ASSERT_EQ(routing, kFlutterPlatformMessageRoutingCallingThread);
+}
+
+TEST_F(EmbedderTest, CallbackInfoArgumentValidation) {
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  // Null info_out pointer.
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(1, nullptr), kInvalidArguments);
+
+  // Invalid struct_size (0).
+  info.struct_size = 0;
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(1, &info), kInvalidArguments);
+
+  // Invalid struct_size (truncated / wrong size).
+  info.struct_size = sizeof(FlutterCallbackInformation) - 1;
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(1, &info), kInvalidArguments);
+
+  // Valid struct size, but non-existent callback handle.
+  info.struct_size = sizeof(FlutterCallbackInformation);
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(0x1234567890ABCDEFLL, &info),
+            kInternalInconsistency);
+}
+
+TEST_F(EmbedderTest, CallbackInfoLookupClassMethod) {
+  int64_t handle = DartCallbackCache::GetCallbackHandle(
+      "testClassCallback", "TestTargetClass", "package:test/class_method.dart");
+  ASSERT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(handle, &info), kSuccess);
+  ASSERT_STREQ(info.callback_name, "testClassCallback");
+  ASSERT_STREQ(info.class_name, "TestTargetClass");
+  ASSERT_STREQ(info.library_path, "package:test/class_method.dart");
+}
+
+TEST_F(EmbedderTest, CallbackInfoLookupTopLevelFunction) {
+  int64_t handle = DartCallbackCache::GetCallbackHandle(
+      "topLevelCallback", "", "package:test/top_level.dart");
+  ASSERT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  ASSERT_EQ(FlutterEngineGetCallbackInformation(handle, &info), kSuccess);
+  ASSERT_STREQ(info.callback_name, "topLevelCallback");
+  ASSERT_STREQ(info.class_name, "");
+  ASSERT_STREQ(info.library_path, "package:test/top_level.dart");
+}
+
+TEST_F(EmbedderTest, CallbackInfoProcTable) {
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  ASSERT_NE(table.GetCallbackInformation, nullptr);
+  ASSERT_EQ(table.GetCallbackInformation, &FlutterEngineGetCallbackInformation);
+
+  int64_t handle = DartCallbackCache::GetCallbackHandle(
+      "procTableCallback", "ProcTableClass", "package:test/proc_table.dart");
+  ASSERT_NE(handle, 0);
+
+  FlutterCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterCallbackInformation);
+
+  ASSERT_EQ(table.GetCallbackInformation(handle, &info), kSuccess);
+  ASSERT_STREQ(info.callback_name, "procTableCallback");
+  ASSERT_STREQ(info.class_name, "ProcTableClass");
+  ASSERT_STREQ(info.library_path, "package:test/proc_table.dart");
 }
 
 }  // namespace testing
