@@ -297,8 +297,12 @@ DEF_SWITCH(kImpellerUseSdFs,
            "Whether to use SDFs for rendering in Impeller.")
 DEF_SWITCH(kAndroidEmbedderApi,
            "android-embedder-api",
-           "Whether to enable the Android Embedder API adherence path "
-           "(Stage 3 migration). Defaults to false.")
+           "Whether to enable the Android Embedder API adherence path. "
+           "Defaults to true; pass --no-android-embedder-api to opt out.")
+DEF_SWITCH(kNoAndroidEmbedderApi,
+           "no-android-embedder-api",
+           "Whether to disable the Android Embedder API adherence path and "
+           "opt out to the legacy implementation.")
 DEF_SWITCHES_END
 
 }  // namespace flutter

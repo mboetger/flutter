@@ -473,7 +473,8 @@ Settings SettingsFromCommandLine(const fml::CommandLine& command_line,
                                     &android_embedder_api_value)) {
       settings.android_embedder_api = android_embedder_api_value.empty() ||
                                       "true" == android_embedder_api_value;
-    } else if (command_line.HasOption("no-android-embedder-api")) {
+    } else if (command_line.HasOption(
+                   FlagForSwitch(Switch::kNoAndroidEmbedderApi))) {
       settings.android_embedder_api = false;
     }
   }
