@@ -17,6 +17,7 @@
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/shell/common/snapshot_surface_producer.h"
+#include "flutter/shell/platform/android/android_external_texture_adapter.h"
 #include "flutter/shell/platform/android/android_surface_lifecycle.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -51,7 +52,9 @@ class AndroidSurfaceFactoryImpl : public AndroidSurfaceFactory {
   const bool lazy_shader_mode_;
 };
 
-class PlatformViewAndroid final : public AndroidSurfaceLifecycle::Delegate {
+class PlatformViewAndroid final
+    : public AndroidSurfaceLifecycle::Delegate,
+      public AndroidExternalTextureAdapter::Delegate {
  public:
   static bool Register(JNIEnv* env);
 
@@ -102,6 +105,10 @@ class PlatformViewAndroid final : public AndroidSurfaceLifecycle::Delegate {
 
   AndroidCompositorAdapter* GetCompositorAdapterForTesting() const {
     return compositor_adapter_.get();
+  }
+
+  AndroidExternalTextureAdapter* GetExternalTextureAdapterForTesting() const {
+    return external_texture_adapter_.get();
   }
 
   void DispatchPlatformMessage(JNIEnv* env,
@@ -197,6 +204,7 @@ class PlatformViewAndroid final : public AndroidSurfaceLifecycle::Delegate {
   PlatformView* platform_view_ = nullptr;
   bool android_meets_hcpp_criteria_ = false;
   std::shared_ptr<AndroidCompositorAdapter> compositor_adapter_;
+  std::unique_ptr<AndroidExternalTextureAdapter> external_texture_adapter_;
   fml::WeakPtrFactory<PlatformViewAndroid> weak_factory_{this};
 
  public:
@@ -205,6 +213,11 @@ class PlatformViewAndroid final : public AndroidSurfaceLifecycle::Delegate {
   void OnSurfaceDestroyed() override;
   void OnScheduleFrame() override;
   void OnInstallFirstFrameCallback() override;
+
+  // |AndroidExternalTextureAdapter::Delegate|
+  void OnRegisterTexture(std::shared_ptr<flutter::Texture> texture) override;
+  void OnUnregisterTexture(int64_t texture_id) override;
+  void OnMarkTextureFrameAvailable(int64_t texture_id) override;
 
   void UpdateSemantics(int64_t view_id,
                        flutter::SemanticsNodeUpdates update,

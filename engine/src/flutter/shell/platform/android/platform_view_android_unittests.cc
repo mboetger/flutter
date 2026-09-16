@@ -6,6 +6,7 @@
 
 #include "flutter/fml/message_loop.h"
 #include "flutter/shell/platform/android/android_compositor_adapter.h"
+#include "flutter/shell/platform/android/android_external_texture_adapter.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
@@ -577,6 +578,7 @@ TEST_F(PlatformViewAndroidTest, PlatformViewDelegateSurfaceAndContextFallback) {
   EXPECT_NE(
       platform_view->GetCompositorAdapterForTesting()->GetFlutterCompositor(),
       nullptr);
+  EXPECT_NE(platform_view->GetExternalTextureAdapterForTesting(), nullptr);
   platform_view->ReleaseResourceContext();
   EXPECT_NE(platform_view->GetImpellerContext(), nullptr);
   platform_view->SetupImpellerContext();
