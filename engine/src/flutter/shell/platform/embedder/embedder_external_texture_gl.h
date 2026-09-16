@@ -5,7 +5,10 @@
 #ifndef FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_EXTERNAL_TEXTURE_GL_H_
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_EXTERNAL_TEXTURE_GL_H_
 
+#include <optional>
+
 #include "flutter/common/graphics/texture.h"
+#include "flutter/display_list/geometry/dl_geometry_types.h"
 #include "flutter/fml/macros.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 #include "third_party/skia/include/core/SkSize.h"
@@ -43,6 +46,7 @@ class EmbedderExternalTextureGL : public flutter::Texture {
  private:
   const ExternalTextureCallback& external_texture_callback_;
   sk_sp<DlImage> last_image_;
+  std::optional<DlMatrix> last_transformation_;
 
   sk_sp<DlImage> ResolveTexture(int64_t texture_id,
                                 GrDirectContext* context,

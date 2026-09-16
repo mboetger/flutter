@@ -5379,6 +5379,230 @@ TEST_F(EmbedderTest, RendererConfigSetupCallback) {
   ASSERT_EQ(received_user_data, &context);
 }
 
+TEST_F(EmbedderTest, PlatformViewWithOpenGLTextureBackingStoreImpeller) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor();
+  builder.SetDartEntrypoint("platform_view_mutators");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kOpenGLTexture);
+
+  fml::CountDownLatch latch(1);
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) {
+        ASSERT_EQ(layers_count, 2u);
+
+        // Layer 0 (Root backing store)
+        ASSERT_EQ(layers[0]->type, kFlutterLayerContentTypeBackingStore);
+        ASSERT_NE(layers[0]->backing_store, nullptr);
+        ASSERT_EQ(layers[0]->backing_store->type,
+                  kFlutterBackingStoreTypeOpenGL);
+        ASSERT_EQ(layers[0]->backing_store->open_gl.type,
+                  kFlutterOpenGLTargetTypeTexture);
+
+        // Layer 1 (Platform view)
+        ASSERT_EQ(layers[1]->type, kFlutterLayerContentTypePlatformView);
+        ASSERT_NE(layers[1]->platform_view, nullptr);
+        ASSERT_EQ(layers[1]->platform_view->identifier, 42);
+
+        latch.CountDown();
+      });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  latch.Wait();
+}
+
+TEST_F(EmbedderTest, RenderTextureWithUVTransformation) {
+  constexpr int kWidth = 800;
+  constexpr int kHeight = 600;
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  fml::AutoResetWaitableEvent latch;
+  context.SetGLPresentCallback(
+      [&](FlutterPresentInfo present_info) { latch.Signal(); });
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture_impeller_test");
+  builder.SetSurface(DlISize(kWidth, kHeight));
+
+  typedef void (*glGenTexturesProc)(GLsizei n, GLuint* textures);
+  typedef void (*glBindTextureProc)(GLenum n, GLuint texture);
+  typedef void (*glTexImage2DProc)(GLenum target, GLint level,
+                                   GLint internalformat, GLsizei width,
+                                   GLsizei height, GLint border, GLenum format,
+                                   GLenum type, const void* pixels);
+  typedef void (*glDeleteTexturesProc)(GLsizei n, const GLuint* textures);
+
+  static glGenTexturesProc glGenTextures = reinterpret_cast<glGenTexturesProc>(
+      context.GLGetProcAddress("glGenTextures"));
+  static glBindTextureProc glBindTexture = reinterpret_cast<glBindTextureProc>(
+      context.GLGetProcAddress("glBindTexture"));
+  static glTexImage2DProc glTexImage2D = reinterpret_cast<glTexImage2DProc>(
+      context.GLGetProcAddress("glTexImage2D"));
+  static glDeleteTexturesProc glDeleteTextures =
+      reinterpret_cast<glDeleteTexturesProc>(
+          context.GLGetProcAddress("glDeleteTextures"));
+
+  static GLuint gl_texture = 0;
+  static bool callback_invoked = false;
+
+  context.GetRendererConfig().open_gl.gl_external_texture_frame_callback =
+      [](void* user_data, int64_t texture_id, size_t width, size_t height,
+         FlutterOpenGLTexture* texture) -> bool {
+    callback_invoked = true;
+    std::vector<uint8_t> buffer(kWidth * kHeight * 4, 255);
+
+    if (gl_texture == 0) {
+      glGenTextures(1, &gl_texture);
+    }
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kWidth, kHeight, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, buffer.data());
+    texture->target = GL_TEXTURE_2D;
+    texture->name = gl_texture;
+    texture->format = GL_RGBA8;
+    texture->user_data = nullptr;
+    texture->destruction_callback = nullptr;
+    texture->width = width;
+    texture->height = height;
+
+    // Apply 90-degree UV rotation matrix (column-major).
+    texture->transformation[0] = 0.0;
+    texture->transformation[1] = 1.0;
+    texture->transformation[2] = 0.0;
+    texture->transformation[3] = 0.0;
+
+    texture->transformation[4] = -1.0;
+    texture->transformation[5] = 0.0;
+    texture->transformation[6] = 0.0;
+    texture->transformation[7] = 0.0;
+
+    texture->transformation[8] = 0.0;
+    texture->transformation[9] = 0.0;
+    texture->transformation[10] = 1.0;
+    texture->transformation[11] = 0.0;
+
+    texture->transformation[12] = 1.0;
+    texture->transformation[13] = 0.0;
+    texture->transformation[14] = 0.0;
+    texture->transformation[15] = 1.0;
+    return true;
+  };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  flutter::EmbedderEngine* embedder_engine = ToEmbedderEngine(engine.get());
+  constexpr int texture_id = 1;
+  ASSERT_TRUE(embedder_engine->RegisterTexture(texture_id));
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = kWidth;
+  event.height = kHeight;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+  latch.Wait();
+  ASSERT_TRUE(callback_invoked);
+
+  if (gl_texture != 0) {
+    glDeleteTextures(1, &gl_texture);
+    gl_texture = 0;
+  }
+}
+
+TEST_F(EmbedderTest, RenderTextureWithOESTargetImpeller) {
+  constexpr int kWidth = 800;
+  constexpr int kHeight = 600;
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  fml::AutoResetWaitableEvent latch;
+  context.SetGLPresentCallback(
+      [&](FlutterPresentInfo present_info) { latch.Signal(); });
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture_impeller_test");
+  builder.SetSurface(DlISize(kWidth, kHeight));
+
+  typedef void (*glGenTexturesProc)(GLsizei n, GLuint* textures);
+  typedef void (*glBindTextureProc)(GLenum n, GLuint texture);
+  typedef void (*glTexImage2DProc)(GLenum target, GLint level,
+                                   GLint internalformat, GLsizei width,
+                                   GLsizei height, GLint border, GLenum format,
+                                   GLenum type, const void* pixels);
+  typedef void (*glDeleteTexturesProc)(GLsizei n, const GLuint* textures);
+
+  static glGenTexturesProc glGenTextures = reinterpret_cast<glGenTexturesProc>(
+      context.GLGetProcAddress("glGenTextures"));
+  static glBindTextureProc glBindTexture = reinterpret_cast<glBindTextureProc>(
+      context.GLGetProcAddress("glBindTexture"));
+  static glTexImage2DProc glTexImage2D = reinterpret_cast<glTexImage2DProc>(
+      context.GLGetProcAddress("glTexImage2D"));
+  static glDeleteTexturesProc glDeleteTextures =
+      reinterpret_cast<glDeleteTexturesProc>(
+          context.GLGetProcAddress("glDeleteTextures"));
+
+  static GLuint gl_texture = 0;
+  static bool callback_invoked = false;
+
+  context.GetRendererConfig().open_gl.gl_external_texture_frame_callback =
+      [](void* user_data, int64_t texture_id, size_t width, size_t height,
+         FlutterOpenGLTexture* texture) -> bool {
+    callback_invoked = true;
+    std::vector<uint8_t> buffer(kWidth * kHeight * 4, 255);
+
+    if (gl_texture == 0) {
+      glGenTextures(1, &gl_texture);
+    }
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kWidth, kHeight, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, buffer.data());
+    // Simulate Android SurfaceTexture target GL_TEXTURE_EXTERNAL_OES (0x8D65)
+    texture->target = 0x8D65;
+    texture->name = gl_texture;
+    texture->format = GL_RGBA8;
+    texture->user_data = nullptr;
+    texture->destruction_callback = nullptr;
+    texture->width = width;
+    texture->height = height;
+    return true;
+  };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  flutter::EmbedderEngine* embedder_engine = ToEmbedderEngine(engine.get());
+  constexpr int texture_id = 1;
+  ASSERT_TRUE(embedder_engine->RegisterTexture(texture_id));
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = kWidth;
+  event.height = kHeight;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+  latch.Wait();
+  ASSERT_TRUE(callback_invoked);
+
+  if (gl_texture != 0) {
+    glDeleteTextures(1, &gl_texture);
+    gl_texture = 0;
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(
     EmbedderTestGlVk,
     EmbedderTestMultiBackend,

@@ -113,6 +113,30 @@ TEST(EmbedderTestNoFixture, RendererConfigVulkanExternalTextureFields) {
   ASSERT_NE(vk_config.vulkan_external_texture_frame_callback, nullptr);
 }
 
+TEST(EmbedderTestNoFixture, RendererConfigOpenGLTextureTransformationFields) {
+  FlutterOpenGLTexture texture = {};
+  for (int i = 0; i < 16; ++i) {
+    EXPECT_DOUBLE_EQ(texture.transformation[i], 0.0);
+  }
+
+  // Populate column-major 4x4 UV transformation matrix (e.g. 90-degree
+  // rotation). Column 0: (0, 1, 0, 0) Column 1: (-1, 0, 0, 0) Column 2: (0, 0,
+  // 1, 0) Column 3: (1, 0, 0, 1)
+  texture.transformation[0] = 0.0;
+  texture.transformation[1] = 1.0;
+  texture.transformation[4] = -1.0;
+  texture.transformation[5] = 0.0;
+  texture.transformation[10] = 1.0;
+  texture.transformation[12] = 1.0;
+  texture.transformation[15] = 1.0;
+
+  EXPECT_DOUBLE_EQ(texture.transformation[1], 1.0);
+  EXPECT_DOUBLE_EQ(texture.transformation[4], -1.0);
+  EXPECT_DOUBLE_EQ(texture.transformation[10], 1.0);
+  EXPECT_DOUBLE_EQ(texture.transformation[12], 1.0);
+  EXPECT_DOUBLE_EQ(texture.transformation[15], 1.0);
+}
+
 TEST_F(EmbedderTest, CanLaunchAndShutdownWithValidProjectArgs) {
   auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
   fml::AutoResetWaitableEvent latch;

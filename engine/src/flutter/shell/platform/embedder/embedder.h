@@ -537,6 +537,18 @@ typedef struct {
   size_t width;
   /// Height of the texture.
   size_t height;
+  /// Optional 4x4 transformation matrix for texture coordinates (UV
+  /// coordinates). If provided, this matrix will be applied to the texture
+  /// coordinates when sampling the external texture. The matrix consists of 16
+  /// double elements in column-major order, matching standard OpenGL and
+  /// Android SurfaceTexture conventions:
+  ///   [ m[0] m[4] m[8]  m[12] ]
+  ///   [ m[1] m[5] m[9]  m[13] ]
+  ///   [ m[2] m[6] m[10] m[14] ]
+  ///   [ m[3] m[7] m[11] m[15] ]
+  /// If all elements are 0.0 or the matrix is identity, standard [0, 1] texture
+  /// coordinates are used without transformation.
+  double transformation[16];
 } FlutterOpenGLTexture;
 
 typedef struct {

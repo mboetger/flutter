@@ -4,7 +4,10 @@
 
 #include "flutter/shell/platform/embedder/embedder_external_texture_gl.h"
 
+#include "flutter/display_list/dl_canvas.h"
+#include "flutter/display_list/effects/dl_color_source.h"
 #include "flutter/display_list/image/dl_image_skia.h"
+#include "flutter/display_list/paint/dl_paint.h"
 #include "flutter/fml/logging.h"
 #include "impeller/core/texture_descriptor.h"
 #include "impeller/display_list/aiks_context.h"
@@ -27,6 +30,32 @@
 #include "third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h"
 
 namespace flutter {
+
+static std::optional<DlMatrix> ExtractTransformation(
+    const FlutterOpenGLTexture* texture) {
+  if (!texture) {
+    return std::nullopt;
+  }
+  bool has_non_zero = false;
+  for (int i = 0; i < 16; ++i) {
+    if (texture->transformation[i] != 0.0) {
+      has_non_zero = true;
+      break;
+    }
+  }
+  if (!has_non_zero) {
+    return std::nullopt;
+  }
+  return DlMatrix::MakeColumn(
+      texture->transformation[0], texture->transformation[1],
+      texture->transformation[2], texture->transformation[3],
+      texture->transformation[4], texture->transformation[5],
+      texture->transformation[6], texture->transformation[7],
+      texture->transformation[8], texture->transformation[9],
+      texture->transformation[10], texture->transformation[11],
+      texture->transformation[12], texture->transformation[13],
+      texture->transformation[14], texture->transformation[15]);
+}
 
 EmbedderExternalTextureGL::EmbedderExternalTextureGL(
     int64_t texture_identifier,
@@ -55,11 +84,42 @@ void EmbedderExternalTextureGL::Paint(PaintContext& context,
   const DlPaint* paint = context.paint;
 
   if (last_image_) {
-    DlRect image_bounds = DlRect::Make(last_image_->GetBounds());
-    if (bounds != image_bounds) {
-      canvas->DrawImageRect(last_image_, image_bounds, bounds, sampling, paint);
+    if (last_transformation_.has_value() &&
+        !last_transformation_->IsIdentity()) {
+      auto transform = last_transformation_.value();
+      if (!transform.IsInvertible()) {
+        FML_LOG(ERROR) << "Invalid (not invertible) external texture "
+                          "transformation matrix";
+        return;
+      }
+      transform = transform.Invert();
+
+      DlAutoCanvasRestore auto_restore(canvas, true);
+
+      // The incoming texture is vertically flipped, so we flip it back.
+      // OpenGL's coordinate system has Positive Y equivalent to up, while
+      // DisplayList coordinate system has Negative Y equivalent to up.
+      canvas->Translate(bounds.GetX(), bounds.GetY() + bounds.GetHeight());
+      canvas->Scale(bounds.GetWidth(), -bounds.GetHeight());
+
+      auto source =
+          DlColorSource::MakeImage(last_image_, DlTileMode::kClamp,
+                                   DlTileMode::kClamp, sampling, &transform);
+
+      DlPaint paint_with_shader;
+      if (paint) {
+        paint_with_shader = *paint;
+      }
+      paint_with_shader.setColorSource(source);
+      canvas->DrawRect(DlRect::MakeWH(1, 1), paint_with_shader);
     } else {
-      canvas->DrawImage(last_image_, bounds.GetOrigin(), sampling, paint);
+      DlRect image_bounds = DlRect::Make(last_image_->GetBounds());
+      if (bounds != image_bounds) {
+        canvas->DrawImageRect(last_image_, image_bounds, bounds, sampling,
+                              paint);
+      } else {
+        canvas->DrawImage(last_image_, bounds.GetOrigin(), sampling, paint);
+      }
     }
   }
 }
@@ -92,6 +152,8 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureSkia(
   if (!texture) {
     return nullptr;
   }
+
+  last_transformation_ = ExtractTransformation(texture.get());
 
   GrGLTextureInfo gr_texture_info = {texture->target, texture->name,
                                      texture->format};
@@ -143,6 +205,8 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpeller(
     return nullptr;
   }
 
+  last_transformation_ = ExtractTransformation(texture.get());
+
   // Call the destruction callback if an error occurs.
   fml::ScopedCleanupClosure scoped_cleanup([&texture]() {
     if (texture->destruction_callback) {
@@ -158,6 +222,11 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpeller(
   impeller::TextureDescriptor desc;
   desc.size = impeller::ISize(texture->width, texture->height);
   desc.format = impeller::PixelFormat::kR8G8B8A8UNormInt;
+  if (texture->target == 0x8D65 /* GL_TEXTURE_EXTERNAL_OES */) {
+    desc.type = impeller::TextureType::kTextureExternalOES;
+  } else {
+    desc.type = impeller::TextureType::kTexture2D;
+  }
 
   impeller::ContextGLES& context =
       impeller::ContextGLES::Cast(*aiks_context->GetContext());
@@ -202,6 +271,7 @@ void EmbedderExternalTextureGL::OnGrContextDestroyed() {}
 // |flutter::Texture|
 void EmbedderExternalTextureGL::MarkNewFrameAvailable() {
   last_image_ = nullptr;
+  last_transformation_.reset();
 }
 
 // |flutter::Texture|

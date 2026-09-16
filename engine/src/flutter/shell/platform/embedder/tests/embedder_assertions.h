@@ -55,9 +55,18 @@ inline bool operator==(const FlutterTransformation& a,
 
 inline bool operator==(const FlutterOpenGLTexture& a,
                        const FlutterOpenGLTexture& b) {
-  return a.target == b.target && a.name == b.name && a.format == b.format &&
-         a.user_data == b.user_data &&
-         a.destruction_callback == b.destruction_callback;
+  if (a.target != b.target || a.name != b.name || a.format != b.format ||
+      a.user_data != b.user_data ||
+      a.destruction_callback != b.destruction_callback || a.width != b.width ||
+      a.height != b.height) {
+    return false;
+  }
+  for (int i = 0; i < 16; ++i) {
+    if (a.transformation[i] != b.transformation[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 inline bool operator==(const FlutterOpenGLFramebuffer& a,

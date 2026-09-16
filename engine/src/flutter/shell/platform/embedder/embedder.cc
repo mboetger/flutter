@@ -1278,6 +1278,90 @@ MakeRenderTargetFromBackingStoreImpeller(
     const fml::closure& on_release,
     const std::shared_ptr<impeller::AiksContext>& aiks_context,
     const FlutterBackingStoreConfig& config,
+    const FlutterOpenGLTexture* texture) {
+#if defined(SHELL_ENABLE_GL) && defined(IMPELLER_SUPPORTS_RENDERING)
+  auto format = FlutterFormatToImpellerPixelFormat(texture->format);
+  if (!format.has_value()) {
+    return nullptr;
+  }
+
+  const auto& gl_context =
+      impeller::ContextGLES::Cast(*aiks_context->GetContext());
+
+  const auto size = impeller::ISize(config.size.width, config.size.height);
+
+  impeller::TextureDescriptor texture_desc;
+  texture_desc.format = format.value();
+  texture_desc.size = size;
+  texture_desc.usage = static_cast<impeller::TextureUsageMask>(
+      impeller::TextureUsage::kRenderTarget |
+      impeller::TextureUsage::kShaderRead);
+
+  impeller::HandleGLES handle = gl_context.GetReactor()->CreateHandle(
+      impeller::HandleType::kTexture, texture->name);
+  auto texture_gles = impeller::TextureGLES::WrapTexture(
+      gl_context.GetReactor(), texture_desc, handle);
+  if (!texture_gles) {
+    FML_LOG(ERROR) << "Could not wrap embedder supplied OpenGL texture.";
+    return nullptr;
+  }
+
+  impeller::ColorAttachment color0;
+  color0.texture = texture_gles;
+  color0.clear_color = impeller::Color::DarkSlateGray();
+  color0.load_action = impeller::LoadAction::kClear;
+  color0.store_action = impeller::StoreAction::kStore;
+
+  impeller::TextureDescriptor depth_stencil_texture_desc;
+  depth_stencil_texture_desc.format = impeller::PixelFormat::kD24UnormS8Uint;
+  depth_stencil_texture_desc.size = size;
+  depth_stencil_texture_desc.usage = static_cast<impeller::TextureUsageMask>(
+      impeller::TextureUsage::kRenderTarget);
+  depth_stencil_texture_desc.type = impeller::TextureType::kTexture2D;
+  depth_stencil_texture_desc.sample_count = impeller::SampleCount::kCount1;
+
+  auto depth_stencil_tex = impeller::TextureGLES::CreatePlaceholder(
+      gl_context.GetReactor(), depth_stencil_texture_desc);
+
+  impeller::DepthAttachment depth0;
+  depth0.clear_depth = 0;
+  depth0.texture = depth_stencil_tex;
+  depth0.load_action = impeller::LoadAction::kClear;
+  depth0.store_action = impeller::StoreAction::kDontCare;
+
+  impeller::StencilAttachment stencil0;
+  stencil0.clear_stencil = 0;
+  stencil0.texture = depth_stencil_tex;
+  stencil0.load_action = impeller::LoadAction::kClear;
+  stencil0.store_action = impeller::StoreAction::kDontCare;
+
+  impeller::RenderTarget render_target_desc;
+  render_target_desc.SetColorAttachment(color0, 0u);
+  render_target_desc.SetDepthAttachment(depth0);
+  render_target_desc.SetStencilAttachment(stencil0);
+
+  fml::closure texture_destruct = [callback = texture->destruction_callback,
+                                   user_data = texture->user_data]() {
+    if (callback) {
+      callback(user_data);
+    }
+  };
+
+  return std::make_unique<flutter::EmbedderRenderTargetImpeller>(
+      backing_store, aiks_context,
+      std::make_unique<impeller::RenderTarget>(std::move(render_target_desc)),
+      on_release, texture_destruct);
+#else
+  return nullptr;
+#endif
+}
+
+static std::unique_ptr<flutter::EmbedderRenderTarget>
+MakeRenderTargetFromBackingStoreImpeller(
+    FlutterBackingStore backing_store,
+    const fml::closure& on_release,
+    const std::shared_ptr<impeller::AiksContext>& aiks_context,
+    const FlutterBackingStoreConfig& config,
     const FlutterMetalBackingStore* metal) {
 #if defined(SHELL_ENABLE_METAL) && defined(IMPELLER_SUPPORTS_RENDERING)
   if (!metal->texture.texture) {
@@ -1556,12 +1640,19 @@ CreateEmbedderRenderTarget(
     case kFlutterBackingStoreTypeOpenGL: {
       switch (backing_store.open_gl.type) {
         case kFlutterOpenGLTargetTypeTexture: {
-          auto skia_surface = MakeSkSurfaceFromBackingStore(
-              context, config, &backing_store.open_gl.texture);
-          render_target = MakeRenderTargetFromSkSurface(
-              backing_store, std::move(skia_surface),
-              collect_callback.Release());
-          break;
+          if (enable_impeller) {
+            render_target = MakeRenderTargetFromBackingStoreImpeller(
+                backing_store, collect_callback.Release(), aiks_context, config,
+                &backing_store.open_gl.texture);
+            break;
+          } else {
+            auto skia_surface = MakeSkSurfaceFromBackingStore(
+                context, config, &backing_store.open_gl.texture);
+            render_target = MakeRenderTargetFromSkSurface(
+                backing_store, std::move(skia_surface),
+                collect_callback.Release());
+            break;
+          }
         }
         case kFlutterOpenGLTargetTypeFramebuffer: {
           if (enable_impeller) {
