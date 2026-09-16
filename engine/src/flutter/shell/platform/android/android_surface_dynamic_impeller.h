@@ -63,6 +63,9 @@ class AndroidSurfaceDynamicImpeller : public AndroidSurface {
   // |AndroidSurface|
   void SetupImpellerSurface() override;
 
+  // |AndroidSurface|
+  Screenshot Screenshot() override;
+
  private:
   std::shared_ptr<AndroidContextDynamicImpeller> android_context_;
   std::unique_ptr<AndroidSurfaceVKImpeller> vulkan_surface_;

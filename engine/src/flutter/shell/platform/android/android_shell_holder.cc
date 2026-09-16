@@ -307,10 +307,15 @@ void AndroidShellHolder::Launch(
 Rasterizer::Screenshot AndroidShellHolder::Screenshot(
     Rasterizer::ScreenshotType type,
     bool base64_encode) {
-  if (!IsValid()) {
+  if (!IsValid() || !platform_view_) {
     return {nullptr, DlISize(), "", Rasterizer::ScreenshotFormat::kUnknown};
   }
-  return shell_->Screenshot(type, base64_encode);
+  auto surface_screenshot = platform_view_->Screenshot();
+  Rasterizer::Screenshot screenshot;
+  screenshot.data = surface_screenshot.data;
+  screenshot.frame_size = surface_screenshot.frame_size;
+  screenshot.format = "ScreenshotType::UncompressedImage";
+  return screenshot;
 }
 
 fml::WeakPtr<PlatformViewAndroid> AndroidShellHolder::GetPlatformView() {

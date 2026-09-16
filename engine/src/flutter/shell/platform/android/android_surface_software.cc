@@ -168,4 +168,24 @@ bool AndroidSurfaceSoftware::SetNativeWindow(
   return true;
 }
 
+AndroidSurface::Screenshot AndroidSurfaceSoftware::Screenshot() {
+  if (!sk_surface_) {
+    return {};
+  }
+  SkImageInfo info = sk_surface_->imageInfo();
+  if (info.width() <= 0 || info.height() <= 0) {
+    return {};
+  }
+  SkImageInfo read_info = SkImageInfo::Make(
+      info.width(), info.height(), kRGBA_8888_SkColorType, kPremul_SkAlphaType);
+  size_t row_bytes = read_info.minRowBytes();
+  size_t total_bytes = read_info.computeByteSize(row_bytes);
+  auto data = SkData::MakeUninitialized(total_bytes);
+  if (!sk_surface_->readPixels(read_info, data->writable_data(), row_bytes, 0,
+                               0)) {
+    return {};
+  }
+  return AndroidSurface::Screenshot{data, DlISize(info.width(), info.height())};
+}
+
 }  // namespace flutter

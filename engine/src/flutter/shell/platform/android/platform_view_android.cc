@@ -569,4 +569,20 @@ void PlatformViewAndroid::SetupImpellerContext() {
   android_surface_->SetupImpellerSurface();
 }
 
+AndroidSurface::Screenshot PlatformViewAndroid::Screenshot() {
+  if (!android_surface_) {
+    return {};
+  }
+  AndroidSurface::Screenshot screenshot;
+  fml::AutoResetWaitableEvent latch;
+  fml::TaskRunner::RunNowOrPostTask(
+      task_runners_.GetRasterTaskRunner(),
+      [&latch, surface = android_surface_.get(), &screenshot]() {
+        screenshot = surface->Screenshot();
+        latch.Signal();
+      });
+  latch.Wait();
+  return screenshot;
+}
+
 }  // namespace flutter

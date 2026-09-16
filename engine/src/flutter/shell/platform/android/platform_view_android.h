@@ -127,6 +127,8 @@ class PlatformViewAndroid final : public PlatformView {
   // |PlatformView|
   void SetupImpellerContext() override;
 
+  AndroidSurface::Screenshot Screenshot();
+
  private:
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::shared_ptr<AndroidContext> android_context_;

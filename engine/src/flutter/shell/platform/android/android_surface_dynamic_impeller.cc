@@ -118,4 +118,14 @@ AndroidSurfaceDynamicImpeller::GetImpellerContext() {
   return android_context_->GetImpellerContext();
 }
 
+AndroidSurface::Screenshot AndroidSurfaceDynamicImpeller::Screenshot() {
+  if (vulkan_surface_) {
+    return vulkan_surface_->Screenshot();
+  }
+  if (gl_surface_) {
+    return gl_surface_->Screenshot();
+  }
+  return {};
+}
+
 }  // namespace flutter

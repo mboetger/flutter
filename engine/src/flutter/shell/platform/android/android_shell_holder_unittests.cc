@@ -5,9 +5,12 @@
 #include <memory>
 
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/android_surface_software.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "shell/platform/android/jni/platform_view_android_jni.h"
+#include "third_party/skia/include/core/SkCanvas.h"
+#include "third_party/skia/include/core/SkPaint.h"
 
 namespace flutter {
 namespace testing {
@@ -226,6 +229,46 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
   EXPECT_NE(
       holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
       holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+}
+
+#if !SLIMPELLER
+TEST(AndroidSurfaceSoftware, ScreenshotNonBlank) {
+  AndroidSurfaceSoftware surface;
+  const DlISize size(80, 60);
+  sk_sp<SkSurface> sk_surface = surface.AcquireBackingStore(size);
+  ASSERT_NE(sk_surface, nullptr);
+
+  SkPaint paint;
+  paint.setColor(SK_ColorRED);
+  sk_surface->getCanvas()->drawPaint(paint);
+
+  auto screenshot = surface.Screenshot();
+  EXPECT_NE(screenshot.data, nullptr);
+  EXPECT_EQ(screenshot.frame_size.width, 80);
+  EXPECT_EQ(screenshot.frame_size.height, 60);
+  EXPECT_EQ(screenshot.data->size(), static_cast<size_t>(80 * 60 * 4));
+
+  // Assert non-blank bitmap: check for non-zero pixel data.
+  const uint8_t* bytes = static_cast<const uint8_t*>(screenshot.data->data());
+  bool has_non_zero_pixel = false;
+  for (size_t i = 0; i < screenshot.data->size(); ++i) {
+    if (bytes[i] != 0) {
+      has_non_zero_pixel = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(has_non_zero_pixel);
+}
+#endif  // !SLIMPELLER
+
+TEST(AndroidShellHolder, ScreenshotEmptyWhenNoFrame) {
+  Settings settings;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  auto screenshot =
+      holder->Screenshot(Rasterizer::ScreenshotType::UncompressedImage, false);
+  EXPECT_EQ(screenshot.data, nullptr);
 }
 
 }  // namespace testing

@@ -39,6 +39,8 @@ class AndroidSurfaceMock final : public GPUSurfaceGLDelegate,
                const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade),
               (override));
 
+  MOCK_METHOD(Screenshot, Screenshot, (), (override));
+
   // |GPUSurfaceGLDelegate|
   std::unique_ptr<GLContextResult> GLContextMakeCurrent() override;
 

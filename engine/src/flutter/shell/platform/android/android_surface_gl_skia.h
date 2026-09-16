@@ -53,6 +53,9 @@ class AndroidSurfaceGLSkia final : public GPUSurfaceGLDelegate,
   // |AndroidSurface|
   virtual std::unique_ptr<Surface> CreateSnapshotSurface() override;
 
+  // |AndroidSurface|
+  Screenshot Screenshot() override;
+
   // |GPUSurfaceGLDelegate|
   std::unique_ptr<GLContextResult> GLContextMakeCurrent() override;
 

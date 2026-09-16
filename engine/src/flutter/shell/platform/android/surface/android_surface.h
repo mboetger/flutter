@@ -12,6 +12,7 @@
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
+#include "third_party/skia/include/core/SkData.h"
 
 namespace impeller {
 class Context;
@@ -23,6 +24,11 @@ class AndroidExternalViewEmbedder;
 
 class AndroidSurface {
  public:
+  struct Screenshot {
+    sk_sp<SkData> data;
+    DlISize frame_size;
+  };
+
   virtual ~AndroidSurface();
 
   virtual bool IsValid() const = 0;
@@ -47,6 +53,8 @@ class AndroidSurface {
   virtual std::shared_ptr<impeller::Context> GetImpellerContext();
 
   virtual void SetupImpellerSurface();
+
+  virtual Screenshot Screenshot();
 
  protected:
   AndroidSurface();

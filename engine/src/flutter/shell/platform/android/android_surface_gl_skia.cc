@@ -218,4 +218,32 @@ std::unique_ptr<Surface> AndroidSurfaceGLSkia::CreateSnapshotSurface() {
   return std::make_unique<GPUSurfaceGLSkia>(main_skia_context, this, true);
 }
 
+AndroidSurface::Screenshot AndroidSurfaceGLSkia::Screenshot() {
+  if (!onscreen_surface_ || !onscreen_surface_->IsValid()) {
+    return {};
+  }
+  if (onscreen_surface_->MakeCurrent() !=
+      AndroidEGLSurfaceMakeCurrentStatus::kSuccess) {
+    return {};
+  }
+  DlISize size = onscreen_surface_->GetSize();
+  if (size.width <= 0 || size.height <= 0) {
+    return {};
+  }
+  size_t bytes_per_pixel = 4;
+  size_t row_bytes = size.width * bytes_per_pixel;
+  size_t total_bytes = row_bytes * size.height;
+  auto data = SkData::MakeUninitialized(total_bytes);
+  uint8_t* pixels = static_cast<uint8_t*>(data->writable_data());
+
+  std::vector<uint8_t> temp(total_bytes);
+  glReadPixels(0, 0, size.width, size.height, GL_RGBA, GL_UNSIGNED_BYTE,
+               temp.data());
+  for (int y = 0; y < size.height; ++y) {
+    memcpy(pixels + y * row_bytes,
+           temp.data() + (size.height - 1 - y) * row_bytes, row_bytes);
+  }
+  return AndroidSurface::Screenshot{data, size};
+}
+
 }  // namespace flutter
