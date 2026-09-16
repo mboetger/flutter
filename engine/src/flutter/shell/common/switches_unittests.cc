@@ -211,12 +211,12 @@ TEST(SwitchesTest, RequireMergedPlatformUIThreadAllowsMergeAfterLaunch) {
 #endif  // !OS_FUCHSIA
 
 TEST(SwitchesTest, AndroidEmbedderApiFlag) {
-  // Default is false.
+  // Default is true in Stage 4.
   {
     fml::CommandLine command_line =
         fml::CommandLineFromInitializerList({"command"});
     Settings settings = SettingsFromCommandLine(command_line);
-    EXPECT_FALSE(settings.android_embedder_api);
+    EXPECT_TRUE(settings.android_embedder_api);
   }
 
   // Explicit flag without value evaluates to true.

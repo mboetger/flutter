@@ -627,26 +627,26 @@ TEST_F(PlatformViewAndroidTest, PlatformViewDelegateSurfaceAndContextFallback) {
 }
 
 TEST_F(PlatformViewAndroidTest, AndroidEmbedderApiFlagState) {
-  // Flag off by default:
+  // Flag on by default in Stage 4:
   {
     auto holder = CreateShellHolder();
-    ASSERT_NE(holder, nullptr);
-    EXPECT_FALSE(holder->IsAndroidEmbedderApiEnabled());
-    auto platform_view = holder->GetPlatformView();
-    ASSERT_TRUE(platform_view);
-    EXPECT_FALSE(platform_view->IsAndroidEmbedderApiEnabled());
-  }
-
-  // Flag on when set in Settings:
-  {
-    Settings settings;
-    settings.android_embedder_api = true;
-    auto holder = CreateShellHolder(nullptr, settings);
     ASSERT_NE(holder, nullptr);
     EXPECT_TRUE(holder->IsAndroidEmbedderApiEnabled());
     auto platform_view = holder->GetPlatformView();
     ASSERT_TRUE(platform_view);
     EXPECT_TRUE(platform_view->IsAndroidEmbedderApiEnabled());
+  }
+
+  // Flag off when explicitly disabled in Settings:
+  {
+    Settings settings;
+    settings.android_embedder_api = false;
+    auto holder = CreateShellHolder(nullptr, settings);
+    ASSERT_NE(holder, nullptr);
+    EXPECT_FALSE(holder->IsAndroidEmbedderApiEnabled());
+    auto platform_view = holder->GetPlatformView();
+    ASSERT_TRUE(platform_view);
+    EXPECT_FALSE(platform_view->IsAndroidEmbedderApiEnabled());
   }
 }
 

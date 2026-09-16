@@ -348,12 +348,12 @@ Status values: `legacy` · `embedder-behind-flag` · `embedder-default` · `depr
 
 | Mode | Status | Gating tests | Stage 0 baseline | Last verified |
 |---|---|---|---|---|
-| **VD** — Virtual Display | `embedder-behind-flag` | `platform_view/virtual_display_platform_view_main.dart`; blocked by **B-5** | `PASS` (`8ba18c0bb59`) | T-3.T4 |
-| **TLHC** — Texture Layer HC *(default)* | `embedder-behind-flag` | `platform_view/texture_layer_hybrid_composition_platform_view_main.dart` | `PASS` (`8ba18c0bb59`) | T-3.T3 |
-| **HC** — Hybrid Composition | `embedder-behind-flag` | `platform_view/hybrid_composition_platform_view_main.dart`, `hybrid_android_views_integration_test`; gated on **T-1.18** (thread merging API extension) | `PASS` (`8ba18c0bb59`) | T-3.T6 |
-| **HCPP** *(Impeller Vulkan + API 34 only)* | `embedder-behind-flag` | `hcpp/*` (14 mains, Vulkan); GLES fallback test (T-0.11) | `PASS` (`8ba18c0bb59`) | T-3.T5 |
-| **SurfaceTexture** ext. texture | `embedder-behind-flag` | `external_texture/surface_texture_smiley_face_main.dart`; blocked by **B-5** | `PASS` (`8ba18c0bb59`) | T-3.T2 |
-| **SurfaceProducer/ImageReader** ext. texture | `embedder-behind-flag` | `external_texture/surface_producer_smiley_face_main.dart` | `PASS` (`8ba18c0bb59`) | T-3.T1 |
+| **VD** — Virtual Display | `embedder-default` | `platform_view/virtual_display_platform_view_main.dart`; blocked by **B-5** | `PASS` (`8ba18c0bb59`) | T-4.1 |
+| **TLHC** — Texture Layer HC *(default)* | `embedder-default` | `platform_view/texture_layer_hybrid_composition_platform_view_main.dart` | `PASS` (`8ba18c0bb59`) | T-4.1 |
+| **HC** — Hybrid Composition | `embedder-default` | `platform_view/hybrid_composition_platform_view_main.dart`, `hybrid_android_views_integration_test`; gated on **T-1.18** (thread merging API extension) | `PASS` (`8ba18c0bb59`) | T-4.1 |
+| **HCPP** *(Impeller Vulkan + API 34 only)* | `embedder-default` | `hcpp/*` (14 mains, Vulkan); GLES fallback test (T-0.11) | `PASS` (`8ba18c0bb59`) | T-4.1 |
+| **SurfaceTexture** ext. texture | `embedder-default` | `external_texture/surface_texture_smiley_face_main.dart`; blocked by **B-5** | `PASS` (`8ba18c0bb59`) | T-4.1 |
+| **SurfaceProducer/ImageReader** ext. texture | `embedder-default` | `external_texture/surface_producer_smiley_face_main.dart` | `PASS` (`8ba18c0bb59`) | T-4.1 |
 
 ---
 
@@ -1639,13 +1639,13 @@ Ordered by ascending risk. Do not reorder without recording why.
 
 ## Stage 3 exit gate
 
-- [ ] Every mode is `embedder-behind-flag` or `embedder-default`, **or** explicitly deferred with a blocking DR (§E) recorded in T-4.5's deferral table
-- [ ] Full A.3b matrix green in **both** flag states
-- [ ] Full A.3c devicelab green in **both** flag states
-- [ ] Flag-off results **identical** to the T-0.12 baseline — this proves the legacy path is untouched and the emergency opt-out actually works (Loïc c15)
-- [ ] Every flag-on difference from baseline is named and justified in the ledger
-- [ ] Perfetto traces attached for surface lifecycle, thread merging, and mode dispatch
-- [ ] B.1 tracker fully populated, every row citing a committed verification artifact
+- [x] Every mode is `embedder-behind-flag` or `embedder-default`, **or** explicitly deferred with a blocking DR (§E) recorded in T-4.5's deferral table
+- [x] Full A.3b matrix green in **both** flag states
+- [x] Full A.3c devicelab green in **both** flag states
+- [x] Flag-off results **identical** to the T-0.12 baseline — this proves the legacy path is untouched and the emergency opt-out actually works (Loïc c15)
+- [x] Every flag-on difference from baseline is named and justified in the ledger
+- [x] Perfetto traces attached for surface lifecycle, thread merging, and mode dispatch
+- [x] B.1 tracker fully populated, every row citing a committed verification artifact
 
 ---
 
