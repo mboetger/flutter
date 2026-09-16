@@ -1660,6 +1660,149 @@ TEST_F(PlatformViewAndroidTest, HidePlatformView2InvalidArguments) {
   EXPECT_EQ(platform_view->HidePlatformView2(-1), kInvalidArguments);
 }
 
+TEST_F(PlatformViewAndroidTest, BeginFrameHCLegacyPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewBeginFrame()).Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->BeginFrameHC();
+}
+
+TEST_F(PlatformViewAndroidTest, BeginFrameHCEmbedderApiPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewBeginFrame()).Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->BeginFrameHC();
+}
+
+TEST_F(PlatformViewAndroidTest, BeginFrameHCDirectSeam) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewBeginFrame()).Times(1);
+
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(platform_view->BeginFrameHCEmbedder(), kSuccess);
+}
+
+TEST_F(PlatformViewAndroidTest, EndFrameHCLegacyPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewEndFrame()).Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->EndFrameHC();
+}
+
+TEST_F(PlatformViewAndroidTest, EndFrameHCEmbedderApiPath) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewEndFrame()).Times(1);
+
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  platform_view->EndFrameHC();
+}
+
+TEST_F(PlatformViewAndroidTest, EndFrameHCDirectSeam) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewEndFrame()).Times(1);
+
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  EXPECT_EQ(platform_view->EndFrameHCEmbedder(), kSuccess);
+}
+
+TEST_F(PlatformViewAndroidTest, CreateOverlaySurfaceHC) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewCreateOverlaySurface())
+      .Times(3)
+      .WillRepeatedly(::testing::Return(::testing::ByMove(
+          std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(
+              1, fml::MakeRefCounted<AndroidNativeWindow>(nullptr)))));
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder_legacy = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder_legacy, nullptr);
+  auto pv_legacy = holder_legacy->GetPlatformView();
+  ASSERT_TRUE(pv_legacy);
+  auto meta_legacy = pv_legacy->CreateOverlaySurfaceHC();
+  EXPECT_NE(meta_legacy, nullptr);
+  EXPECT_EQ(meta_legacy->id, 1);
+
+  settings.android_embedder_api = true;
+  auto holder_embedder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder_embedder, nullptr);
+  auto pv_embedder = holder_embedder->GetPlatformView();
+  ASSERT_TRUE(pv_embedder);
+  auto meta_embedder = pv_embedder->CreateOverlaySurfaceHC();
+  EXPECT_NE(meta_embedder, nullptr);
+  EXPECT_EQ(meta_embedder->id, 1);
+
+  std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> meta_seam;
+  EXPECT_EQ(pv_embedder->CreateOverlaySurfaceHCEmbedder(nullptr),
+            kInvalidArguments);
+  EXPECT_EQ(pv_embedder->CreateOverlaySurfaceHCEmbedder(&meta_seam), kSuccess);
+  EXPECT_NE(meta_seam, nullptr);
+  EXPECT_EQ(meta_seam->id, 1);
+}
+
+TEST_F(PlatformViewAndroidTest, DestroyOverlaySurfacesHC) {
+  auto jni = std::make_shared<JNIMock>();
+  EXPECT_CALL(*jni, FlutterViewDestroyOverlaySurfaces()).Times(3);
+
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder_legacy = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder_legacy, nullptr);
+  auto pv_legacy = holder_legacy->GetPlatformView();
+  ASSERT_TRUE(pv_legacy);
+  pv_legacy->DestroyOverlaySurfacesHC();
+
+  settings.android_embedder_api = true;
+  auto holder_embedder = CreateShellHolder(jni, settings);
+  ASSERT_NE(holder_embedder, nullptr);
+  auto pv_embedder = holder_embedder->GetPlatformView();
+  ASSERT_TRUE(pv_embedder);
+  pv_embedder->DestroyOverlaySurfacesHC();
+
+  EXPECT_EQ(pv_embedder->DestroyOverlaySurfacesHCEmbedder(), kSuccess);
+}
+
 // TODO(matanlurey): Re-enable.
 //
 // This test (and the entire suite) was skipped on CI (see

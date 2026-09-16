@@ -268,6 +268,24 @@ class PlatformViewAndroid final
 
   FlutterEngineResult HidePlatformView2(int32_t view_id);
 
+  void BeginFrameHC();
+
+  FlutterEngineResult BeginFrameHCEmbedder();
+
+  void EndFrameHC();
+
+  FlutterEngineResult EndFrameHCEmbedder();
+
+  std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
+  CreateOverlaySurfaceHC();
+
+  FlutterEngineResult CreateOverlaySurfaceHCEmbedder(
+      std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>* out_metadata);
+
+  void DestroyOverlaySurfacesHC();
+
+  FlutterEngineResult DestroyOverlaySurfacesHCEmbedder();
+
   void ScheduleFrame();
 
   void LoadDartDeferredLibrary(

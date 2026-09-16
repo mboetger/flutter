@@ -1314,6 +1314,105 @@ FlutterEngineResult PlatformViewAndroid::HidePlatformView2(int32_t view_id) {
   return kInternalInconsistency;
 }
 
+void PlatformViewAndroid::BeginFrameHC() {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::BeginFrameHC", "mode", "HC",
+                 "path", "embedder_api");
+    BeginFrameHCEmbedder();
+    return;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::BeginFrameHC", "mode", "HC",
+               "path", "legacy");
+  if (jni_facade_) {
+    jni_facade_->FlutterViewBeginFrame();
+  }
+}
+
+FlutterEngineResult PlatformViewAndroid::BeginFrameHCEmbedder() {
+  if (jni_facade_) {
+    jni_facade_->FlutterViewBeginFrame();
+    return kSuccess;
+  }
+  return kInternalInconsistency;
+}
+
+void PlatformViewAndroid::EndFrameHC() {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::EndFrameHC", "mode", "HC",
+                 "path", "embedder_api");
+    EndFrameHCEmbedder();
+    return;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::EndFrameHC", "mode", "HC",
+               "path", "legacy");
+  if (jni_facade_) {
+    jni_facade_->FlutterViewEndFrame();
+  }
+}
+
+FlutterEngineResult PlatformViewAndroid::EndFrameHCEmbedder() {
+  if (jni_facade_) {
+    jni_facade_->FlutterViewEndFrame();
+    return kSuccess;
+  }
+  return kInternalInconsistency;
+}
+
+std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
+PlatformViewAndroid::CreateOverlaySurfaceHC() {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::CreateOverlaySurfaceHC",
+                 "mode", "HC", "path", "embedder_api");
+    std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> metadata;
+    CreateOverlaySurfaceHCEmbedder(&metadata);
+    return metadata;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::CreateOverlaySurfaceHC", "mode",
+               "HC", "path", "legacy");
+  if (jni_facade_) {
+    return jni_facade_->FlutterViewCreateOverlaySurface();
+  }
+  return nullptr;
+}
+
+FlutterEngineResult PlatformViewAndroid::CreateOverlaySurfaceHCEmbedder(
+    std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>* out_metadata) {
+  if (!out_metadata) {
+    return kInvalidArguments;
+  }
+  if (jni_facade_) {
+    *out_metadata = jni_facade_->FlutterViewCreateOverlaySurface();
+    return kSuccess;
+  }
+  return kInternalInconsistency;
+}
+
+void PlatformViewAndroid::DestroyOverlaySurfacesHC() {
+  if (android_embedder_api_) {
+    TRACE_EVENT2("flutter", "PlatformViewAndroid::DestroyOverlaySurfacesHC",
+                 "mode", "HC", "path", "embedder_api");
+    DestroyOverlaySurfacesHCEmbedder();
+    return;
+  }
+
+  TRACE_EVENT2("flutter", "PlatformViewAndroid::DestroyOverlaySurfacesHC",
+               "mode", "HC", "path", "legacy");
+  if (jni_facade_) {
+    jni_facade_->FlutterViewDestroyOverlaySurfaces();
+  }
+}
+
+FlutterEngineResult PlatformViewAndroid::DestroyOverlaySurfacesHCEmbedder() {
+  if (jni_facade_) {
+    jni_facade_->FlutterViewDestroyOverlaySurfaces();
+    return kSuccess;
+  }
+  return kInternalInconsistency;
+}
+
 // |PlatformView|
 std::unique_ptr<VsyncWaiter> PlatformViewAndroid::CreateVSyncWaiter() {
   return std::make_unique<VsyncWaiterAndroid>(task_runners_);
