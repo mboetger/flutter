@@ -295,6 +295,10 @@ DEF_SWITCH(kImpellerLazyShaderMode,
 DEF_SWITCH(kImpellerUseSdFs,
            "impeller-use-sdfs",
            "Whether to use SDFs for rendering in Impeller.")
+DEF_SWITCH(kAndroidEmbedderApi,
+           "android-embedder-api",
+           "Whether to enable the Android Embedder API adherence path "
+           "(Stage 3 migration). Defaults to false.")
 DEF_SWITCHES_END
 
 }  // namespace flutter

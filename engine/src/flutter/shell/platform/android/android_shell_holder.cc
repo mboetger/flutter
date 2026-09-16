@@ -404,6 +404,10 @@ bool AndroidShellHolder::IsSurfaceControlEnabled() {
   return GetPlatformView()->IsSurfaceControlEnabled();
 }
 
+bool AndroidShellHolder::IsAndroidEmbedderApiEnabled() const {
+  return settings_.android_embedder_api;
+}
+
 void AndroidShellHolder::InitializeProjectArgs() {
   project_args_.struct_size = sizeof(FlutterProjectArgs);
   project_args_.assets_path = settings_.assets_path.c_str();

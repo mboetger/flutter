@@ -1585,6 +1585,26 @@ Each task replaces one internal engine call with its Embedder API equivalent:
 | `shell_->Spawn(...)` | `FlutterEngineSpawn` |
 | `Rasterizer` screenshot | *(none — platform code, T-1.15)* |
 
+### Stage 3 task schedule
+
+| Task | Summary | Depends on |
+|---|---|---|
+| **T-3.0** | Introduce `--android-embedder-api` feature flag in engine switches and plumbing | T-2.10 |
+| **T-3.1** | Replace `platform_view_->DispatchPointerDataPacket(...)` with `FlutterEngineSendPointerEvent` behind flag | T-3.0 |
+| **T-3.2** | Replace `platform_view_->SetViewportMetrics(view_id, metrics)` with `FlutterEngineSendWindowMetricsEvent` behind flag | T-3.1 |
+| **T-3.3** | Replace `platform_view_->DispatchSemanticsAction(...)` with `FlutterEngineDispatchSemanticsAction` behind flag | T-3.2 |
+| **T-3.4** | Replace `platform_view_->SetSemanticsEnabled(enabled)` with `FlutterEngineUpdateSemanticsEnabled` behind flag | T-3.3 |
+| **T-3.5** | Replace `platform_view_->SetAccessibilityFeatures(flags)` with `FlutterEngineUpdateAccessibilityFeatures` behind flag | T-3.4 |
+| **T-3.6** | Replace `platform_view_->UnregisterTexture(id)` / `MarkTextureFrameAvailable(id)` with `FlutterEngineUnregisterExternalTexture` / `FlutterEngineMarkExternalTextureFrameAvailable` behind flag | T-3.5 |
+| **T-3.7** | Replace `Shell::Create` / `ThreadHost` with `FlutterEngineInitialize` + `FlutterEngineRun` behind flag | T-3.6 |
+| **T-3.8** | Replace `shell_->Spawn(...)` with `FlutterEngineSpawn` behind flag | T-3.7 |
+| **T-3.T1** | SurfaceProducer / ImageReader external texture mode migration | T-1.19, T-2.10, T-3.0 |
+| **T-3.T2** | SurfaceTexture external texture mode migration | T-1.19, T-2.10, T-3.0 |
+| **T-3.T3** | TLHC composition mode migration | T-3.T1 |
+| **T-3.T4** | Virtual Display (VD) composition mode migration | T-3.T2 |
+| **T-3.T5** | HCPP composition mode migration | T-2.9, T-3.0 |
+| **T-3.T6** | HC composition mode migration | T-2.9, T-1.18, T-3.0 |
+
 **Per-task requirements for all of Stage 3:**
 
 - Flagged. The legacy path stays intact and reachable with the flag off.

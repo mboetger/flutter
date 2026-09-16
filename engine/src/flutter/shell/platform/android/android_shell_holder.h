@@ -97,6 +97,8 @@ class AndroidShellHolder {
 
   bool IsSurfaceControlEnabled();
 
+  bool IsAndroidEmbedderApiEnabled() const;
+
   Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
                                     bool base64_encode);
 

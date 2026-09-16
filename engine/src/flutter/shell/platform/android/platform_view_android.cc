@@ -13,6 +13,7 @@
 #include "flutter/common/graphics/texture.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/task_runner_util.h"
+#include "flutter/fml/trace_event.h"
 #include "flutter/shell/common/shell_io_manager.h"
 #include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/android_context_dynamic_impeller.h"
@@ -164,6 +165,7 @@ PlatformViewAndroid::PlatformViewAndroid(
       android_context_(android_context),
       platform_view_android_delegate_(jni_facade),
       platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)),
+      android_embedder_api_(settings.android_embedder_api),
       weak_factory_(this) {
   if (android_context_) {
     FML_CHECK(android_context_->IsValid())
@@ -188,6 +190,8 @@ PlatformViewAndroid::PlatformViewAndroid(
       this);
   external_texture_adapter_ = std::make_unique<AndroidExternalTextureAdapter>(
       android_context_, jni_facade_, this);
+  TRACE_EVENT1("flutter", "AndroidEmbedderApiState", "enabled",
+               android_embedder_api_ ? "true" : "false");
 }
 
 PlatformViewAndroid::~PlatformViewAndroid() = default;

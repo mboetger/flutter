@@ -239,8 +239,8 @@ class PlatformViewAndroidTest : public ::testing::Test {
   }
 
   std::unique_ptr<AndroidShellHolder> CreateShellHolder(
-      std::shared_ptr<JNIMock> jni = nullptr) {
-    Settings settings;
+      std::shared_ptr<JNIMock> jni = nullptr,
+      Settings settings = {}) {
     settings.enable_software_rendering = false;
     if (!jni) {
       jni = std::make_shared<JNIMock>();
@@ -582,6 +582,30 @@ TEST_F(PlatformViewAndroidTest, PlatformViewDelegateSurfaceAndContextFallback) {
   platform_view->ReleaseResourceContext();
   EXPECT_NE(platform_view->GetImpellerContext(), nullptr);
   platform_view->SetupImpellerContext();
+}
+
+TEST_F(PlatformViewAndroidTest, AndroidEmbedderApiFlagState) {
+  // Flag off by default:
+  {
+    auto holder = CreateShellHolder();
+    ASSERT_NE(holder, nullptr);
+    EXPECT_FALSE(holder->IsAndroidEmbedderApiEnabled());
+    auto platform_view = holder->GetPlatformView();
+    ASSERT_TRUE(platform_view);
+    EXPECT_FALSE(platform_view->IsAndroidEmbedderApiEnabled());
+  }
+
+  // Flag on when set in Settings:
+  {
+    Settings settings;
+    settings.android_embedder_api = true;
+    auto holder = CreateShellHolder(nullptr, settings);
+    ASSERT_NE(holder, nullptr);
+    EXPECT_TRUE(holder->IsAndroidEmbedderApiEnabled());
+    auto platform_view = holder->GetPlatformView();
+    ASSERT_TRUE(platform_view);
+    EXPECT_TRUE(platform_view->IsAndroidEmbedderApiEnabled());
+  }
 }
 
 // TODO(matanlurey): Re-enable.
