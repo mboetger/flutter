@@ -150,6 +150,9 @@ class PlatformViewAndroid final
 
   void SetAccessibilityFeatures(int32_t flags);
 
+  FlutterEngineResult UpdateAccessibilityFeatures(
+      FlutterAccessibilityFeature features);
+
   void RegisterExternalTexture(
       int64_t texture_id,
       const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);

@@ -861,9 +861,27 @@ FlutterEngineResult PlatformViewAndroid::UpdateSemanticsEnabled(bool enabled) {
 }
 
 void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
+  if (android_embedder_api_) {
+    TRACE_EVENT1("flutter", "PlatformViewAndroid::SetAccessibilityFeatures",
+                 "path", "embedder_api");
+    UpdateAccessibilityFeatures(
+        static_cast<FlutterAccessibilityFeature>(flags));
+    return;
+  }
+
+  TRACE_EVENT1("flutter", "PlatformViewAndroid::SetAccessibilityFeatures",
+               "path", "legacy");
   if (platform_view_) {
     platform_view_->SetAccessibilityFeatures(flags);
   }
+}
+
+FlutterEngineResult PlatformViewAndroid::UpdateAccessibilityFeatures(
+    FlutterAccessibilityFeature features) {
+  if (platform_view_) {
+    platform_view_->SetAccessibilityFeatures(static_cast<int32_t>(features));
+  }
+  return kSuccess;
 }
 
 void PlatformViewAndroid::RegisterTexture(

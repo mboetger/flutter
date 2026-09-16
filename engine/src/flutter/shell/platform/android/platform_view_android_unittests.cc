@@ -75,7 +75,12 @@ class FakePlatformViewDelegate : public PlatformView::Delegate {
   }
   bool set_semantics_enabled_called = false;
   bool last_semantics_enabled = false;
-  void OnPlatformViewSetAccessibilityFeatures(int32_t flags) override {}
+  void OnPlatformViewSetAccessibilityFeatures(int32_t flags) override {
+    set_accessibility_features_called = true;
+    last_accessibility_features = flags;
+  }
+  bool set_accessibility_features_called = false;
+  int32_t last_accessibility_features = 0;
   void OnPlatformViewRegisterTexture(
       std::shared_ptr<Texture> texture) override {}
   void OnPlatformViewUnregisterTexture(int64_t texture_id) override {}
@@ -959,6 +964,92 @@ TEST_F(PlatformViewAndroidTest, UpdateSemanticsEnabledDirect) {
 
   EXPECT_EQ(platform_view->UpdateSemanticsEnabled(false), kSuccess);
   EXPECT_FALSE(fake_delegate.last_semantics_enabled);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, AccessibilityFeaturesDispatchLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.set_accessibility_features_called);
+  platform_view->SetAccessibilityFeatures(
+      kFlutterAccessibilityFeatureAccessibleNavigation |
+      kFlutterAccessibilityFeatureInvertColors);
+  EXPECT_TRUE(fake_delegate.set_accessibility_features_called);
+  EXPECT_EQ(fake_delegate.last_accessibility_features,
+            kFlutterAccessibilityFeatureAccessibleNavigation |
+                kFlutterAccessibilityFeatureInvertColors);
+
+  platform_view->SetAccessibilityFeatures(0);
+  EXPECT_EQ(fake_delegate.last_accessibility_features, 0);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, AccessibilityFeaturesDispatchEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto holder = CreateShellHolder(nullptr, settings);
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.set_accessibility_features_called);
+  platform_view->SetAccessibilityFeatures(
+      kFlutterAccessibilityFeatureAccessibleNavigation |
+      kFlutterAccessibilityFeatureBoldText);
+  EXPECT_TRUE(fake_delegate.set_accessibility_features_called);
+  EXPECT_EQ(fake_delegate.last_accessibility_features,
+            kFlutterAccessibilityFeatureAccessibleNavigation |
+                kFlutterAccessibilityFeatureBoldText);
+
+  platform_view->SetAccessibilityFeatures(0);
+  EXPECT_EQ(fake_delegate.last_accessibility_features, 0);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+TEST_F(PlatformViewAndroidTest, UpdateAccessibilityFeaturesDirect) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  EXPECT_FALSE(fake_delegate.set_accessibility_features_called);
+  EXPECT_EQ(platform_view->UpdateAccessibilityFeatures(
+                kFlutterAccessibilityFeatureReduceMotion),
+            kSuccess);
+  EXPECT_TRUE(fake_delegate.set_accessibility_features_called);
+  EXPECT_EQ(fake_delegate.last_accessibility_features,
+            kFlutterAccessibilityFeatureReduceMotion);
+
+  EXPECT_EQ(platform_view->UpdateAccessibilityFeatures(
+                static_cast<FlutterAccessibilityFeature>(0)),
+            kSuccess);
+  EXPECT_EQ(fake_delegate.last_accessibility_features, 0);
 
   platform_view->SetPlatformView(nullptr);
 }
