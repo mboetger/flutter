@@ -114,6 +114,45 @@ class MockPlatformViewDelegate final : public PlatformView {
     return unscaled_font_size * 2.0;
   }
 
+  void HandlePlatformMessage(
+      std::unique_ptr<flutter::PlatformMessage> message) override {
+    handle_platform_message_called = true;
+    last_platform_message_channel = message ? message->channel() : "";
+  }
+
+  void OnPreEngineRestart() const override {
+    on_pre_engine_restart_called = true;
+  }
+
+  void RequestDartDeferredLibrary(intptr_t loading_unit_id) override {
+    request_dart_deferred_library_called = true;
+    last_loading_unit_id = loading_unit_id;
+  }
+
+  void LoadDartDeferredLibrary(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions) override {
+    load_dart_deferred_library_called = true;
+    last_load_loading_unit_id = loading_unit_id;
+  }
+
+  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
+                                    const std::string error_message,
+                                    bool transient) override {
+    load_dart_deferred_library_error_called = true;
+    last_error_loading_unit_id = loading_unit_id;
+    last_error_message = error_message;
+    last_error_transient = transient;
+  }
+
+  void UpdateAssetResolverByType(
+      std::unique_ptr<AssetResolver> updated_asset_resolver,
+      AssetResolver::AssetResolverType type) override {
+    update_asset_resolver_by_type_called = true;
+    last_asset_resolver_type = type;
+  }
+
   bool notify_destroyed_called = false;
   bool update_semantics_called = false;
   int64_t last_semantics_view_id = -1;
@@ -123,6 +162,20 @@ class MockPlatformViewDelegate final : public PlatformView {
   std::string last_locale;
   bool compute_locales_called = false;
   mutable bool get_scaled_font_size_called = false;
+  bool handle_platform_message_called = false;
+  std::string last_platform_message_channel;
+  mutable bool on_pre_engine_restart_called = false;
+  bool request_dart_deferred_library_called = false;
+  intptr_t last_loading_unit_id = -1;
+  bool load_dart_deferred_library_called = false;
+  intptr_t last_load_loading_unit_id = -1;
+  bool load_dart_deferred_library_error_called = false;
+  intptr_t last_error_loading_unit_id = -1;
+  std::string last_error_message;
+  bool last_error_transient = false;
+  bool update_asset_resolver_by_type_called = false;
+  AssetResolver::AssetResolverType last_asset_resolver_type =
+      AssetResolver::AssetResolverType::kApkAssetProvider;
 };
 
 class PlatformViewAndroidTest : public ::testing::Test {
@@ -283,6 +336,102 @@ TEST_F(PlatformViewAndroidTest,
   EXPECT_EQ((*resolved)[0], "fr");
   EXPECT_EQ((*resolved)[1], "FR");
   EXPECT_DOUBLE_EQ(platform_view->GetScaledFontSize(12.0, 2), 18.0);
+}
+
+// Characterization: verify that HandlePlatformMessage, OnPreEngineRestart,
+// RequestDartDeferredLibrary, LoadDartDeferredLibrary,
+// LoadDartDeferredLibraryError, and UpdateAssetResolverByType forward to the
+// registered PlatformView delegate when present.
+TEST_F(PlatformViewAndroidTest, PlatformViewDelegateMessagingAndDeferredSeam) {
+  auto holder = CreateShellHolder();
+  ASSERT_NE(holder, nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+
+  FakePlatformViewDelegate fake_delegate;
+  const auto& task_runners = holder->GetShellForTesting()->GetTaskRunners();
+  MockPlatformViewDelegate delegate_platform_view(fake_delegate, task_runners);
+
+  platform_view->SetPlatformView(&delegate_platform_view);
+
+  // 1. HandlePlatformMessage
+  EXPECT_FALSE(delegate_platform_view.handle_platform_message_called);
+  platform_view->HandlePlatformMessage(
+      std::make_unique<flutter::PlatformMessage>("test_channel", nullptr));
+  EXPECT_TRUE(delegate_platform_view.handle_platform_message_called);
+  EXPECT_EQ(delegate_platform_view.last_platform_message_channel,
+            "test_channel");
+
+  // 2. OnPreEngineRestart
+  EXPECT_FALSE(delegate_platform_view.on_pre_engine_restart_called);
+  platform_view->OnPreEngineRestart();
+  EXPECT_TRUE(delegate_platform_view.on_pre_engine_restart_called);
+
+  // 3. RequestDartDeferredLibrary
+  EXPECT_FALSE(delegate_platform_view.request_dart_deferred_library_called);
+  platform_view->RequestDartDeferredLibrary(42);
+  EXPECT_TRUE(delegate_platform_view.request_dart_deferred_library_called);
+  EXPECT_EQ(delegate_platform_view.last_loading_unit_id, 42);
+
+  // 4. LoadDartDeferredLibrary
+  EXPECT_FALSE(delegate_platform_view.load_dart_deferred_library_called);
+  platform_view->LoadDartDeferredLibrary(43, nullptr, nullptr);
+  EXPECT_TRUE(delegate_platform_view.load_dart_deferred_library_called);
+  EXPECT_EQ(delegate_platform_view.last_load_loading_unit_id, 43);
+
+  // 5. LoadDartDeferredLibraryError
+  EXPECT_FALSE(delegate_platform_view.load_dart_deferred_library_error_called);
+  platform_view->LoadDartDeferredLibraryError(44, "failure", true);
+  EXPECT_TRUE(delegate_platform_view.load_dart_deferred_library_error_called);
+  EXPECT_EQ(delegate_platform_view.last_error_loading_unit_id, 44);
+  EXPECT_EQ(delegate_platform_view.last_error_message, "failure");
+  EXPECT_TRUE(delegate_platform_view.last_error_transient);
+
+  // 6. UpdateAssetResolverByType
+  EXPECT_FALSE(delegate_platform_view.update_asset_resolver_by_type_called);
+  platform_view->UpdateAssetResolverByType(
+      nullptr, AssetResolver::AssetResolverType::kApkAssetProvider);
+  EXPECT_TRUE(delegate_platform_view.update_asset_resolver_by_type_called);
+  EXPECT_EQ(delegate_platform_view.last_asset_resolver_type,
+            AssetResolver::AssetResolverType::kApkAssetProvider);
+
+  platform_view->SetPlatformView(nullptr);
+}
+
+// Characterization: verify that HandlePlatformMessage, OnPreEngineRestart,
+// RequestDartDeferredLibrary, LoadDartDeferredLibrary,
+// LoadDartDeferredLibraryError, and UpdateAssetResolverByType fall back
+// to default implementations when platform_view_ is null.
+TEST_F(PlatformViewAndroidTest,
+       PlatformViewDelegateMessagingAndDeferredFallback) {
+  auto jni = std::make_shared<JNIMock>();
+
+  EXPECT_CALL(*jni,
+              FlutterViewHandlePlatformMessage(::testing::_, ::testing::_))
+      .Times(1);
+  EXPECT_CALL(*jni, FlutterViewOnPreEngineRestart()).Times(1);
+  EXPECT_CALL(*jni, RequestDartDeferredLibrary(101))
+      .WillOnce(::testing::Return(true));
+
+  auto holder = CreateShellHolder(jni);
+  ASSERT_NE(holder, nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto platform_view = holder->GetPlatformView();
+  ASSERT_TRUE(platform_view);
+  EXPECT_EQ(platform_view->GetPlatformViewDelegate(), nullptr);
+
+  // Fallback calls:
+  platform_view->HandlePlatformMessage(
+      std::make_unique<flutter::PlatformMessage>("fallback_channel", nullptr));
+  platform_view->OnPreEngineRestart();
+  platform_view->RequestDartDeferredLibrary(101);
+  platform_view->LoadDartDeferredLibrary(102, nullptr, nullptr);
+  platform_view->LoadDartDeferredLibraryError(103, "test_err", false);
+  platform_view->UpdateAssetResolverByType(
+      nullptr, AssetResolver::AssetResolverType::kApkAssetProvider);
 }
 
 // TODO(matanlurey): Re-enable.

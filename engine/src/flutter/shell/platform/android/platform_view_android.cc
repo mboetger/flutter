@@ -297,12 +297,20 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
 // |PlatformView|
 void PlatformViewAndroid::HandlePlatformMessage(
     std::unique_ptr<flutter::PlatformMessage> message) {
+  if (platform_view_) {
+    platform_view_->HandlePlatformMessage(std::move(message));
+    return;
+  }
   // Called from the ui thread.
   platform_message_handler_->HandlePlatformMessage(std::move(message));
 }
 
 // |PlatformView|
 void PlatformViewAndroid::OnPreEngineRestart() const {
+  if (platform_view_) {
+    platform_view_->OnPreEngineRestart();
+    return;
+  }
   jni_facade_->FlutterViewOnPreEngineRestart();
 }
 
@@ -527,6 +535,10 @@ PlatformViewAndroid::ComputePlatformResolvedLocales(
 
 // |PlatformView|
 void PlatformViewAndroid::RequestDartDeferredLibrary(intptr_t loading_unit_id) {
+  if (platform_view_) {
+    platform_view_->RequestDartDeferredLibrary(loading_unit_id);
+    return;
+  }
   if (jni_facade_->RequestDartDeferredLibrary(loading_unit_id)) {
     return;
   }
@@ -538,6 +550,12 @@ void PlatformViewAndroid::LoadDartDeferredLibrary(
     intptr_t loading_unit_id,
     std::unique_ptr<const fml::Mapping> snapshot_data,
     std::unique_ptr<const fml::Mapping> snapshot_instructions) {
+  if (platform_view_) {
+    platform_view_->LoadDartDeferredLibrary(loading_unit_id,
+                                            std::move(snapshot_data),
+                                            std::move(snapshot_instructions));
+    return;
+  }
   delegate_.LoadDartDeferredLibrary(loading_unit_id, std::move(snapshot_data),
                                     std::move(snapshot_instructions));
 }
@@ -547,6 +565,11 @@ void PlatformViewAndroid::LoadDartDeferredLibraryError(
     intptr_t loading_unit_id,
     const std::string error_message,
     bool transient) {
+  if (platform_view_) {
+    platform_view_->LoadDartDeferredLibraryError(loading_unit_id, error_message,
+                                                 transient);
+    return;
+  }
   delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
                                          transient);
 }
@@ -555,6 +578,11 @@ void PlatformViewAndroid::LoadDartDeferredLibraryError(
 void PlatformViewAndroid::UpdateAssetResolverByType(
     std::unique_ptr<AssetResolver> updated_asset_resolver,
     AssetResolver::AssetResolverType type) {
+  if (platform_view_) {
+    platform_view_->UpdateAssetResolverByType(std::move(updated_asset_resolver),
+                                              type);
+    return;
+  }
   delegate_.UpdateAssetResolverByType(std::move(updated_asset_resolver), type);
 }
 

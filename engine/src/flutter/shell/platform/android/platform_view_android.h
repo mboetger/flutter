@@ -158,7 +158,6 @@ class PlatformViewAndroid final : public PlatformView {
   // |PlatformView|
   void SetSemanticsTreeEnabled(bool enabled) override;
 
- private:
   // |PlatformView|
   void HandlePlatformMessage(
       std::unique_ptr<flutter::PlatformMessage> message) override;
@@ -166,7 +165,6 @@ class PlatformViewAndroid final : public PlatformView {
   // |PlatformView|
   void OnPreEngineRestart() const override;
 
- public:
   // |PlatformView|
   std::unique_ptr<VsyncWaiter> CreateVSyncWaiter() override;
 
