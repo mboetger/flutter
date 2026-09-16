@@ -107,6 +107,11 @@ class AndroidShellHolder {
       const std::vector<std::string>& entrypoint_args = {},
       int64_t engine_id = 0);
 
+  FlutterEngineResult SpawnEngine(
+      const FlutterEngineSpawnConfig* config,
+      std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+      std::unique_ptr<AndroidShellHolder>* spawned_holder_out) const;
+
   Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
                                     bool base64_encode);
 

@@ -416,5 +416,93 @@ TEST(AndroidShellHolder, RunEngineDirect) {
   EXPECT_EQ(holder->RunEngine("main", "", {}, 1), kInvalidArguments);
 }
 
+TEST(AndroidShellHolder, SpawnLegacyPath) {
+  Settings settings;
+  settings.android_embedder_api = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  auto spawned = holder->Spawn(jni, "main", "", "", {}, 1);
+  // Without a kernel blob in the test environment, BuildRunConfiguration
+  // returns std::nullopt and Spawn returns nullptr.
+  EXPECT_EQ(spawned, nullptr);
+}
+
+TEST(AndroidShellHolder, SpawnEmbedderApiPath) {
+  Settings settings;
+  settings.android_embedder_api = true;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  auto spawned = holder->Spawn(jni, "main", "", "", {}, 1);
+  // Without a kernel blob in the test environment, BuildRunConfiguration
+  // returns std::nullopt and Spawn returns nullptr.
+  EXPECT_EQ(spawned, nullptr);
+}
+
+TEST(AndroidShellHolder, SpawnEngineDirect) {
+  Settings settings;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  FlutterEngineSpawnConfig config = {};
+  config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  config.entrypoint = "customMain";
+  config.initial_route = "/home";
+
+  std::unique_ptr<AndroidShellHolder> spawned;
+  // In test environment without kernel blob, BuildRunConfiguration returns
+  // nullopt -> kInvalidArguments.
+  EXPECT_EQ(holder->SpawnEngine(&config, jni, &spawned), kInvalidArguments);
+  EXPECT_EQ(spawned, nullptr);
+}
+
+TEST(AndroidShellHolder, SpawnEngineInvalidArguments) {
+  Settings settings;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  FlutterEngineSpawnConfig config = {};
+  config.struct_size = sizeof(FlutterEngineSpawnConfig);
+  std::unique_ptr<AndroidShellHolder> spawned;
+
+  // Null spawned_holder_out.
+  EXPECT_EQ(holder->SpawnEngine(&config, jni, nullptr), kInvalidArguments);
+
+  // Null config.
+  EXPECT_EQ(holder->SpawnEngine(nullptr, jni, &spawned), kInvalidArguments);
+
+  // Invalid struct_size.
+  FlutterEngineSpawnConfig bad_size = {};
+  bad_size.struct_size = sizeof(FlutterEngineSpawnConfig) - 1;
+  EXPECT_EQ(holder->SpawnEngine(&bad_size, jni, &spawned), kInvalidArguments);
+
+  // Negative argc.
+  FlutterEngineSpawnConfig negative_argc = {};
+  negative_argc.struct_size = sizeof(FlutterEngineSpawnConfig);
+  negative_argc.argc = -1;
+  EXPECT_EQ(holder->SpawnEngine(&negative_argc, jni, &spawned),
+            kInvalidArguments);
+
+  // Null argv with argc > 0.
+  FlutterEngineSpawnConfig null_argv = {};
+  null_argv.struct_size = sizeof(FlutterEngineSpawnConfig);
+  null_argv.argc = 1;
+  null_argv.argv = nullptr;
+  EXPECT_EQ(holder->SpawnEngine(&null_argv, jni, &spawned), kInvalidArguments);
+
+  // Null element in argv.
+  const char* argv[] = {nullptr};
+  FlutterEngineSpawnConfig null_elem = {};
+  null_elem.struct_size = sizeof(FlutterEngineSpawnConfig);
+  null_elem.argc = 1;
+  null_elem.argv = argv;
+  EXPECT_EQ(holder->SpawnEngine(&null_elem, jni, &spawned), kInvalidArguments);
+}
+
 }  // namespace testing
 }  // namespace flutter

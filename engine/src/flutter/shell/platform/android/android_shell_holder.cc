@@ -312,6 +312,39 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
     const std::string& initial_route,
     const std::vector<std::string>& entrypoint_args,
     int64_t engine_id) const {
+  if (settings_.android_embedder_api) {
+    TRACE_EVENT1("flutter", "AndroidShellHolder::Spawn", "path",
+                 "embedder_api");
+    std::vector<const char*> argv;
+    argv.reserve(entrypoint_args.size());
+    for (const auto& arg : entrypoint_args) {
+      argv.push_back(arg.c_str());
+    }
+
+    FlutterProjectArgs custom_project_args = CreateFlutterProjectArgs(
+        entrypoint, libraryUrl, entrypoint_args, engine_id);
+
+    FlutterEngineSpawnConfig spawn_config = {};
+    spawn_config.struct_size = sizeof(FlutterEngineSpawnConfig);
+    spawn_config.entrypoint = entrypoint.empty() ? nullptr : entrypoint.c_str();
+    spawn_config.library_path =
+        libraryUrl.empty() ? nullptr : libraryUrl.c_str();
+    spawn_config.initial_route =
+        initial_route.empty() ? nullptr : initial_route.c_str();
+    spawn_config.argc = static_cast<int64_t>(argv.size());
+    spawn_config.argv = argv.empty() ? nullptr : argv.data();
+    spawn_config.custom_args = &custom_project_args;
+
+    std::unique_ptr<AndroidShellHolder> spawned_holder;
+    FlutterEngineResult result =
+        SpawnEngine(&spawn_config, jni_facade, &spawned_holder);
+    if (result != kSuccess) {
+      return nullptr;
+    }
+    return spawned_holder;
+  }
+
+  TRACE_EVENT1("flutter", "AndroidShellHolder::Spawn", "path", "legacy");
   FML_DCHECK(shell_ && shell_->IsSetup())
       << "A new Shell can only be spawned "
          "if the current Shell is properly constructed";
@@ -432,6 +465,121 @@ FlutterEngineResult AndroidShellHolder::RunEngine(
   config->SetEngineId(engine_id);
   UpdateDisplayMetrics();
   shell_->RunEngine(std::move(config.value()));
+  return kSuccess;
+}
+
+FlutterEngineResult AndroidShellHolder::SpawnEngine(
+    const FlutterEngineSpawnConfig* config,
+    std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+    std::unique_ptr<AndroidShellHolder>* spawned_holder_out) const {
+  if (spawned_holder_out == nullptr) {
+    return kInvalidArguments;
+  }
+  *spawned_holder_out = nullptr;
+
+  if (config == nullptr ||
+      config->struct_size != sizeof(FlutterEngineSpawnConfig)) {
+    return kInvalidArguments;
+  }
+
+  if (!IsValid() || !shell_ || !shell_->IsSetup()) {
+    return kInternalInconsistency;
+  }
+
+  if (config->argc < 0) {
+    return kInvalidArguments;
+  }
+
+  std::vector<std::string> entrypoint_args;
+  if (config->argc > 0) {
+    if (config->argv == nullptr) {
+      return kInvalidArguments;
+    }
+    entrypoint_args.reserve(config->argc);
+    for (int64_t i = 0; i < config->argc; ++i) {
+      if (config->argv[i] == nullptr) {
+        return kInvalidArguments;
+      }
+      entrypoint_args.emplace_back(config->argv[i]);
+    }
+  }
+
+  std::string entrypoint = config->entrypoint ? config->entrypoint : "";
+  std::string library_url = config->library_path ? config->library_path : "";
+  std::string initial_route =
+      (config->initial_route != nullptr && config->initial_route[0] != '\0')
+          ? config->initial_route
+          : "/";
+
+  int64_t engine_id = 0;
+  if (config->custom_args != nullptr) {
+    engine_id = config->custom_args->engine_id;
+    if (entrypoint.empty() &&
+        config->custom_args->custom_dart_entrypoint != nullptr) {
+      entrypoint = config->custom_args->custom_dart_entrypoint;
+    }
+  }
+
+  std::unique_ptr<PlatformViewAndroid> spawned_platform_view_android;
+  PlatformViewEmbedder* raw_spawned_platform_view_embedder = nullptr;
+
+  PlatformViewAndroid* android_platform_view = platform_view_.get();
+  if (!android_platform_view) {
+    return kInternalInconsistency;
+  }
+  std::shared_ptr<flutter::AndroidContext> android_context =
+      android_platform_view->GetAndroidContext();
+  if (!android_context) {
+    return kInternalInconsistency;
+  }
+
+  Shell::CreateCallback<PlatformView> on_create_platform_view =
+      [&jni_facade, android_context, &spawned_platform_view_android,
+       &raw_spawned_platform_view_embedder](Shell& shell) {
+        spawned_platform_view_android = std::make_unique<PlatformViewAndroid>(
+            shell.GetSettings(),     // settings
+            shell.GetTaskRunners(),  // task runners
+            jni_facade,              // JNI interop
+            android_context          // Android context
+        );
+        auto platform_view_embedder = CreatePlatformViewEmbedder(
+            shell, spawned_platform_view_android.get(), jni_facade,
+            spawned_platform_view_android->GetWeakPtr());
+        raw_spawned_platform_view_embedder = platform_view_embedder.get();
+        spawned_platform_view_android->SetPlatformView(
+            raw_spawned_platform_view_embedder);
+        return platform_view_embedder;
+      };
+
+  Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
+    return std::make_unique<Rasterizer>(shell);
+  };
+
+  auto run_config =
+      BuildRunConfiguration(entrypoint, library_url, entrypoint_args);
+  if (!run_config) {
+    return kInvalidArguments;
+  }
+  run_config->SetEngineId(engine_id);
+
+  std::unique_ptr<flutter::Shell> shell =
+      shell_->Spawn(std::move(run_config.value()), initial_route,
+                    on_create_platform_view, on_create_rasterizer);
+  if (!shell) {
+    return kInternalInconsistency;
+  }
+
+  auto spawned_holder =
+      std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
+          GetSettings(), jni_facade, task_runners_, std::move(shell),
+          apk_asset_provider_->Clone(),
+          std::move(spawned_platform_view_android),
+          android_context->RenderingApi(), raw_spawned_platform_view_embedder));
+  if (!spawned_holder) {
+    return kInternalInconsistency;
+  }
+  spawned_holder->project_args_.engine_id = engine_id;
+  *spawned_holder_out = std::move(spawned_holder);
   return kSuccess;
 }
 
