@@ -634,7 +634,7 @@ class FlutterPlugin : Plugin<Project> {
                 project
                     .findProperty("filesystem-roots")
                     ?.toString()
-                    ?.split("\\|")
+                    ?.split('|')
                     ?.toTypedArray()
             val fileSystemSchemeValue: String? =
                 project.findProperty("filesystem-scheme")?.toString()

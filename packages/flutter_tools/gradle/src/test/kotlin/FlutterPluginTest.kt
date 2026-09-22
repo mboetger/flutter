@@ -38,6 +38,9 @@ import java.util.Base64
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
 
 class FlutterPluginTest {
     // Clear global singleton mocks to prevent mock state leaking into other tests in the same JVM.
@@ -250,7 +253,175 @@ class FlutterPluginTest {
         }
     }
 
+    private fun executeCompileTaskWithFileSystemRoots(
+        tempDir: Path,
+        fileSystemRootsProperty: String?
+    ): Array<String>? {
+        val env = setupTestProjectEnvironment(tempDir)
+        val project = env.project
+        every { project.findProperty("filesystem-roots") } returns fileSystemRootsProperty
+
+        setupMockApplicationExtension(project)
+        val mockAbstractAppExtension = project.extensions.getByType(AbstractAppExtension::class.java)
+        setupMockComponentsExtension(project)
+        setupMockNativePluginLoader(project, env.flutterExtension)
+
+        val taskContainer = mockk<TaskContainer>(relaxed = true)
+        every { project.tasks } returns taskContainer
+
+        val mockVariant = mockk<com.android.build.gradle.api.ApplicationVariant>(relaxed = true)
+        every { mockVariant.name } returns "debug"
+        every { mockVariant.buildType.name } returns "debug"
+        every { mockVariant.flavorName } returns ""
+        val mergedFlavor = mockk<InternalBaseVariant.MergedFlavor>(relaxed = true)
+        every { mockVariant.mergedFlavor } returns mergedFlavor
+        val apiLevel = mockk<com.android.builder.model.ApiVersion>(relaxed = true)
+        every { apiLevel.apiLevel } returns 21
+        every { mergedFlavor.minSdkVersion } returns apiLevel
+
+        val variantOutput = mockk<com.android.build.gradle.api.BaseVariantOutput>(relaxed = true)
+        val outputsIterator = mockk<MutableIterator<com.android.build.gradle.api.BaseVariantOutput>>()
+        every { outputsIterator.hasNext() } returns true andThen false
+        every { outputsIterator.next() } returns variantOutput
+        val variantOutputCollection = mockk<org.gradle.api.DomainObjectCollection<com.android.build.gradle.api.BaseVariantOutput>>()
+        every { variantOutputCollection.iterator() } returns outputsIterator
+        every { mockVariant.outputs } returns variantOutputCollection
+
+        val processResourcesProvider = mockk<TaskProvider<ProcessAndroidResources>>(relaxed = true)
+        every { processResourcesProvider.hint(ProcessAndroidResources::class).get() } returns mockk<ProcessAndroidResources>(relaxed = true)
+        every { variantOutput.processResourcesProvider } returns processResourcesProvider
+
+        val assembleTask = mockk<Task>(relaxed = true)
+        val assembleTaskProvider = mockk<TaskProvider<Task>>(relaxed = true)
+        every { assembleTaskProvider.get() } returns assembleTask
+        every { mockVariant.assembleProvider } returns assembleTaskProvider
+
+        val variants = listOf(mockVariant)
+        val variantsIterator = mockk<MutableIterator<com.android.build.gradle.api.ApplicationVariant>>()
+        every { variantsIterator.hasNext() } returns true andThen false
+        every { variantsIterator.next() } returns mockVariant
+        val variantCollection = mockk<org.gradle.api.DomainObjectSet<com.android.build.gradle.api.ApplicationVariant>>()
+        every { mockAbstractAppExtension.applicationVariants } returns variantCollection
+        every { variantCollection.iterator() } returns variantsIterator
+        every {
+            variantCollection.configureEach(any<Action<com.android.build.gradle.api.ApplicationVariant>>())
+        } answers {
+            variants.forEach { firstArg<Action<com.android.build.gradle.api.ApplicationVariant>>().execute(it) }
+        }
+        every { mockVariant.mergeAssetsProvider.hint(MergeSourceSetFolders::class).get() } returns
+            mockk<MergeSourceSetFolders>(relaxed = true)
+
+        val flutterTask = mockk<FlutterTask>(relaxed = true)
+        var capturedFileSystemRoots: Array<String>? = null
+        every { flutterTask.fileSystemRoots = any() } answers {
+            capturedFileSystemRoots = firstArg()
+        }
+        every { flutterTask.fileSystemRoots = null } answers {
+            capturedFileSystemRoots = null
+        }
+
+        val flutterTaskActionCaptor = slot<Action<FlutterTask>>()
+        val flutterTaskProvider = mockk<TaskProvider<FlutterTask>>(relaxed = true)
+        every {
+            flutterTaskProvider.hint(FlutterTask::class).get()
+        } returns flutterTask
+        every {
+            taskContainer.register(
+                match { it.contains("compileFlutterBuild") },
+                eq(FlutterTask::class.java),
+                capture(flutterTaskActionCaptor)
+            )
+        } answers {
+            flutterTaskProvider
+        }
+
+        val mockCopyTaskProvider = mockk<TaskProvider<Copy>>(relaxed = true)
+        every { mockCopyTaskProvider.hint(Copy::class).get() } returns mockk<Copy>(relaxed = true)
+        every {
+            taskContainer.register(
+                match { it.startsWith("copyFlutterAssets") },
+                eq(Copy::class.java),
+                any()
+            )
+        } answers {
+            mockCopyTaskProvider
+        }
+
+        val mockJarTaskProvider = mockk<TaskProvider<org.gradle.api.tasks.bundling.Jar>>(relaxed = true)
+        every { mockJarTaskProvider.hint(org.gradle.api.tasks.bundling.Jar::class).get() } returns
+            mockk<org.gradle.api.tasks.bundling.Jar>(relaxed = true)
+        every {
+            taskContainer.register(
+                match { it.contains("packJniLibs") },
+                eq(org.gradle.api.tasks.bundling.Jar::class.java),
+                any()
+            )
+        } answers {
+            mockJarTaskProvider
+        }
+
+        val mockTaskProvider = mockk<TaskProvider<Task>>(relaxed = true)
+        every { mockTaskProvider.hint(Task::class).get() } returns mockk<Task>(relaxed = true)
+        every {
+            taskContainer.named(any<String>())
+        } returns mockTaskProvider
+
+        val flutterPlugin = FlutterPlugin()
+        flutterPlugin.apply(project)
+
+        if (!flutterTaskActionCaptor.isCaptured) {
+            fail<Nothing>("FlutterTask configuration action was not captured")
+        }
+        flutterTaskActionCaptor.captured.execute(flutterTask)
+        return capturedFileSystemRoots
+    }
+
+    @Test
+    fun `multiple filesystem-roots separated by pipe are split into separate roots on FlutterTask`(
+        @TempDir tempDir: Path
+    ) {
+        // Bug reproduction (flutter/flutter#192824):
+        // FlutterPlugin uses `split("\\|")` which matches literal "\\|" in Kotlin,
+        // failing to split "root1|root2" into separate roots.
+        val roots = executeCompileTaskWithFileSystemRoots(tempDir, "root1|root2")
+        assertEquals(listOf("root1", "root2"), roots?.toList())
+    }
+
+    @Test
+    fun `three filesystem-roots separated by pipe are split into three separate roots on FlutterTask`(
+        @TempDir tempDir: Path
+    ) {
+        val roots = executeCompileTaskWithFileSystemRoots(tempDir, "root1|root2|root3")
+        assertEquals(listOf("root1", "root2", "root3"), roots?.toList())
+    }
+
+    @Test
+    fun `multiple filesystem-roots with Windows backslashes are split correctly without corrupting paths`(
+        @TempDir tempDir: Path
+    ) {
+        val roots = executeCompileTaskWithFileSystemRoots(tempDir, """C:\path\to\root1|D:\path\to\root2""")
+        assertEquals(listOf("""C:\path\to\root1""", """D:\path\to\root2"""), roots?.toList())
+    }
+
+    @Test
+    fun `single filesystem-root is preserved as single element list`(
+        @TempDir tempDir: Path
+    ) {
+        val roots = executeCompileTaskWithFileSystemRoots(tempDir, "root1")
+        assertEquals(listOf("root1"), roots?.toList())
+    }
+
+    @Test
+    fun `null filesystem-roots property leaves fileSystemRoots on FlutterTask null`(
+        @TempDir tempDir: Path
+    ) {
+        val roots = executeCompileTaskWithFileSystemRoots(tempDir, null)
+        assertNull(roots)
+    }
+
+
     private data class TestProjectEnvironment(
+
         val projectDir: File,
         val fakeFlutterSdkDir: File,
         val project: Project,
