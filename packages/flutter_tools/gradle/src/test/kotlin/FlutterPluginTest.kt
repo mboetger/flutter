@@ -309,17 +309,13 @@ class FlutterPluginTest {
                 every { isDebuggable } returns false
             }
     ): ApplicationExtension {
-        val mockAbstractAppExtension =
-            mockk<AbstractAppExtension>(
-                moreInterfaces = arrayOf(ApplicationExtension::class),
-                relaxed = true
-            )
-        val mockApplicationExtension = mockAbstractAppExtension as ApplicationExtension
+        val mockAppExtension = mockk<AppExtension>(relaxed = true)
+        val mockApplicationExtension = mockk<ApplicationExtension>(relaxed = true)
         val mockLibraryExtension = mockk<LibraryExtension>(relaxed = true)
-        every { project.extensions.findByType(AbstractAppExtension::class.java) } returns mockAbstractAppExtension
-        every { project.extensions.getByType(AbstractAppExtension::class.java) } returns mockAbstractAppExtension
+        every { project.extensions.findByType(AppExtension::class.java) } returns mockAppExtension
+        every { project.extensions.getByType(AppExtension::class.java) } returns mockAppExtension
         every { project.extensions.getByType(LibraryExtension::class.java) } returns mockLibraryExtension
-        every { project.extensions.findByName("android") } returns mockAbstractAppExtension
+        every { project.extensions.findByName("android") } returns mockApplicationExtension
 
         every { project.extensions.findByType(BaseExtension::class.java) } returns mockk(relaxed = true)
         every { project.extensions.findByType(ApplicationExtension::class.java) } returns mockApplicationExtension
@@ -346,7 +342,7 @@ class FlutterPluginTest {
         val mockAndroidSourceSet = mockk<com.android.build.gradle.api.AndroidSourceSet>(relaxed = true)
         val mockAndroidSourceDirectorySet = mockk<AndroidSourceDirectorySet>(relaxed = true)
         every { mockAndroidSourceSet.jniLibs.srcDir(any()) } returns mockAndroidSourceDirectorySet
-        every { mockAbstractAppExtension.sourceSets.getByName("main") } returns mockAndroidSourceSet
+        every { mockAppExtension.sourceSets.getByName("main") } returns mockAndroidSourceSet
 
         return mockApplicationExtension
     }
@@ -372,6 +368,50 @@ class FlutterPluginTest {
         every { project.file(flutterExtension.source!!) } returns mockk()
     }
 
+
+    @Test
+    fun `FlutterPlugin safely retrieves legacy AppExtension without ClassCastException`(@TempDir tempDir: Path) {
+        val env = setupTestProjectEnvironment(tempDir)
+        val project = env.project
+
+        val mockApplicationExtension = setupMockApplicationExtension(project)
+        val mockAppExtension = mockk<AppExtension>(relaxed = true)
+
+        every { project.extensions.findByType(AppExtension::class.java) } returns mockAppExtension
+        every { project.extensions.getByType(AppExtension::class.java) } returns mockAppExtension
+        // findByName returns the new API type that doesn't implement AppExtension, simulating AGP 9.1
+        every { project.extensions.findByName("android") } returns mockApplicationExtension
+
+        setupMockComponentsExtension(project)
+        setupMockNativePluginLoader(project, env.flutterExtension)
+
+        val flutterPlugin = FlutterPlugin()
+        flutterPlugin.apply(project)
+
+        // Verify that we successfully used getByType to get the AppExtension
+        verify { project.extensions.getByType(AppExtension::class.java) }
+    }
+
+    @Test
+    fun `apply succeeds when android extension is not AppExtension`(
+        @TempDir tempDir: Path
+    ) {
+        val env = setupTestProjectEnvironment(tempDir)
+        val project = env.project
+
+        val mockApplicationExtension = setupMockApplicationExtension(project)
+
+        val mockAppExtension = mockk<AppExtension>(relaxed = true)
+        every { project.extensions.findByType(AppExtension::class.java) } returns mockAppExtension
+        every { project.extensions.getByType(AppExtension::class.java) } returns mockAppExtension
+        every { project.extensions.findByName("android") } returns mockApplicationExtension
+
+        setupMockComponentsExtension(project)
+        setupMockNativePluginLoader(project, env.flutterExtension)
+
+        val flutterPlugin = FlutterPlugin()
+        flutterPlugin.apply(project)
+    }
     companion object {
         const val FAKE_ENGINE_STAMP = "901b0f1afe77c3555abee7b86a26aaa37f131379"
         const val FAKE_ENGINE_REALM = "made_up_realm"

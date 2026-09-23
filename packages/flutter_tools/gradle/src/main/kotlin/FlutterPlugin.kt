@@ -6,7 +6,7 @@ package com.flutter.gradle
 
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.AndroidComponentsExtension
-import com.android.build.gradle.AbstractAppExtension
+import com.android.build.gradle.AppExtension
 import com.android.build.gradle.LibraryExtension
 import com.android.build.gradle.api.ApkVariant
 import com.android.build.gradle.tasks.PackageAndroidArtifact
@@ -357,8 +357,8 @@ class FlutterPlugin : Plugin<Project> {
         if (FlutterPluginUtils.isFlutterAppProject(projectToAddTasksTo)) {
             val appExtension = FlutterPluginUtils.getAndroidApplicationExtension(projectToAddTasksTo)
             configureAbis(projectToAddTasksTo, appExtension)
-            val android: AbstractAppExtension =
-                projectToAddTasksTo.extensions.findByName("android") as AbstractAppExtension
+            val android =
+                projectToAddTasksTo.extensions.getByType(AppExtension::class.java)
             android.applicationVariants.configureEach {
                 val variant = this
                 val assembleTask = variant.assembleProvider.get()
@@ -460,7 +460,7 @@ class FlutterPlugin : Plugin<Project> {
                 val libraryVariant = this
                 var copyFlutterAssetsTask: Task? = null
                 val androidAppExtension =
-                    appProject.extensions.findByName("android") as? AbstractAppExtension
+                    appProject.extensions.findByType(AppExtension::class.java)
                 check(androidAppExtension != null)
                 androidAppExtension.applicationVariants.all applicationVariantAll@{
                     val appProjectVariant = this
