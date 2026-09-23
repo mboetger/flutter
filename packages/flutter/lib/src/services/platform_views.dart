@@ -661,6 +661,7 @@ class _AndroidMotionEventConverter {
     final int? action = switch (event) {
       PointerDownEvent() when numPointers == 1 => AndroidViewController.kActionDown,
       PointerUpEvent() when numPointers == 1 => AndroidViewController.kActionUp,
+      PointerCancelEvent() when numPointers == 1 => AndroidViewController.kActionCancel,
       PointerDownEvent() => AndroidViewController.pointerAction(
         pointerIdx,
         AndroidViewController.kActionPointerDown,
@@ -669,8 +670,11 @@ class _AndroidMotionEventConverter {
         pointerIdx,
         AndroidViewController.kActionPointerUp,
       ),
+      PointerCancelEvent() => AndroidViewController.pointerAction(
+        pointerIdx,
+        AndroidViewController.kActionPointerUp,
+      ),
       PointerMoveEvent() => AndroidViewController.kActionMove,
-      PointerCancelEvent() => AndroidViewController.kActionCancel,
       _ => null,
     };
     if (action == null) {
