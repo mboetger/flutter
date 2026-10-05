@@ -1013,7 +1013,9 @@ abstract class AndroidViewController extends PlatformViewController {
       _motionEventConverter.handlePointerDownEvent(event);
     }
 
-    _motionEventConverter.updatePointerPositions(event);
+    if (event is! PointerCancelEvent) {
+      _motionEventConverter.updatePointerPositions(event);
+    }
 
     final AndroidMotionEvent? androidEvent = _motionEventConverter.toAndroidMotionEvent(event);
 

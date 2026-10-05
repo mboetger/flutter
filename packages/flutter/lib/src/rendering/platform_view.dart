@@ -698,6 +698,9 @@ class _PlatformViewGestureRecognizer extends OneSequenceGestureRecognizer {
 
   void reset() {
     _gestureIds.clear();
+    for (final int pointerId in forwardedPointers) {
+      _handlePointerEvent(PointerCancelEvent(pointer: pointerId));
+    }
     forwardedPointers.forEach(super.stopTrackingPointer);
     forwardedPointers.clear();
     cachedEvents.keys.forEach(super.stopTrackingPointer);
