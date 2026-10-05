@@ -31,7 +31,6 @@ import io.flutter.util.ViewUtils;
  */
 public class FlutterMutatorView extends FrameLayout {
   private FlutterMutatorsStack mutatorsStack;
-  private float screenDensity;
   private int left;
   private int top;
 
@@ -40,22 +39,34 @@ public class FlutterMutatorView extends FrameLayout {
   private Paint paint;
 
   /**
-   * Initialize the FlutterMutatorView. Use this to set the screenDensity, which will be used to
-   * correct the final transform matrix.
+   * @deprecated Use {@link #FlutterMutatorView(Context, AndroidTouchProcessor)} instead. The {@code
+   *     screenDensity} parameter is ignored, as the view automatically adapts to the current
+   *     context's display density to ensure correct scaling.
    */
+  @Deprecated
   public FlutterMutatorView(
       @NonNull Context context,
       float screenDensity,
       @Nullable AndroidTouchProcessor androidTouchProcessor) {
+    this(context, androidTouchProcessor);
+  }
+
+  /**
+   * Initialize the FlutterMutatorView.
+   *
+   * @param context The Context.
+   * @param androidTouchProcessor The AndroidTouchProcessor.
+   */
+  public FlutterMutatorView(
+      @NonNull Context context, @Nullable AndroidTouchProcessor androidTouchProcessor) {
     super(context, null);
-    this.screenDensity = screenDensity;
     this.androidTouchProcessor = androidTouchProcessor;
     this.paint = new Paint();
   }
 
   /** Initialize the FlutterMutatorView. */
   public FlutterMutatorView(@NonNull Context context) {
-    this(context, 1, /* androidTouchProcessor=*/ null);
+    this(context, /* androidTouchProcessor=*/ null);
   }
 
   @Nullable @VisibleForTesting ViewTreeObserver.OnGlobalFocusChangeListener activeFocusListener;
@@ -159,7 +170,8 @@ public class FlutterMutatorView extends FrameLayout {
     // However, flow is based on the physical resolution. For example, 1000 pixels in flow equals
     // 500 points in Android. And until this point, we did all the calculation based on the flow
     // resolution. So we need to scale down to match Android's logical resolution.
-    finalMatrix.preScale(1 / screenDensity, 1 / screenDensity);
+    float currentScale = getContext().getResources().getDisplayMetrics().density;
+    finalMatrix.preScale(1 / currentScale, 1 / currentScale);
 
     // Reverse the current offset.
     //

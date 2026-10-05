@@ -105,7 +105,8 @@ class PluginHandler(
 
             // Apply the "flutter" Gradle extension to plugins so that they can use it's vended
             // compile/target/min sdk values.
-            pluginProject.extensions.create("flutter", FlutterExtension::class.java)
+            val pluginFlutterExtension = pluginProject.extensions.create("flutter", FlutterExtension::class.java)
+            FlutterPluginUtils.setDefaultAarMinCompileSdk(pluginProject, pluginFlutterExtension.minSdkVersion)
 
             // Add plugin dependency to the app project. We only want to add dependency
             // for dev dependencies in non-release builds.

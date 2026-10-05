@@ -5,11 +5,13 @@
 package com.flutter.gradle
 
 import com.android.build.api.AndroidPluginVersion
+import com.android.build.api.dsl.AarMetadata
 import com.android.build.api.dsl.ApplicationBuildType
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.DynamicFeatureBuildType
 import com.android.build.api.dsl.LibraryBuildType
 import com.android.build.api.variant.AndroidComponentsExtension
+import com.android.build.api.variant.LibraryAndroidComponentsExtension
 import com.android.build.api.variant.Variant
 import com.android.build.api.variant.VariantBuilder
 import com.android.builder.model.BuildType
@@ -36,6 +38,7 @@ import org.gradle.api.UnknownTaskException
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.logging.Logger
+import org.gradle.api.plugins.AppliedPlugin
 import org.gradle.api.plugins.PluginManager
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
@@ -60,6 +63,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.android.build.api.dsl.LibraryExtension as DslLibraryExtension
 
 /**
  * Configuration for a mock Gradle subproject.
@@ -756,6 +760,56 @@ class FlutterPluginUtilsTest {
         val result = FlutterPluginUtils.getCompileSdkFromProject(project)
         assertEquals(CompileSdkVersion(apiLevel = null, previewCodename = "Baklava"), result)
         assertEquals("Baklava", result.toString())
+    }
+
+    // setDefaultAarMinCompileSdk
+    private fun runSetDefaultAarMinCompileSdk(existingMinCompileSdk: Int?): AarMetadata {
+        val project = mockk<Project>()
+        val pluginManager = mockk<PluginManager>()
+        val withPluginSlot = slot<Action<AppliedPlugin>>()
+        every { project.pluginManager } returns pluginManager
+        every { pluginManager.withPlugin("com.android.library", capture(withPluginSlot)) } returns Unit
+
+        val androidComponents = mockk<LibraryAndroidComponentsExtension>()
+        val finalizeDslSlot = slot<(DslLibraryExtension) -> Unit>()
+        every { project.extensions.getByType(LibraryAndroidComponentsExtension::class.java) } returns androidComponents
+        every { androidComponents.finalizeDsl(capture(finalizeDslSlot)) } returns Unit
+
+        val aarMetadata = mockk<AarMetadata>(relaxed = true)
+        every { aarMetadata.minCompileSdk } returns existingMinCompileSdk
+        val libraryExtension = mockk<DslLibraryExtension>()
+        every { libraryExtension.defaultConfig.aarMetadata } returns aarMetadata
+
+        FlutterPluginUtils.setDefaultAarMinCompileSdk(project, minCompileSdk = 24)
+
+        withPluginSlot.captured.execute(mockk())
+        finalizeDslSlot.captured.invoke(libraryExtension)
+        return aarMetadata
+    }
+
+    @Test
+    fun `setDefaultAarMinCompileSdk sets minCompileSdk when the library does not`() {
+        val aarMetadata = runSetDefaultAarMinCompileSdk(existingMinCompileSdk = null)
+        verify { aarMetadata.minCompileSdk = 24 }
+    }
+
+    @Test
+    fun `setDefaultAarMinCompileSdk keeps an explicitly configured minCompileSdk`() {
+        val aarMetadata = runSetDefaultAarMinCompileSdk(existingMinCompileSdk = 30)
+        verify(exactly = 0) { aarMetadata.minCompileSdk = any() }
+    }
+
+    @Test
+    fun `setDefaultAarMinCompileSdk only configures Android library projects`() {
+        val project = mockk<Project>()
+        val pluginManager = mockk<PluginManager>()
+        every { project.pluginManager } returns pluginManager
+        every { pluginManager.withPlugin(any<String>(), any<Action<AppliedPlugin>>()) } returns Unit
+
+        FlutterPluginUtils.setDefaultAarMinCompileSdk(project, minCompileSdk = 24)
+
+        verify(exactly = 1) { pluginManager.withPlugin("com.android.library", any<Action<AppliedPlugin>>()) }
+        verify(exactly = 0) { project.extensions }
     }
 
     @Test

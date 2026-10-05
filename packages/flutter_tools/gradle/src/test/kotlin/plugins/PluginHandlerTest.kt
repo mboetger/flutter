@@ -25,6 +25,7 @@ import org.gradle.api.Action
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.logging.Logger
+import org.gradle.api.plugins.AppliedPlugin
 import org.jetbrains.kotlin.gradle.plugin.extraProperties
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
@@ -181,6 +182,7 @@ class PluginHandlerTest {
         capturePluginActionSlot[1].execute(pluginProject)
 
         verify { pluginProject.extensions.create("flutter", FlutterExtension::class.java) }
+        verify { pluginProject.pluginManager.withPlugin("com.android.library", any<Action<AppliedPlugin>>()) }
         verify {
             pluginProject.dependencies.add(
                 "debugApi",
@@ -435,7 +437,8 @@ class PluginHandlerTest {
         if (dependencyProject != null) {
             every { project.rootProject.findProject(":${flutterPluginAndroidLifecycleDependency["name"]}") } returns dependencyProject
         }
-        every { pluginProject.extensions.create(any(), any<Class<Any>>()) } returns mockk()
+        every { pluginProject.extensions.create(any(), any<Class<Any>>()) } returns FlutterExtension()
+        every { pluginProject.pluginManager.withPlugin(any<String>(), any<Action<AppliedPlugin>>()) } returns Unit
         every { project.afterEvaluate(any<Action<Project>>()) } returns Unit
         every { pluginProject.afterEvaluate(any<Action<Project>>()) } returns Unit
         every { pluginProject.configurations.named(any<String>()) } returns mockk()

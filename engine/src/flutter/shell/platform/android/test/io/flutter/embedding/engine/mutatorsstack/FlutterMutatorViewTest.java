@@ -9,6 +9,7 @@ import static junit.framework.TestCase.*;
 import static org.mockito.Mockito.*;
 
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.view.MotionEvent;
 import android.view.View;
@@ -28,12 +29,37 @@ import org.robolectric.annotation.Implements;
 
 @RunWith(AndroidJUnit4.class)
 public class FlutterMutatorViewTest {
+
+  @Test
+  public void reproducesDensityChangeBug() {
+    Context baseContext = androidx.test.core.app.ApplicationProvider.getApplicationContext();
+    Context spyContext = spy(baseContext);
+    android.content.res.Resources spyResources = spy(baseContext.getResources());
+    when(spyContext.getResources()).thenReturn(spyResources);
+    android.util.DisplayMetrics displayMetrics = new android.util.DisplayMetrics();
+    displayMetrics.density = 2.0f;
+    when(spyResources.getDisplayMetrics()).thenReturn(displayMetrics);
+    FlutterMutatorView view = new FlutterMutatorView(spyContext, null);
+    FlutterMutatorsStack mutatorStack = mock(FlutterMutatorsStack.class);
+    when(mutatorStack.getFinalMatrix()).thenReturn(new Matrix());
+    when(mutatorStack.getFinalClippingPaths()).thenReturn(new java.util.ArrayList<>());
+    view.readyToDisplay(mutatorStack, 0, 0, 100, 100);
+    displayMetrics.density = 4.0f;
+    Canvas canvas = mock(Canvas.class);
+    view.dispatchDraw(canvas);
+    ArgumentCaptor<Matrix> matrixCaptor = ArgumentCaptor.forClass(Matrix.class);
+    verify(canvas).concat(matrixCaptor.capture());
+    Matrix expectedMatrix = new Matrix();
+    expectedMatrix.preScale(1.0f / 4.0f, 1.0f / 4.0f);
+    assertEquals(expectedMatrix, matrixCaptor.getValue());
+  }
+
   private final Context ctx = ApplicationProvider.getApplicationContext();
 
   @Test
   public void canDragViews() {
     final AndroidTouchProcessor touchProcessor = mock(AndroidTouchProcessor.class);
-    final FlutterMutatorView view = new FlutterMutatorView(ctx, 1.0f, touchProcessor);
+    final FlutterMutatorView view = new FlutterMutatorView(ctx, touchProcessor);
     final FlutterMutatorsStack mutatorStack = mock(FlutterMutatorsStack.class);
 
     assertTrue(view.onInterceptTouchEvent(mock(MotionEvent.class)));
@@ -243,7 +269,7 @@ public class FlutterMutatorViewTest {
     final AndroidTouchProcessor touchProcessor = mock(AndroidTouchProcessor.class);
     final MotionEvent[] lastRequestedEvent = new MotionEvent[1];
     final FlutterMutatorView view =
-        new FlutterMutatorView(ctx, 1.0f, touchProcessor) {
+        new FlutterMutatorView(ctx, touchProcessor) {
           @Override
           void requestUnbuffered(MotionEvent event) {
             lastRequestedEvent[0] = event;
@@ -281,4 +307,36 @@ public class FlutterMutatorViewTest {
   @Implements(FrameLayout.class)
   public static class ShadowFrameLayout
       extends io.flutter.plugin.platform.PlatformViewWrapperTest.ShadowViewGroup {}
+
+  @Test
+  public void reproducesDensityChangeBug() {
+    Context baseContext = androidx.test.core.app.ApplicationProvider.getApplicationContext();
+    Context spyContext = spy(baseContext);
+    android.content.res.Resources spyResources = spy(baseContext.getResources());
+    when(spyContext.getResources()).thenReturn(spyResources);
+    android.util.DisplayMetrics displayMetrics = new android.util.DisplayMetrics();
+    displayMetrics.density = 2.0f;
+    when(spyResources.getDisplayMetrics()).thenReturn(displayMetrics);
+
+    FlutterMutatorView view = new FlutterMutatorView(spyContext, null);
+    FlutterMutatorsStack mutatorStack = mock(FlutterMutatorsStack.class);
+    when(mutatorStack.getFinalMatrix()).thenReturn(new android.graphics.Matrix());
+    when(mutatorStack.getFinalClippingPaths()).thenReturn(new java.util.ArrayList<>());
+
+    view.readyToDisplay(mutatorStack, 0, 0, 100, 100);
+
+    displayMetrics.density = 4.0f;
+
+    android.graphics.Canvas canvas = mock(android.graphics.Canvas.class);
+    view.dispatchDraw(canvas);
+
+    ArgumentCaptor<android.graphics.Matrix> matrixCaptor =
+        ArgumentCaptor.forClass(android.graphics.Matrix.class);
+    verify(canvas).concat(matrixCaptor.capture());
+
+    android.graphics.Matrix expectedMatrix = new android.graphics.Matrix();
+    expectedMatrix.preScale(1.0f / 4.0f, 1.0f / 4.0f);
+
+    assertEquals(expectedMatrix, matrixCaptor.getValue());
+  }
 }

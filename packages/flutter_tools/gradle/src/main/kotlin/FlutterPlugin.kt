@@ -120,6 +120,8 @@ class FlutterPlugin : Plugin<Project> {
 
         val flutterExtension: FlutterExtension =
             project.extensions.create("flutter", FlutterExtension::class.java)
+        // Only takes effect for the add-to-app `:flutter` library module.
+        FlutterPluginUtils.setDefaultAarMinCompileSdk(project, flutterExtension.minSdkVersion)
 
         // TODO(gmackall): is this actually a different properties file than the previous one?
         val rootProjectLocalProperties = Properties()

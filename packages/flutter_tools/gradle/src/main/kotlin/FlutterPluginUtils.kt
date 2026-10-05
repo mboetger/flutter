@@ -12,6 +12,7 @@ import com.android.build.api.dsl.DynamicFeatureBuildType
 import com.android.build.api.dsl.LibraryExtension
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.ApplicationVariant
+import com.android.build.api.variant.LibraryAndroidComponentsExtension
 import com.flutter.gradle.plugins.PluginHandler
 import com.flutter.gradle.tasks.DeepLinkJsonFromManifestTask
 import com.flutter.gradle.tasks.EnableHcppManifestTask
@@ -566,6 +567,37 @@ object FlutterPluginUtils {
             apiLevel = if (preview != null) null else androidExtension.compileSdk,
             previewCodename = preview
         )
+    }
+
+    /**
+     * Defaults the AAR metadata `minCompileSdk` of an Android library [project] to [minCompileSdk],
+     * unless the library already sets one.
+     *
+     * Starting with AGP 9, a library's `minCompileSdk` defaults to its own `compileSdk`. Flutter
+     * libraries (the add-to-app `:flutter` module and Flutter plugins) compile against
+     * `flutter.compileSdkVersion`, so without this every consumer, such as an add-to-app host app,
+     * would be forced to compile against at least that version even though Flutter doesn't
+     * require it.
+     *
+     * No-op for projects that don't apply `com.android.library`.
+     */
+    @JvmStatic
+    @JvmName("setDefaultAarMinCompileSdk")
+    internal fun setDefaultAarMinCompileSdk(
+        project: Project,
+        minCompileSdk: Int
+    ) {
+        project.pluginManager.withPlugin("com.android.library") {
+            // finalizeDsl runs after the library's build script, so an explicit value wins.
+            project.extensions
+                .getByType(LibraryAndroidComponentsExtension::class.java)
+                .finalizeDsl { libraryExtension ->
+                    val aarMetadata = libraryExtension.defaultConfig.aarMetadata
+                    if (aarMetadata.minCompileSdk == null) {
+                        aarMetadata.minCompileSdk = minCompileSdk
+                    }
+                }
+        }
     }
 
     /**

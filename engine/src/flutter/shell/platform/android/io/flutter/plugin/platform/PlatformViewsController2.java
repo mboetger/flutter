@@ -482,9 +482,7 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
           "The Android view returned from PlatformView#getView() was already added to a parent"
               + " view.");
     }
-    final FlutterMutatorView parentView =
-        new FlutterMutatorView(
-            context, context.getResources().getDisplayMetrics().density, androidTouchProcessor);
+    final FlutterMutatorView parentView = new FlutterMutatorView(context, androidTouchProcessor);
 
     parentView.setOnDescendantFocusChangeListener(
         (view, hasFocus) -> {
