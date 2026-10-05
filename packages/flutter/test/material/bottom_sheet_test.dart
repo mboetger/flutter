@@ -3258,6 +3258,72 @@ void main() {
     // animation continues from the current visual offset.
     expect(yAfterUp, closeTo(yBeforeUp, 0.1));
   });
+
+  Future<void> openSheet(WidgetTester tester, Widget Function(int) item) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => FractionallySizedBox(
+                    heightFactor: 0.7,
+                    child: SingleChildScrollView(
+                      child: Column(children: List<Widget>.generate(9, (int i) => item(i))),
+                    ),
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+  }
+
+  void expectNoneHidden(WidgetTester tester) {
+    final List<String> hidden = <String>[
+      for (int i = 0; i < 9; i++)
+        if (tester.getSemantics(find.text('Item $i')).flagsCollection.isHidden) 'Item $i',
+    ];
+    expect(hidden, isEmpty, reason: 'on-screen items flagged hidden: $hidden');
+  }
+
+  testWidgets('nested semantics node keeps isHidden after the sheet settles', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await openSheet(
+      tester,
+      (int i) => Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: 'wrapper',
+        child: ListTile(title: Text('Item $i'), onTap: () {}),
+      ),
+    );
+    expectNoneHidden(tester);
+    handle.dispose();
+  });
+
+  testWidgets('ExpansionTile header keeps isHidden on Android', (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await openSheet(
+      tester,
+      (int i) => ExpansionTile(title: Text('Item $i'), children: const <Widget>[Text('child')]),
+    );
+    expectNoneHidden(tester);
+    handle.dispose();
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 }
 
 class _TestPage extends StatelessWidget {
