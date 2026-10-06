@@ -2082,6 +2082,7 @@ class _TabBarState extends State<TabBar> {
         enableFeedback: widget.enableFeedback ?? true,
         overlayColor: widget.overlayColor ?? tabBarTheme.overlayColor ?? defaultOverlay,
         splashFactory: widget.splashFactory ?? tabBarTheme.splashFactory ?? _defaults.splashFactory,
+        excludeFromSemantics: index == _currentIndex,
         borderRadius:
             widget.splashBorderRadius ??
             tabBarTheme.splashBorderRadius ??

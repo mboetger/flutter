@@ -326,8 +326,9 @@ sealed class _DebugSemanticsRoleChecks {
     }
 
     if (data.flagsCollection.isEnabled != Tristate.isFalse &&
+        data.flagsCollection.isSelected != Tristate.isTrue &&
         !data.hasAction(SemanticsAction.tap)) {
-      return FlutterError('A tab must have a tap action');
+      return FlutterError('An unselected tab must have a tap action');
     }
 
     return null;

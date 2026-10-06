@@ -478,7 +478,6 @@ void main() {
         hasSelectedState: true,
         hasEnabledState: true,
         isEnabled: true,
-        hasTapAction: true,
         hasFocusAction: true,
       ),
     );
@@ -538,7 +537,7 @@ void main() {
         hasEnabledState: true,
         hasSelectedState: true,
         isEnabled: true,
-        hasTapAction: true,
+         
         hasFocusAction: true,
       ),
     );
@@ -612,7 +611,7 @@ void main() {
         hasEnabledState: true,
         hasSelectedState: true,
         isEnabled: true,
-        hasTapAction: true,
+         
         hasFocusAction: true,
       ),
     );
@@ -658,7 +657,7 @@ void main() {
         isEnabled: true,
         isSelected: true,
         isButton: true,
-        hasTapAction: true,
+         
         hasFocusAction: true,
       ),
     );

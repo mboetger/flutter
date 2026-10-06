@@ -4295,7 +4295,7 @@ void main() {
                       children: <TestSemantics>[
                         TestSemantics(
                           id: 5,
-                          actions: <SemanticsAction>[SemanticsAction.tap, SemanticsAction.focus],
+                          actions: <SemanticsAction>[SemanticsAction.focus],
                           flags: <SemanticsFlag>[
                             SemanticsFlag.hasSelectedState,
                             SemanticsFlag.isSelected,
@@ -4585,7 +4585,7 @@ void main() {
                             SemanticsFlag.isSelected,
                             SemanticsFlag.isFocusable,
                           ],
-                          actions: <SemanticsAction>[SemanticsAction.tap, SemanticsAction.focus],
+                          actions: <SemanticsAction>[SemanticsAction.focus],
                           label: 'Semantics override 0${kIsWeb ? '' : '\nTab 1 of 2'}',
                           rect: const Rect.fromLTRB(0.0, 0.0, 116.0, kTextTabBarHeight),
                           role: SemanticsRole.tab,
@@ -6429,7 +6429,7 @@ void main() {
                     SemanticsFlag.hasSelectedState,
                   ],
                   rect: TestSemantics.fullScreen,
-                  actions: 1 | SemanticsAction.focus.index,
+                  actions: <SemanticsAction>[SemanticsAction.focus],
                   role: SemanticsRole.tab,
                 ),
                 TestSemantics(

@@ -603,6 +603,7 @@ class _NavigationDestinationBuilderState extends State<_NavigationDestinationBui
           customBorder:
               info.indicatorShape ?? navigationBarTheme.indicatorShape ?? defaults.indicatorShape,
           overlayColor: info.overlayColor ?? navigationBarTheme.overlayColor,
+          excludeFromSemantics: info.index == info.selectedIndex,
           onTap: widget.enabled ? info.onTap : null,
           child: Row(
             children: <Widget>[
@@ -628,6 +629,7 @@ class _IndicatorInkWell extends InkResponse {
     super.overlayColor,
     super.customBorder,
     super.onTap,
+    super.excludeFromSemantics,
     super.child,
   }) : super(containedInkWell: true, highlightColor: Colors.transparent);
 
