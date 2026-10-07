@@ -58,6 +58,8 @@ template("embedder_source_set") {
   source_set(target_name) {
     sources = [
       "embedder.cc",
+      "embedder_asset_resolver.cc",
+      "embedder_asset_resolver.h",
       "embedder_engine.cc",
       "embedder_engine.h",
       "embedder_external_texture_resolver.cc",
@@ -66,6 +68,8 @@ template("embedder_source_set") {
       "embedder_external_view.h",
       "embedder_external_view_embedder.cc",
       "embedder_external_view_embedder.h",
+      "embedder_image_generator.cc",
+      "embedder_image_generator.h",
       "embedder_include.c",
       "embedder_include2.c",
       "embedder_layers.cc",
