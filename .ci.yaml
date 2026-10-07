@@ -3180,6 +3180,14 @@ targets:
         ["devicelab", "android", "linux", "mokey"]
       task_name: list_text_layout_impeller_perf__e2e_summary
 
+  - name: Linux_android_emu run_debug_test_android
+    recipe: devicelab/devicelab_drone
+    timeout: 60
+    properties:
+      tags: >
+        ["devicelab", "linux"]
+      task_name: run_debug_test_android
+
   - name: Linux_android_emu native_assets_android
     recipe: devicelab/devicelab_drone
     timeout: 60
@@ -5330,38 +5338,7 @@ targets:
         ["devicelab", "android", "mac", "arm64", "mokey"]
       task_name: native_assets_android
 
-  # mac mokey test
-  - name: Mac_mokey run_debug_test_android
-    recipe: devicelab/devicelab_drone
-    presubmit: false
-    enabled_branches:
-      - beta # TODO(flutter/flutter#189295): Remove after 3.48.0-0.1.pre is released.
-      - stable # TODO(flutter/flutter#189295): Delete this builder after 3.50 is released.
-    runIf:
-      - .ci.yaml
-      - dev/**
-      - DEPS
-      - engine/**
-    timeout: 60
-    properties:
-      tags: >
-        ["devicelab", "android", "mac", "mokey"]
-      task_name: run_debug_test_android
 
-  # mac mokey test
-  - name: Mac_arm64_mokey run_debug_test_android
-    recipe: devicelab/devicelab_drone
-    presubmit: false
-    runIf:
-      - .ci.yaml
-      - engine/**
-      - DEPS
-      - dev/**
-    timeout: 60
-    properties:
-      tags: >
-        ["devicelab", "android", "mac", "arm64", "mokey"]
-      task_name: run_debug_test_android
 
   # mac mokey test
   - name: Mac_mokey run_release_test
