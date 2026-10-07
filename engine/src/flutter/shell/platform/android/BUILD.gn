@@ -71,11 +71,13 @@ executable("flutter_embedder_native_unittests") {
   visibility = [ "*" ]
   testonly = true
   sources = [
+    "android_hardware_buffer_unittests.cc",
     "android_mutator_unittests.cc",
     "android_semantics_unittests.cc",
     "android_surface_control_unittests.cc",
     "android_task_runners_unittests.cc",
     "android_vsync_waiter_unittests.cc",
+    "android_vulkan_texture_unittests.cc",
     "apk_asset_provider_unittests.cc",
   ]
   public_configs = [ "//flutter:config" ]
@@ -99,6 +101,8 @@ source_set("flutter_embedder_native_src") {
   visibility = [ ":*" ]
 
   sources = [
+    "android_hardware_buffer.cc",
+    "android_hardware_buffer.h",
     "android_mutators_mapper.cc",
     "android_mutators_mapper.h",
     "android_platform_views_controller.cc",
@@ -111,6 +115,12 @@ source_set("flutter_embedder_native_src") {
     "android_task_runners.h",
     "android_vsync_waiter.cc",
     "android_vsync_waiter.h",
+    "android_vulkan_device_owner.cc",
+    "android_vulkan_device_owner.h",
+    "android_vulkan_eligibility.cc",
+    "android_vulkan_eligibility.h",
+    "android_vulkan_texture.cc",
+    "android_vulkan_texture.h",
     "android_window_metrics_mapper.cc",
     "android_window_metrics_mapper.h",
     "jvm_invoker.cc",
