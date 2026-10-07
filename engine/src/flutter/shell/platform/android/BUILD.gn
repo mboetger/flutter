@@ -67,6 +67,68 @@ executable("flutter_shell_native_unittests") {
   ]
 }
 
+executable("flutter_embedder_native_unittests") {
+  visibility = [ "*" ]
+  testonly = true
+  sources = [
+    "android_task_runners_unittests.cc",
+  ]
+  public_configs = [ "//flutter:config" ]
+  deps = [
+    ":flutter_embedder_native_src",
+    "//flutter/fml",
+    "//flutter/shell/platform/android/jni:mock_jni_env",
+    "//flutter/third_party/googletest:gmock",
+    "//flutter/third_party/googletest:gtest",
+    "//flutter/third_party/icu",
+  ]
+}
+
+config("jni_headers_config") {
+  if (!is_android) {
+    include_dirs = [ "//flutter/shell/platform/android/jni/include" ]
+  }
+}
+
+source_set("flutter_embedder_native_src") {
+  visibility = [ ":*" ]
+
+  sources = [
+    "android_task_runners.cc",
+    "android_task_runners.h",
+  ]
+
+  defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
+
+  public_deps = [
+    "//flutter/assets",
+    "//flutter/fml",
+    "//flutter/shell/platform/android/vulkan_queue_guard",
+    "//flutter/shell/platform/embedder:embedder_headers",
+  ]
+
+  deps = [
+    "//flutter/shell/platform/embedder:embedder_as_internal_library",
+    "//flutter/third_party/icu",
+    "//flutter/third_party/rapidjson",
+    "//flutter/third_party/vulkan-deps/vulkan-headers/src:vulkan_headers",
+  ]
+
+  public_configs = [
+    "//flutter:config",
+    "//flutter/third_party/icu:icu_config",
+    ":jni_headers_config",
+  ]
+
+  if (is_android) {
+    libs = [
+      "android",
+      "EGL",
+      "GLESv2",
+    ]
+  }
+}
+
 shared_library("flutter_shell_native") {
   inputs = [ "android_exports.lst" ]
   output_name = "flutter"
@@ -159,6 +221,7 @@ source_set("flutter_shell_native_src") {
 
   public_deps = [
     ":android_gpu_configuration",
+    ":flutter_embedder_native_src",
     ":icudtl_asm",
     ":image_generator",
     "//flutter/assets",
