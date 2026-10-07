@@ -103,6 +103,8 @@ source_set("flutter_embedder_native_src") {
     "android_semantics_mapper.h",
     "android_task_runners.cc",
     "android_task_runners.h",
+    "jvm_invoker.cc",
+    "jvm_invoker.h",
     "os_library_loader.cc",
     "os_library_loader.h",
   ]
