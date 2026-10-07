@@ -4361,6 +4361,303 @@ FlutterEngineResult FlutterEngineUpdateAssetResolver(
   return kSuccess;
 }
 
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                       const FlutterEngineSpawnConfig* config,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           spawned_engine_out) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (config == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Spawn config was null.");
+  }
+
+  if (spawned_engine_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Spawned engine output pointer was null.");
+  }
+
+  if (config->struct_size < sizeof(FlutterEngineSpawnConfig)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments, "FlutterEngineSpawnConfig struct_size is invalid.");
+  }
+
+  auto parent_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!parent_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Parent engine must be running to spawn a new engine.");
+  }
+
+  const FlutterRendererConfig* renderer_config =
+      SAFE_ACCESS(config, renderer_config, nullptr);
+  if (renderer_config == nullptr &&
+      parent_engine->GetRendererConfig().has_value()) {
+    renderer_config = &parent_engine->GetRendererConfig().value();
+  }
+  if (renderer_config == nullptr || !IsRendererValid(renderer_config)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "The renderer configuration was invalid.");
+  }
+
+  const FlutterProjectArgs* args = SAFE_ACCESS(config, project_args, nullptr);
+  if (args != nullptr && args->struct_size < sizeof(size_t)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "FlutterProjectArgs struct_size is invalid.");
+  }
+
+  if (args != nullptr &&
+      SAFE_ACCESS(args, custom_task_runners, nullptr) != nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Spawned engine cannot have custom task runners because all isolates "
+        "in an isolate group must share the same task runners as the parent "
+        "engine.");
+  }
+
+  void* user_data = config->user_data;
+
+  const flutter::Settings& parent_settings =
+      parent_engine->GetShell().GetSettings();
+
+  flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
+      CreatePlatformDispatchTable(args, user_data);
+
+  const FlutterCompositor* compositor =
+      args ? SAFE_ACCESS(args, compositor, nullptr) : nullptr;
+  auto external_view_embedder_result = InferExternalViewEmbedderFromArgs(
+      compositor, parent_settings.enable_impeller);
+  if (!external_view_embedder_result.ok()) {
+    FML_LOG(ERROR) << external_view_embedder_result.status().message();
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Compositor arguments were invalid.");
+  }
+
+  impeller::Flags impeller_flags;
+  impeller_flags.use_sdfs = parent_settings.impeller_use_sdfs;
+  impeller_flags.top_left_default_framebuffer_origin =
+      parent_settings.impeller_top_left_default_framebuffer_origin;
+
+  auto on_create_platform_view = InferPlatformViewCreationCallback(
+      renderer_config, user_data, platform_dispatch_table,
+      std::move(external_view_embedder_result.value()),
+      parent_settings.enable_impeller, impeller_flags,
+      parent_settings.enable_vulkan_validation);
+
+  if (!on_create_platform_view) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not infer platform view creation callback.");
+  }
+
+  flutter::Shell::CreateCallback<flutter::Rasterizer> on_create_rasterizer =
+      [](flutter::Shell& shell) {
+        return std::make_unique<flutter::Rasterizer>(shell);
+      };
+
+  auto external_texture_resolver =
+      CreateExternalTextureResolver(renderer_config, user_data);
+
+  std::shared_ptr<flutter::EmbedderThreadHost> thread_host =
+      parent_engine->GetThreadHost();
+
+  const flutter::TaskRunners& task_runners =
+      thread_host ? thread_host->GetTaskRunners()
+                  : parent_engine->GetTaskRunners();
+
+  if (!task_runners.IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Task runner configuration was invalid.");
+  }
+
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+
+  if (fml::UniqueFD::traits_type::IsValid(parent_settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(parent_settings.assets_dir), true));
+  }
+
+  if (!parent_settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(parent_settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
+
+  if (args != nullptr) {
+    bool has_custom_asset_resolvers =
+        SAFE_ACCESS(args, asset_resolvers, nullptr) != nullptr &&
+        SAFE_ACCESS(args, asset_resolvers_count, 0) > 0;
+    if (has_custom_asset_resolvers) {
+      size_t count = args->asset_resolvers_count;
+      for (size_t i = 0; i < count; ++i) {
+        const FlutterAssetResolver* resolver = args->asset_resolvers[i];
+        if (resolver != nullptr) {
+          if (resolver->struct_size < sizeof(FlutterAssetResolver)) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterAssetResolver struct_size is invalid.");
+          }
+          if (resolver->find_asset_callback == nullptr) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterAssetResolver find_asset_callback is required.");
+          }
+          auto asset_resolver =
+              std::make_unique<flutter::EmbedderAssetResolver>(*resolver);
+          asset_manager->PushBack(std::move(asset_resolver));
+        }
+      }
+    }
+  }
+
+  flutter::RunConfiguration run_configuration(
+      flutter::IsolateConfiguration::InferFromSettings(
+          parent_settings, asset_manager, nullptr,
+          flutter::IsolateLaunchType::kExistingGroup),
+      asset_manager);
+
+  const char* raw_entrypoint = SAFE_ACCESS(config, entrypoint, nullptr);
+  if ((raw_entrypoint == nullptr || raw_entrypoint[0] == '\0') &&
+      args != nullptr) {
+    raw_entrypoint = SAFE_ACCESS(args, custom_dart_entrypoint, nullptr);
+  }
+  if (raw_entrypoint != nullptr) {
+    auto dart_entrypoint = std::string{raw_entrypoint};
+    if (!dart_entrypoint.empty()) {
+      if (SAFE_ACCESS(config, library_uri, nullptr) != nullptr) {
+        auto library_uri_str = std::string{config->library_uri};
+        if (!library_uri_str.empty()) {
+          run_configuration.SetEntrypointAndLibrary(std::move(dart_entrypoint),
+                                                    std::move(library_uri_str));
+        } else {
+          run_configuration.SetEntrypoint(std::move(dart_entrypoint));
+        }
+      } else {
+        run_configuration.SetEntrypoint(std::move(dart_entrypoint));
+      }
+    }
+  }
+
+  int argc = SAFE_ACCESS(config, entrypoint_argc, 0);
+  const char* const* argv = SAFE_ACCESS(config, entrypoint_argv, nullptr);
+  if (argc <= 0 && args != nullptr) {
+    argc = SAFE_ACCESS(args, dart_entrypoint_argc, 0);
+    argv = SAFE_ACCESS(args, dart_entrypoint_argv, nullptr);
+  }
+  if (argc > 0) {
+    if (argv == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          "Could not determine Dart entrypoint arguments as entrypoint_argc "
+          "was set, but entrypoint_argv was null.");
+    }
+    std::vector<std::string> arguments;
+    arguments.reserve(argc);
+    for (int i = 0; i < argc; ++i) {
+      if (argv[i] == nullptr) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "Dart entrypoint argument in entrypoint_argv was null.");
+      }
+      arguments.emplace_back(argv[i]);
+    }
+    run_configuration.SetEntrypointArgs(std::move(arguments));
+  }
+
+  int64_t spawned_engine_id = SAFE_ACCESS(config, engine_id, 0);
+  if (spawned_engine_id == 0 && args != nullptr) {
+    spawned_engine_id = SAFE_ACCESS(args, engine_id, 0);
+  }
+  if (spawned_engine_id != 0) {
+    run_configuration.SetEngineId(spawned_engine_id);
+  }
+
+  const char* initial_route_arg = SAFE_ACCESS(config, initial_route, nullptr);
+  if ((initial_route_arg == nullptr || initial_route_arg[0] == '\0') &&
+      args != nullptr) {
+    initial_route_arg = SAFE_ACCESS(args, initial_route, nullptr);
+  }
+  if (initial_route_arg != nullptr && initial_route_arg[0] != '\0') {
+    run_configuration.SetInitialRoute(initial_route_arg);
+  }
+
+  bool has_custom_image_generators = false;
+  if (args != nullptr) {
+    has_custom_image_generators =
+        SAFE_ACCESS(args, image_generators, nullptr) != nullptr &&
+        SAFE_ACCESS(args, image_generators_count, 0) > 0;
+    if (has_custom_image_generators) {
+      size_t count = args->image_generators_count;
+      for (size_t i = 0; i < count; ++i) {
+        const FlutterImageGeneratorRegistrationInfo* info =
+            args->image_generators[i];
+        if (info != nullptr) {
+          if (info->struct_size <
+              sizeof(FlutterImageGeneratorRegistrationInfo)) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterImageGeneratorRegistrationInfo struct_size is "
+                "invalid.");
+          }
+          if (info->create_generator == nullptr) {
+            return LOG_EMBEDDER_ERROR(
+                kInvalidArguments,
+                "FlutterImageGeneratorRegistrationInfo create_generator "
+                "callback is required.");
+          }
+        }
+      }
+    }
+  }
+
+  if (!run_configuration.IsValid()) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Could not infer the Flutter project to run for spawned engine.");
+  }
+
+  std::string spawn_initial_route = "/";
+  if (initial_route_arg != nullptr && initial_route_arg[0] != '\0') {
+    spawn_initial_route = initial_route_arg;
+  }
+
+  auto spawned_engine = parent_engine->Spawn(
+      thread_host, task_runners, std::move(run_configuration),
+      spawn_initial_route, on_create_platform_view, on_create_rasterizer,
+      std::move(external_texture_resolver));
+
+  if (!spawned_engine) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not spawn Flutter engine.");
+  }
+  spawned_engine->SetRendererConfig(*renderer_config);
+
+  if (!spawned_engine->NotifyCreated()) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not notify platform view of spawned engine creation.");
+  }
+
+  if (args != nullptr && has_custom_image_generators) {
+    size_t count = args->image_generators_count;
+    for (size_t i = 0; i < count; ++i) {
+      const FlutterImageGeneratorRegistrationInfo* info =
+          args->image_generators[i];
+      if (info != nullptr) {
+        spawned_engine->RegisterImageGenerator(
+            flutter::CreateEmbedderImageGeneratorFactory(*info),
+            info->priority);
+      }
+    }
+  }
+
+  *spawned_engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
+      spawned_engine.release());
+  return kSuccess;
+}
 
 FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
@@ -4749,6 +5046,61 @@ FlutterEngineResult FlutterEngineRegisterImageGenerator(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void) {
+  txt::GetDefaultFontManager();
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineRegisterVMServiceUriCallback(
+    const FlutterVMServiceUriCallbackConfig* config,
+    intptr_t* handle_out) {
+  if (config == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Config was null.");
+  }
+
+  if (config->struct_size < sizeof(FlutterVMServiceUriCallbackConfig)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid config struct_size.");
+  }
+
+  if (config->callback == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Callback was null.");
+  }
+
+  FlutterEngineVMServiceUriCallback callback = config->callback;
+  void* user_data = config->user_data;
+
+  flutter::DartServiceIsolate::CallbackHandle handle =
+      flutter::DartServiceIsolate::AddServerStatusCallback(
+          [callback, user_data](const std::string& uri) {
+            callback(uri.c_str(), user_data);
+          });
+
+  if (handle == 0) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not register VM service URI callback.");
+  }
+
+  if (handle_out != nullptr) {
+    *handle_out = static_cast<intptr_t>(handle);
+  }
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineDeregisterVMServiceUriCallback(
+    intptr_t handle) {
+  if (handle == 0) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid callback handle.");
+  }
+
+  if (flutter::DartServiceIsolate::RemoveServerStatusCallback(
+          static_cast<flutter::DartServiceIsolate::CallbackHandle>(handle))) {
+    return kSuccess;
+  }
+
+  return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                            "Could not deregister VM service URI callback.");
+}
 
 FlutterEngineResult FlutterEngineQueryVulkanDriverSupport(
     const FlutterVulkanDriverProperties* properties,
@@ -4847,6 +5199,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(RemoveView, FlutterEngineRemoveView);
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
   SET_PROC(UpdateAssetResolver, FlutterEngineUpdateAssetResolver);
+  SET_PROC(Spawn, FlutterEngineSpawn);
   SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
   SET_PROC(NotifyDartDeferredLibraryLoadError,
            FlutterEngineNotifyDartDeferredLibraryLoadError);
@@ -4859,6 +5212,11 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(LoadCallbackCache, FlutterEngineLoadCallbackCache);
   SET_PROC(GetCallbackHandle, FlutterEngineGetCallbackHandle);
   SET_PROC(RegisterImageGenerator, FlutterEngineRegisterImageGenerator);
+  SET_PROC(PrefetchDefaultFontManager, FlutterEnginePrefetchDefaultFontManager);
+  SET_PROC(RegisterVMServiceUriCallback,
+           FlutterEngineRegisterVMServiceUriCallback);
+  SET_PROC(DeregisterVMServiceUriCallback,
+           FlutterEngineDeregisterVMServiceUriCallback);
   SET_PROC(QueryVulkanDriverSupport, FlutterEngineQueryVulkanDriverSupport);
 #undef SET_PROC
 
