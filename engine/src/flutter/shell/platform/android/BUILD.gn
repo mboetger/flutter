@@ -72,6 +72,7 @@ executable("flutter_embedder_native_unittests") {
   testonly = true
   sources = [
     "android_task_runners_unittests.cc",
+    "apk_asset_provider_unittests.cc",
   ]
   public_configs = [ "//flutter:config" ]
   deps = [
@@ -96,6 +97,8 @@ source_set("flutter_embedder_native_src") {
   sources = [
     "android_task_runners.cc",
     "android_task_runners.h",
+    "os_library_loader.cc",
+    "os_library_loader.h",
   ]
 
   defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
