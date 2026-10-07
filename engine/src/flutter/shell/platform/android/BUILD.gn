@@ -79,9 +79,12 @@ executable("flutter_embedder_native_unittests") {
     "android_surface_control_unittests.cc",
     "android_surface_manager_unittests.cc",
     "android_task_runners_unittests.cc",
+    "android_vm_init_unittests.cc",
     "android_vsync_waiter_unittests.cc",
     "android_vulkan_texture_unittests.cc",
+    "android_window_metrics_unittests.cc",
     "apk_asset_provider_unittests.cc",
+    "flutter_embedder_native_unittests.cc",
   ]
   public_configs = [ "//flutter:config" ]
   deps = [
@@ -122,6 +125,7 @@ source_set("flutter_embedder_native_src") {
     "android_surface_manager.h",
     "android_task_runners.cc",
     "android_task_runners.h",
+    "android_vm_init.cc",
     "android_vm_init.h",
     "android_vsync_waiter.cc",
     "android_vsync_waiter.h",
@@ -133,6 +137,12 @@ source_set("flutter_embedder_native_src") {
     "android_vulkan_texture.h",
     "android_window_metrics_mapper.cc",
     "android_window_metrics_mapper.h",
+    "flutter_embedder_native.cc",
+    "flutter_embedder_native.h",
+    "jni_delegate.cc",
+    "jni_delegate.h",
+    "jni_router.cc",
+    "jni_router.h",
     "jvm_invoker.cc",
     "jvm_invoker.h",
     "os_library_loader.cc",
