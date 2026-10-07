@@ -71,6 +71,7 @@ executable("flutter_embedder_native_unittests") {
   visibility = [ "*" ]
   testonly = true
   sources = [
+    "android_compositor_unittests.cc",
     "android_engine_group_unittests.cc",
     "android_hardware_buffer_unittests.cc",
     "android_mutator_unittests.cc",
@@ -103,6 +104,8 @@ source_set("flutter_embedder_native_src") {
   visibility = [ ":*" ]
 
   sources = [
+    "android_compositor.cc",
+    "android_compositor.h",
     "android_engine_group.cc",
     "android_engine_group.h",
     "android_hardware_buffer.cc",
