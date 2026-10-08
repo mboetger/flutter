@@ -378,6 +378,7 @@ mixin GestureBinding on BindingBase implements HitTestable, HitTestDispatcher, H
   /// This is handled in [RendererBinding] and [MouseTracker], and will ignore
   /// the results cached here.
   final Map<int, HitTestResult> _hitTests = <int, HitTestResult>{};
+  final Map<int, int> _pointerByDevice = <int, int>{};
 
   /// Dispatch an event to the targets found by a hit test on its position.
   ///
@@ -405,6 +406,21 @@ mixin GestureBinding on BindingBase implements HitTestable, HitTestDispatcher, H
   }
 
   void _handlePointerEventImmediately(PointerEvent event) {
+    if (event is PointerAddedEvent || event is PointerDownEvent) {
+      final int? existingPointer = _pointerByDevice[event.device];
+      if (existingPointer != null && existingPointer != event.pointer) {
+        for (final int p in _pointerByDevice.values.toList()) {
+          _handlePointerEventImmediately(PointerCancelEvent(pointer: p, device: event.device));
+        }
+        _pointerByDevice.clear();
+      }
+      _pointerByDevice[event.device] = event.pointer;
+    } else if (event is PointerRemovedEvent || event is PointerCancelEvent) {
+      if (_pointerByDevice[event.device] == event.pointer) {
+        _pointerByDevice.remove(event.device);
+      }
+    }
+
     HitTestResult? hitTestResult;
     if (event is PointerDownEvent ||
         event is PointerSignalEvent ||
@@ -553,6 +569,7 @@ mixin GestureBinding on BindingBase implements HitTestable, HitTestDispatcher, H
   @protected
   void resetGestureBinding() {
     _hitTests.clear();
+    _pointerByDevice.clear();
   }
 
   void _handleSampleTimeChanged() {
