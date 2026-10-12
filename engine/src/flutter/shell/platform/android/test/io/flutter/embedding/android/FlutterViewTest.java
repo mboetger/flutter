@@ -102,6 +102,43 @@ public class FlutterViewTest {
   }
 
   @Test
+  public void onConfigurationChanged_updatesViewportMetrics() {
+    try (ActivityScenario<Activity> scenario = ActivityScenario.launch(Activity.class)) {
+      scenario.onActivity(
+          activity -> {
+            FlutterView flutterView = new FlutterView(activity);
+            FlutterEngine flutterEngine =
+                spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+            FlutterRenderer mockRenderer = mock(FlutterRenderer.class);
+            when(flutterEngine.getRenderer()).thenReturn(mockRenderer);
+
+            flutterView.attachToFlutterEngine(flutterEngine);
+            clearInvocations(mockRenderer);
+
+            Configuration configuration = new Configuration();
+            configuration.densityDpi = 320;
+
+            float originalDensity = ctx.getResources().getDisplayMetrics().density;
+            try {
+              // We also need to change the resource density, since viewportMetrics.devicePixelRatio
+              // =
+              // getResources().getDisplayMetrics().density;
+              ctx.getResources().getDisplayMetrics().density = 2.0f;
+
+              flutterView.onConfigurationChanged(configuration);
+
+              org.mockito.ArgumentCaptor<FlutterRenderer.ViewportMetrics> viewportMetricsCaptor =
+                  org.mockito.ArgumentCaptor.forClass(FlutterRenderer.ViewportMetrics.class);
+              verify(mockRenderer, times(1)).setViewportMetrics(viewportMetricsCaptor.capture());
+              assertEquals(2.0f, viewportMetricsCaptor.getValue().devicePixelRatio, 0.0f);
+            } finally {
+              ctx.getResources().getDisplayMetrics().density = originalDensity;
+            }
+          });
+    }
+  }
+
+  @Test
   public void attachToFlutterEngine_alertsPlatformViews() {
     FlutterView flutterView = new FlutterView(ctx);
     FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));

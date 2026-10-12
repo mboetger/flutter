@@ -486,11 +486,14 @@ public class FlutterView extends FrameLayout
     // the activity or fragment tell the view to attach to the Flutter engine
     // again (e.g. in onStart).
     if (flutterEngine != null) {
-      Log.v(TAG, "Configuration changed. Sending locales and user settings to Flutter.");
+      Log.v(
+          TAG,
+          "Configuration changed. Sending locales, user settings, and viewport metrics to Flutter.");
       localizationPlugin.sendLocalesToFlutter(newConfig);
       sendUserSettingsToFlutter();
 
       ViewUtils.calculateMaximumDisplayMetrics(getContext(), flutterEngine);
+      sendViewportMetricsToFlutter();
     }
   }
 
