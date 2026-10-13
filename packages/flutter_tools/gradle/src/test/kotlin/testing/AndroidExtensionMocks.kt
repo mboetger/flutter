@@ -34,6 +34,7 @@ import java.io.File
 fun setUpMockAndroidExtension(
     project: Project,
     compileSdk: Int? = 35,
+    compileSdkMinor: Int? = null,
     compileSdkPreview: String? = null,
     ndkVersion: String? = "29.0.13846066",
     buildTypes: List<ApplicationBuildType> = emptyList()
@@ -41,6 +42,7 @@ fun setUpMockAndroidExtension(
     val mockAndroidExtension = mockk<ApplicationExtension>()
 
     every { mockAndroidExtension.compileSdk } returns compileSdk
+    every { mockAndroidExtension.compileSdkMinor } returns compileSdkMinor
     every { mockAndroidExtension.compileSdkPreview } returns compileSdkPreview
     if (ndkVersion != null) {
         every { mockAndroidExtension.ndkVersion } returns ndkVersion
@@ -80,6 +82,7 @@ fun setUpMockAndroidExtension(
 fun setUpMockLibraryAndroidExtension(
     project: Project,
     compileSdk: Int? = 35,
+    compileSdkMinor: Int? = null,
     compileSdkPreview: String? = null,
     ndkVersion: String? = "29.0.13846066",
     buildTypes: List<LibraryBuildType> = emptyList()
@@ -87,6 +90,7 @@ fun setUpMockLibraryAndroidExtension(
     val mockLibraryExtension = mockk<LibraryExtension>()
 
     every { mockLibraryExtension.compileSdk } returns compileSdk
+    every { mockLibraryExtension.compileSdkMinor } returns compileSdkMinor
     every { mockLibraryExtension.compileSdkPreview } returns compileSdkPreview
     if (ndkVersion != null) {
         every { mockLibraryExtension.ndkVersion } returns ndkVersion

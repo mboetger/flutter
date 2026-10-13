@@ -544,6 +544,7 @@ object FlutterPluginUtils {
         val preview = androidExtension.compileSdkPreview
         return CompileSdkVersion(
             apiLevel = if (preview != null) null else androidExtension.compileSdk,
+            minorApiLevel = if (preview != null) null else androidExtension.compileSdkMinor,
             previewCodename = preview
         )
     }

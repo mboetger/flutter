@@ -396,6 +396,45 @@ class PluginHandlerTest {
         }
     }
 
+    @Test
+    fun `configurePlugins logs warning when plugin compileSdkMinor is higher than project compileSdkMinor`(
+        @TempDir tempDir: Path
+    ) {
+        val project = mockk<Project>()
+        val pluginProject = mockk<Project>()
+        val mockBuildType =
+            mockk<ApplicationBuildType> {
+                every { name } returns "debug"
+                every { isDebuggable } returns true
+            }
+        val mockLogger = mockk<Logger>(relaxed = true)
+        every { project.logger } returns mockLogger
+
+        setupMockProjectDir(project, tempDir)
+        setupMockPluginProject(project, pluginProject)
+        setUpMockAndroidExtension(project, compileSdk = 37, compileSdkMinor = null, buildTypes = listOf(mockBuildType))
+        setUpMockLibraryAndroidExtension(pluginProject, compileSdk = 37, compileSdkMinor = 2)
+        setupMockPluginLoader(project, listOf(cameraDependency))
+
+        val capturePluginActionSlot = mutableListOf<Action<Project>>()
+
+        val pluginHandler = PluginHandler(project)
+        pluginHandler.configurePlugins(
+            engineVersionValue = EXAMPLE_ENGINE_VERSION
+        )
+
+        verify { pluginProject.afterEvaluate(capture(capturePluginActionSlot)) }
+        capturePluginActionSlot.forEach { it.execute(pluginProject) }
+
+        verify {
+            mockLogger.quiet(
+                match { message ->
+                    message.contains("The plugin camera_android_camerax requires Android SDK version 37.2 or higher")
+                }
+            )
+        }
+    }
+
     private fun setupMockProjectDir(
         project: Project,
         tempDir: Path,

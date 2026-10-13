@@ -17,6 +17,21 @@ class CompileSdkVersionTest {
     }
 
     @Test
+    fun `constructor rejects minorApiLevel without apiLevel`() {
+        assertFailsWith<IllegalArgumentException> {
+            CompileSdkVersion(apiLevel = null, minorApiLevel = 2, previewCodename = null)
+        }
+    }
+
+    @Test
+    fun `constructor accepts numeric api level and minor api level`() {
+        val version = CompileSdkVersion(apiLevel = 37, minorApiLevel = 2, previewCodename = null)
+        assertEquals(37, version.apiLevel)
+        assertEquals(2, version.minorApiLevel)
+        assertEquals(null, version.previewCodename)
+    }
+
+    @Test
     fun `constructor accepts numeric api level`() {
         val version = CompileSdkVersion(apiLevel = 35, previewCodename = null)
         assertEquals(35, version.apiLevel)
@@ -38,12 +53,18 @@ class CompileSdkVersionTest {
     }
 
     @Test
-    fun `isHigherThan compares numeric api levels numerically`() {
+    fun `isHigherThan compares numeric api levels and minor api levels numerically`() {
         val sdk35 = CompileSdkVersion(apiLevel = 35, previewCodename = null)
         val sdk36 = CompileSdkVersion(apiLevel = 36, previewCodename = null)
+        val sdk37 = CompileSdkVersion(apiLevel = 37, previewCodename = null)
+        val sdk37Minor0 = CompileSdkVersion(apiLevel = 37, minorApiLevel = 0, previewCodename = null)
+        val sdk37Minor2 = CompileSdkVersion(apiLevel = 37, minorApiLevel = 2, previewCodename = null)
         assertEquals(true, sdk36.isHigherThan(sdk35))
         assertEquals(false, sdk35.isHigherThan(sdk36))
         assertEquals(false, sdk35.isHigherThan(sdk35))
+        assertEquals(true, sdk37Minor2.isHigherThan(sdk37))
+        assertEquals(false, sdk37.isHigherThan(sdk37Minor2))
+        assertEquals(false, sdk37Minor0.isHigherThan(sdk37))
     }
 
     @Test
@@ -77,6 +98,7 @@ class CompileSdkVersionTest {
     fun `toString formats preview or apiLevel or unknown`() {
         assertEquals("Baklava", CompileSdkVersion(apiLevel = null, previewCodename = "Baklava").toString())
         assertEquals("35", CompileSdkVersion(apiLevel = 35, previewCodename = null).toString())
+        assertEquals("37.2", CompileSdkVersion(apiLevel = 37, minorApiLevel = 2, previewCodename = null).toString())
         assertEquals("unknown", CompileSdkVersion(apiLevel = null, previewCodename = null).toString())
     }
 }

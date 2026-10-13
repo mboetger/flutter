@@ -667,10 +667,24 @@ class FlutterPluginUtilsTest {
         val androidExtension = mockk<ApplicationExtension>()
         every { project.extensions.findByName("android") } returns androidExtension
         every { androidExtension.compileSdk } returns 35
+        every { androidExtension.compileSdkMinor } returns null
         every { androidExtension.compileSdkPreview } returns null
         val result = FlutterPluginUtils.getCompileSdkFromProject(project)
         assertEquals(CompileSdkVersion(apiLevel = 35, previewCodename = null), result)
         assertEquals("35", result.toString())
+    }
+
+    @Test
+    fun `getCompileSdkFromProject returns the compileSdk and compileSdkMinor from the project`() {
+        val project = mockk<Project>()
+        val androidExtension = mockk<ApplicationExtension>()
+        every { project.extensions.findByName("android") } returns androidExtension
+        every { androidExtension.compileSdk } returns 37
+        every { androidExtension.compileSdkMinor } returns 2
+        every { androidExtension.compileSdkPreview } returns null
+        val result = FlutterPluginUtils.getCompileSdkFromProject(project)
+        assertEquals(CompileSdkVersion(apiLevel = 37, minorApiLevel = 2, previewCodename = null), result)
+        assertEquals("37.2", result.toString())
     }
 
     @Test
@@ -697,6 +711,7 @@ class FlutterPluginUtilsTest {
         val androidExtension = mockk<ApplicationExtension>()
         every { project.extensions.findByName("android") } returns androidExtension
         every { androidExtension.compileSdk } returns 36
+        every { androidExtension.compileSdkMinor } returns null
         every { androidExtension.compileSdkPreview } returns null
         every { androidExtension.compileSdkExtension } returns 19
         val result = FlutterPluginUtils.getCompileSdkFromProject(project)

@@ -41,6 +41,25 @@ class AgpCommonExtensionWrapper(
             }
         }
 
+    var compileSdkMinor: Int?
+        get() =
+            when (backingExtension) {
+                is ApplicationExtension -> backingExtension.compileSdkMinor
+                is LibraryExtension -> backingExtension.compileSdkMinor
+                is DynamicFeatureExtension -> backingExtension.compileSdkMinor
+                is TestExtension -> backingExtension.compileSdkMinor
+                else -> throw IllegalArgumentException(unsupportedMessage())
+            }
+        set(value) {
+            when (backingExtension) {
+                is ApplicationExtension -> backingExtension.compileSdkMinor = value
+                is LibraryExtension -> backingExtension.compileSdkMinor = value
+                is DynamicFeatureExtension -> backingExtension.compileSdkMinor = value
+                is TestExtension -> backingExtension.compileSdkMinor = value
+                else -> throw IllegalArgumentException(unsupportedMessage())
+            }
+        }
+
     var compileSdkPreview: String?
         get() =
             when (backingExtension) {

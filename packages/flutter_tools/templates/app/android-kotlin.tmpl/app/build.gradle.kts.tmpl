@@ -6,7 +6,11 @@ plugins {
 
 android {
     namespace = "{{androidIdentifier}}"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk {
+        version = release(flutter.compileSdkVersion) {
+            minorApiLevel = flutter.compileSdkMinor
+        }
+    }
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

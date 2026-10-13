@@ -42,4 +42,20 @@ class FlutterExtensionTest {
         flutterExtension.flutterVersionName = "1.2.3"
         assertEquals("1.2.3", flutterExtension.getVersionName())
     }
+
+    @Test
+    fun `compileSdkMinor defaults to null and supports integer assignment`() {
+        val flutterExtension = FlutterExtension()
+        assertEquals(null, flutterExtension.compileSdkMinor)
+        flutterExtension.compileSdkMinor = 2
+        assertEquals(2, flutterExtension.compileSdkMinor)
+    }
+
+    @Test
+    fun `compileSdkVersion defaults to 36 and supports integer assignment`() {
+        val flutterExtension = FlutterExtension()
+        assertEquals(36, flutterExtension.compileSdkVersion)
+        flutterExtension.compileSdkVersion = 37
+        assertEquals(37, flutterExtension.compileSdkVersion)
+    }
 }

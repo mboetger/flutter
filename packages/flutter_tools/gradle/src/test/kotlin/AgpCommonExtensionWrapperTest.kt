@@ -51,6 +51,31 @@ class AgpCommonExtensionWrapperTest {
     }
 
     @Test
+    fun `compileSdkMinor delegates to application, library, dynamicFeature, and test extensions`() {
+        val appExt = mockk<ApplicationExtension>(relaxed = true) { every { compileSdkMinor } returns 1 }
+        val libExt = mockk<LibraryExtension>(relaxed = true) { every { compileSdkMinor } returns 2 }
+        val dfExt = mockk<DynamicFeatureExtension>(relaxed = true) { every { compileSdkMinor } returns 3 }
+        val testExt = mockk<TestExtension>(relaxed = true) { every { compileSdkMinor } returns 4 }
+
+        assertEquals(1, AgpCommonExtensionWrapper(appExt).compileSdkMinor)
+        assertEquals(2, AgpCommonExtensionWrapper(libExt).compileSdkMinor)
+        assertEquals(3, AgpCommonExtensionWrapper(dfExt).compileSdkMinor)
+        assertEquals(4, AgpCommonExtensionWrapper(testExt).compileSdkMinor)
+
+        AgpCommonExtensionWrapper(appExt).compileSdkMinor = 5
+        verify { appExt.compileSdkMinor = 5 }
+
+        AgpCommonExtensionWrapper(libExt).compileSdkMinor = 6
+        verify { libExt.compileSdkMinor = 6 }
+
+        AgpCommonExtensionWrapper(dfExt).compileSdkMinor = 7
+        verify { dfExt.compileSdkMinor = 7 }
+
+        AgpCommonExtensionWrapper(testExt).compileSdkMinor = 8
+        verify { testExt.compileSdkMinor = 8 }
+    }
+
+    @Test
     fun `compileSdkPreview delegates to application, library, dynamicFeature, and test extensions`() {
         val appExt = mockk<ApplicationExtension>(relaxed = true) { every { compileSdkPreview } returns "Baklava" }
         val libExt = mockk<LibraryExtension>(relaxed = true) { every { compileSdkPreview } returns "VanillaIceCream" }
@@ -217,6 +242,8 @@ class AgpCommonExtensionWrapperTest {
         assertFailsWith<IllegalArgumentException> { wrapper.buildTypes }
         assertFailsWith<IllegalArgumentException> { wrapper.compileSdk }
         assertFailsWith<IllegalArgumentException> { wrapper.compileSdk = 35 }
+        assertFailsWith<IllegalArgumentException> { wrapper.compileSdkMinor }
+        assertFailsWith<IllegalArgumentException> { wrapper.compileSdkMinor = 2 }
         assertFailsWith<IllegalArgumentException> { wrapper.compileSdkPreview }
         assertFailsWith<IllegalArgumentException> { wrapper.compileSdkPreview = "Baklava" }
         assertFailsWith<IllegalArgumentException> { wrapper.namespace }
