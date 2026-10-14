@@ -8,6 +8,7 @@ import static io.flutter.Build.API_LEVELS;
 
 import android.view.Surface;
 import androidx.annotation.RequiresApi;
+import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.view.TextureRegistry.SurfaceProducer;
 
 @RequiresApi(API_LEVELS.API_29)
@@ -57,5 +58,15 @@ public class SurfaceProducerPlatformViewRenderTarget implements PlatformViewRend
 
   public void scheduleFrame() {
     this.producer.scheduleFrame();
+  }
+
+  @Override
+  public void onFrameProduced(Runnable callback) {
+    if (this.producer instanceof FlutterRenderer.ImageReaderSurfaceProducer
+        && this.producer.getSurface() != null) {
+      ((FlutterRenderer.ImageReaderSurfaceProducer) this.producer).onFrameProduced(callback);
+    } else {
+      callback.run();
+    }
   }
 }

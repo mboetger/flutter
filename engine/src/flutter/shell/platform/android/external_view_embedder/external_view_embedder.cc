@@ -227,6 +227,7 @@ void AndroidExternalViewEmbedder::Reset() {
 
   composition_order_.clear();
   slices_.clear();
+  surface_pool_->RecycleLayers();
 }
 
 // |ExternalViewEmbedder|

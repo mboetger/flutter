@@ -6,6 +6,7 @@
 
 #include <cstdint>
 
+#include "flutter/fml/closure.h"
 #include "flutter/impeller/core/formats.h"
 #include "flutter/impeller/core/texture_descriptor.h"
 #include "flutter/impeller/display_list/dl_image_impeller.h"
@@ -46,35 +47,45 @@ void ImageExternalTextureVKImpeller::ProcessFrame(PaintContext& context,
   if (hardware_buffer.is_null()) {
     return;
   }
+  fml::ScopedCleanupClosure close_hardware_buffer(
+      [this, &hardware_buffer]() { CloseHardwareBuffer(hardware_buffer); });
   AHardwareBuffer* latest_hardware_buffer = AHardwareBufferFor(hardware_buffer);
 
   auto hb_desc =
       impeller::android::HardwareBuffer::Describe(latest_hardware_buffer);
+  if (!hb_desc.has_value()) {
+    return;
+  }
   std::optional<HardwareBufferKey> key =
       impeller::android::HardwareBuffer::GetSystemUniqueID(
           latest_hardware_buffer);
   auto existing_image = image_lru_.FindImage(key);
-  if (existing_image != nullptr || !hb_desc.has_value()) {
-    dl_image_ = existing_image;
-
-    CloseHardwareBuffer(hardware_buffer);
-    return;
+  std::shared_ptr<impeller::TextureVK> texture;
+  if (existing_image != nullptr && existing_image->asImpellerImage()) {
+    auto existing_texture = existing_image->asImpellerImage()->GetTexture();
+    if (existing_texture) {
+      texture = std::static_pointer_cast<impeller::TextureVK>(existing_texture);
+    }
+  }
+  if (!texture) {
+    auto texture_source = std::make_shared<impeller::AHBTextureSourceVK>(
+        impeller_context_, latest_hardware_buffer, hb_desc.value());
+    if (!texture_source->IsValid()) {
+      return;
+    }
+    texture = std::make_shared<impeller::TextureVK>(impeller_context_,
+                                                    texture_source);
   }
 
-  auto texture_source = std::make_shared<impeller::AHBTextureSourceVK>(
-      impeller_context_, latest_hardware_buffer, hb_desc.value());
-  if (!texture_source->IsValid()) {
-    CloseHardwareBuffer(hardware_buffer);
-    return;
-  }
-
-  auto texture =
-      std::make_shared<impeller::TextureVK>(impeller_context_, texture_source);
-  // Transition the layout to shader read.
+  // Transition the layout to shader read and acquire external queue family
+  // ownership from the producer (e.g. SurfaceFlinger / VirtualDisplay).
   {
     auto buffer = impeller_context_->CreateCommandBuffer();
     impeller::CommandBufferVK& buffer_vk =
         impeller::CommandBufferVK::Cast(*buffer);
+    if (!buffer_vk.Track(texture->GetTextureSource())) {
+      return;
+    }
 
     impeller::BarrierVK barrier;
     barrier.cmd_buffer = buffer_vk.GetCommandBuffer();
@@ -85,8 +96,10 @@ void ImageExternalTextureVKImpeller::ProcessFrame(PaintContext& context,
         impeller::vk::PipelineStageFlagBits::eTransfer;
     barrier.dst_access = impeller::vk::AccessFlagBits::eShaderRead;
     barrier.dst_stage = impeller::vk::PipelineStageFlagBits::eFragmentShader;
-
     barrier.new_layout = impeller::vk::ImageLayout::eShaderReadOnlyOptimal;
+    barrier.src_queue_family_index = VK_QUEUE_FAMILY_EXTERNAL;
+    barrier.dst_queue_family_index =
+        impeller_context_->GetGraphicsQueue()->GetIndex().family;
 
     if (!texture->SetLayout(barrier)) {
       return;
@@ -96,11 +109,14 @@ void ImageExternalTextureVKImpeller::ProcessFrame(PaintContext& context,
     }
   }
 
-  dl_image_ = impeller::DlImageImpeller::Make(texture);
-  if (key.has_value()) {
-    image_lru_.AddImage(dl_image_, key.value());
+  if (existing_image != nullptr) {
+    dl_image_ = existing_image;
+  } else {
+    dl_image_ = impeller::DlImageImpeller::Make(texture);
+    if (key.has_value()) {
+      image_lru_.AddImage(dl_image_, key.value());
+    }
   }
-  CloseHardwareBuffer(hardware_buffer);
 }
 
 }  // namespace flutter

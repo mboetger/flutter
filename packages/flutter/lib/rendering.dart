@@ -57,7 +57,7 @@ export 'src/rendering/mouse_tracker.dart';
 export 'src/rendering/object.dart';
 export 'src/rendering/paragraph.dart';
 export 'src/rendering/performance_overlay.dart';
-export 'src/rendering/platform_view.dart';
+export 'src/rendering/platform_view.dart' hide PlatformViewPlaceholderBox;
 export 'src/rendering/proxy_box.dart';
 export 'src/rendering/proxy_sliver.dart';
 export 'src/rendering/rotated_box.dart';

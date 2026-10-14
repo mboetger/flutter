@@ -1489,5 +1489,84 @@ TEST(AndroidExternalViewEmbedder2, ResizeDoesNotBlockRasterOnPlatformThread) {
   embedder.reset();
 }
 
+TEST(AndroidExternalViewEmbedder, ResetRecyclesSurfacePoolLayers) {
+  auto jni_mock = std::make_shared<JNIMock>();
+  auto android_context =
+      std::make_shared<AndroidContext>(AndroidRenderingAPI::kSoftware);
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(nullptr);
+  auto gr_context = GrDirectContext::MakeMock(nullptr);
+  auto frame_size = DlISize(1000, 1000);
+  auto surface_factory = std::make_shared<TestAndroidSurfaceFactory>(
+      [gr_context, window, frame_size]() {
+        SurfaceFrame::FramebufferInfo framebuffer_info;
+        auto surface_frame = std::make_unique<SurfaceFrame>(
+            SkSurfaces::Null(1000, 1000), framebuffer_info,
+            [](const SurfaceFrame& surface_frame, DlCanvas* canvas) {
+              return true;
+            },
+            [](const SurfaceFrame& surface_frame) { return true; },
+            /*frame_size=*/DlISize(800, 600));
+
+        auto surface_mock = std::make_unique<SurfaceMock>();
+        EXPECT_CALL(*surface_mock, AcquireFrame(frame_size))
+            .WillOnce(Return(ByMove(std::move(surface_frame))));
+
+        auto android_surface_mock = std::make_unique<AndroidSurfaceMock>();
+        EXPECT_CALL(*android_surface_mock, IsValid()).WillOnce(Return(true));
+        EXPECT_CALL(*android_surface_mock, CreateGPUSurface(gr_context.get()))
+            .WillOnce(Return(ByMove(std::move(surface_mock))));
+
+        return android_surface_mock;
+      });
+
+  auto embedder = std::make_unique<AndroidExternalViewEmbedder>(
+      *android_context, jni_mock, surface_factory, GetTaskRunnersForFixture());
+  fml::Thread rasterizer_thread("rasterizer");
+  auto raster_thread_merger =
+      GetThreadMergerFromPlatformThread(&rasterizer_thread);
+
+  embedder->BeginFrame(nullptr, raster_thread_merger);
+  embedder->PrepareFlutterView(frame_size, 1.5);
+
+  MutatorsStack stack;
+  embedder->PrerollCompositeEmbeddedView(
+      0, std::make_unique<EmbeddedViewParams>(DlMatrix(), DlSize(200, 200),
+                                              stack));
+  embedder->CompositeEmbeddedView(0)->DrawRect(
+      DlRect::MakeXYWH(50, 50, 200, 200), DlPaint());
+
+  // Cancelling the frame (which calls Reset(), e.g. on kSkipAndRetryFrame)
+  // must recycle any layers acquired from the surface pool so the next frame
+  // reuses the existing layer instead of allocating a duplicate overlay.
+  embedder->CancelFrame();
+
+  EXPECT_CALL(*jni_mock, FlutterViewBeginFrame());
+  embedder->BeginFrame(nullptr, raster_thread_merger);
+  embedder->PrepareFlutterView(frame_size, 1.5);
+  embedder->PrerollCompositeEmbeddedView(
+      0, std::make_unique<EmbeddedViewParams>(DlMatrix(), DlSize(200, 200),
+                                              stack));
+  embedder->CompositeEmbeddedView(0)->DrawRect(
+      DlRect::MakeXYWH(50, 50, 200, 200), DlPaint());
+
+  EXPECT_CALL(*jni_mock, FlutterViewCreateOverlaySurface())
+      .Times(1)
+      .WillOnce(Return(
+          ByMove(std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(
+              0, window))));
+  EXPECT_CALL(*jni_mock,
+              FlutterViewOnDisplayPlatformView(0, 0, 0, 200, 200, 300, 300, _));
+  EXPECT_CALL(*jni_mock, FlutterViewDisplayOverlaySurface(0, 50, 50, 150, 150));
+
+  SurfaceFrame::FramebufferInfo framebuffer_info;
+  auto root_frame = std::make_unique<SurfaceFrame>(
+      SkSurfaces::Null(1000, 1000), framebuffer_info,
+      [](const SurfaceFrame& surface_frame, DlCanvas* canvas) { return true; },
+      [](const SurfaceFrame& surface_frame) { return true; },
+      /*frame_size=*/DlISize(800, 600));
+  embedder->SubmitFlutterView(kImplicitViewId, gr_context.get(), nullptr,
+                              std::move(root_frame));
+}
+
 }  // namespace testing
 }  // namespace flutter

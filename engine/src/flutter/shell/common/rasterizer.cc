@@ -756,115 +756,123 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
     std::optional<fml::TimePoint> presentation_time) {
   FML_DCHECK(surface_);
 
-  DlCanvas* embedder_root_canvas = nullptr;
-  if (external_view_embedder_) {
-    external_view_embedder_->PrepareFlutterView(layer_tree.frame_size(),
-                                                device_pixel_ratio);
-    // TODO(dkwingsmt): Add view ID here.
-    embedder_root_canvas = external_view_embedder_->GetRootCanvas();
-  }
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    DlCanvas* embedder_root_canvas = nullptr;
+    if (external_view_embedder_) {
+      external_view_embedder_->PrepareFlutterView(layer_tree.frame_size(),
+                                                  device_pixel_ratio);
+      // TODO(dkwingsmt): Add view ID here.
+      embedder_root_canvas = external_view_embedder_->GetRootCanvas();
+    }
 
-  // On Android, the external view embedder deletes surfaces in `BeginFrame`.
-  //
-  // Deleting a surface also clears the GL context. Therefore, acquire the
-  // frame after calling `BeginFrame` as this operation resets the GL context.
-  auto frame = surface_->AcquireFrame(layer_tree.frame_size());
-  if (frame == nullptr) {
-    return DrawSurfaceStatus::kFailed;
-  }
+    // On Android, the external view embedder deletes surfaces in `BeginFrame`.
+    //
+    // Deleting a surface also clears the GL context. Therefore, acquire the
+    // frame after calling `BeginFrame` as this operation resets the GL context.
+    auto frame = surface_->AcquireFrame(layer_tree.frame_size());
+    if (frame == nullptr) {
+      return DrawSurfaceStatus::kFailed;
+    }
 
-  // If the external view embedder has specified an optional root surface, the
-  // root surface transformation is set by the embedder instead of
-  // having to apply it here.
-  DlMatrix root_surface_transformation =
-      embedder_root_canvas ? DlMatrix() : surface_->GetRootTransformation();
+    // If the external view embedder has specified an optional root surface, the
+    // root surface transformation is set by the embedder instead of
+    // having to apply it here.
+    DlMatrix root_surface_transformation =
+        embedder_root_canvas ? DlMatrix() : surface_->GetRootTransformation();
 
-  auto root_surface_canvas =
-      embedder_root_canvas ? embedder_root_canvas : frame->Canvas();
-  auto compositor_frame = compositor_context_->AcquireFrame(
-      surface_->GetContext(),         // skia GrContext
-      root_surface_canvas,            // root surface canvas
-      external_view_embedder_.get(),  // external view embedder
-      root_surface_transformation,    // root surface transformation
-      true,                           // instrumentation enabled
-      frame->framebuffer_info()
-          .supports_readback,           // surface supports pixel reads
-      raster_thread_merger_,            // thread merger
-      surface_->GetAiksContext().get()  // aiks context
-  );
-  if (compositor_frame) {
-    NOT_SLIMPELLER(compositor_context_->raster_cache().BeginFrame());
+    auto root_surface_canvas =
+        embedder_root_canvas ? embedder_root_canvas : frame->Canvas();
+    auto compositor_frame = compositor_context_->AcquireFrame(
+        surface_->GetContext(),         // skia GrContext
+        root_surface_canvas,            // root surface canvas
+        external_view_embedder_.get(),  // external view embedder
+        root_surface_transformation,    // root surface transformation
+        true,                           // instrumentation enabled
+        frame->framebuffer_info()
+            .supports_readback,           // surface supports pixel reads
+        raster_thread_merger_,            // thread merger
+        surface_->GetAiksContext().get()  // aiks context
+    );
+    if (compositor_frame) {
+      NOT_SLIMPELLER(compositor_context_->raster_cache().BeginFrame());
 
-    std::unique_ptr<FrameDamage> damage;
-    // when leaf layer tracing is enabled we wish to repaint the whole frame
-    // for accurate performance metrics.
-    if (frame->framebuffer_info().supports_partial_repaint) {
-      // Disable partial repaint if external_view_embedder_ SubmitFlutterView is
-      // involved - ExternalViewEmbedder unconditionally clears the entire
-      // surface and also partial repaint with platform view present is
-      // something that still need to be figured out.
-      bool force_full_repaint =
-          external_view_embedder_ &&
-          (!raster_thread_merger_ || raster_thread_merger_->IsMerged());
+      std::unique_ptr<FrameDamage> damage;
+      // when leaf layer tracing is enabled we wish to repaint the whole frame
+      // for accurate performance metrics.
+      if (frame->framebuffer_info().supports_partial_repaint) {
+        // Disable partial repaint if external_view_embedder_ SubmitFlutterView
+        // is involved - ExternalViewEmbedder unconditionally clears the entire
+        // surface and also partial repaint with platform view present is
+        // something that still need to be figured out.
+        bool force_full_repaint =
+            external_view_embedder_ &&
+            (!raster_thread_merger_ || raster_thread_merger_->IsMerged());
 
-      damage = std::make_unique<FrameDamage>();
-      auto existing_damage = frame->framebuffer_info().existing_damage;
-      if (existing_damage.has_value() && !force_full_repaint) {
-        damage->SetPreviousLayerTree(GetLastLayerTree(view_id));
-        damage->AddAdditionalDamage(existing_damage.value());
-        damage->SetClipAlignment(
-            frame->framebuffer_info().horizontal_clip_alignment,
-            frame->framebuffer_info().vertical_clip_alignment);
+        damage = std::make_unique<FrameDamage>();
+        auto existing_damage = frame->framebuffer_info().existing_damage;
+        if (existing_damage.has_value() && !force_full_repaint) {
+          damage->SetPreviousLayerTree(GetLastLayerTree(view_id));
+          damage->AddAdditionalDamage(existing_damage.value());
+          damage->SetClipAlignment(
+              frame->framebuffer_info().horizontal_clip_alignment,
+              frame->framebuffer_info().vertical_clip_alignment);
+        }
+      }
+
+      bool ignore_raster_cache = true;
+      if (surface_->EnableRasterCache()) {
+        ignore_raster_cache = false;
+      }
+
+      RasterStatus frame_status =
+          compositor_frame->Raster(layer_tree,           // layer tree
+                                   ignore_raster_cache,  // ignore raster cache
+                                   damage.get()          // frame damage
+          );
+      if (frame_status == RasterStatus::kSkipAndRetry) {
+        return DrawSurfaceStatus::kRetry;
+      }
+
+      SurfaceFrame::SubmitInfo submit_info;
+      submit_info.presentation_time = presentation_time;
+      if (damage) {
+        submit_info.frame_damage = damage->GetFrameDamage();
+        submit_info.buffer_damage = damage->GetBufferDamage();
+      }
+
+      frame->set_submit_info(submit_info);
+
+      if (external_view_embedder_ &&
+          (!raster_thread_merger_ || raster_thread_merger_->IsMerged())) {
+        FML_DCHECK(!frame->IsSubmitted());
+        external_view_embedder_->SubmitFlutterView(
+            view_id, surface_->GetContext(), surface_->GetAiksContext(),
+            std::move(frame));
+      } else {
+        frame->Submit();
+      }
+
+#if !SLIMPELLER
+      // Do not update raster cache metrics for kResubmit because that status
+      // indicates that the frame was not actually painted.
+      if (frame_status != RasterStatus::kResubmit) {
+        compositor_context_->raster_cache().EndFrame();
+      }
+#endif  //  !SLIMPELLER
+
+      if (frame_status == RasterStatus::kResubmit) {
+        if (attempt == 0 && external_view_embedder_ && raster_thread_merger_ &&
+            raster_thread_merger_->IsMerged()) {
+          continue;
+        }
+        return DrawSurfaceStatus::kRetry;
+      } else {
+        FML_CHECK(frame_status == RasterStatus::kSuccess);
+        return DrawSurfaceStatus::kSuccess;
       }
     }
 
-    bool ignore_raster_cache = true;
-    if (surface_->EnableRasterCache()) {
-      ignore_raster_cache = false;
-    }
-
-    RasterStatus frame_status =
-        compositor_frame->Raster(layer_tree,           // layer tree
-                                 ignore_raster_cache,  // ignore raster cache
-                                 damage.get()          // frame damage
-        );
-    if (frame_status == RasterStatus::kSkipAndRetry) {
-      return DrawSurfaceStatus::kRetry;
-    }
-
-    SurfaceFrame::SubmitInfo submit_info;
-    submit_info.presentation_time = presentation_time;
-    if (damage) {
-      submit_info.frame_damage = damage->GetFrameDamage();
-      submit_info.buffer_damage = damage->GetBufferDamage();
-    }
-
-    frame->set_submit_info(submit_info);
-
-    if (external_view_embedder_ &&
-        (!raster_thread_merger_ || raster_thread_merger_->IsMerged())) {
-      FML_DCHECK(!frame->IsSubmitted());
-      external_view_embedder_->SubmitFlutterView(
-          view_id, surface_->GetContext(), surface_->GetAiksContext(),
-          std::move(frame));
-    } else {
-      frame->Submit();
-    }
-
-#if !SLIMPELLER
-    // Do not update raster cache metrics for kResubmit because that status
-    // indicates that the frame was not actually painted.
-    if (frame_status != RasterStatus::kResubmit) {
-      compositor_context_->raster_cache().EndFrame();
-    }
-#endif  //  !SLIMPELLER
-
-    if (frame_status == RasterStatus::kResubmit) {
-      return DrawSurfaceStatus::kRetry;
-    } else {
-      FML_CHECK(frame_status == RasterStatus::kSuccess);
-      return DrawSurfaceStatus::kSuccess;
-    }
+    return DrawSurfaceStatus::kFailed;
   }
 
   return DrawSurfaceStatus::kFailed;

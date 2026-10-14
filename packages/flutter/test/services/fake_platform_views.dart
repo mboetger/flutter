@@ -190,6 +190,7 @@ class FakeAndroidPlatformViewsController {
 
   Iterable<FakeAndroidPlatformView> get views => _views.values;
   final Map<int, FakeAndroidPlatformView> _views = <int, FakeAndroidPlatformView>{};
+  final Set<int> _hybridViews = <int>{};
 
   final Map<int, List<FakeAndroidMotionEvent>> motionEvents = <int, List<FakeAndroidMotionEvent>>{};
 
@@ -285,6 +286,7 @@ class FakeAndroidPlatformViewsController {
         // hybrid fallback was requested and simulated.
         (!allowTextureLayerMode && (hybridFallback ?? false));
     if (hybridResult) {
+      _hybridViews.add(id);
       return Future<void>.value();
     }
     final int textureId = _textureCounter++;
@@ -298,11 +300,12 @@ class FakeAndroidPlatformViewsController {
     final id = arguments['id']! as int;
     final hybrid = arguments['hybrid']! as bool;
 
-    if (hybrid && !_views[id]!.hybrid!) {
+    final bool usesHybridComposition = (_views[id]!.hybrid ?? false) || _hybridViews.contains(id);
+    if (hybrid && !usesHybridComposition) {
       throw ArgumentError(
         'An $AndroidViewController using hybrid composition must pass `hybrid: true`',
       );
-    } else if (!hybrid && (_views[id]!.hybrid ?? false)) {
+    } else if (!hybrid && usesHybridComposition) {
       throw ArgumentError(
         'An $AndroidViewController not using hybrid composition must pass `hybrid: false`',
       );
@@ -316,6 +319,7 @@ class FakeAndroidPlatformViewsController {
     }
 
     _views.remove(id);
+    _hybridViews.remove(id);
     return Future<dynamic>.sync(() => null);
   }
 

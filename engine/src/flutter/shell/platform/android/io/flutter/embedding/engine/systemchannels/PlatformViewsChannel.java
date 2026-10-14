@@ -141,7 +141,7 @@ public class PlatformViewsChannel {
                 // A fallback to hybrid mode is indicated with a null texture ID.
                 result.success(null);
               } else {
-                result.success(textureId);
+                handler.onPlatformViewCreated(request.viewId, () -> result.success(textureId));
               }
             }
           } catch (IllegalStateException exception) {
@@ -397,6 +397,15 @@ public class PlatformViewsChannel {
      *     buffered dispatch.
      */
     default void onRejectGesture(int viewId, long gestureId) {}
+
+    /**
+     * Invoked after {@link #createForTextureLayer(PlatformViewCreationRequest)} returns a valid
+     * texture ID so the handler can defer completing the creation channel call until the backing
+     * texture has produced its initial frame (for example, in Virtual Display mode).
+     */
+    default void onPlatformViewCreated(int viewId, @NonNull Runnable onComplete) {
+      onComplete.run();
+    }
   }
 
   /** Request sent from Flutter to resize a platform view. */

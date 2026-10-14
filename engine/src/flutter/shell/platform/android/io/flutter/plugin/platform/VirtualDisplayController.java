@@ -8,17 +8,31 @@ import static android.view.View.OnFocusChangeListener;
 import static io.flutter.Build.API_LEVELS;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.ImageFormat;
+import android.graphics.PorterDuff;
+import android.hardware.HardwareBuffer;
+import android.hardware.SyncFence;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.media.Image;
+import android.media.ImageReader;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
 import android.view.View.OnFocusChangeListener;
 import android.view.ViewTreeObserver;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
+import java.io.IOException;
 
 class VirtualDisplayController {
   private static String TAG = "VirtualDisplayController";
@@ -61,6 +75,14 @@ class VirtualDisplayController {
     // virtual display and AndroidPlatformView widget.
     // https://github.com/flutter/flutter/issues/93115
     renderTarget.resize(width, height);
+    ImageReader vdImageReader = null;
+    Surface vdSurface = renderTarget.getSurface();
+    if (shouldForwardFramesThroughHardwareCanvas(renderTarget)) {
+      vdImageReader = createVdImageReader(width, height);
+      if (vdImageReader.getSurface() != null) {
+        vdSurface = vdImageReader.getSurface();
+      }
+    }
     int flags = 0;
     VirtualDisplay virtualDisplay =
         displayManager.createVirtualDisplay(
@@ -68,12 +90,15 @@ class VirtualDisplayController {
             width,
             height,
             metrics.densityDpi,
-            renderTarget.getSurface(),
+            vdSurface,
             flags,
             callback,
             null /* handler */);
 
     if (virtualDisplay == null) {
+      if (vdImageReader != null) {
+        vdImageReader.close();
+      }
       return null;
     }
     VirtualDisplayController controller =
@@ -83,10 +108,37 @@ class VirtualDisplayController {
             virtualDisplay,
             view,
             renderTarget,
+            vdImageReader,
             focusChangeListener,
             viewId,
             createParams);
     return controller;
+  }
+
+  private static boolean shouldForwardFramesThroughHardwareCanvas(
+      @Nullable PlatformViewRenderTarget renderTarget) {
+    return Build.VERSION.SDK_INT >= API_LEVELS.API_29
+        && renderTarget != null
+        && !(renderTarget instanceof SurfaceTexturePlatformViewRenderTarget);
+  }
+
+  @RequiresApi(API_LEVELS.API_29)
+  private static ImageReader createVdImageReader(int width, int height) {
+    final int clampedWidth = Math.max(1, width);
+    final int clampedHeight = Math.max(1, height);
+    if (Build.VERSION.SDK_INT >= API_LEVELS.API_33) {
+      final ImageReader.Builder builder = new ImageReader.Builder(clampedWidth, clampedHeight);
+      builder.setMaxImages(4);
+      builder.setImageFormat(ImageFormat.PRIVATE);
+      builder.setUsage(HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE);
+      return builder.build();
+    }
+    return ImageReader.newInstance(
+        clampedWidth,
+        clampedHeight,
+        ImageFormat.PRIVATE,
+        4,
+        HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE);
   }
 
   @VisibleForTesting SingleViewPresentation presentation;
@@ -97,8 +149,11 @@ class VirtualDisplayController {
   private final int viewId;
   private final PlatformViewRenderTarget renderTarget;
   private final OnFocusChangeListener focusChangeListener;
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
   private VirtualDisplay virtualDisplay;
+  @Nullable private ImageReader vdImageReader;
+  private boolean disposed = false;
 
   private VirtualDisplayController(
       Context context,
@@ -106,16 +161,21 @@ class VirtualDisplayController {
       VirtualDisplay virtualDisplay,
       PlatformView view,
       PlatformViewRenderTarget renderTarget,
+      @Nullable ImageReader vdImageReader,
       OnFocusChangeListener focusChangeListener,
       int viewId,
       Object createParams) {
     this.context = context;
     this.accessibilityEventsDelegate = accessibilityEventsDelegate;
     this.renderTarget = renderTarget;
+    this.vdImageReader = vdImageReader;
     this.focusChangeListener = focusChangeListener;
     this.viewId = viewId;
     this.virtualDisplay = virtualDisplay;
     this.densityDpi = context.getResources().getDisplayMetrics().densityDpi;
+    if (this.vdImageReader != null && Build.VERSION.SDK_INT >= API_LEVELS.API_29) {
+      attachVdImageListener(this.vdImageReader);
+    }
     presentation =
         new SingleViewPresentation(
             context,
@@ -125,6 +185,91 @@ class VirtualDisplayController {
             viewId,
             focusChangeListener);
     presentation.show();
+  }
+
+  @RequiresApi(API_LEVELS.API_29)
+  private void attachVdImageListener(@NonNull ImageReader reader) {
+    reader.setOnImageAvailableListener(this::onVdImageAvailable, mainHandler);
+  }
+
+  @RequiresApi(API_LEVELS.API_29)
+  private void onVdImageAvailable(ImageReader reader) {
+    if (disposed || renderTarget == null) {
+      return;
+    }
+    Image image = null;
+    try {
+      image = reader.acquireLatestImage();
+    } catch (IllegalStateException e) {
+      return;
+    }
+    if (image == null) {
+      return;
+    }
+    try {
+      if (Build.VERSION.SDK_INT >= API_LEVELS.API_33) {
+        try (SyncFence fence = image.getFence()) {
+          fence.awaitForever();
+        } catch (IOException | RuntimeException e) {
+          // Ignore fence wait errors on unsupported environments.
+        }
+      }
+      final Surface targetSurface = renderTarget.getSurface();
+      if (targetSurface == null || !targetSurface.isValid()) {
+        return;
+      }
+      final HardwareBuffer hb = image.getHardwareBuffer();
+      if (hb == null) {
+        return;
+      }
+      try {
+        final Bitmap hwBitmap = Bitmap.wrapHardwareBuffer(hb, null);
+        if (hwBitmap == null) {
+          return;
+        }
+        try {
+          final Canvas targetCanvas = targetSurface.lockHardwareCanvas();
+          if (targetCanvas == null) {
+            return;
+          }
+          try {
+            targetCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+            targetCanvas.drawBitmap(hwBitmap, 0, 0, null);
+          } finally {
+            renderTarget.scheduleFrame();
+            targetSurface.unlockCanvasAndPost(targetCanvas);
+          }
+        } finally {
+          hwBitmap.recycle();
+        }
+      } finally {
+        hb.close();
+      }
+    } finally {
+      image.close();
+    }
+  }
+
+  private Surface getOrRecreateVdSurface(int width, int height) {
+    if (shouldForwardFramesThroughHardwareCanvas(renderTarget)) {
+      if (vdImageReader != null) {
+        vdImageReader.setOnImageAvailableListener(null, null);
+        vdImageReader.close();
+      }
+      vdImageReader = createVdImageReader(width, height);
+      attachVdImageListener(vdImageReader);
+      if (vdImageReader.getSurface() != null) {
+        return vdImageReader.getSurface();
+      }
+    }
+    return renderTarget.getSurface();
+  }
+
+  private Surface getCurrentVdSurface() {
+    if (vdImageReader != null && vdImageReader.getSurface() != null) {
+      return vdImageReader.getSurface();
+    }
+    return renderTarget.getSurface();
   }
 
   public int getRenderTargetWidth() {
@@ -161,6 +306,7 @@ class VirtualDisplayController {
     final DisplayManager displayManager =
         (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
     renderTarget.resize(width, height);
+    final Surface vdSurface = getOrRecreateVdSurface(width, height);
     int flags = 0;
     virtualDisplay =
         displayManager.createVirtualDisplay(
@@ -168,7 +314,7 @@ class VirtualDisplayController {
             width,
             height,
             densityDpi,
-            renderTarget.getSurface(),
+            vdSurface,
             flags,
             callback,
             null /* handler */);
@@ -223,11 +369,47 @@ class VirtualDisplayController {
     presentation = newPresentation;
   }
 
+  private Runnable pendingFirstFrameCallback;
+
+  public void onFirstFrameAvailable(@NonNull final Runnable onComplete) {
+    if (renderTarget == null) {
+      onComplete.run();
+      return;
+    }
+    final Runnable onceCallback =
+        new Runnable() {
+          private boolean ran = false;
+
+          @Override
+          public void run() {
+            if (ran) {
+              return;
+            }
+            ran = true;
+            pendingFirstFrameCallback = null;
+            onComplete.run();
+          }
+        };
+    pendingFirstFrameCallback = onceCallback;
+    renderTarget.onFrameProduced(onceCallback);
+  }
+
   public void dispose() {
+    disposed = true;
+    if (pendingFirstFrameCallback != null) {
+      final Runnable callback = pendingFirstFrameCallback;
+      pendingFirstFrameCallback = null;
+      callback.run();
+    }
     // Fix rare crash on HuaWei device described in: https://github.com/flutter/engine/pull/9192
     presentation.cancel();
     presentation.detachState();
     virtualDisplay.release();
+    if (vdImageReader != null) {
+      vdImageReader.setOnImageAvailableListener(null, null);
+      vdImageReader.close();
+      vdImageReader = null;
+    }
     renderTarget.release();
   }
 
@@ -236,9 +418,10 @@ class VirtualDisplayController {
   private void resize31(
       View embeddedView, int width, int height, final Runnable onNewSizeFrameAvailable) {
     renderTarget.resize(width, height);
+    final Surface vdSurface = getOrRecreateVdSurface(width, height);
     virtualDisplay.resize(width, height, densityDpi);
     // Must update the surface to match the renderTarget's current surface.
-    virtualDisplay.setSurface(renderTarget.getSurface());
+    virtualDisplay.setSurface(vdSurface);
     embeddedView.postDelayed(onNewSizeFrameAvailable, 0);
   }
 
@@ -306,7 +489,7 @@ class VirtualDisplayController {
             width,
             height,
             densityDpi,
-            renderTarget.getSurface(),
+            getCurrentVdSurface(),
             flags,
             callback,
             null /* handler */);

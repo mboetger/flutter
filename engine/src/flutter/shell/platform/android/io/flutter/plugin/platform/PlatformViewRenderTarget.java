@@ -35,4 +35,10 @@ public interface PlatformViewRenderTarget {
 
   // Schedules a frame to be drawn.
   default void scheduleFrame() {}
+
+  // Invokes callback once the render target has produced its first frame (or immediately if
+  // synchronous / unsupported).
+  default void onFrameProduced(Runnable callback) {
+    callback.run();
+  }
 }

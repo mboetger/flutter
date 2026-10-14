@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../rendering/platform_view.dart' show PlatformViewPlaceholderBox;
 import '_html_element_view_io.dart' if (dart.library.js_interop) '_html_element_view_web.dart';
 import 'basic.dart';
 import 'debug.dart';
@@ -1595,33 +1596,6 @@ class _PlatformLayerBasedAndroidViewSurface extends PlatformViewSurface {
 /// This size is the initial size of the platform view.
 typedef _OnLayoutCallback = void Function(Size size, Offset position);
 
-/// A [RenderBox] that notifies its size to the owner after a layout.
-class _PlatformViewPlaceholderBox extends RenderConstrainedBox {
-  _PlatformViewPlaceholderBox({required this.onLayout})
-    : super(
-        additionalConstraints: const BoxConstraints.tightFor(
-          width: double.infinity,
-          height: double.infinity,
-        ),
-      );
-
-  _OnLayoutCallback onLayout;
-
-  @override
-  void performLayout() {
-    super.performLayout();
-    // A call to `localToGlobal` requires waiting for a frame to render first.
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      // The render object can be detached before this callback runs, for
-      // example when a viewport garbage-collects it during fast scrolling.
-      if (!attached) {
-        return;
-      }
-      onLayout(size, localToGlobal(Offset.zero));
-    }, debugLabel: 'PlatformViewPlaceholderBox.onLayout');
-  }
-}
-
 /// When a platform view is in the widget hierarchy, this widget is used to capture
 /// the size of the platform view after the first layout.
 /// This placeholder is basically a [SizedBox.expand] with a [onLayout] callback to
@@ -1632,12 +1606,12 @@ class _PlatformViewPlaceHolder extends SingleChildRenderObjectWidget {
   final _OnLayoutCallback onLayout;
 
   @override
-  _PlatformViewPlaceholderBox createRenderObject(BuildContext context) {
-    return _PlatformViewPlaceholderBox(onLayout: onLayout);
+  PlatformViewPlaceholderBox createRenderObject(BuildContext context) {
+    return PlatformViewPlaceholderBox(onLayout: onLayout);
   }
 
   @override
-  void updateRenderObject(BuildContext context, _PlatformViewPlaceholderBox renderObject) {
+  void updateRenderObject(BuildContext context, PlatformViewPlaceholderBox renderObject) {
     renderObject.onLayout = onLayout;
   }
 }

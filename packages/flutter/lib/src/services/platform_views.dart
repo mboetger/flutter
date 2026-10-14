@@ -819,6 +819,8 @@ abstract class AndroidViewController extends PlatformViewController {
 
   _AndroidViewState _state = _AndroidViewState.waitingForSize;
 
+  Size? _createdSize;
+
   final _CreationParams? _creationParams;
 
   final List<PlatformViewCreatedCallback> _platformViewCreatedCallbacks =
@@ -870,6 +872,7 @@ abstract class AndroidViewController extends PlatformViewController {
     _state = _AndroidViewState.creating;
     await _sendCreateMessage(size: size, position: position);
     _state = _AndroidViewState.created;
+    _createdSize = size;
 
     for (final PlatformViewCreatedCallback callback in _platformViewCreatedCallbacks) {
       callback(viewId);
@@ -896,8 +899,14 @@ abstract class AndroidViewController extends PlatformViewController {
       // Either `create` hasn't been called, or it couldn't run due to missing
       // size information, so create the view now.
       await create(size: size);
+      _createdSize = null;
       return size;
     } else {
+      final Size? initialCreatedSize = _createdSize;
+      _createdSize = null;
+      if (_state == _AndroidViewState.created && initialCreatedSize == size) {
+        return size;
+      }
       return _sendResizeMessage(size);
     }
   }

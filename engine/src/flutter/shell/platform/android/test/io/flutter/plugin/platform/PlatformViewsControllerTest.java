@@ -1344,13 +1344,9 @@ public class PlatformViewsControllerTest {
     assertEquals(logicalSize, (double) bufferSize.get("height"), 1e-9);
   }
 
-  // The render target is only ever grown, never shrunk, so that a smooth keyboard animation does
-  // not resize the texture on every frame. That means the buffer can be larger than the view, and
-  // the framework needs to be told the real size: it sizes the texture with it and clips the
-  // texture to the widget, rather than scaling the buffer down onto the widget.
   @Test
   @Config(shadows = {ShadowFlutterJNI.class, ShadowPlatformTaskQueue.class})
-  public void resizeAndroidView_reportsUnshrunkBufferSize() {
+  public void resizeAndroidView_resizesRenderTargetOnGrowAndShrink() {
     PlatformViewsController platformViewsController = new PlatformViewsController();
 
     int platformViewId = 0;
@@ -1375,11 +1371,12 @@ public class PlatformViewsControllerTest {
     resize(jni, platformViewsController, platformViewId, 400.0, 400.0);
     assertEquals(400.0, (double) lastResponse().get("width"), 1e-9);
 
-    // Shrinking the view leaves the render target alone, so the reported buffer stays at 400.
+    // Shrinking the view resizes the render target to match so no cleared transparent region
+    // remains in an oversized buffer.
     resize(jni, platformViewsController, platformViewId, 200.0, 200.0);
     final Map<String, Object> bufferSize = lastResponse();
-    assertEquals(400.0, (double) bufferSize.get("width"), 1e-9);
-    assertEquals(400.0, (double) bufferSize.get("height"), 1e-9);
+    assertEquals(200.0, (double) bufferSize.get("width"), 1e-9);
+    assertEquals(200.0, (double) bufferSize.get("height"), 1e-9);
   }
 
   @Test

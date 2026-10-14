@@ -446,7 +446,7 @@ public class FlutterRenderer implements TextureRegistry {
   // When we acquire the next image, close any ImageReaders that don't have any
   // more pending images.
   @Keep
-  final class ImageReaderSurfaceProducer
+  public final class ImageReaderSurfaceProducer
       implements TextureRegistry.SurfaceProducer,
           TextureRegistry.ImageConsumer,
           TextureRegistry.OnTrimMemoryListener {
@@ -504,6 +504,8 @@ public class FlutterRenderer implements TextureRegistry {
     private final HashMap<ImageReader, PerImageReader> perImageReaders = new HashMap<>();
     private ArrayList<PerImage> lastDequeuedImage = new ArrayList<PerImage>();
     private PerImageReader lastReaderDequeuedFrom = null;
+    private boolean hasProducedFrame = false;
+    private Runnable onFrameProducedCallback = null;
 
     @VisibleForTesting Callback callback = null;
 
@@ -631,11 +633,32 @@ public class FlutterRenderer implements TextureRegistry {
       }
     }
 
+    public void onFrameProduced(@NonNull Runnable callback) {
+      final boolean runImmediately;
+      synchronized (lock) {
+        if (released || hasProducedFrame) {
+          runImmediately = true;
+        } else {
+          onFrameProducedCallback = callback;
+          runImmediately = false;
+        }
+      }
+      if (runImmediately) {
+        callback.run();
+      }
+    }
+
     void onImage(ImageReader reader, Image image) {
       PerImage queuedImage;
+      Runnable frameCallback = null;
       synchronized (lock) {
         PerImageReader perReader = getOrCreatePerImageReader(reader);
         queuedImage = perReader.queueImage(image);
+        if (queuedImage != null) {
+          hasProducedFrame = true;
+          frameCallback = onFrameProducedCallback;
+          onFrameProducedCallback = null;
+        }
       }
       if (queuedImage == null) {
         // We got a late image.
@@ -656,6 +679,9 @@ public class FlutterRenderer implements TextureRegistry {
         } else {
           lastQueueTime = System.nanoTime();
         }
+      }
+      if (frameCallback != null) {
+        frameCallback.run();
       }
       scheduleEngineFrame();
     }
@@ -762,6 +788,7 @@ public class FlutterRenderer implements TextureRegistry {
     }
 
     private void cleanup() {
+      Runnable frameCallback = null;
       synchronized (lock) {
         for (PerImageReader pir : perImageReaders.values()) {
           if (lastReaderDequeuedFrom == pir) {
@@ -781,6 +808,11 @@ public class FlutterRenderer implements TextureRegistry {
           lastReaderDequeuedFrom = null;
         }
         imageReaderQueue.clear();
+        frameCallback = onFrameProducedCallback;
+        onFrameProducedCallback = null;
+      }
+      if (frameCallback != null) {
+        frameCallback.run();
       }
     }
 

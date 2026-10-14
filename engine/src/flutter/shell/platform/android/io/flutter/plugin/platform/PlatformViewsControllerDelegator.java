@@ -162,6 +162,11 @@ public class PlatformViewsControllerDelegator
     return channelHandler.createForTextureLayer(request);
   }
 
+  @Override
+  public void onPlatformViewCreated(int viewId, @NonNull Runnable onComplete) {
+    channelHandler.onPlatformViewCreated(viewId, onComplete);
+  }
+
   // hcpp
   @Override
   public void createPlatformViewHcpp(@NonNull PlatformViewCreationRequest request) {

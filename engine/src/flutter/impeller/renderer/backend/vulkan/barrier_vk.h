@@ -50,6 +50,12 @@ struct BarrierVK {
 
   /// The base mip level to apply the barrier to in the subresource range.
   uint32_t base_mip_level = 0;
+
+  /// The source queue family for a queue family ownership transfer.
+  uint32_t src_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
+
+  /// The destination queue family for a queue family ownership transfer.
+  uint32_t dst_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
 };
 
 }  // namespace impeller

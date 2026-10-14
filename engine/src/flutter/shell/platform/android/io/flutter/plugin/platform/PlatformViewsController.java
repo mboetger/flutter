@@ -247,6 +247,18 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         }
 
         @Override
+        public void onPlatformViewCreated(int viewId, @NonNull Runnable onComplete) {
+          if (usesVirtualDisplay(viewId)) {
+            final VirtualDisplayController vdController = vdControllers.get(viewId);
+            if (vdController != null) {
+              vdController.onFirstFrameAvailable(onComplete);
+              return;
+            }
+          }
+          onComplete.run();
+        }
+
+        @Override
         public void dispose(int viewId) {
           final PlatformView platformView = platformViews.get(viewId);
           if (platformView == null) {
@@ -374,15 +386,11 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             Log.e(TAG, "Resizing unknown platform view with id: " + viewId);
             return;
           }
-          // Resize the buffer only when the current buffer size is smaller than the new size.
-          // This is required to prevent a situation when smooth keyboard animation
-          // resizes the texture too often, such that the GPU and the platform thread don't agree on
-          // the timing of the new size.
-          // Resizing the texture causes pixel stretching since the size of the GL texture used in
-          // the engine is set by the framework, but the texture buffer size is set by the
-          // platform down below.
-          if (physicalWidth > viewWrapper.getRenderTargetWidth()
-              || physicalHeight > viewWrapper.getRenderTargetHeight()) {
+          // Resize the buffer whenever its size differs from the new size so that shrinking a
+          // platform view does not leave a cleared transparent region in an oversized texture
+          // buffer that would be exposed when the view later expands again.
+          if (physicalWidth != viewWrapper.getRenderTargetWidth()
+              || physicalHeight != viewWrapper.getRenderTargetHeight()) {
             viewWrapper.resizeRenderTarget(physicalWidth, physicalHeight);
           }
 
@@ -402,10 +410,6 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             embeddedViewLayoutParams.height = physicalHeight;
             embeddedView.setLayoutParams(embeddedViewLayoutParams);
           }
-          // Report the size of the render target, not the requested size. Because the buffer is
-          // only ever grown (see above), it can be larger than the view. The framework relies on
-          // this to size the texture 1:1 with the buffer and clip it to the widget instead of
-          // scaling the buffer down onto the widget.
           onComplete.run(
               new PlatformViewsChannel.PlatformViewBufferSize(
                   toLogicalPixels(viewWrapper.getRenderTargetWidth()),

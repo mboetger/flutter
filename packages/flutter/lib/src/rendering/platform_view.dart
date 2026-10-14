@@ -6,6 +6,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui show SemanticsHitTestBehavior;
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'box.dart';
 import 'layer.dart';
 import 'object.dart';
+import 'proxy_box.dart';
 
 /// How an embedded platform view behave during hit tests.
 enum PlatformViewHitTestBehavior {
@@ -94,11 +96,92 @@ class RenderAndroidView extends PlatformViewRenderBox {
     _setOffset();
   }
 
+  static final Expando<Set<RenderAndroidView>> _attachedViewsByOwner =
+      Expando<Set<RenderAndroidView>>('RenderAndroidView._attachedViewsByOwner');
+  static final Expando<Set<PlatformViewPlaceholderBox>> _attachedPlaceholdersByOwner =
+      Expando<Set<PlatformViewPlaceholderBox>>('RenderAndroidView._attachedPlaceholdersByOwner');
+
   _PlatformViewState _state = _PlatformViewState.uninitialized;
 
   Size? _currentTextureSize;
 
+  bool _isEmptySize = false;
+
   bool _isDisposed = false;
+
+  bool _hasSiblingPlatformViewAwaitingCreation() {
+    final PipelineOwner? currentOwner = owner;
+    if (currentOwner == null) {
+      return false;
+    }
+    final Set<RenderAndroidView>? views = _attachedViewsByOwner[currentOwner];
+    if (views != null) {
+      for (final RenderAndroidView other in views) {
+        if (other != this &&
+            other.attached &&
+            other._currentTextureSize == null &&
+            !other._viewController.requiresViewComposition &&
+            !other._isEmptySize) {
+          return true;
+        }
+      }
+    }
+    final Set<PlatformViewPlaceholderBox>? placeholders =
+        _attachedPlaceholdersByOwner[currentOwner];
+    if (placeholders != null) {
+      for (final PlatformViewPlaceholderBox placeholder in placeholders) {
+        if (placeholder.attached && !placeholder._isEmptySize) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  static void _notifySiblingPlatformViews(PipelineOwner? owner) {
+    if (owner == null) {
+      return;
+    }
+    final Set<RenderAndroidView>? views = _attachedViewsByOwner[owner];
+    if (views == null || views.isEmpty) {
+      return;
+    }
+    for (final RenderAndroidView view in views.toList()) {
+      if (!view.attached || view._isDisposed) {
+        continue;
+      }
+      if (view.hasSize &&
+          !view._isEmptySize &&
+          view._currentTextureSize != null &&
+          view._currentTextureSize != view.size &&
+          view._state != _PlatformViewState.resizing &&
+          !view._hasSiblingPlatformViewAwaitingCreation()) {
+        view._sizePlatformView();
+      }
+      view.markNeedsPaint();
+    }
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    (_attachedViewsByOwner[owner] ??= <RenderAndroidView>{}).add(this);
+    _notifySiblingPlatformViews(owner);
+  }
+
+  @override
+  void detach() {
+    final PipelineOwner? previousOwner = owner;
+    if (previousOwner != null) {
+      final Set<RenderAndroidView>? views = _attachedViewsByOwner[previousOwner];
+      views?.remove(this);
+      if (views != null && views.isEmpty) {
+        _attachedViewsByOwner[previousOwner] = null;
+      }
+    }
+    super.detach();
+    _notifySiblingPlatformViews(previousOwner);
+  }
 
   /// The Android view controller for the Android view associated with this render object.
   @override
@@ -160,7 +243,24 @@ class RenderAndroidView extends PlatformViewRenderBox {
   @override
   void performResize() {
     super.performResize();
+    _isEmptySize = size.isEmpty;
+    if (_isEmptySize && _currentTextureSize == null) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (attached && !_isDisposed) {
+          _notifySiblingPlatformViews(owner);
+        }
+      }, debugLabel: 'RenderAndroidView.notifySiblingPlatformViews');
+    }
     _sizePlatformView();
+  }
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    _isEmptySize = size.isEmpty;
+    if (_currentTextureSize != size) {
+      _sizePlatformView();
+    }
   }
 
   Future<void> _sizePlatformView() async {
@@ -177,15 +277,27 @@ class RenderAndroidView extends PlatformViewRenderBox {
       return;
     }
 
+    final bool isShrinking =
+        _currentTextureSize != null &&
+        (size.width < _currentTextureSize!.width || size.height < _currentTextureSize!.height);
+    if (isShrinking && _hasSiblingPlatformViewAwaitingCreation()) {
+      markNeedsPaint();
+      return;
+    }
+
     _state = _PlatformViewState.resizing;
     markNeedsPaint();
 
     Size targetSize;
     do {
       targetSize = size;
+      final hadTextureSize = _currentTextureSize != null;
       _currentTextureSize = await _viewController.setSize(targetSize);
       if (_isDisposed) {
         return;
+      }
+      if (!hadTextureSize && _currentTextureSize != null) {
+        _notifySiblingPlatformViews(owner);
       }
       // We've resized the platform view to targetSize, but it is possible that
       // while we were resizing the render object's size was changed again.
@@ -232,12 +344,14 @@ class RenderAndroidView extends PlatformViewRenderBox {
     // TextureLayer is unaware of the texture frame's size and always maps it to the
     // specified rect. If the rect we provide has a different size from the current texture frame's
     // size the texture frame will be scaled.
-    // To prevent unwanted scaling artifacts while resizing, clip the texture.
-    // This guarantees that the size of the texture frame we're painting is always
-    // _currentAndroidTextureSize.
+    // To prevent unwanted scaling artifacts while resizing, clip the texture unless another
+    // sibling platform view is currently awaiting initial creation (in which case clipping early
+    // would expose an uncovered gap before the new platform view is ready to paint).
     final bool isTextureLargerThanWidget =
         _currentTextureSize!.width > size.width || _currentTextureSize!.height > size.height;
-    if (isTextureLargerThanWidget && clipBehavior != Clip.none) {
+    if (isTextureLargerThanWidget &&
+        clipBehavior != Clip.none &&
+        !_hasSiblingPlatformViewAwaitingCreation()) {
       _clipRectLayer.layer = context.pushClipRect(
         true,
         offset,
@@ -267,15 +381,20 @@ class RenderAndroidView extends PlatformViewRenderBox {
       return;
     }
 
+    final paintedTextureSize = Size(
+      math.max(_currentTextureSize!.width, size.width),
+      math.max(_currentTextureSize!.height, size.height),
+    );
+
     if (_viewController.requiresViewComposition) {
       context.addLayer(
-        PlatformViewLayer(rect: offset & _currentTextureSize!, viewId: _viewController.viewId),
+        PlatformViewLayer(rect: offset & paintedTextureSize, viewId: _viewController.viewId),
       );
       return;
     }
 
     context.addLayer(
-      TextureLayer(rect: offset & _currentTextureSize!, textureId: _viewController.textureId!),
+      TextureLayer(rect: offset & paintedTextureSize, textureId: _viewController.textureId!),
     );
   }
 
@@ -292,6 +411,75 @@ class RenderAndroidView extends PlatformViewRenderBox {
       // underlying platform view content.
       config.hitTestBehavior = ui.SemanticsHitTestBehavior.transparent;
     }
+  }
+}
+
+/// A [RenderBox] that notifies its size to the owner after a layout while a
+/// [PlatformViewLink] is awaiting initial platform view creation.
+@internal
+class PlatformViewPlaceholderBox extends RenderConstrainedBox {
+  /// Creates a [PlatformViewPlaceholderBox].
+  PlatformViewPlaceholderBox({required this.onLayout})
+    : super(
+        additionalConstraints: const BoxConstraints.tightFor(
+          width: double.infinity,
+          height: double.infinity,
+        ),
+      );
+
+  /// Called in a post-frame callback after layout with the box's size and global offset.
+  void Function(Size size, Offset position) onLayout;
+
+  bool _isEmptySize = false;
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    (RenderAndroidView._attachedPlaceholdersByOwner[owner] ??= <PlatformViewPlaceholderBox>{}).add(
+      this,
+    );
+    RenderAndroidView._notifySiblingPlatformViews(owner);
+  }
+
+  @override
+  void detach() {
+    final PipelineOwner? previousOwner = owner;
+    if (previousOwner != null) {
+      final Set<PlatformViewPlaceholderBox>? placeholders =
+          RenderAndroidView._attachedPlaceholdersByOwner[previousOwner];
+      placeholders?.remove(this);
+      if (placeholders != null && placeholders.isEmpty) {
+        RenderAndroidView._attachedPlaceholdersByOwner[previousOwner] = null;
+      }
+      final Set<RenderAndroidView>? views = RenderAndroidView._attachedViewsByOwner[previousOwner];
+      if (views != null) {
+        for (final RenderAndroidView view in views) {
+          if (view.attached && !view._isDisposed) {
+            view.markNeedsLayout();
+            view.markNeedsPaint();
+          }
+        }
+      }
+    }
+    super.detach();
+  }
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    _isEmptySize = size.isEmpty;
+    // A call to `localToGlobal` requires waiting for a frame to render first.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (_isEmptySize && attached) {
+        RenderAndroidView._notifySiblingPlatformViews(owner);
+      }
+      // The render object can be detached before this callback runs, for
+      // example when a viewport garbage-collects it during fast scrolling.
+      if (!attached) {
+        return;
+      }
+      onLayout(size, localToGlobal(Offset.zero));
+    }, debugLabel: 'PlatformViewPlaceholderBox.onLayout');
   }
 }
 
