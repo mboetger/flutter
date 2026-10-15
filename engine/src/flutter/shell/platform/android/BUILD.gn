@@ -84,6 +84,23 @@ bin_to_assembly("icudtl_asm") {
   executable = false
 }
 
+source_set("flutter_embedder_native_src") {
+  visibility = [ ":*" ]
+  check_includes = true
+  defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
+
+  sources = []
+
+  public_deps = [
+    "//flutter/assets",
+    "//flutter/common",
+    "//flutter/fml",
+    "//flutter/shell/platform/embedder:embedder_headers",
+  ]
+
+  public_configs = [ "//flutter:config" ]
+}
+
 source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
@@ -160,6 +177,7 @@ source_set("flutter_shell_native_src") {
 
   public_deps = [
     ":android_gpu_configuration",
+    ":flutter_embedder_native_src",
     ":icudtl_asm",
     ":image_generator",
     "//flutter/assets",

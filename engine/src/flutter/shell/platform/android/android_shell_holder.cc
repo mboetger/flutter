@@ -175,7 +175,7 @@ AndroidShellHolder::AndroidShellHolder(
           return AndroidImageGenerator::MakeFromData(std::move(buffer), runner);
         },
         -1);
-    FML_DLOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
+    FML_LOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
   }
 
   platform_view_ = weak_platform_view;
