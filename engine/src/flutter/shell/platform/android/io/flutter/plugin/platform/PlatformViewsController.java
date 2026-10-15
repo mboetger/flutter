@@ -148,6 +148,9 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
   // Platform view IDs that were displayed since the start of the current frame.
   private final HashSet<Integer> currentFrameUsedPlatformViewIds;
 
+  // Views that were displayed since the start of the current frame.
+  private final List<View> currentFrameViews = new ArrayList<>();
+
   // Used to acquire the original motion events using the motionEventIds.
   private final MotionEventTracker motionEventTracker;
 
@@ -1266,14 +1269,18 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
     final FlutterMutatorView parentView = platformViewParent.get(viewId);
     parentView.readyToDisplay(mutatorsStack, x, y, width, height);
     parentView.setVisibility(View.VISIBLE);
-    parentView.bringToFront();
+    currentFrameViews.add(parentView);
 
-    final FrameLayout.LayoutParams layoutParams =
-        new FrameLayout.LayoutParams(viewWidth, viewHeight);
     final View view = platformViews.get(viewId).getView();
     if (view != null) {
-      view.setLayoutParams(layoutParams);
-      view.bringToFront();
+      final android.view.ViewGroup.LayoutParams currentParams = view.getLayoutParams();
+      if (currentParams == null
+          || currentParams.width != viewWidth
+          || currentParams.height != viewHeight) {
+        final FrameLayout.LayoutParams layoutParams =
+            new FrameLayout.LayoutParams(viewWidth, viewHeight);
+        view.setLayoutParams(layoutParams);
+      }
     }
     currentFrameUsedPlatformViewIds.add(viewId);
   }
@@ -1299,18 +1306,30 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
       flutterView.addView(overlayView);
     }
 
-    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(width, height);
-    layoutParams.leftMargin = x;
-    layoutParams.topMargin = y;
-    overlayView.setLayoutParams(layoutParams);
+    android.view.ViewGroup.LayoutParams currentParams = overlayView.getLayoutParams();
+    if (!sizeEquals(currentParams, width, height)) {
+      FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(width, height);
+      overlayView.setLayoutParams(layoutParams);
+    }
+    overlayView.setTranslationX(x);
+    overlayView.setTranslationY(y);
     overlayView.setVisibility(View.VISIBLE);
-    overlayView.bringToFront();
+    currentFrameViews.add(overlayView);
     currentFrameUsedOverlayLayerIds.add(id);
+  }
+
+  private boolean sizeEquals(ViewGroup.LayoutParams params, int width, int height) {
+    if (params instanceof FrameLayout.LayoutParams) {
+      FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) params;
+      return frameParams.width == width && frameParams.height == height;
+    }
+    return false;
   }
 
   public void onBeginFrame() {
     currentFrameUsedOverlayLayerIds.clear();
     currentFrameUsedPlatformViewIds.clear();
+    currentFrameViews.clear();
   }
 
   /**
@@ -1386,6 +1405,23 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
         parentView.setVisibility(View.VISIBLE);
       } else {
         parentView.setVisibility(View.GONE);
+      }
+    }
+
+    boolean requiresReorder = false;
+    int expectedIndex = flutterView.getChildCount() - currentFrameViews.size();
+    expectedIndex = Math.max(0, expectedIndex);
+    for (View view : currentFrameViews) {
+      if (flutterView.indexOfChild(view) != expectedIndex) {
+        requiresReorder = true;
+        break;
+      }
+      expectedIndex++;
+    }
+
+    if (requiresReorder) {
+      for (View view : currentFrameViews) {
+        view.bringToFront();
       }
     }
   }

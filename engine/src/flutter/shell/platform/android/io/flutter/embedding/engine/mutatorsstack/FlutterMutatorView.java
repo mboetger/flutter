@@ -104,11 +104,21 @@ public class FlutterMutatorView extends FrameLayout {
     this.mutatorsStack = mutatorsStack;
     this.left = left;
     this.top = top;
-    FrameLayout.LayoutParams layoutParams =
-        new FrameLayout.LayoutParams(width, height, Gravity.LEFT | Gravity.TOP);
-    layoutParams.leftMargin = left;
-    layoutParams.topMargin = top;
-    setLayoutParams(layoutParams);
+    android.view.ViewGroup.LayoutParams currentParams = getLayoutParams();
+    boolean paramsChanged = true;
+    if (currentParams instanceof FrameLayout.LayoutParams) {
+      FrameLayout.LayoutParams currentFrameParams = (FrameLayout.LayoutParams) currentParams;
+      if (currentFrameParams.width == width && currentFrameParams.height == height) {
+        paramsChanged = false;
+      }
+    }
+    if (paramsChanged) {
+      FrameLayout.LayoutParams layoutParams =
+          new FrameLayout.LayoutParams(width, height, Gravity.LEFT | Gravity.TOP);
+      setLayoutParams(layoutParams);
+    }
+    setTranslationX(left);
+    setTranslationY(top);
     setWillNotDraw(false);
   }
 
@@ -234,7 +244,7 @@ public class FlutterMutatorView extends FrameLayout {
     }
     gestureTracker.onTouchEvent(event, this::requestUnbuffered);
     final Matrix screenMatrix = new Matrix();
-    screenMatrix.postTranslate(getLeft(), getTop());
+    screenMatrix.postTranslate(getX(), getY());
     return androidTouchProcessor.onTouchEvent(event, screenMatrix);
   }
 }
