@@ -57,9 +57,13 @@ PlatformViewEmbedder::PlatformViewEmbedder(
       embedder_surface_(
           std::make_unique<EmbedderSurfaceSoftware>(software_dispatch_table,
                                                     external_view_embedder_)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : std::shared_ptr<PlatformMessageHandler>(
+                    new EmbedderPlatformMessageHandler(
+                        GetWeakPtr(),
+                        task_runners.GetPlatformTaskRunner()))),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 
 #ifdef SHELL_ENABLE_GL
@@ -72,9 +76,13 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : std::shared_ptr<PlatformMessageHandler>(
+                    new EmbedderPlatformMessageHandler(
+                        GetWeakPtr(),
+                        task_runners.GetPlatformTaskRunner()))),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -88,9 +96,13 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : std::shared_ptr<PlatformMessageHandler>(
+                    new EmbedderPlatformMessageHandler(
+                        GetWeakPtr(),
+                        task_runners.GetPlatformTaskRunner()))),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -104,9 +116,13 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : std::shared_ptr<PlatformMessageHandler>(
+                    new EmbedderPlatformMessageHandler(
+                        GetWeakPtr(),
+                        task_runners.GetPlatformTaskRunner()))),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -141,6 +157,9 @@ void PlatformViewEmbedder::HandlePlatformMessage(
 
 // |PlatformView|
 std::unique_ptr<Surface> PlatformViewEmbedder::CreateRenderingSurface() {
+  if (platform_dispatch_table_.create_rendering_surface_callback != nullptr) {
+    return platform_dispatch_table_.create_rendering_surface_callback();
+  }
   if (embedder_surface_ == nullptr) {
     FML_LOG(ERROR) << "Embedder surface was null.";
     return nullptr;
@@ -151,6 +170,10 @@ std::unique_ptr<Surface> PlatformViewEmbedder::CreateRenderingSurface() {
 // |PlatformView|
 std::shared_ptr<ExternalViewEmbedder>
 PlatformViewEmbedder::CreateExternalViewEmbedder() {
+  if (platform_dispatch_table_.create_external_view_embedder_callback !=
+      nullptr) {
+    return platform_dispatch_table_.create_external_view_embedder_callback();
+  }
   if (external_view_embedder_) {
     return external_view_embedder_;
   }
@@ -163,6 +186,10 @@ PlatformViewEmbedder::CreateExternalViewEmbedder() {
 // |PlatformView|
 std::unique_ptr<SnapshotSurfaceProducer>
 PlatformViewEmbedder::CreateSnapshotSurfaceProducer() {
+  if (platform_dispatch_table_.create_snapshot_surface_producer_callback !=
+      nullptr) {
+    return platform_dispatch_table_.create_snapshot_surface_producer_callback();
+  }
   if (embedder_surface_ == nullptr) {
     return nullptr;
   }
@@ -171,6 +198,9 @@ PlatformViewEmbedder::CreateSnapshotSurfaceProducer() {
 
 std::shared_ptr<impeller::Context> PlatformViewEmbedder::GetImpellerContext()
     const {
+  if (platform_dispatch_table_.get_impeller_context_callback != nullptr) {
+    return platform_dispatch_table_.get_impeller_context_callback();
+  }
   if (embedder_surface_ == nullptr) {
     return nullptr;
   }
@@ -179,6 +209,10 @@ std::shared_ptr<impeller::Context> PlatformViewEmbedder::GetImpellerContext()
 
 // |PlatformView|
 void PlatformViewEmbedder::SetupImpellerContext() {
+  if (platform_dispatch_table_.setup_impeller_context_callback != nullptr) {
+    platform_dispatch_table_.setup_impeller_context_callback();
+    return;
+  }
   if (embedder_surface_ != nullptr) {
     embedder_surface_->SetupImpellerContext();
   }
@@ -186,6 +220,9 @@ void PlatformViewEmbedder::SetupImpellerContext() {
 
 // |PlatformView|
 sk_sp<GrDirectContext> PlatformViewEmbedder::CreateResourceContext() const {
+  if (platform_dispatch_table_.create_resource_context_callback != nullptr) {
+    return platform_dispatch_table_.create_resource_context_callback();
+  }
   if (embedder_surface_ == nullptr) {
     FML_LOG(ERROR) << "Embedder surface was null.";
     return nullptr;
@@ -195,6 +232,10 @@ sk_sp<GrDirectContext> PlatformViewEmbedder::CreateResourceContext() const {
 
 // |PlatformView|
 void PlatformViewEmbedder::ReleaseResourceContext() const {
+  if (platform_dispatch_table_.release_resource_context_callback != nullptr) {
+    platform_dispatch_table_.release_resource_context_callback();
+    return;
+  }
   if (embedder_surface_ == nullptr) {
     FML_LOG(ERROR) << "Embedder surface was null.";
     return;
@@ -204,6 +245,9 @@ void PlatformViewEmbedder::ReleaseResourceContext() const {
 
 // |PlatformView|
 std::unique_ptr<VsyncWaiter> PlatformViewEmbedder::CreateVSyncWaiter() {
+  if (platform_dispatch_table_.create_vsync_waiter_callback != nullptr) {
+    return platform_dispatch_table_.create_vsync_waiter_callback();
+  }
   if (!platform_dispatch_table_.vsync_callback) {
     // Superclass implementation creates a timer based fallback.
     return PlatformView::CreateVSyncWaiter();
@@ -225,6 +269,40 @@ PlatformViewEmbedder::ComputePlatformResolvedLocales(
   std::unique_ptr<std::vector<std::string>> out =
       std::make_unique<std::vector<std::string>>();
   return out;
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::RequestDartDeferredLibrary(
+    intptr_t loading_unit_id) {
+  if (platform_dispatch_table_.request_dart_deferred_library_callback !=
+      nullptr) {
+    platform_dispatch_table_.request_dart_deferred_library_callback(
+        loading_unit_id);
+  }
+}
+
+// |PlatformView|
+double PlatformViewEmbedder::GetScaledFontSize(double unscaled_font_size,
+                                               int configuration_id) const {
+  if (platform_dispatch_table_.get_scaled_font_size_callback != nullptr) {
+    return platform_dispatch_table_.get_scaled_font_size_callback(
+        unscaled_font_size, configuration_id);
+  }
+  return PlatformView::GetScaledFontSize(unscaled_font_size, configuration_id);
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::SetApplicationLocale(std::string locale) {
+  if (platform_dispatch_table_.set_application_locale_callback != nullptr) {
+    platform_dispatch_table_.set_application_locale_callback(std::move(locale));
+  }
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::SetSemanticsTreeEnabled(bool enabled) {
+  if (platform_dispatch_table_.set_semantics_tree_enabled_callback != nullptr) {
+    platform_dispatch_table_.set_semantics_tree_enabled_callback(enabled);
+  }
 }
 
 // |PlatformView|

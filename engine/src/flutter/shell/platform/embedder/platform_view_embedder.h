@@ -60,6 +60,26 @@ class PlatformViewEmbedder final : public PlatformView {
     ChanneUpdateCallback on_channel_update;                     // optional
     ViewFocusChangeRequestCallback
         view_focus_change_request_callback;  // optional
+    std::function<std::unique_ptr<Surface>()>
+        create_rendering_surface_callback;  // optional
+    std::function<std::shared_ptr<ExternalViewEmbedder>()>
+        create_external_view_embedder_callback;  // optional
+    std::function<std::unique_ptr<SnapshotSurfaceProducer>()>
+        create_snapshot_surface_producer_callback;  // optional
+    std::function<sk_sp<GrDirectContext>()>
+        create_resource_context_callback;                     // optional
+    std::function<void()> release_resource_context_callback;  // optional
+    std::function<std::shared_ptr<impeller::Context>()>
+        get_impeller_context_callback;                      // optional
+    std::function<void()> setup_impeller_context_callback;  // optional
+    std::function<std::unique_ptr<VsyncWaiter>()>
+        create_vsync_waiter_callback;  // optional
+    std::function<void(intptr_t)>
+        request_dart_deferred_library_callback;  // optional
+    std::function<double(double, int)> get_scaled_font_size_callback;
+    std::function<void(std::string)> set_application_locale_callback;
+    std::function<void(bool)> set_semantics_tree_enabled_callback;
+    std::shared_ptr<PlatformMessageHandler> custom_platform_message_handler;
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -123,7 +143,7 @@ class PlatformViewEmbedder final : public PlatformView {
   class EmbedderPlatformMessageHandler;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
   std::unique_ptr<EmbedderSurface> embedder_surface_;
-  std::shared_ptr<EmbedderPlatformMessageHandler> platform_message_handler_;
+  std::shared_ptr<PlatformMessageHandler> platform_message_handler_;
   PlatformDispatchTable platform_dispatch_table_;
 
   // |PlatformView|
@@ -154,6 +174,19 @@ class PlatformViewEmbedder final : public PlatformView {
   // |PlatformView|
   std::unique_ptr<std::vector<std::string>> ComputePlatformResolvedLocales(
       const std::vector<std::string>& supported_locale_data) override;
+
+  // |PlatformView|
+  void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
+
+  // |PlatformView|
+  double GetScaledFontSize(double unscaled_font_size,
+                           int configuration_id) const override;
+
+  // |PlatformView|
+  void SetApplicationLocale(std::string locale) override;
+
+  // |PlatformView|
+  void SetSemanticsTreeEnabled(bool enabled) override;
 
   // |PlatformView|
   void SendChannelUpdate(const std::string& name, bool listening) override;

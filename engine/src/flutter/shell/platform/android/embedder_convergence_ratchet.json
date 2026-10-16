@@ -14,7 +14,7 @@
       "enforce": "ratchet"
     },
     "embedder_internal_includes": {
-      "count": 1,
+      "count": 2,
       "enforce": "ratchet"
     },
     "engine_internal_includes": {
@@ -30,8 +30,8 @@
       "enforce": "ratchet"
     },
     "platform_view_android_overrides": {
-      "count": 20,
-      "enforce": "ratchet"
+      "count": 0,
+      "enforce": "zero"
     },
     "gn_internal_deps": {
       "count": 14,
@@ -48,6 +48,12 @@
       "from": 0,
       "to": 1,
       "reason": "Phase 1 transitional seam: AndroidSurface inherits from EmbedderSurface"
+    },
+    {
+      "metric": "embedder_internal_includes",
+      "from": 1,
+      "to": 2,
+      "reason": "Phase 1 transitional seam: AndroidShellHolder constructs PlatformViewEmbedder"
     }
   ]
 }

@@ -153,11 +153,13 @@ PlatformViewAndroid::PlatformViewAndroid(
     const flutter::TaskRunners& task_runners,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
     const std::shared_ptr<flutter::AndroidContext>& android_context)
-    : PlatformView(delegate, task_runners),
+    : delegate_(delegate),
+      task_runners_(task_runners),
       jni_facade_(jni_facade),
       android_context_(android_context),
       platform_view_android_delegate_(jni_facade),
-      platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)) {
+      platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)),
+      weak_factory_(this) {
   if (android_context_) {
     FML_CHECK(android_context_->IsValid())
         << "Could not create surface from invalid Android context.";
@@ -197,7 +199,9 @@ void PlatformViewAndroid::NotifyCreated(
     latch.Wait();
   }
 
-  PlatformView::NotifyCreated();
+  if (platform_view_) {
+    platform_view_->NotifyCreated();
+  }
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
@@ -215,11 +219,13 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
     latch.Wait();
   }
 
-  PlatformView::ScheduleFrame();
+  ScheduleFrame();
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
-  PlatformView::NotifyDestroyed();
+  if (platform_view_) {
+    platform_view_->NotifyDestroyed();
+  }
 
   if (android_surface_) {
     fml::AutoResetWaitableEvent latch;
@@ -263,9 +269,11 @@ void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
         response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
   }
 
-  PlatformView::DispatchPlatformMessage(
-      std::make_unique<flutter::PlatformMessage>(
-          std::move(name), std::move(message), std::move(response)));
+  if (platform_view_) {
+    platform_view_->DispatchPlatformMessage(
+        std::make_unique<flutter::PlatformMessage>(
+            std::move(name), std::move(message), std::move(response)));
+  }
 }
 
 void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
@@ -277,9 +285,11 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
         response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
   }
 
-  PlatformView::DispatchPlatformMessage(
-      std::make_unique<flutter::PlatformMessage>(std::move(name),
-                                                 std::move(response)));
+  if (platform_view_) {
+    platform_view_->DispatchPlatformMessage(
+        std::make_unique<flutter::PlatformMessage>(std::move(name),
+                                                   std::move(response)));
+  }
 }
 
 // |PlatformView|
@@ -302,18 +312,22 @@ void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
   // TODO(team-android): Remove implicit view assumption.
   // https://github.com/flutter/flutter/issues/142845
   if (env->IsSameObject(args, NULL)) {
-    PlatformView::DispatchSemanticsAction(
-        kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
-        fml::MallocMapping());
+    if (platform_view_) {
+      platform_view_->DispatchSemanticsAction(
+          kImplicitViewId, node_id,
+          static_cast<flutter::SemanticsAction>(action), fml::MallocMapping());
+    }
     return;
   }
 
   uint8_t* args_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(args));
   auto args_vector = fml::MallocMapping::Copy(args_data, args_position);
 
-  PlatformView::DispatchSemanticsAction(
-      kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
-      std::move(args_vector));
+  if (platform_view_) {
+    platform_view_->DispatchSemanticsAction(
+        kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
+        std::move(args_vector));
+  }
 }
 
 // |PlatformView|
@@ -522,17 +536,79 @@ void PlatformViewAndroid::LoadDartDeferredLibraryError(
                                          transient);
 }
 
+void PlatformViewAndroid::SetViewportMetrics(int64_t view_id,
+                                             const ViewportMetrics& metrics) {
+  if (platform_view_) {
+    platform_view_->SetViewportMetrics(view_id, metrics);
+  }
+}
+
+void PlatformViewAndroid::DispatchPointerDataPacket(
+    std::unique_ptr<PointerDataPacket> packet) {
+  if (platform_view_) {
+    platform_view_->DispatchPointerDataPacket(std::move(packet));
+  }
+}
+
+void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {
+  if (platform_view_) {
+    platform_view_->SetSemanticsEnabled(enabled);
+  }
+}
+
+void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
+  if (platform_view_) {
+    platform_view_->SetAccessibilityFeatures(flags);
+  }
+}
+
+void PlatformViewAndroid::RegisterTexture(
+    std::shared_ptr<flutter::Texture> texture) {
+  if (platform_view_) {
+    platform_view_->RegisterTexture(std::move(texture));
+  }
+}
+
+void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
+  if (platform_view_) {
+    platform_view_->UnregisterTexture(texture_id);
+  }
+}
+
+void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
+  if (platform_view_) {
+    platform_view_->MarkTextureFrameAvailable(texture_id);
+  }
+}
+
+void PlatformViewAndroid::ScheduleFrame() {
+  if (platform_view_) {
+    platform_view_->ScheduleFrame();
+  }
+}
+
+void PlatformViewAndroid::UpdateAssetResolverByType(
+    std::unique_ptr<AssetResolver> updated_asset_resolver,
+    AssetResolver::AssetResolverType type) {
+  if (platform_view_) {
+    platform_view_->UpdateAssetResolverByType(std::move(updated_asset_resolver),
+                                              type);
+  }
+}
+
 void PlatformViewAndroid::InstallFirstFrameCallback() {
   // On Platform Task Runner.
-  SetNextFrameCallback(
+  if (!platform_view_) {
+    return;
+  }
+  platform_view_->SetNextFrameCallback(
       [platform_view = GetWeakPtr(),
        platform_task_runner = task_runners_.GetPlatformTaskRunner()]() {
         // On GPU Task Runner.
         platform_task_runner->PostTask([platform_view]() {
           // Back on Platform Task Runner.
           if (platform_view) {
-            reinterpret_cast<PlatformViewAndroid*>(platform_view.get())
-                ->FireFirstFrameCallback();
+            platform_view->FireFirstFrameCallback();
           }
         });
       });
