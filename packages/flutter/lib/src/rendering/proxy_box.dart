@@ -4120,9 +4120,20 @@ class RenderSemanticsGestureHandler extends RenderProxyBoxWithHitTestBehavior {
     return validActions == null || validActions!.contains(action);
   }
 
+  /// An optional callback to compute the semantic scroll extent in the horizontal axis.
+  ///
+  /// If this is null, the [size.width] of the render object is used.
+  double Function()? semanticScrollExtentHorizontal;
+
+  /// An optional callback to compute the semantic scroll extent in the vertical axis.
+  ///
+  /// If this is null, the [size.height] of the render object is used.
+  double Function()? semanticScrollExtentVertical;
+
   void _performSemanticScrollLeft() {
     if (onHorizontalDragUpdate != null) {
-      final double primaryDelta = size.width * -scrollFactor;
+      final double primaryDelta =
+          (semanticScrollExtentHorizontal?.call() ?? size.width) * -scrollFactor;
       onHorizontalDragUpdate!(
         DragUpdateDetails(
           delta: Offset(primaryDelta, 0.0),
@@ -4135,7 +4146,8 @@ class RenderSemanticsGestureHandler extends RenderProxyBoxWithHitTestBehavior {
 
   void _performSemanticScrollRight() {
     if (onHorizontalDragUpdate != null) {
-      final double primaryDelta = size.width * scrollFactor;
+      final double primaryDelta =
+          (semanticScrollExtentHorizontal?.call() ?? size.width) * scrollFactor;
       onHorizontalDragUpdate!(
         DragUpdateDetails(
           delta: Offset(primaryDelta, 0.0),
@@ -4148,7 +4160,8 @@ class RenderSemanticsGestureHandler extends RenderProxyBoxWithHitTestBehavior {
 
   void _performSemanticScrollUp() {
     if (onVerticalDragUpdate != null) {
-      final double primaryDelta = size.height * -scrollFactor;
+      final double primaryDelta =
+          (semanticScrollExtentVertical?.call() ?? size.height) * -scrollFactor;
       onVerticalDragUpdate!(
         DragUpdateDetails(
           delta: Offset(0.0, primaryDelta),
@@ -4161,7 +4174,8 @@ class RenderSemanticsGestureHandler extends RenderProxyBoxWithHitTestBehavior {
 
   void _performSemanticScrollDown() {
     if (onVerticalDragUpdate != null) {
-      final double primaryDelta = size.height * scrollFactor;
+      final double primaryDelta =
+          (semanticScrollExtentVertical?.call() ?? size.height) * scrollFactor;
       onVerticalDragUpdate!(
         DragUpdateDetails(
           delta: Offset(0.0, primaryDelta),

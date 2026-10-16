@@ -1712,11 +1712,45 @@ class _DefaultSemanticsGestureDelegate extends SemanticsGestureDelegate {
   void assignSemantics(RenderSemanticsGestureHandler renderObject) {
     assert(!detectorState.widget.excludeFromSemantics);
     final Map<Type, GestureRecognizer> recognizers = detectorState._recognizers!;
-    renderObject
-      ..onTap = _getTapHandler(renderObject, recognizers)
-      ..onLongPress = _getLongPressHandler(renderObject, recognizers)
-      ..onHorizontalDragUpdate = _getHorizontalDragUpdateHandler(renderObject, recognizers)
-      ..onVerticalDragUpdate = _getVerticalDragUpdateHandler(renderObject, recognizers);
+    renderObject.onTap = _getTapHandler(renderObject, recognizers);
+    renderObject.onLongPress = _getLongPressHandler(renderObject, recognizers);
+    renderObject.onHorizontalDragUpdate = _getHorizontalDragUpdateHandler(
+      renderObject,
+      recognizers,
+    );
+    renderObject.onVerticalDragUpdate = _getVerticalDragUpdateHandler(renderObject, recognizers);
+    renderObject.semanticScrollExtentHorizontal = () =>
+        _getSemanticScrollExtent(renderObject, Axis.horizontal);
+    renderObject.semanticScrollExtentVertical = () =>
+        _getSemanticScrollExtent(renderObject, Axis.vertical);
+  }
+
+  double _getSemanticScrollExtent(RenderSemanticsGestureHandler renderObject, Axis axis) {
+    double? extent;
+    void visit(RenderObject child) {
+      if (extent != null) {
+        return;
+      }
+      if (child is RenderViewportBase) {
+        var obstruction = 0.0;
+        if (child.axis == axis) {
+          RenderSliver? sliver = child.firstChild;
+          while (sliver != null) {
+            obstruction += sliver.geometry?.maxScrollObstructionExtent ?? 0.0;
+            sliver = child.childAfter(sliver);
+          }
+        }
+        final double fullExtent = axis == Axis.horizontal
+            ? renderObject.size.width
+            : renderObject.size.height;
+        extent = fullExtent - obstruction;
+        return;
+      }
+      child.visitChildren(visit);
+    }
+
+    renderObject.visitChildren(visit);
+    return extent ?? (axis == Axis.horizontal ? renderObject.size.width : renderObject.size.height);
   }
 
   GestureTapCallback? _getTapHandler(
