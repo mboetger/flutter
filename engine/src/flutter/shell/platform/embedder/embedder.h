@@ -1595,6 +1595,39 @@ typedef struct {
   /// The maximum bound of the pressure of the current pointer, where 0.0 is the
   /// default maximum bound.
   double pressure_max;
+  /// The distance of the detected object from the input surface, where 0.0 is
+  /// the default value.
+  double distance;
+  /// The maximum value of a distance for the current pointer, where 0.0 is the
+  /// default maximum bound.
+  double distance_max;
+  /// The area of the screen being pressed, normalized between 0.0 and 1.0,
+  /// where 0.0 is the default value.
+  double size;
+  /// The radius of the contact area along the major axis of the ellipse in
+  /// physical pixels, where 0.0 is the default value.
+  double radius_major;
+  /// The radius of the contact area along the minor axis of the ellipse in
+  /// physical pixels, where 0.0 is the default value.
+  double radius_minor;
+  /// The minimum radius of the contact area for the current pointer in physical
+  /// pixels, where 0.0 is the default value.
+  double radius_min;
+  /// The maximum radius of the contact area for the current pointer in physical
+  /// pixels, where 0.0 is the default value.
+  double radius_max;
+  /// The orientation of the current pointer in radians in the range -pi/2 <
+  /// orientation <= pi/2 for touch, and -pi < orientation <= pi for stylus,
+  /// where 0.0 is the default value.
+  double orientation;
+  /// The tilt of the current pointer in radians in the range 0 <= tilt <= pi/2,
+  /// where 0.0 is the default value.
+  double tilt;
+  /// An arbitrary int64 payload provided by the platform / embedder.
+  int64_t platform_data;
+  /// Identifier provided by the embedder to identify this event (e.g. Android
+  /// MotionEvent ID). Defaults to 0 if unassigned or unsupported.
+  int64_t embedder_id;
 } FlutterPointerEvent;
 
 typedef enum {
@@ -1703,6 +1736,25 @@ typedef struct {
 typedef void (*FlutterPlatformMessageCallback)(
     const FlutterPlatformMessage* /* message*/,
     void* /* user data */);
+
+/// Payload taken from a received `FlutterPlatformMessage` via
+/// `FlutterPlatformMessageTakePayload`.
+///
+/// If `data` is non-null, the caller owns it and must invoke
+/// `destruction_callback(user_data)` to release it.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterPlatformMessagePayload).
+  size_t struct_size;
+  /// The payload. Null if and only if the message had no payload; a
+  /// zero-length payload is non-null, with a `data_size` of 0.
+  const uint8_t* data;
+  /// The number of bytes in `data`.
+  size_t data_size;
+  /// The baton to pass to `destruction_callback`.
+  void* user_data;
+  /// Releases `data`. Null if `data` is null.
+  VoidCallback destruction_callback;
+} FlutterPlatformMessagePayload;
 
 typedef void (*FlutterDataCallback)(const uint8_t* /* data */,
                                     size_t /* size */,
@@ -3804,6 +3856,34 @@ FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
     size_t data_length);
 
 //------------------------------------------------------------------------------
+/// @brief      Takes ownership of the payload backing a received platform
+///             message so the buffer can outlive the message callback and the
+///             response handle.
+///
+///             May be called at most once per `handle`, while `handle` is still
+///             valid (before `FlutterEngineSendPlatformMessageResponse` or
+///             `FlutterPlatformMessageReleaseResponseHandle`).
+///
+///             On success, `payload_out` is populated. If `payload_out->data`
+///             is non-null, the caller must invoke
+///             `payload_out->destruction_callback(payload_out->user_data)` when
+///             done with it.
+///
+/// @param[in]  engine       The running engine instance.
+/// @param[in]  handle       The response handle from the received
+///                          `FlutterPlatformMessage`.
+/// @param[out] payload_out  Populated with the payload and its destructor.
+///                          `struct_size` must be set by the caller.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterPlatformMessageTakePayload(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessageResponseHandle* handle,
+    FlutterPlatformMessagePayload* payload_out);
+
+//------------------------------------------------------------------------------
 /// @brief      This API is only meant to be used by platforms that need to
 ///             flush tasks on a message loop not controlled by the Flutter
 ///             engine.
@@ -4555,6 +4635,10 @@ typedef FlutterEngineResult (*FlutterEngineGetCallbackInformationFnPtr)(
     FlutterDartCallbackInformation* info_out);
 typedef FlutterEngineResult (*FlutterEnginePrefetchDefaultFontManagerFnPtr)(
     void);
+typedef FlutterEngineResult (*FlutterEnginePlatformMessageTakePayloadFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessageResponseHandle* handle,
+    FlutterPlatformMessagePayload* payload_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4615,6 +4699,7 @@ typedef struct {
   FlutterEngineInitializeCallbackCacheFnPtr InitializeCallbackCache;
   FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
   FlutterEnginePrefetchDefaultFontManagerFnPtr PrefetchDefaultFontManager;
+  FlutterEnginePlatformMessageTakePayloadFnPtr PlatformMessageTakePayload;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

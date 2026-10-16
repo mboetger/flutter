@@ -1770,7 +1770,50 @@ MakeViewportMetricsFromWindowMetrics(
 
 struct _FlutterPlatformMessageResponseHandle {
   std::unique_ptr<flutter::PlatformMessage> message;
+  mutable bool payload_taken = false;
 };
+
+namespace {
+
+constexpr uint8_t kEmptyPayloadByte = 0;
+
+// Returns a non-null pointer for any message that had a payload (`hasData()`),
+// even when that payload is 0 bytes and the underlying `fml::Mapping` returns
+// `nullptr` for `GetMapping()`. Returns `nullptr` only when `!hasData()`.
+const uint8_t* ReceivedPayloadData(flutter::PlatformMessage& message) {
+  if (!message.hasData()) {
+    return nullptr;
+  }
+  const uint8_t* mapping = message.data().GetMapping();
+  return mapping != nullptr ? mapping : &kEmptyPayloadByte;
+}
+
+}  // namespace
+
+namespace flutter {
+
+PlatformViewEmbedder::PlatformMessageResponseCallback
+MakePlatformMessageResponseCallback(FlutterPlatformMessageCallback callback,
+                                    void* user_data) {
+  if (callback == nullptr) {
+    return nullptr;
+  }
+  return
+      [callback, user_data](std::unique_ptr<flutter::PlatformMessage> message) {
+        auto handle = new FlutterPlatformMessageResponseHandle();
+        const FlutterPlatformMessage incoming_message = {
+            sizeof(FlutterPlatformMessage),  // struct_size
+            message->channel().c_str(),      // channel
+            ReceivedPayloadData(*message),   // message
+            message->data().GetSize(),       // message_size
+            handle,                          // response_handle
+        };
+        handle->message = std::move(message);
+        return callback(&incoming_message, user_data);
+      };
+}
+
+}  // namespace flutter
 
 struct LoadedElfDeleter {
   void operator()(Dart_LoadedElf* elf) {
@@ -2652,23 +2695,9 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
           CreateEmbedderSemanticsUpdateCallback(args, user_data);
 
   flutter::PlatformViewEmbedder::PlatformMessageResponseCallback
-      platform_message_response_callback = nullptr;
-  if (SAFE_ACCESS(args, platform_message_callback, nullptr) != nullptr) {
-    platform_message_response_callback =
-        [ptr = args->platform_message_callback,
-         user_data](std::unique_ptr<flutter::PlatformMessage> message) {
-          auto handle = new FlutterPlatformMessageResponseHandle();
-          const FlutterPlatformMessage incoming_message = {
-              sizeof(FlutterPlatformMessage),  // struct_size
-              message->channel().c_str(),      // channel
-              message->data().GetMapping(),    // message
-              message->data().GetSize(),       // message_size
-              handle,                          // response_handle
-          };
-          handle->message = std::move(message);
-          return ptr(&incoming_message, user_data);
-        };
-  }
+      platform_message_response_callback =
+          flutter::MakePlatformMessageResponseCallback(
+              SAFE_ACCESS(args, platform_message_callback, nullptr), user_data);
 
   flutter::VsyncWaiterEmbedder::VsyncCallback vsync_callback = nullptr;
   if (SAFE_ACCESS(args, vsync_callback, nullptr) != nullptr) {
@@ -3372,8 +3401,7 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
   for (size_t i = 0; i < events_count; ++i) {
     flutter::PointerData pointer_data;
     pointer_data.Clear();
-    // this is currely in use only on android embedding.
-    pointer_data.embedder_id = 0;
+    pointer_data.embedder_id = SAFE_ACCESS(current, embedder_id, 0);
     pointer_data.time_stamp = SAFE_ACCESS(current, timestamp, 0);
     pointer_data.change = ToPointerDataChange(
         SAFE_ACCESS(current, phase, FlutterPointerPhase::kCancel));
@@ -3424,6 +3452,16 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
     pointer_data.pressure = SAFE_ACCESS(current, pressure, 0.0);
     pointer_data.pressure_min = SAFE_ACCESS(current, pressure_min, 0.0);
     pointer_data.pressure_max = SAFE_ACCESS(current, pressure_max, 0.0);
+    pointer_data.distance = SAFE_ACCESS(current, distance, 0.0);
+    pointer_data.distance_max = SAFE_ACCESS(current, distance_max, 0.0);
+    pointer_data.size = SAFE_ACCESS(current, size, 0.0);
+    pointer_data.radius_major = SAFE_ACCESS(current, radius_major, 0.0);
+    pointer_data.radius_minor = SAFE_ACCESS(current, radius_minor, 0.0);
+    pointer_data.radius_min = SAFE_ACCESS(current, radius_min, 0.0);
+    pointer_data.radius_max = SAFE_ACCESS(current, radius_max, 0.0);
+    pointer_data.orientation = SAFE_ACCESS(current, orientation, 0.0);
+    pointer_data.tilt = SAFE_ACCESS(current, tilt, 0.0);
+    pointer_data.platformData = SAFE_ACCESS(current, platform_data, 0);
     pointer_data.view_id =
         SAFE_ACCESS(current, view_id, kFlutterImplicitViewId);
     packet->SetPointerData(i, pointer_data);
@@ -3598,9 +3636,14 @@ FlutterEngineResult FlutterEngineSendPlatformMessage(
   }
 
   std::unique_ptr<flutter::PlatformMessage> message;
-  if (message_size == 0) {
+  if (message_size == 0 && message_data == nullptr) {
     message = std::make_unique<flutter::PlatformMessage>(
         flutter_message->channel, response);
+  } else if (message_size == 0) {
+    static constexpr uint8_t kEmptyByte = 0;
+    message = std::make_unique<flutter::PlatformMessage>(
+        flutter_message->channel, fml::MallocMapping::Copy(&kEmptyByte, 0),
+        response);
   } else {
     message = std::make_unique<flutter::PlatformMessage>(
         flutter_message->channel,
@@ -3679,7 +3722,7 @@ FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
   auto response = handle->message->response();
 
   if (response) {
-    if (data_length == 0) {
+    if (data_length == 0 && data == nullptr) {
       response->CompleteEmpty();
     } else {
       response->Complete(std::make_unique<fml::DataMapping>(
@@ -3689,6 +3732,62 @@ FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
 
   delete handle;
 
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterPlatformMessageTakePayload(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterPlatformMessageResponseHandle* handle,
+    FlutterPlatformMessagePayload* payload_out) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
+  }
+  if (handle == nullptr || handle->message == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid response handle.");
+  }
+  if (payload_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Payload output pointer was null.");
+  }
+  if (SAFE_ACCESS(payload_out, struct_size, 0u) !=
+      sizeof(FlutterPlatformMessagePayload)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Invalid struct_size on FlutterPlatformMessagePayload.");
+  }
+  if (handle->payload_taken) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Payload was already taken from this handle.");
+  }
+
+  handle->payload_taken = true;
+
+  if (!handle->message->hasData()) {
+    payload_out->data = nullptr;
+    payload_out->data_size = 0;
+    payload_out->user_data = nullptr;
+    payload_out->destruction_callback = nullptr;
+    return kSuccess;
+  }
+
+  fml::MallocMapping released = handle->message->releaseData();
+  const size_t size = released.GetSize();
+  uint8_t* buffer = released.Release();
+  if (buffer == nullptr) {
+    // 0-byte payload whose MallocMapping had a null pointer: return a static
+    // non-null sentinel with a no-op destructor so callers can distinguish an
+    // empty `ByteData(0)` payload from a null payload without leaking.
+    payload_out->data = &kEmptyPayloadByte;
+    payload_out->data_size = 0;
+    payload_out->user_data = nullptr;
+    payload_out->destruction_callback = [](void*) {};
+    return kSuccess;
+  }
+
+  payload_out->data = buffer;
+  payload_out->data_size = size;
+  payload_out->user_data = buffer;
+  payload_out->destruction_callback = [](void* data) { std::free(data); };
   return kSuccess;
 }
 
@@ -4523,23 +4622,9 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
           CreateEmbedderSemanticsUpdateCallback(args, user_data);
 
   flutter::PlatformViewEmbedder::PlatformMessageResponseCallback
-      platform_message_response_callback = nullptr;
-  if (SAFE_ACCESS(args, platform_message_callback, nullptr) != nullptr) {
-    platform_message_response_callback =
-        [ptr = args->platform_message_callback,
-         user_data](std::unique_ptr<flutter::PlatformMessage> message) {
-          auto handle = new FlutterPlatformMessageResponseHandle();
-          const FlutterPlatformMessage incoming_message = {
-              sizeof(FlutterPlatformMessage),  // struct_size
-              message->channel().c_str(),      // channel
-              message->data().GetMapping(),    // message
-              message->data().GetSize(),       // message_size
-              handle,                          // response_handle
-          };
-          handle->message = std::move(message);
-          return ptr(&incoming_message, user_data);
-        };
-  }
+      platform_message_response_callback =
+          flutter::MakePlatformMessageResponseCallback(
+              SAFE_ACCESS(args, platform_message_callback, nullptr), user_data);
 
   flutter::VsyncWaiterEmbedder::VsyncCallback vsync_callback = nullptr;
   if (SAFE_ACCESS(args, vsync_callback, nullptr) != nullptr) {
@@ -5019,6 +5104,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(InitializeCallbackCache, FlutterEngineInitializeCallbackCache);
   SET_PROC(GetCallbackInformation, FlutterEngineGetCallbackInformation);
   SET_PROC(PrefetchDefaultFontManager, FlutterEnginePrefetchDefaultFontManager);
+  SET_PROC(PlatformMessageTakePayload, FlutterPlatformMessageTakePayload);
 #undef SET_PROC
 
   return kSuccess;

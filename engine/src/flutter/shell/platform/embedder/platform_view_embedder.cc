@@ -5,6 +5,8 @@
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
 #include <atomic>
+#include <mutex>
+#include <shared_mutex>
 #include <utility>
 
 #include "flutter/fml/make_copyable.h"
@@ -25,13 +27,18 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
         enable_direct_platform_message_dispatch_(
             enable_direct_platform_message_dispatch) {}
 
-  void Shutdown() { is_alive_.store(false, std::memory_order_release); }
+  void Shutdown() {
+    std::unique_lock lock(mutex_);
+    is_alive_.store(false, std::memory_order_release);
+    direct_dispatch_callback_ = nullptr;
+  }
 
   virtual void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) {
     if (enable_direct_platform_message_dispatch_) {
       if (!message) {
         return;
       }
+      std::shared_lock lock(mutex_);
       if (!is_alive_.load(std::memory_order_acquire)) {
         FML_DLOG(WARNING) << "Deleted engine dropping message on channel "
                           << message->channel();
@@ -72,6 +79,7 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
   PlatformMessageResponseCallback direct_dispatch_callback_;
   bool enable_direct_platform_message_dispatch_ = false;
   std::atomic<bool> is_alive_{true};
+  std::shared_mutex mutex_;
 };
 
 PlatformViewEmbedder::PlatformViewEmbedder(

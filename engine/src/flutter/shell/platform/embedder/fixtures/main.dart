@@ -1837,3 +1837,93 @@ Future<void> a11y_main_multi_view() async {
   await semanticsChanged;
   notifySemanticsEnabled(PlatformDispatcher.instance.semanticsEnabled);
 }
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Int64,
+    ffi.Int64,
+    ffi.Double,
+    ffi.Double,
+    ffi.Double,
+    ffi.Double,
+    ffi.Double,
+    ffi.Double,
+    ffi.Double,
+    ffi.Double,
+    ffi.Double,
+  )
+>(symbol: 'NotifyPointerDataPacketFull')
+external void notifyPointerDataPacketFull(
+  int embedderId,
+  int platformData,
+  double distance,
+  double distanceMax,
+  double size,
+  double radiusMajor,
+  double radiusMinor,
+  double radiusMin,
+  double radiusMax,
+  double orientation,
+  double tilt,
+);
+
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
+void pointer_data_packet_full() {
+  PlatformDispatcher.instance.onPointerDataPacket = (PointerDataPacket packet) {
+    for (final PointerData data in packet.data) {
+      notifyPointerDataPacketFull(
+        data.embedderId,
+        data.platformData,
+        data.distance,
+        data.distanceMax,
+        data.size,
+        data.radiusMajor,
+        data.radiusMinor,
+        data.radiusMin,
+        data.radiusMax,
+        data.orientation,
+        data.tilt,
+      );
+    }
+  };
+  signalNativeTest();
+}
+
+@ffi.Native<ffi.Void Function(ffi.Int64)>(symbol: 'NotifyPlatformMessageKind')
+// kind: -1 for null ByteData, 0 for 0-byte non-null ByteData, >0 for length
+external void notifyPlatformMessageKind(int kind);
+
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
+void platform_messages_with_null_empty_and_bytes() {
+  PlatformDispatcher.instance.onPlatformMessage =
+      (String name, ByteData? data, PlatformMessageResponseCallback? callback) {
+        if (name == 'to_dart_inspect') {
+          notifyPlatformMessageKind(data == null ? -1 : data.lengthInBytes);
+          callback?.call(data);
+        } else if (name == 'trigger_from_dart_null') {
+          PlatformDispatcher.instance.sendPlatformMessage('from_dart', null, (ByteData? reply) {
+            notifyPlatformMessageKind(reply == null ? -1 : reply.lengthInBytes);
+          });
+          callback?.call(null);
+        } else if (name == 'trigger_from_dart_empty') {
+          PlatformDispatcher.instance.sendPlatformMessage('from_dart', ByteData(0), (
+            ByteData? reply,
+          ) {
+            notifyPlatformMessageKind(reply == null ? -1 : reply.lengthInBytes);
+          });
+          callback?.call(null);
+        } else if (name == 'trigger_from_dart_bytes') {
+          final bytes = ByteData(3)
+            ..setUint8(0, 0xAA)
+            ..setUint8(1, 0xBB)
+            ..setUint8(2, 0xCC);
+          PlatformDispatcher.instance.sendPlatformMessage('from_dart', bytes, (ByteData? reply) {
+            notifyPlatformMessageKind(reply == null ? -1 : reply.lengthInBytes);
+          });
+          callback?.call(null);
+        }
+      };
+  signalNativeTest();
+}

@@ -6,13 +6,16 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_JNI_PLATFORM_VIEW_ANDROID_JNI_H_
 
 #include <functional>
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "flutter/fml/mapping.h"
 
 #include "flutter/flow/embedded_views.h"
-#include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 #if FML_OS_ANDROID
 #include "flutter/fml/platform/android/scoped_java_ref.h"
@@ -21,6 +24,23 @@
 struct ASurfaceTransaction;
 
 namespace flutter {
+
+/// RAII wrapper around a `FlutterPlatformMessagePayload` whose buffer is
+/// released by invoking `destruction_callback(user_data)`.
+struct PlatformMessagePayloadDeleter {
+  void operator()(FlutterPlatformMessagePayload* payload) const {
+    if (payload == nullptr) {
+      return;
+    }
+    if (payload->destruction_callback != nullptr) {
+      payload->destruction_callback(payload->user_data);
+    }
+    delete payload;
+  }
+};
+using UniquePlatformMessagePayload =
+    std::unique_ptr<FlutterPlatformMessagePayload,
+                    PlatformMessagePayloadDeleter>;
 
 #if FML_OS_ANDROID
 using JavaLocalRef = fml::jni::ScopedJavaLocalRef<jobject>;
@@ -41,10 +61,13 @@ class PlatformViewAndroidJNI {
   virtual ~PlatformViewAndroidJNI();
 
   //----------------------------------------------------------------------------
-  /// @brief      Sends a platform message. The message may be empty.
+  /// @brief      Sends a platform message to Java (`FlutterJNI`).
+  ///             `payload->data` is null when the message had no payload, or
+  ///             non-null (possibly with `data_size == 0`) when it did.
   ///
   virtual void FlutterViewHandlePlatformMessage(
-      std::unique_ptr<flutter::PlatformMessage> message,
+      const std::string& channel,
+      UniquePlatformMessagePayload payload,
       int responseId) = 0;
 
   //----------------------------------------------------------------------------

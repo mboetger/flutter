@@ -29,7 +29,8 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
  public:
   MOCK_METHOD(void,
               FlutterViewHandlePlatformMessage,
-              (std::unique_ptr<flutter::PlatformMessage> message,
+              (const std::string& channel,
+               UniquePlatformMessagePayload payload,
                int responseId),
               (override));
   MOCK_METHOD(void,
@@ -153,15 +154,6 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
               MaybeResizeSurfaceView,
               (int32_t width, int32_t height),
               (const, override));
-};
-
-class MockPlatformMessageResponse : public PlatformMessageResponse {
- public:
-  static fml::RefPtr<MockPlatformMessageResponse> Create() {
-    return fml::AdoptRef(new MockPlatformMessageResponse());
-  }
-  MOCK_METHOD(void, Complete, (std::unique_ptr<fml::Mapping> data), (override));
-  MOCK_METHOD(void, CompleteEmpty, (), (override));
 };
 
 // How long a test waits for a vsync. At 60 Hz this is 120 frames, so a busy
@@ -316,22 +308,119 @@ TEST(AndroidShellHolder, HandlePlatformMessage) {
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   holder->NotifySurfaceCreated(window);
-  EXPECT_TRUE(holder->GetPlatformMessageHandler());
-  size_t data_size = 4;
-  fml::MallocMapping bytes =
-      fml::MallocMapping(static_cast<uint8_t*>(malloc(data_size)), data_size);
-  fml::RefPtr<MockPlatformMessageResponse> response =
-      MockPlatformMessageResponse::Create();
-  auto message = std::make_unique<PlatformMessage>(
-      /*channel=*/"foo", /*data=*/std::move(bytes), /*response=*/response);
-  int response_id = 1;
-  EXPECT_CALL(*jni,
-              FlutterViewHandlePlatformMessage(::testing::_, response_id));
-  EXPECT_CALL(*response, CompleteEmpty());
-  holder->GetPlatformMessageHandler()->HandlePlatformMessage(
-      std::move(message));
-  holder->GetPlatformMessageHandler()
-      ->InvokePlatformMessageEmptyResponseCallback(response_id);
+
+  // Exercise PlatformMessageHandlerAndroid directly through a mock C-API proc
+  // table to verify that it takes the payload via
+  // `PlatformMessageTakePayload`, forwards the channel + payload to JNI, and
+  // routes the empty response back through `SendPlatformMessageResponse`.
+  PlatformMessageHandlerAndroid handler(jni);
+  FlutterEngineProcTable& api = holder->GetEmbedderApiForTesting();
+  handler.Attach(
+      reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(holder.get()), &api);
+
+  const auto* fake_handle =
+      reinterpret_cast<const FlutterPlatformMessageResponseHandle*>(0x1234);
+  bool take_called = false;
+  bool destructor_called = false;
+  api.PlatformMessageTakePayload =
+      MOCK_ENGINE_PROC(PlatformMessageTakePayload,
+                       ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                            const FlutterPlatformMessageResponseHandle* handle,
+                            FlutterPlatformMessagePayload* payload_out) {
+                         EXPECT_EQ(handle, fake_handle);
+                         take_called = true;
+                         static const uint8_t kBytes[4] = {10, 20, 30, 40};
+                         payload_out->data = kBytes;
+                         payload_out->data_size = sizeof(kBytes);
+                         payload_out->user_data = &destructor_called;
+                         payload_out->destruction_callback = [](void* ud) {
+                           *static_cast<bool*>(ud) = true;
+                         };
+                         return kSuccess;
+                       }));
+
+  bool response_sent = false;
+  api.SendPlatformMessageResponse =
+      MOCK_ENGINE_PROC(SendPlatformMessageResponse,
+                       ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                            const FlutterPlatformMessageResponseHandle* handle,
+                            const uint8_t* data, size_t data_length) {
+                         EXPECT_EQ(handle, fake_handle);
+                         EXPECT_EQ(data, nullptr);
+                         EXPECT_EQ(data_length, 0u);
+                         response_sent = true;
+                         return kSuccess;
+                       }));
+
+  int captured_response_id = 0;
+  EXPECT_CALL(
+      *jni, FlutterViewHandlePlatformMessage("foo", ::testing::_, ::testing::_))
+      .WillOnce([&](const std::string& channel,
+                    UniquePlatformMessagePayload payload, int response_id) {
+        ASSERT_NE(payload, nullptr);
+        EXPECT_EQ(payload->data_size, 4u);
+        captured_response_id = response_id;
+      });
+
+  FlutterPlatformMessage incoming = {};
+  incoming.struct_size = sizeof(FlutterPlatformMessage);
+  incoming.channel = "foo";
+  incoming.response_handle = fake_handle;
+  handler.HandlePlatformMessage(incoming);
+  EXPECT_TRUE(take_called);
+  EXPECT_TRUE(destructor_called);
+  ASSERT_NE(captured_response_id, 0);
+
+  handler.InvokePlatformMessageEmptyResponseCallback(captured_response_id);
+  EXPECT_TRUE(response_sent);
+}
+
+TEST(AndroidShellHolder,
+     PlatformMessageHandlerReleasesPendingHandlesOnShutdown) {
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  PlatformMessageHandlerAndroid handler(jni);
+
+  FlutterEngineProcTable api = {};
+  api.struct_size = sizeof(FlutterEngineProcTable);
+  const auto fake_engine =
+      reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(0xCAFE);
+  const auto* fake_handle =
+      reinterpret_cast<const FlutterPlatformMessageResponseHandle*>(0xBEEF);
+
+  api.PlatformMessageTakePayload =
+      MOCK_ENGINE_PROC(PlatformMessageTakePayload,
+                       ([](FLUTTER_API_SYMBOL(FlutterEngine),
+                           const FlutterPlatformMessageResponseHandle*,
+                           FlutterPlatformMessagePayload* payload_out) {
+                         payload_out->data = nullptr;
+                         payload_out->data_size = 0;
+                         return kSuccess;
+                       }));
+  int released_count = 0;
+  api.PlatformMessageReleaseResponseHandle =
+      MOCK_ENGINE_PROC(PlatformMessageReleaseResponseHandle,
+                       ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                            FlutterPlatformMessageResponseHandle* handle) {
+                         EXPECT_EQ(engine, fake_engine);
+                         EXPECT_EQ(handle, fake_handle);
+                         released_count++;
+                         return kSuccess;
+                       }));
+
+  handler.Attach(fake_engine, &api);
+  EXPECT_CALL(*jni, FlutterViewHandlePlatformMessage("bar", ::testing::_,
+                                                     ::testing::_));
+
+  FlutterPlatformMessage incoming = {};
+  incoming.struct_size = sizeof(FlutterPlatformMessage);
+  incoming.channel = "bar";
+  incoming.response_handle = fake_handle;
+  handler.HandlePlatformMessage(incoming);
+
+  // Destroy/release without invoking a response callback: the pending handle
+  // must be released via `PlatformMessageReleaseResponseHandle`.
+  handler.ReleasePendingResponses();
+  EXPECT_EQ(released_count, 1);
 }
 
 TEST(AndroidShellHolder, CreateWithMergedPlatformAndUIThread) {

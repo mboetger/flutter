@@ -15,11 +15,47 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
+#include "flutter/shell/platform/android/platform_message_handler_android.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/android/vsync_waiter_android.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
+
+/// Viewport metrics reported by `FlutterJNI.setViewportMetrics`, expressed
+/// without depending on `flutter/lib/ui/window/viewport_metrics.h` so
+/// `AndroidShellHolder` can translate directly into `FlutterWindowMetricsEvent`
+/// and call `FlutterEngineProcTable::SendWindowMetricsEvent`.
+struct AndroidViewportMetrics {
+  double device_pixel_ratio = 1.0;
+  double physical_width = 0;
+  double physical_height = 0;
+  double physical_min_width_constraint = 0;
+  double physical_max_width_constraint = 0;
+  double physical_min_height_constraint = 0;
+  double physical_max_height_constraint = 0;
+  double physical_padding_top = 0;
+  double physical_padding_right = 0;
+  double physical_padding_bottom = 0;
+  double physical_padding_left = 0;
+  double physical_view_inset_top = 0;
+  double physical_view_inset_right = 0;
+  double physical_view_inset_bottom = 0;
+  double physical_view_inset_left = 0;
+  double physical_system_gesture_inset_top = 0;
+  double physical_system_gesture_inset_right = 0;
+  double physical_system_gesture_inset_bottom = 0;
+  double physical_system_gesture_inset_left = 0;
+  double physical_touch_slop = -1.0;
+  std::vector<double> physical_display_features_bounds;
+  std::vector<int> physical_display_features_type;
+  std::vector<int> physical_display_features_state;
+  size_t display_id = 0;
+  double top_left_corner_radius = -1.0;
+  double top_right_corner_radius = -1.0;
+  double bottom_right_corner_radius = -1.0;
+  double bottom_left_corner_radius = -1.0;
+};
 
 //----------------------------------------------------------------------------
 /// @brief      This is the Android owner of the core engine Shell.
@@ -104,19 +140,23 @@ class AndroidShellHolder {
 
   void NotifySurfaceDestroyed();
 
-  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
+  void SetViewportMetrics(int64_t view_id,
+                          const AndroidViewportMetrics& metrics);
 
-  void DispatchPlatformMessage(JNIEnv* env,
-                               std::string name,
-                               jobject message_data,
-                               jint message_position,
-                               jint response_id);
+  void DispatchPlatformMessage(const std::string& name,
+                               const void* message_data,
+                               int message_position,
+                               int response_id);
 
-  void DispatchEmptyPlatformMessage(JNIEnv* env,
-                                    std::string name,
-                                    jint response_id);
+  void DispatchEmptyPlatformMessage(const std::string& name, int response_id);
 
-  void DispatchPointerDataPacket(std::unique_ptr<PointerDataPacket> packet);
+  void DispatchPointerDataPacket(const uint8_t* buffer, int size_bytes);
+
+  void InvokePlatformMessageResponseCallback(int response_id,
+                                             const uint8_t* data,
+                                             size_t size);
+
+  void InvokePlatformMessageEmptyResponseCallback(int response_id);
 
   void DispatchSemanticsAction(JNIEnv* env,
                                jint id,
@@ -159,9 +199,6 @@ class AndroidShellHolder {
 
   void NotifyLowMemoryWarning();
 
-  const std::shared_ptr<PlatformMessageHandler>& GetPlatformMessageHandler()
-      const;
-
   void UpdateDisplayMetrics();
 
   // Visible for testing.
@@ -184,7 +221,7 @@ class AndroidShellHolder {
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
-  std::shared_ptr<PlatformMessageHandler> platform_message_handler_;
+  std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   std::shared_ptr<ThreadHost> thread_host_;
   UniqueEngine engine_;
   // The embedder API functions that the holder calls engine_ through.
@@ -208,15 +245,17 @@ class AndroidShellHolder {
   ///             Used when constructing the Shell from the inside out when
   ///             spawning from an existing Shell.
   ///
-  AndroidShellHolder(const flutter::Settings& settings,
-                     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-                     const std::shared_ptr<ThreadHost>& thread_host,
-                     UniqueEngine engine,
-                     std::unique_ptr<APKAssetProvider> apk_asset_provider,
-                     std::unique_ptr<PlatformViewAndroid> platform_view_android,
-                     const fml::WeakPtr<PlatformViewAndroid>& platform_view,
-                     std::shared_ptr<VsyncWaiterAndroid> vsync_waiter,
-                     AndroidRenderingAPI rendering_api);
+  AndroidShellHolder(
+      const flutter::Settings& settings,
+      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+      const std::shared_ptr<ThreadHost>& thread_host,
+      UniqueEngine engine,
+      std::unique_ptr<APKAssetProvider> apk_asset_provider,
+      std::unique_ptr<PlatformViewAndroid> platform_view_android,
+      const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+      std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler,
+      std::shared_ptr<VsyncWaiterAndroid> vsync_waiter,
+      AndroidRenderingAPI rendering_api);
   static void ThreadDestructCallback(void* value);
   std::optional<RunConfiguration> BuildRunConfiguration(
       const std::string& entrypoint,

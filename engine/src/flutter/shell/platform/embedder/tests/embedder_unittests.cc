@@ -5162,6 +5162,464 @@ TEST_F(EmbedderTest, ThreadPrioritySetterAndCustomImageGeneratorRegistration) {
   EXPECT_GE(priority_calls.load(), 1);
 }
 
+TEST_F(EmbedderTest,
+       ZeroLengthNonNullPlatformMessagesAndResponsesAreDistinguishedFromNull) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("platform_messages_with_null_empty_and_bytes");
+
+  fml::AutoResetWaitableEvent ready_latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  std::mutex mutex;
+  std::vector<int> dart_observed_kinds;
+  fml::AutoResetWaitableEvent kind_latch;
+  context.AddFfiNativeCallback(
+      "NotifyPlatformMessageKind", CREATE_FFI_LAMBDA([&](int64_t kind) {
+        {
+          std::scoped_lock lock(mutex);
+          dart_observed_kinds.push_back(static_cast<int>(kind));
+        }
+        kind_latch.Signal();
+      }));
+
+  // Record what the C-API platform_message_callback observes for messages
+  // sent from Dart (`null`, `ByteData(0)`, `ByteData(3)`), and reply with the
+  // same distinction via `FlutterEngineSendPlatformMessageResponse`.
+  struct ObservedFromDart {
+    bool non_null_ptr = false;
+    size_t size = 0;
+  };
+  std::vector<ObservedFromDart> c_observed;
+  FlutterEngine raw_engine = nullptr;
+
+  std::function<void(const FlutterPlatformMessage*)> on_platform_message =
+      [&](const FlutterPlatformMessage* msg) {
+        if (std::string(msg->channel) == "from_dart") {
+          {
+            std::scoped_lock lock(mutex);
+            c_observed.push_back({msg->message != nullptr, msg->message_size});
+          }
+          // Echo the exact (pointer-nullness, size) back as the response so
+          // Dart's reply callback also exercises `Complete` vs `CompleteEmpty`.
+          static const uint8_t kEmpty = 0;
+          const uint8_t* reply_ptr =
+              msg->message == nullptr
+                  ? nullptr
+                  : (msg->message_size == 0 ? &kEmpty : msg->message);
+          FlutterEngineSendPlatformMessageResponse(
+              raw_engine, msg->response_handle, reply_ptr, msg->message_size);
+        } else if (msg->response_handle != nullptr) {
+          FlutterPlatformMessageReleaseResponseHandle(
+              raw_engine, const_cast<FlutterPlatformMessageResponseHandle*>(
+                              msg->response_handle));
+        }
+      };
+  builder.SetPlatformMessageCallback(on_platform_message);
+
+  auto platform_task_runner = CreateNewThread("test_platform_thread");
+  UniqueEngine engine;
+  fml::AutoResetWaitableEvent init_latch;
+  platform_task_runner->PostTask([&]() {
+    engine = builder.InitializeEngine();
+    ASSERT_TRUE(engine.is_valid());
+    raw_engine = engine.get();
+    ASSERT_EQ(FlutterEngineRunInitialized(raw_engine), kSuccess);
+    init_latch.Signal();
+  });
+  init_latch.Wait();
+  ready_latch.Wait();
+
+  auto send_and_observe_response = [&](const char* channel,
+                                       const uint8_t* bytes, size_t len,
+                                       bool* resp_non_null, size_t* resp_size) {
+    fml::AutoResetWaitableEvent resp_latch;
+    struct RespCtx {
+      fml::AutoResetWaitableEvent* latch;
+      bool* non_null;
+      size_t* size;
+    } ctx{&resp_latch, resp_non_null, resp_size};
+
+    platform_task_runner->PostTask([&]() {
+      FlutterPlatformMessageResponseHandle* handle = nullptr;
+      ASSERT_EQ(FlutterPlatformMessageCreateResponseHandle(
+                    engine.get(),
+                    [](const uint8_t* data, size_t size, void* ud) {
+                      auto* c = reinterpret_cast<RespCtx*>(ud);
+                      if (c->non_null) {
+                        *c->non_null = (data != nullptr);
+                      }
+                      if (c->size) {
+                        *c->size = size;
+                      }
+                      c->latch->Signal();
+                    },
+                    &ctx, &handle),
+                kSuccess);
+      FlutterPlatformMessage message = {};
+      message.struct_size = sizeof(FlutterPlatformMessage);
+      message.channel = channel;
+      message.message = bytes;
+      message.message_size = len;
+      message.response_handle = handle;
+      ASSERT_EQ(FlutterEngineSendPlatformMessage(engine.get(), &message),
+                kSuccess);
+      ASSERT_EQ(
+          FlutterPlatformMessageReleaseResponseHandle(engine.get(), handle),
+          kSuccess);
+    });
+    resp_latch.Wait();
+  };
+
+  // 1. Embedder -> Dart: null payload (`message == nullptr, size == 0`).
+  bool resp_non_null = true;
+  size_t resp_size = 99;
+  send_and_observe_response("to_dart_inspect", nullptr, 0, &resp_non_null,
+                            &resp_size);
+  kind_latch.Wait();
+  EXPECT_FALSE(resp_non_null);
+  EXPECT_EQ(resp_size, 0u);
+
+  // 2. Embedder -> Dart: 0-byte non-null payload (`message != nullptr,
+  //    size == 0`) — must arrive in Dart as `ByteData(0)`, NOT `null`, and the
+  //    echoed response must arrive in C with `data != nullptr, size == 0`.
+  const uint8_t empty_byte = 0;
+  resp_non_null = false;
+  resp_size = 99;
+  send_and_observe_response("to_dart_inspect", &empty_byte, 0, &resp_non_null,
+                            &resp_size);
+  kind_latch.Wait();
+  EXPECT_TRUE(resp_non_null);
+  EXPECT_EQ(resp_size, 0u);
+
+  // 3. Embedder -> Dart: 4-byte payload.
+  const uint8_t four_bytes[4] = {1, 2, 3, 4};
+  resp_non_null = false;
+  resp_size = 0;
+  send_and_observe_response("to_dart_inspect", four_bytes, 4, &resp_non_null,
+                            &resp_size);
+  kind_latch.Wait();
+  EXPECT_TRUE(resp_non_null);
+  EXPECT_EQ(resp_size, 4u);
+
+  // 4. Dart -> Embedder -> Dart reply: null, empty (0-byte), and 3-byte.
+  send_and_observe_response("trigger_from_dart_null", nullptr, 0, nullptr,
+                            nullptr);
+  kind_latch.Wait();
+  send_and_observe_response("trigger_from_dart_empty", nullptr, 0, nullptr,
+                            nullptr);
+  kind_latch.Wait();
+  send_and_observe_response("trigger_from_dart_bytes", nullptr, 0, nullptr,
+                            nullptr);
+  kind_latch.Wait();
+
+  {
+    std::scoped_lock lock(mutex);
+    ASSERT_EQ(dart_observed_kinds.size(), 6u);
+    EXPECT_EQ(dart_observed_kinds[0], -1);  // to_dart null
+    EXPECT_EQ(dart_observed_kinds[1], 0);   // to_dart 0-byte non-null
+    EXPECT_EQ(dart_observed_kinds[2], 4);   // to_dart 4-byte
+    EXPECT_EQ(dart_observed_kinds[3], -1);  // reply to from_dart null
+    EXPECT_EQ(dart_observed_kinds[4], 0);   // reply to from_dart 0-byte
+    EXPECT_EQ(dart_observed_kinds[5], 3);   // reply to from_dart 3-byte
+
+    ASSERT_EQ(c_observed.size(), 3u);
+    EXPECT_FALSE(c_observed[0].non_null_ptr);
+    EXPECT_EQ(c_observed[0].size, 0u);
+    EXPECT_TRUE(c_observed[1].non_null_ptr);
+    EXPECT_EQ(c_observed[1].size, 0u);
+    EXPECT_TRUE(c_observed[2].non_null_ptr);
+    EXPECT_EQ(c_observed[2].size, 3u);
+  }
+
+  fml::AutoResetWaitableEvent kill_latch;
+  platform_task_runner->PostTask([&]() {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, ReceivedPlatformMessagePayloadsCanOutliveTheResponse) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("platform_messages_with_null_empty_and_bytes");
+
+  fml::AutoResetWaitableEvent ready_latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  fml::AutoResetWaitableEvent reply_latch;
+  context.AddFfiNativeCallback(
+      "NotifyPlatformMessageKind",
+      CREATE_FFI_LAMBDA([&](int64_t) { reply_latch.Signal(); }));
+
+  std::vector<FlutterPlatformMessagePayload> taken_payloads;
+  FlutterEngine raw_engine = nullptr;
+
+  builder.SetPlatformMessageCallback([&](const FlutterPlatformMessage* msg) {
+    if (std::string(msg->channel) == "from_dart") {
+      FlutterPlatformMessagePayload payload = {};
+      payload.struct_size = sizeof(FlutterPlatformMessagePayload);
+      EXPECT_EQ(FlutterPlatformMessageTakePayload(
+                    raw_engine, msg->response_handle, &payload),
+                kSuccess);
+      // Taking a second time on the same handle must fail with
+      // kInvalidArguments.
+      FlutterPlatformMessagePayload duplicate = {};
+      duplicate.struct_size = sizeof(FlutterPlatformMessagePayload);
+      EXPECT_EQ(FlutterPlatformMessageTakePayload(
+                    raw_engine, msg->response_handle, &duplicate),
+                kInvalidArguments);
+      taken_payloads.push_back(payload);
+    }
+    if (msg->response_handle != nullptr) {
+      // Reply immediately, destroying the response handle BEFORE the test
+      // inspects `taken_payloads`.
+      FlutterEngineSendPlatformMessageResponse(raw_engine, msg->response_handle,
+                                               nullptr, 0);
+    }
+  });
+
+  auto platform_task_runner = CreateNewThread("test_platform_thread");
+  UniqueEngine engine;
+  fml::AutoResetWaitableEvent init_latch;
+  platform_task_runner->PostTask([&]() {
+    engine = builder.InitializeEngine();
+    ASSERT_TRUE(engine.is_valid());
+    raw_engine = engine.get();
+    ASSERT_EQ(FlutterEngineRunInitialized(raw_engine), kSuccess);
+    init_latch.Signal();
+  });
+  init_latch.Wait();
+  ready_latch.Wait();
+
+  auto trigger = [&](const char* channel) {
+    platform_task_runner->PostTask([&, channel]() {
+      FlutterPlatformMessage message = {};
+      message.struct_size = sizeof(FlutterPlatformMessage);
+      message.channel = channel;
+      ASSERT_EQ(FlutterEngineSendPlatformMessage(engine.get(), &message),
+                kSuccess);
+    });
+    reply_latch.Wait();
+  };
+
+  trigger("trigger_from_dart_null");
+  trigger("trigger_from_dart_empty");
+  trigger("trigger_from_dart_bytes");
+
+  ASSERT_EQ(taken_payloads.size(), 3u);
+
+  // 1. Null payload: data is nullptr, destruction_callback is nullptr.
+  EXPECT_EQ(taken_payloads[0].data, nullptr);
+  EXPECT_EQ(taken_payloads[0].data_size, 0u);
+  EXPECT_EQ(taken_payloads[0].destruction_callback, nullptr);
+
+  // 2. 0-byte non-null payload: data is non-null, size is 0, destructor safe.
+  EXPECT_NE(taken_payloads[1].data, nullptr);
+  EXPECT_EQ(taken_payloads[1].data_size, 0u);
+  ASSERT_NE(taken_payloads[1].destruction_callback, nullptr);
+  taken_payloads[1].destruction_callback(taken_payloads[1].user_data);
+
+  // 3. 3-byte payload: buffer is still readable after the response handle was
+  //    destroyed by `FlutterEngineSendPlatformMessageResponse`.
+  ASSERT_NE(taken_payloads[2].data, nullptr);
+  ASSERT_EQ(taken_payloads[2].data_size, 3u);
+  EXPECT_EQ(taken_payloads[2].data[0], 0xAA);
+  EXPECT_EQ(taken_payloads[2].data[1], 0xBB);
+  EXPECT_EQ(taken_payloads[2].data[2], 0xCC);
+  ASSERT_NE(taken_payloads[2].destruction_callback, nullptr);
+  taken_payloads[2].destruction_callback(taken_payloads[2].user_data);
+
+  fml::AutoResetWaitableEvent kill_latch;
+  platform_task_runner->PostTask([&]() {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, PlatformMessageTakePayloadRejectsNullArguments) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterPlatformMessagePayload payload = {};
+  payload.struct_size = sizeof(FlutterPlatformMessagePayload);
+  EXPECT_EQ(FlutterPlatformMessageTakePayload(nullptr, nullptr, &payload),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterPlatformMessageTakePayload(engine.get(), nullptr, &payload),
+            kInvalidArguments);
+}
+
+TEST_F(EmbedderTest, ReceivedResponseHandleCanBeReleasedWithoutResponding) {
+  // Verify that an embedder shutting down with pending received handles can
+  // release them via `FlutterPlatformMessageReleaseResponseHandle` without
+  // leaking or crashing.
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("platform_messages_with_null_empty_and_bytes");
+
+  fml::AutoResetWaitableEvent ready_latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  fml::AutoResetWaitableEvent received_latch;
+  const FlutterPlatformMessageResponseHandle* pending_handle = nullptr;
+  FlutterEngine raw_engine = nullptr;
+
+  builder.SetPlatformMessageCallback([&](const FlutterPlatformMessage* msg) {
+    if (std::string(msg->channel) == "from_dart") {
+      pending_handle = msg->response_handle;
+      received_latch.Signal();
+    } else if (msg->response_handle != nullptr) {
+      FlutterPlatformMessageReleaseResponseHandle(
+          raw_engine, const_cast<FlutterPlatformMessageResponseHandle*>(
+                          msg->response_handle));
+    }
+  });
+
+  auto platform_task_runner = CreateNewThread("test_platform_thread");
+  UniqueEngine engine;
+  fml::AutoResetWaitableEvent init_latch;
+  platform_task_runner->PostTask([&]() {
+    engine = builder.InitializeEngine();
+    ASSERT_TRUE(engine.is_valid());
+    raw_engine = engine.get();
+    ASSERT_EQ(FlutterEngineRunInitialized(raw_engine), kSuccess);
+    init_latch.Signal();
+  });
+  init_latch.Wait();
+  ready_latch.Wait();
+
+  platform_task_runner->PostTask([&]() {
+    FlutterPlatformMessage message = {};
+    message.struct_size = sizeof(FlutterPlatformMessage);
+    message.channel = "trigger_from_dart_bytes";
+    ASSERT_EQ(FlutterEngineSendPlatformMessage(engine.get(), &message),
+              kSuccess);
+  });
+  received_latch.Wait();
+  ASSERT_NE(pending_handle, nullptr);
+
+  EXPECT_EQ(FlutterPlatformMessageReleaseResponseHandle(
+                engine.get(), const_cast<FlutterPlatformMessageResponseHandle*>(
+                                  pending_handle)),
+            kSuccess);
+
+  fml::AutoResetWaitableEvent kill_latch;
+  platform_task_runner->PostTask([&]() {
+    engine.reset();
+    kill_latch.Signal();
+  });
+  kill_latch.Wait();
+}
+
+TEST_F(EmbedderTest, ExtendedPointerEventFieldsReachTheFrameworkIntact) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetDartEntrypoint("pointer_data_packet_full");
+
+  fml::AutoResetWaitableEvent ready_latch;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  struct ObservedPointer {
+    int64_t embedder_id = 0;
+    int64_t platform_data = 0;
+    double distance = 0.0;
+    double distance_max = 0.0;
+    double size = 0.0;
+    double radius_major = 0.0;
+    double radius_minor = 0.0;
+    double radius_min = 0.0;
+    double radius_max = 0.0;
+    double orientation = 0.0;
+    double tilt = 0.0;
+  };
+  std::mutex mutex;
+  std::vector<ObservedPointer> observed;
+  fml::AutoResetWaitableEvent pointer_latch;
+
+  context.AddFfiNativeCallback(
+      "NotifyPointerDataPacketFull",
+      CREATE_FFI_LAMBDA([&](int64_t embedder_id, int64_t platform_data,
+                            double distance, double distance_max, double size,
+                            double radius_major, double radius_minor,
+                            double radius_min, double radius_max,
+                            double orientation, double tilt) {
+        {
+          std::scoped_lock lock(mutex);
+          observed.push_back({embedder_id, platform_data, distance,
+                              distance_max, size, radius_major, radius_minor,
+                              radius_min, radius_max, orientation, tilt});
+        }
+        pointer_latch.Signal();
+      }));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+
+  FlutterPointerEvent event = {};
+  event.struct_size = sizeof(FlutterPointerEvent);
+  event.phase = FlutterPointerPhase::kDown;
+  event.timestamp = 1234;
+  event.x = 100.0;
+  event.y = 200.0;
+  event.device = 7;
+  event.signal_kind = kFlutterPointerSignalKindNone;
+  event.device_kind = kFlutterPointerDeviceKindStylus;
+  event.buttons = kFlutterPointerButtonMousePrimary;
+  event.view_id = 0;
+  event.pressure = 0.5;
+  event.pressure_min = 0.0;
+  event.pressure_max = 1.0;
+  event.distance = 2.25;
+  event.distance_max = 10.5;
+  event.size = 0.375;
+  event.radius_major = 12.0;
+  event.radius_minor = 8.0;
+  event.radius_min = 1.0;
+  event.radius_max = 24.0;
+  event.orientation = 0.75;
+  event.tilt = 0.25;
+  event.platform_data = 42;
+  event.embedder_id = 9876543210LL;
+
+  ASSERT_EQ(FlutterEngineSendPointerEvent(engine.get(), &event, 1), kSuccess);
+  pointer_latch.Wait();
+
+  std::scoped_lock lock(mutex);
+  // PointerDataPacketConverter synthesizes an kAdd event before kDown for a
+  // newly seen device; both carry the pointer's extended fields.
+  ASSERT_GE(observed.size(), 1u);
+  const auto& last = observed.back();
+  EXPECT_EQ(last.embedder_id, 9876543210LL);
+  EXPECT_EQ(last.platform_data, 42);
+  EXPECT_DOUBLE_EQ(last.distance, 2.25);
+  EXPECT_DOUBLE_EQ(last.distance_max, 10.5);
+  EXPECT_DOUBLE_EQ(last.size, 0.375);
+  EXPECT_DOUBLE_EQ(last.radius_major, 12.0);
+  EXPECT_DOUBLE_EQ(last.radius_minor, 8.0);
+  EXPECT_DOUBLE_EQ(last.radius_min, 1.0);
+  EXPECT_DOUBLE_EQ(last.radius_max, 24.0);
+  EXPECT_DOUBLE_EQ(last.orientation, 0.75);
+  EXPECT_DOUBLE_EQ(last.tilt, 0.25);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

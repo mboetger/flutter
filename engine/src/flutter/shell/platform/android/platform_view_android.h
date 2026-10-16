@@ -11,12 +11,10 @@
 
 #include <android/hardware_buffer_jni.h>
 #include "flutter/fml/platform/android/scoped_java_ref.h"
-#include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/shell/common/platform_view.h"
 #include "flutter/shell/common/snapshot_surface_producer.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
-#include "flutter/shell/platform/android/platform_message_handler_android.h"
 #include "flutter/shell/platform/android/platform_view_android_delegate/platform_view_android_delegate.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
@@ -79,16 +77,6 @@ class PlatformViewAndroid final {
 
   void NotifyDestroyed();
 
-  void DispatchPlatformMessage(JNIEnv* env,
-                               std::string name,
-                               jobject message_data,
-                               jint message_position,
-                               jint response_id);
-
-  void DispatchEmptyPlatformMessage(JNIEnv* env,
-                                    std::string name,
-                                    jint response_id);
-
   void DispatchSemanticsAction(JNIEnv* env,
                                jint id,
                                jint action,
@@ -113,10 +101,6 @@ class PlatformViewAndroid final {
                                     const std::string error_message,
                                     bool transient);
 
-  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
-
-  void DispatchPointerDataPacket(std::unique_ptr<PointerDataPacket> packet);
-
   void RegisterTexture(std::shared_ptr<flutter::Texture> texture);
 
   void UpdateAssetResolverByType(
@@ -131,10 +115,6 @@ class PlatformViewAndroid final {
     return android_context_;
   }
 
-  std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler() const {
-    return platform_message_handler_;
-  }
-
   /// @brief Whether the SurfaceControl based swapchain is enabled and active.
   bool IsSurfaceControlEnabled() const;
 
@@ -147,8 +127,6 @@ class PlatformViewAndroid final {
   void SetApplicationLocale(std::string locale);
 
   void SetSemanticsTreeEnabled(bool enabled);
-
-  void HandlePlatformMessage(std::unique_ptr<flutter::PlatformMessage> message);
 
   void OnPreEngineRestart() const;
 
@@ -180,7 +158,6 @@ class PlatformViewAndroid final {
   PlatformViewAndroidDelegate platform_view_android_delegate_;
 
   std::unique_ptr<AndroidSurface> android_surface_;
-  std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
 
   void FireFirstFrameCallback();

@@ -21,6 +21,7 @@
 #include "flutter/shell/platform/embedder/embedder.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_thread_host.h"
+#include "flutter/shell/platform/embedder/platform_view_embedder.h"
 namespace flutter {
 
 struct ShellArgs;
@@ -181,6 +182,19 @@ class EmbedderEngine {
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderEngine);
 };
+
+//------------------------------------------------------------------------------
+/// @brief      Builds the `PlatformViewEmbedder` platform-message callback
+///             that wraps each incoming `PlatformMessage` in a
+///             `FlutterPlatformMessageResponseHandle` and invokes `callback`.
+///
+///             Defined in `embedder.cc`. Shared with in-process embedders that
+///             construct `PlatformViewEmbedder` directly but want to receive
+///             messages through the C-API `FlutterPlatformMessage` contract.
+///
+PlatformViewEmbedder::PlatformMessageResponseCallback
+MakePlatformMessageResponseCallback(FlutterPlatformMessageCallback callback,
+                                    void* user_data);
 
 }  // namespace flutter
 

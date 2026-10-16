@@ -383,47 +383,44 @@ static void SetViewportMetrics(JNIEnv* env,
                            &displayFeaturesState[0]);
   }
 
-  const flutter::ViewportMetrics metrics{
-      static_cast<double>(devicePixelRatio),  // p_device_pixel_ratio
-      static_cast<double>(physicalWidth),     // p_physical_width
-      static_cast<double>(physicalHeight),    // p_physical_height
-      static_cast<double>(physicalMinWidth),  // p_physical_min_width_constraint
-      static_cast<double>(physicalMaxWidth),  // p_physical_max_width_constraint
+  const flutter::AndroidViewportMetrics metrics{
+      static_cast<double>(devicePixelRatio),   // device_pixel_ratio
+      static_cast<double>(physicalWidth),      // physical_width
+      static_cast<double>(physicalHeight),     // physical_height
+      static_cast<double>(physicalMinWidth),   // physical_min_width_constraint
+      static_cast<double>(physicalMaxWidth),   // physical_max_width_constraint
+      static_cast<double>(physicalMinHeight),  // physical_min_height_constraint
+      static_cast<double>(physicalMaxHeight),  // physical_max_height_constraint
+      static_cast<double>(physicalPaddingTop),      // physical_padding_top
+      static_cast<double>(physicalPaddingRight),    // physical_padding_right
+      static_cast<double>(physicalPaddingBottom),   // physical_padding_bottom
+      static_cast<double>(physicalPaddingLeft),     // physical_padding_left
+      static_cast<double>(physicalViewInsetTop),    // physical_view_inset_top
+      static_cast<double>(physicalViewInsetRight),  // physical_view_inset_right
       static_cast<double>(
-          physicalMinHeight),  // p_physical_min_height_constraint
+          physicalViewInsetBottom),                // physical_view_inset_bottom
+      static_cast<double>(physicalViewInsetLeft),  // physical_view_inset_left
       static_cast<double>(
-          physicalMaxHeight),  // p_physical_max_height_constraint
-      static_cast<double>(physicalPaddingTop),     // p_physical_padding_top
-      static_cast<double>(physicalPaddingRight),   // p_physical_padding_right
-      static_cast<double>(physicalPaddingBottom),  // p_physical_padding_bottom
-      static_cast<double>(physicalPaddingLeft),    // p_physical_padding_left
-      static_cast<double>(physicalViewInsetTop),   // p_physical_view_inset_top
+          systemGestureInsetTop),  // physical_system_gesture_inset_top
       static_cast<double>(
-          physicalViewInsetRight),  // p_physical_view_inset_right
+          systemGestureInsetRight),  // physical_system_gesture_inset_right
       static_cast<double>(
-          physicalViewInsetBottom),  // p_physical_view_inset_bottom
-      static_cast<double>(physicalViewInsetLeft),  // p_physical_view_inset_left
+          systemGestureInsetBottom),  // physical_system_gesture_inset_bottom
       static_cast<double>(
-          systemGestureInsetTop),  // p_physical_system_gesture_inset_top
+          systemGestureInsetLeft),  // physical_system_gesture_inset_left
+      static_cast<double>(physicalTouchSlop),  // physical_touch_slop
+      displayFeaturesBounds,  // physical_display_features_bounds
+      displayFeaturesType,    // physical_display_features_type
+      displayFeaturesState,   // physical_display_features_state
+      0,                      // display_id
       static_cast<double>(
-          systemGestureInsetRight),  // p_physical_system_gesture_inset_right
+          physicalDisplayCornerRadiusTopLeft),  // top_left_corner_radius
       static_cast<double>(
-          systemGestureInsetBottom),  // p_physical_system_gesture_inset_bottom
+          physicalDisplayCornerRadiusTopRight),  // top_right_corner_radius
       static_cast<double>(
-          systemGestureInsetLeft),  // p_physical_system_gesture_inset_left
-      static_cast<double>(physicalTouchSlop),  // p_physical_touch_slop
-      displayFeaturesBounds,  // p_physical_display_features_bounds
-      displayFeaturesType,    // p_physical_display_features_type
-      displayFeaturesState,   // p_physical_display_features_state
-      0,                      // p_display_id,
+          physicalDisplayCornerRadiusBottomRight),  // bottom_right_corner_radius
       static_cast<double>(
-          physicalDisplayCornerRadiusTopLeft),  // p_physical_display_corner_radius_top_left
-      static_cast<double>(
-          physicalDisplayCornerRadiusTopRight),  // p_physical_display_corner_radius_top_right
-      static_cast<double>(
-          physicalDisplayCornerRadiusBottomRight),  // p_physical_display_corner_radius_bottom_right
-      static_cast<double>(
-          physicalDisplayCornerRadiusBottomLeft),  // p_physical_display_corner_radius_bottom_left
+          physicalDisplayCornerRadiusBottomLeft),  // bottom_left_corner_radius
   };
 
   ANDROID_SHELL_HOLDER->SetViewportMetrics(kFlutterImplicitViewId, metrics);
@@ -481,10 +478,11 @@ static void DispatchPlatformMessage(JNIEnv* env,
                                     jobject message,
                                     jint position,
                                     jint responseId) {
+  const void* message_data =
+      message != nullptr ? env->GetDirectBufferAddress(message) : nullptr;
   ANDROID_SHELL_HOLDER->DispatchPlatformMessage(
-      env,                                         //
       fml::jni::JavaStringToString(env, channel),  //
-      message,                                     //
+      message_data,                                //
       position,                                    //
       responseId                                   //
   );
@@ -496,7 +494,6 @@ static void DispatchEmptyPlatformMessage(JNIEnv* env,
                                          jstring channel,
                                          jint responseId) {
   ANDROID_SHELL_HOLDER->DispatchEmptyPlatformMessage(
-      env,                                         //
       fml::jni::JavaStringToString(env, channel),  //
       responseId                                   //
   );
@@ -505,8 +502,11 @@ static void DispatchEmptyPlatformMessage(JNIEnv* env,
 static void CleanupMessageData(JNIEnv* env,
                                jobject jcaller,
                                jlong message_data) {
-  // Called from any thread.
-  free(reinterpret_cast<void*>(message_data));
+  // Called from any thread. `message_data` is the raw pointer to a
+  // heap-allocated `FlutterPlatformMessagePayload` released from
+  // `UniquePlatformMessagePayload` in `FlutterViewHandlePlatformMessage`.
+  UniquePlatformMessagePayload(
+      reinterpret_cast<FlutterPlatformMessagePayload*>(message_data));
 }
 
 static void DispatchPointerDataPacket(JNIEnv* env,
@@ -514,9 +514,9 @@ static void DispatchPointerDataPacket(JNIEnv* env,
                                       jlong shell_holder,
                                       jobject buffer,
                                       jint position) {
-  uint8_t* data = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
-  auto packet = std::make_unique<flutter::PointerDataPacket>(data, position);
-  ANDROID_SHELL_HOLDER->DispatchPointerDataPacket(std::move(packet));
+  const uint8_t* data =
+      static_cast<const uint8_t*>(env->GetDirectBufferAddress(buffer));
+  ANDROID_SHELL_HOLDER->DispatchPointerDataPacket(data, position);
 }
 
 static void DispatchSemanticsAction(JNIEnv* env,
@@ -605,21 +605,21 @@ static void InvokePlatformMessageResponseCallback(JNIEnv* env,
                                                   jint responseId,
                                                   jobject message,
                                                   jint position) {
-  uint8_t* response_data =
-      static_cast<uint8_t*>(env->GetDirectBufferAddress(message));
+  if (position < 0) {
+    return;
+  }
+  const uint8_t* response_data =
+      static_cast<const uint8_t*>(env->GetDirectBufferAddress(message));
   FML_DCHECK(response_data != nullptr);
-  auto mapping = std::make_unique<fml::MallocMapping>(
-      fml::MallocMapping::Copy(response_data, response_data + position));
-  ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
-      ->InvokePlatformMessageResponseCallback(responseId, std::move(mapping));
+  ANDROID_SHELL_HOLDER->InvokePlatformMessageResponseCallback(
+      responseId, response_data, static_cast<size_t>(position));
 }
 
 static void InvokePlatformMessageEmptyResponseCallback(JNIEnv* env,
                                                        jobject jcaller,
                                                        jlong shell_holder,
                                                        jint responseId) {
-  ANDROID_SHELL_HOLDER->GetPlatformMessageHandler()
-      ->InvokePlatformMessageEmptyResponseCallback(responseId);
+  ANDROID_SHELL_HOLDER->InvokePlatformMessageEmptyResponseCallback(responseId);
 }
 
 static void NotifyLowMemoryWarning(JNIEnv* env,
@@ -1364,7 +1364,8 @@ PlatformViewAndroidJNIImpl::PlatformViewAndroidJNIImpl(
 PlatformViewAndroidJNIImpl::~PlatformViewAndroidJNIImpl() = default;
 
 void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
-    std::unique_ptr<flutter::PlatformMessage> message,
+    const std::string& channel,
+    UniquePlatformMessagePayload payload,
     int responseId) {
   // Called from any thread.
   JNIEnv* env = fml::jni::AttachCurrentThread();
@@ -1375,21 +1376,22 @@ void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessage(
   }
 
   fml::jni::ScopedJavaLocalRef<jstring> java_channel =
-      fml::jni::StringToJavaString(env, message->channel());
+      fml::jni::StringToJavaString(env, channel);
 
-  if (message->hasData()) {
+  if (payload != nullptr && payload->data != nullptr) {
     fml::jni::ScopedJavaLocalRef<jobject> message_array(
-        env, env->NewDirectByteBuffer(
-                 const_cast<uint8_t*>(message->data().GetMapping()),
-                 message->data().GetSize()));
-    // Message data is deleted in CleanupMessageData.
-    fml::MallocMapping mapping = message->releaseData();
+        env, env->NewDirectByteBuffer(const_cast<uint8_t*>(payload->data),
+                                      payload->data_size));
+    // Ownership of `payload` transfers to Java and is reclaimed in
+    // `CleanupMessageData` via `FlutterJNI.cleanupMessageData`.
+    jlong message_data_cookie = reinterpret_cast<jlong>(payload.release());
     env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
                         java_channel.obj(), message_array.obj(), responseId,
-                        reinterpret_cast<jlong>(mapping.Release()));
+                        message_data_cookie);
   } else {
     env->CallVoidMethod(java_object.obj(), g_handle_platform_message_method,
-                        java_channel.obj(), nullptr, responseId, nullptr);
+                        java_channel.obj(), nullptr, responseId,
+                        static_cast<jlong>(0));
   }
 
   FML_CHECK(fml::jni::CheckException(env));

@@ -339,6 +339,49 @@ using SetSemanticsEnabledFn = void (*)(JNIEnv*, jobject, jlong, jboolean);
 using SetAccessibilityFeaturesFn = void (*)(JNIEnv*, jobject, jlong, jint);
 using ScheduleFrameFn = void (*)(JNIEnv*, jobject, jlong);
 using UpdateDisplayMetricsFn = void (*)(JNIEnv*, jobject, jlong);
+using SetViewportMetricsFn = void (*)(JNIEnv*,
+                                      jobject,
+                                      jlong,
+                                      jfloat,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jintArray,
+                                      jintArray,
+                                      jintArray,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint,
+                                      jint);
+using DispatchPlatformMessageFn =
+    void (*)(JNIEnv*, jobject, jlong, jstring, jobject, jint, jint);
+using DispatchEmptyPlatformMessageFn =
+    void (*)(JNIEnv*, jobject, jlong, jstring, jint);
+using DispatchPointerDataPacketFn =
+    void (*)(JNIEnv*, jobject, jlong, jobject, jint);
+using CleanupMessageDataFn = void (*)(JNIEnv*, jobject, jlong);
+using InvokePlatformMessageResponseCallbackFn =
+    void (*)(JNIEnv*, jobject, jlong, jint, jobject, jint);
+using InvokePlatformMessageEmptyResponseCallbackFn = void (*)(JNIEnv*,
+                                                              jobject,
+                                                              jlong,
+                                                              jint);
 
 // Runs PlatformViewAndroid::Register against |mock_env| and returns the
 // function registered for the FlutterJNI native called |name|, or nullptr.
@@ -593,6 +636,407 @@ TEST_F(PlatformViewAndroidJNIImplTest, UpdateDisplayMetricsCallsEmbedderApi) {
   EXPECT_EQ(displays[0].width, static_cast<size_t>(kExpectedWidth));
   EXPECT_EQ(displays[0].height, static_cast<size_t>(kExpectedHeight));
   EXPECT_DOUBLE_EQ(displays[0].device_pixel_ratio, kExpectedDensity);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       SetViewportMetricsCallsEmbedderApiWithDisplayFeaturesAndCornerRadii) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+  auto set_viewport_metrics = reinterpret_cast<SetViewportMetricsFn>(
+      RegisterNativesAndFind(mock_env, "nativeSetViewportMetrics"));
+  ASSERT_NE(set_viewport_metrics, nullptr);
+
+  const jintArray kBoundsArray = reinterpret_cast<jintArray>(0x401);
+  const jintArray kTypeArray = reinterpret_cast<jintArray>(0x402);
+  const jintArray kStateArray = reinterpret_cast<jintArray>(0x403);
+  EXPECT_CALL(mock_env, GetArrayLength(kBoundsArray)).WillOnce(Return(4));
+  EXPECT_CALL(mock_env, GetArrayLength(kTypeArray)).WillOnce(Return(1));
+  EXPECT_CALL(mock_env, GetArrayLength(kStateArray)).WillOnce(Return(1));
+  EXPECT_CALL(mock_env, GetIntArrayRegion(kBoundsArray, 0, 4, _))
+      .WillOnce([](jintArray, jsize, jsize, jint* buf) {
+        buf[0] = 10;
+        buf[1] = 20;
+        buf[2] = 30;
+        buf[3] = 40;
+      });
+  EXPECT_CALL(mock_env, GetIntArrayRegion(kTypeArray, 0, 1, _))
+      .WillOnce([](jintArray, jsize, jsize, jint* buf) {
+        buf[0] = static_cast<jint>(kFlutterDisplayFeatureTypeHinge);
+      });
+  EXPECT_CALL(mock_env, GetIntArrayRegion(kStateArray, 0, 1, _))
+      .WillOnce([](jintArray, jsize, jsize, jint* buf) {
+        buf[0] =
+            static_cast<jint>(kFlutterDisplayFeatureStatePostureHalfOpened);
+      });
+
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
+  ASSERT_TRUE(holder->IsValid());
+
+  bool called = false;
+  FlutterWindowMetricsEvent captured = {};
+  FlutterDisplayFeature captured_feature = {};
+  FlutterDisplayCornerRadii captured_radii = {};
+  bool had_corner_radii = false;
+  holder->GetEmbedderApiForTesting().SendWindowMetricsEvent = MOCK_ENGINE_PROC(
+      SendWindowMetricsEvent,
+      ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+           const FlutterWindowMetricsEvent* event) -> FlutterEngineResult {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_NE(event, nullptr);
+        if (event == nullptr) {
+          return kInvalidArguments;
+        }
+        called = true;
+        captured = *event;
+        if (event->display_features_count > 0 &&
+            event->display_features != nullptr &&
+            event->display_features[0] != nullptr) {
+          captured_feature = *event->display_features[0];
+        }
+        if (event->display_corner_radii != nullptr) {
+          had_corner_radii = true;
+          captured_radii = *event->display_corner_radii;
+        }
+        return kSuccess;
+      }));
+
+  set_viewport_metrics(&mock_env, reinterpret_cast<jobject>(123),
+                       reinterpret_cast<jlong>(holder.get()),
+                       /*devicePixelRatio=*/2.5f,
+                       /*physicalWidth=*/1080,
+                       /*physicalHeight=*/2400,
+                       /*physicalPaddingTop=*/50,
+                       /*physicalPaddingRight=*/10,
+                       /*physicalPaddingBottom=*/80,
+                       /*physicalPaddingLeft=*/15,
+                       /*physicalViewInsetTop=*/0,
+                       /*physicalViewInsetRight=*/0,
+                       /*physicalViewInsetBottom=*/600,
+                       /*physicalViewInsetLeft=*/0,
+                       /*systemGestureInsetTop=*/12,
+                       /*systemGestureInsetRight=*/24,
+                       /*systemGestureInsetBottom=*/36,
+                       /*systemGestureInsetLeft=*/48,
+                       /*physicalTouchSlop=*/18, kBoundsArray, kTypeArray,
+                       kStateArray,
+                       /*physicalMinWidth=*/500,
+                       /*physicalMaxWidth=*/1080,
+                       /*physicalMinHeight=*/800,
+                       /*physicalMaxHeight=*/2400,
+                       /*physicalDisplayCornerRadiusTopLeft=*/32,
+                       /*physicalDisplayCornerRadiusTopRight=*/33,
+                       /*physicalDisplayCornerRadiusBottomRight=*/34,
+                       /*physicalDisplayCornerRadiusBottomLeft=*/35);
+
+  ASSERT_TRUE(called);
+  EXPECT_EQ(captured.width, 1080u);
+  EXPECT_EQ(captured.height, 2400u);
+  EXPECT_DOUBLE_EQ(captured.pixel_ratio, 2.5);
+  EXPECT_DOUBLE_EQ(captured.physical_padding.top, 50.0);
+  EXPECT_DOUBLE_EQ(captured.physical_padding.right, 10.0);
+  EXPECT_DOUBLE_EQ(captured.physical_padding.bottom, 80.0);
+  EXPECT_DOUBLE_EQ(captured.physical_padding.left, 15.0);
+  EXPECT_DOUBLE_EQ(captured.physical_view_inset_bottom, 600.0);
+  EXPECT_DOUBLE_EQ(captured.physical_system_gesture_insets.top, 12.0);
+  EXPECT_DOUBLE_EQ(captured.physical_system_gesture_insets.right, 24.0);
+  EXPECT_DOUBLE_EQ(captured.physical_system_gesture_insets.bottom, 36.0);
+  EXPECT_DOUBLE_EQ(captured.physical_system_gesture_insets.left, 48.0);
+  EXPECT_DOUBLE_EQ(captured.physical_touch_slop, 18.0);
+  EXPECT_TRUE(captured.has_constraints);
+  EXPECT_EQ(captured.min_width_constraint, 500u);
+  EXPECT_EQ(captured.max_width_constraint, 1080u);
+  EXPECT_EQ(captured.min_height_constraint, 800u);
+  EXPECT_EQ(captured.max_height_constraint, 2400u);
+  ASSERT_TRUE(had_corner_radii);
+  EXPECT_DOUBLE_EQ(captured_radii.top_left, 32.0);
+  EXPECT_DOUBLE_EQ(captured_radii.top_right, 33.0);
+  EXPECT_DOUBLE_EQ(captured_radii.bottom_right, 34.0);
+  EXPECT_DOUBLE_EQ(captured_radii.bottom_left, 35.0);
+  ASSERT_EQ(captured.display_features_count, 1u);
+  EXPECT_DOUBLE_EQ(captured_feature.bounds.left, 10.0);
+  EXPECT_DOUBLE_EQ(captured_feature.bounds.top, 20.0);
+  EXPECT_DOUBLE_EQ(captured_feature.bounds.right, 30.0);
+  EXPECT_DOUBLE_EQ(captured_feature.bounds.bottom, 40.0);
+  EXPECT_EQ(captured_feature.type, kFlutterDisplayFeatureTypeHinge);
+  EXPECT_EQ(captured_feature.state,
+            kFlutterDisplayFeatureStatePostureHalfOpened);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       SetViewportMetricsRejectsInvalidPixelRatioWithoutCallingEmbedderApi) {
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
+  ASSERT_TRUE(holder->IsValid());
+
+  int calls = 0;
+  holder->GetEmbedderApiForTesting().SendWindowMetricsEvent = MOCK_ENGINE_PROC(
+      SendWindowMetricsEvent, ([&](FLUTTER_API_SYMBOL(FlutterEngine),
+                                   const FlutterWindowMetricsEvent*) {
+        calls++;
+        return kSuccess;
+      }));
+
+  AndroidViewportMetrics invalid_metrics;
+  invalid_metrics.device_pixel_ratio = 0.0;
+  invalid_metrics.physical_width = 100;
+  invalid_metrics.physical_height = 100;
+  holder->SetViewportMetrics(0, invalid_metrics);
+  EXPECT_EQ(calls, 0);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       DispatchPlatformMessageAndEmptyMessageCallEmbedderApi) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+  auto dispatch_msg = reinterpret_cast<DispatchPlatformMessageFn>(
+      RegisterNativesAndFind(mock_env, "nativeDispatchPlatformMessage"));
+  auto dispatch_empty = reinterpret_cast<DispatchEmptyPlatformMessageFn>(
+      RegisterNativesAndFind(mock_env, "nativeDispatchEmptyPlatformMessage"));
+  ASSERT_NE(dispatch_msg, nullptr);
+  ASSERT_NE(dispatch_empty, nullptr);
+
+  static constexpr jchar kChannelChars[] = {'t', 'e', 's', 't'};
+  const jstring kJavaChannel = reinterpret_cast<jstring>(0x501);
+  const jobject kJavaBuffer = reinterpret_cast<jobject>(0x502);
+  const uint8_t kPayload[3] = {7, 8, 9};
+  EXPECT_CALL(mock_env, GetStringChars(kJavaChannel, _))
+      .WillRepeatedly(Return(kChannelChars));
+  EXPECT_CALL(mock_env, GetStringLength(kJavaChannel))
+      .WillRepeatedly(Return(4));
+  EXPECT_CALL(mock_env, ReleaseStringChars(kJavaChannel, kChannelChars))
+      .WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(kJavaBuffer))
+      .WillRepeatedly(Return(const_cast<uint8_t*>(kPayload)));
+
+  auto jni = std::make_shared<JNIMock>();
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  struct SentMessage {
+    std::string channel;
+    bool non_null_ptr = false;
+    std::vector<uint8_t> bytes;
+    bool has_response_handle = false;
+  };
+  std::vector<SentMessage> sent;
+  FlutterDataCallback saved_callback = nullptr;
+  void* saved_user_data = nullptr;
+  int released_handles = 0;
+
+  auto& api = holder->GetEmbedderApiForTesting();
+  api.PlatformMessageCreateResponseHandle = MOCK_ENGINE_PROC(
+      PlatformMessageCreateResponseHandle,
+      ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+           FlutterDataCallback data_callback, void* user_data,
+           FlutterPlatformMessageResponseHandle** response_out) {
+        saved_callback = data_callback;
+        saved_user_data = user_data;
+        *response_out =
+            reinterpret_cast<FlutterPlatformMessageResponseHandle*>(0x7777);
+        return kSuccess;
+      }));
+  api.PlatformMessageReleaseResponseHandle = MOCK_ENGINE_PROC(
+      PlatformMessageReleaseResponseHandle,
+      ([&](FLUTTER_API_SYMBOL(FlutterEngine),
+           FlutterPlatformMessageResponseHandle* handle) {
+        EXPECT_EQ(
+            handle,
+            reinterpret_cast<FlutterPlatformMessageResponseHandle*>(0x7777));
+        released_handles++;
+        return kSuccess;
+      }));
+  api.SendPlatformMessage = MOCK_ENGINE_PROC(
+      SendPlatformMessage, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                const FlutterPlatformMessage* message) {
+        SentMessage m;
+        m.channel = message->channel;
+        m.non_null_ptr = (message->message != nullptr);
+        if (message->message != nullptr && message->message_size > 0) {
+          m.bytes.assign(message->message,
+                         message->message + message->message_size);
+        }
+        m.has_response_handle = (message->response_handle != nullptr);
+        sent.push_back(std::move(m));
+        return kSuccess;
+      }));
+
+  // 1. Non-empty platform message with responseId = 42.
+  dispatch_msg(&mock_env, reinterpret_cast<jobject>(123),
+               reinterpret_cast<jlong>(holder.get()), kJavaChannel, kJavaBuffer,
+               3, 42);
+  ASSERT_EQ(sent.size(), 1u);
+  EXPECT_EQ(sent[0].channel, "test");
+  EXPECT_TRUE(sent[0].non_null_ptr);
+  EXPECT_THAT(sent[0].bytes, ElementsAre(7, 8, 9));
+  EXPECT_TRUE(sent[0].has_response_handle);
+  EXPECT_EQ(released_handles, 1);
+
+  // Simulate Dart replying to responseId 42 through the C-API data callback.
+  ASSERT_NE(saved_callback, nullptr);
+  const uint8_t kReplyBytes[2] = {0x11, 0x22};
+  EXPECT_CALL(*jni, FlutterViewHandlePlatformMessageResponse(42, _))
+      .WillOnce([](int id, std::unique_ptr<fml::Mapping> data) {
+        ASSERT_NE(data, nullptr);
+        ASSERT_EQ(data->GetSize(), 2u);
+        EXPECT_EQ(data->GetMapping()[0], 0x11);
+        EXPECT_EQ(data->GetMapping()[1], 0x22);
+      });
+  saved_callback(kReplyBytes, sizeof(kReplyBytes), saved_user_data);
+
+  // 2. Empty platform message (`message == nullptr, size == 0`) with no
+  //    response callback (`responseId == 0`).
+  dispatch_empty(&mock_env, reinterpret_cast<jobject>(123),
+                 reinterpret_cast<jlong>(holder.get()), kJavaChannel, 0);
+  ASSERT_EQ(sent.size(), 2u);
+  EXPECT_EQ(sent[1].channel, "test");
+  EXPECT_FALSE(sent[1].non_null_ptr);
+  EXPECT_TRUE(sent[1].bytes.empty());
+  EXPECT_FALSE(sent[1].has_response_handle);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       DispatchPointerDataPacketUnpacksAndCallsSendPointerEvent) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+  auto dispatch_pointer = reinterpret_cast<DispatchPointerDataPacketFn>(
+      RegisterNativesAndFind(mock_env, "nativeDispatchPointerDataPacket"));
+  ASSERT_NE(dispatch_pointer, nullptr);
+
+  // Build a 36-field (288-byte) serialized PointerData record matching
+  // `AndroidTouchProcessor.java`.
+  struct RawRecord {
+    int64_t embedder_id;
+    int64_t time_stamp;
+    int64_t change;
+    int64_t kind;
+    int64_t signal_kind;
+    int64_t device;
+    int64_t pointer_identifier;
+    double physical_x;
+    double physical_y;
+    double physical_delta_x;
+    double physical_delta_y;
+    int64_t buttons;
+    int64_t obscured;
+    int64_t synthesized;
+    double pressure;
+    double pressure_min;
+    double pressure_max;
+    double distance;
+    double distance_max;
+    double size;
+    double radius_major;
+    double radius_minor;
+    double radius_min;
+    double radius_max;
+    double orientation;
+    double tilt;
+    int64_t platform_data;
+    double scroll_delta_x;
+    double scroll_delta_y;
+    double pan_x;
+    double pan_y;
+    double pan_delta_x;
+    double pan_delta_y;
+    double scale;
+    double rotation;
+    int64_t view_id;
+  };
+  static_assert(sizeof(RawRecord) == 36 * sizeof(int64_t));
+
+  RawRecord raw = {};
+  raw.embedder_id = 777;
+  raw.time_stamp = 5000;
+  raw.change = 4;       // kDown
+  raw.kind = 2;         // kStylus
+  raw.signal_kind = 0;  // kNone
+  raw.device = 3;
+  raw.physical_x = 120.5;
+  raw.physical_y = 340.25;
+  raw.buttons = 1;
+  raw.pressure = 0.8;
+  raw.pressure_min = 0.0;
+  raw.pressure_max = 1.0;
+  raw.distance = 1.5;
+  raw.distance_max = 9.0;
+  raw.size = 0.4;
+  raw.radius_major = 11.0;
+  raw.radius_minor = 7.0;
+  raw.radius_min = 0.5;
+  raw.radius_max = 20.0;
+  raw.orientation = 0.3;
+  raw.tilt = 0.6;
+  raw.platform_data = 99;
+  raw.scale = 1.0;
+  raw.view_id = 0;
+
+  const jobject kJavaBuffer = reinterpret_cast<jobject>(0x601);
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(kJavaBuffer))
+      .WillOnce(Return(&raw));
+
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
+  ASSERT_TRUE(holder->IsValid());
+
+  std::vector<FlutterPointerEvent> events;
+  holder->GetEmbedderApiForTesting().SendPointerEvent = MOCK_ENGINE_PROC(
+      SendPointerEvent,
+      ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+           const FlutterPointerEvent* pointers, size_t events_count) {
+        EXPECT_NE(engine, nullptr);
+        for (size_t i = 0; i < events_count; ++i) {
+          events.push_back(pointers[i]);
+        }
+        return kSuccess;
+      }));
+
+  dispatch_pointer(&mock_env, reinterpret_cast<jobject>(123),
+                   reinterpret_cast<jlong>(holder.get()), kJavaBuffer,
+                   static_cast<jint>(sizeof(RawRecord)));
+
+  ASSERT_EQ(events.size(), 1u);
+  EXPECT_EQ(events[0].phase, FlutterPointerPhase::kDown);
+  EXPECT_EQ(events[0].timestamp, 5000u);
+  EXPECT_DOUBLE_EQ(events[0].x, 120.5);
+  EXPECT_DOUBLE_EQ(events[0].y, 340.25);
+  EXPECT_EQ(events[0].device, 3);
+  EXPECT_EQ(events[0].device_kind, kFlutterPointerDeviceKindStylus);
+  EXPECT_EQ(events[0].buttons, 1);
+  EXPECT_DOUBLE_EQ(events[0].pressure, 0.8);
+  EXPECT_DOUBLE_EQ(events[0].pressure_max, 1.0);
+  EXPECT_DOUBLE_EQ(events[0].distance, 1.5);
+  EXPECT_DOUBLE_EQ(events[0].distance_max, 9.0);
+  EXPECT_DOUBLE_EQ(events[0].size, 0.4);
+  EXPECT_DOUBLE_EQ(events[0].radius_major, 11.0);
+  EXPECT_DOUBLE_EQ(events[0].radius_minor, 7.0);
+  EXPECT_DOUBLE_EQ(events[0].radius_min, 0.5);
+  EXPECT_DOUBLE_EQ(events[0].radius_max, 20.0);
+  EXPECT_DOUBLE_EQ(events[0].orientation, 0.3);
+  EXPECT_DOUBLE_EQ(events[0].tilt, 0.6);
+  EXPECT_EQ(events[0].platform_data, 99);
+  EXPECT_EQ(events[0].embedder_id, 777);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       CleanupMessageDataInvokesPayloadDestructionCallback) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+  auto cleanup_fn = reinterpret_cast<CleanupMessageDataFn>(
+      RegisterNativesAndFind(mock_env, "nativeCleanupMessageData"));
+  ASSERT_NE(cleanup_fn, nullptr);
+
+  bool destroyed = false;
+  auto* payload = new FlutterPlatformMessagePayload{
+      .struct_size = sizeof(FlutterPlatformMessagePayload),
+      .data = reinterpret_cast<const uint8_t*>(0x1),
+      .data_size = 1,
+      .user_data = &destroyed,
+      .destruction_callback = [](void* ud) { *static_cast<bool*>(ud) = true; },
+  };
+  cleanup_fn(&mock_env, reinterpret_cast<jobject>(123),
+             reinterpret_cast<jlong>(payload));
+  EXPECT_TRUE(destroyed);
 }
 
 // The load order is exercised with an injected loader rather than real

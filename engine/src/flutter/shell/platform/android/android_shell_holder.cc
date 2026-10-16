@@ -8,16 +8,18 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <algorithm>
+#include <cstring>
 #include <memory>
 #include <optional>
-
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "common/settings.h"
 #include "flutter/fml/cpu_affinity.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
+#include "flutter/fml/trace_event.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
@@ -31,7 +33,8 @@ namespace flutter {
 
 static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
     PlatformViewAndroid* platform_view,
-    const std::shared_ptr<VsyncWaiterAndroid>& vsync_waiter) {
+    const std::shared_ptr<VsyncWaiterAndroid>& vsync_waiter,
+    PlatformMessageHandlerAndroid* message_handler) {
   PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
   dispatch_table.update_semantics_callback =
       [platform_view](int64_t view_id, flutter::SemanticsNodeUpdates update,
@@ -40,9 +43,15 @@ static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
                                        std::move(actions));
       };
   dispatch_table.platform_message_response_callback =
-      [platform_view](std::unique_ptr<PlatformMessage> message) {
-        platform_view->HandlePlatformMessage(std::move(message));
-      };
+      MakePlatformMessageResponseCallback(
+          [](const FlutterPlatformMessage* message, void* user_data) {
+            if (message != nullptr && user_data != nullptr) {
+              static_cast<PlatformMessageHandlerAndroid*>(user_data)
+                  ->HandlePlatformMessage(*message);
+            }
+          },
+          message_handler);
+  dispatch_table.enable_direct_platform_message_dispatch = true;
   dispatch_table.compute_platform_resolved_locale_callback =
       [platform_view](const std::vector<std::string>& supported_locale_data) {
         return platform_view->ComputePlatformResolvedLocales(
@@ -87,8 +96,6 @@ static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
       [platform_view](bool enabled) {
         platform_view->SetSemanticsTreeEnabled(enabled);
       };
-  dispatch_table.custom_platform_message_handler =
-      platform_view->GetPlatformMessageHandler();
   return dispatch_table;
 }
 
@@ -216,10 +223,14 @@ AndroidShellHolder::AndroidShellHolder(
 
   fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
   std::shared_ptr<VsyncWaiterAndroid> vsync_waiter;
+  platform_message_handler_ =
+      std::make_shared<PlatformMessageHandlerAndroid>(jni_facade);
+  PlatformMessageHandlerAndroid* message_handler_raw =
+      platform_message_handler_.get();
   AndroidRenderingAPI rendering_api = android_rendering_api_;
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [this, &jni_facade, &weak_platform_view, &vsync_waiter,
-       rendering_api](Shell& shell) {
+       message_handler_raw, rendering_api](Shell& shell) {
         vsync_waiter =
             std::make_shared<VsyncWaiterAndroid>(shell.GetTaskRunners());
         platform_view_android_ = std::make_unique<PlatformViewAndroid>(
@@ -232,7 +243,8 @@ AndroidShellHolder::AndroidShellHolder(
         auto platform_view_embedder = std::make_unique<PlatformViewEmbedder>(
             shell, shell.GetTaskRunners(),
             std::unique_ptr<EmbedderSurface>(nullptr),
-            CreateDispatchTable(platform_view_android_.get(), vsync_waiter),
+            CreateDispatchTable(platform_view_android_.get(), vsync_waiter,
+                                message_handler_raw),
             nullptr);
         platform_view_android_->SetPlatformView(
             platform_view_embedder->GetWeakPtr());
@@ -301,8 +313,7 @@ AndroidShellHolder::AndroidShellHolder(
 
   platform_view_ = weak_platform_view;
   FML_DCHECK(platform_view_);
-  platform_message_handler_ =
-      platform_view_android_->GetPlatformMessageHandler();
+  platform_message_handler_->Attach(engine_.get(), &embedder_api_);
   vsync_waiter_ = std::move(vsync_waiter);
   AttachVsyncWaiter(vsync_waiter_.get(), engine_.get(), &embedder_api_);
   is_valid_ = engine_ != nullptr;
@@ -316,12 +327,14 @@ AndroidShellHolder::AndroidShellHolder(
     std::unique_ptr<APKAssetProvider> apk_asset_provider,
     std::unique_ptr<PlatformViewAndroid> platform_view_android,
     const fml::WeakPtr<PlatformViewAndroid>& platform_view,
+    std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler,
     std::shared_ptr<VsyncWaiterAndroid> vsync_waiter,
     AndroidRenderingAPI rendering_api)
     : settings_(settings),
       jni_facade_(jni_facade),
       platform_view_android_(std::move(platform_view_android)),
       platform_view_(platform_view),
+      platform_message_handler_(std::move(platform_message_handler)),
       thread_host_(thread_host),
       engine_(std::move(engine)),
       embedder_api_(LoadEmbedderApi()),
@@ -332,9 +345,9 @@ AndroidShellHolder::AndroidShellHolder(
   FML_DCHECK(engine_);
   FML_DCHECK(platform_view_android_);
   FML_DCHECK(platform_view_);
+  FML_DCHECK(platform_message_handler_);
   FML_DCHECK(thread_host_);
-  platform_message_handler_ =
-      platform_view_android_->GetPlatformMessageHandler();
+  platform_message_handler_->Attach(engine_.get(), &embedder_api_);
   // The spawned engine may already wait for a vsync; see VsyncWaiterAndroid.
   AttachVsyncWaiter(vsync_waiter_.get(), engine_.get(), &embedder_api_);
   is_valid_ = engine_ != nullptr;
@@ -344,6 +357,9 @@ AndroidShellHolder::AndroidShellHolder(
 AndroidShellHolder::~AndroidShellHolder() {
   if (vsync_waiter_) {
     vsync_waiter_->Detach();
+  }
+  if (platform_message_handler_) {
+    platform_message_handler_->ReleasePendingResponses();
   }
   engine_.reset();
   thread_host_.reset();
@@ -391,9 +407,14 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   // This is a synchronous call, so the captures don't have race checks.
   std::shared_ptr<VsyncWaiterAndroid> vsync_waiter;
+  auto spawned_message_handler =
+      std::make_shared<PlatformMessageHandlerAndroid>(jni_facade);
+  PlatformMessageHandlerAndroid* spawned_message_handler_raw =
+      spawned_message_handler.get();
   Shell::CreateCallback<PlatformView> on_create_platform_view =
       [&jni_facade, android_context, &spawned_platform_view_android,
-       &weak_platform_view, &vsync_waiter](Shell& shell) {
+       &weak_platform_view, &vsync_waiter,
+       spawned_message_handler_raw](Shell& shell) {
         vsync_waiter =
             std::make_shared<VsyncWaiterAndroid>(shell.GetTaskRunners());
         spawned_platform_view_android = std::make_unique<PlatformViewAndroid>(
@@ -407,7 +428,7 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
             shell, shell.GetTaskRunners(),
             std::unique_ptr<EmbedderSurface>(nullptr),
             CreateDispatchTable(spawned_platform_view_android.get(),
-                                vsync_waiter),
+                                vsync_waiter, spawned_message_handler_raw),
             nullptr);
         spawned_platform_view_android->SetPlatformView(
             platform_view_embedder->GetWeakPtr());
@@ -437,8 +458,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
       GetSettings(), jni_facade, thread_host_, std::move(engine),
       apk_asset_provider_->Clone(), std::move(spawned_platform_view_android),
-      weak_platform_view, std::move(vsync_waiter),
-      android_context->RenderingApi()));
+      weak_platform_view, std::move(spawned_message_handler),
+      std::move(vsync_waiter), android_context->RenderingApi()));
 }
 
 void AndroidShellHolder::Launch(
@@ -514,30 +535,507 @@ void AndroidShellHolder::NotifySurfaceDestroyed() {
   GetPlatformView()->NotifyDestroyed();
 }
 
-void AndroidShellHolder::SetViewportMetrics(int64_t view_id,
-                                            const ViewportMetrics& metrics) {
-  GetPlatformView()->SetViewportMetrics(view_id, metrics);
+namespace {
+
+// Maps a Platform -> Dart response handle created via
+// `FlutterPlatformMessageCreateResponseHandle` back to `(jni_facade,
+// response_id)`.
+//
+// `FlutterEngineSendPlatformMessage` clones the `PlatformMessageResponse`
+// ref-ptr out of the handle, and the embedder immediately releases the handle
+// via `FlutterPlatformMessageReleaseResponseHandle`. When Dart later invokes
+// the response callback (or drops it without replying), the callback runs on
+// the platform thread. If Dart drops the callback without replying, the
+// entry in `PendingPlatformMessageResponseTable` is never invoked; we use a
+// monotonic token and bound the table or clean up on callback invocation.
+struct PendingPlatformMessageResponse {
+  std::weak_ptr<PlatformViewAndroidJNI> jni_facade;
+  int response_id = 0;
+};
+
+class PendingPlatformMessageResponseTable {
+ public:
+  static PendingPlatformMessageResponseTable& Instance() {
+    static PendingPlatformMessageResponseTable* instance =
+        new PendingPlatformMessageResponseTable();
+    return *instance;
+  }
+
+  void* Insert(const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+               int response_id) {
+    std::lock_guard lock(mutex_);
+    const uintptr_t token = next_token_++;
+    entries_[token] = PendingPlatformMessageResponse{jni_facade, response_id};
+    return reinterpret_cast<void*>(token);
+  }
+
+  std::optional<PendingPlatformMessageResponse> Take(void* user_data) {
+    std::lock_guard lock(mutex_);
+    const auto token = reinterpret_cast<uintptr_t>(user_data);
+    auto it = entries_.find(token);
+    if (it == entries_.end()) {
+      return std::nullopt;
+    }
+    PendingPlatformMessageResponse entry = std::move(it->second);
+    entries_.erase(it);
+    return entry;
+  }
+
+  static void OnDataCallback(const uint8_t* data,
+                             size_t size,
+                             void* user_data) {
+    auto entry = Instance().Take(user_data);
+    if (!entry.has_value()) {
+      return;
+    }
+    auto jni = entry->jni_facade.lock();
+    if (!jni) {
+      return;
+    }
+    if (data == nullptr) {
+      jni->FlutterViewHandlePlatformMessageResponse(entry->response_id,
+                                                    nullptr);
+    } else {
+      jni->FlutterViewHandlePlatformMessageResponse(
+          entry->response_id, std::make_unique<fml::MallocMapping>(
+                                  fml::MallocMapping::Copy(data, size)));
+    }
+  }
+
+ private:
+  std::mutex mutex_;
+  uintptr_t next_token_ = 1;
+  std::unordered_map<uintptr_t, PendingPlatformMessageResponse> entries_;
+};
+
+// Number of int64_t fields in each serialized PointerData record sent by
+// `AndroidTouchProcessor.java` (must match `PointerData::kBytesPerField` and
+// `kPointerDataFieldCount` in `flutter/lib/ui/window/pointer_data.h`).
+constexpr size_t kAndroidPointerDataFieldCount = 36;
+constexpr size_t kAndroidPointerDataBytesPerField = sizeof(int64_t);
+constexpr size_t kAndroidPointerDataStride =
+    kAndroidPointerDataFieldCount * kAndroidPointerDataBytesPerField;
+
+// Layout matches `flutter::PointerData` in
+// `flutter/lib/ui/window/pointer_data.h`.
+struct RawPointerDataRecord {
+  int64_t embedder_id;
+  int64_t time_stamp;
+  int64_t change;
+  int64_t kind;
+  int64_t signal_kind;
+  int64_t device;
+  int64_t pointer_identifier;
+  double physical_x;
+  double physical_y;
+  double physical_delta_x;
+  double physical_delta_y;
+  int64_t buttons;
+  int64_t obscured;
+  int64_t synthesized;
+  double pressure;
+  double pressure_min;
+  double pressure_max;
+  double distance;
+  double distance_max;
+  double size;
+  double radius_major;
+  double radius_minor;
+  double radius_min;
+  double radius_max;
+  double orientation;
+  double tilt;
+  int64_t platform_data;
+  double scroll_delta_x;
+  double scroll_delta_y;
+  double pan_x;
+  double pan_y;
+  double pan_delta_x;
+  double pan_delta_y;
+  double scale;
+  double rotation;
+  int64_t view_id;
+};
+static_assert(sizeof(RawPointerDataRecord) == kAndroidPointerDataStride,
+              "RawPointerDataRecord must match PointerData binary layout.");
+
+bool ToFlutterPointerPhase(int64_t change, FlutterPointerPhase* phase_out) {
+  // Values match `PointerData::Change` in `pointer_data.h`:
+  // 0=kCancel, 1=kAdd, 2=kRemove, 3=kHover, 4=kDown, 5=kMove, 6=kUp,
+  // 7=kPanZoomStart, 8=kPanZoomUpdate, 9=kPanZoomEnd.
+  switch (change) {
+    case 0:
+      *phase_out = FlutterPointerPhase::kCancel;
+      return true;
+    case 1:
+      *phase_out = FlutterPointerPhase::kAdd;
+      return true;
+    case 2:
+      *phase_out = FlutterPointerPhase::kRemove;
+      return true;
+    case 3:
+      *phase_out = FlutterPointerPhase::kHover;
+      return true;
+    case 4:
+      *phase_out = FlutterPointerPhase::kDown;
+      return true;
+    case 5:
+      *phase_out = FlutterPointerPhase::kMove;
+      return true;
+    case 6:
+      *phase_out = FlutterPointerPhase::kUp;
+      return true;
+    case 7:
+      *phase_out = FlutterPointerPhase::kPanZoomStart;
+      return true;
+    case 8:
+      *phase_out = FlutterPointerPhase::kPanZoomUpdate;
+      return true;
+    case 9:
+      *phase_out = FlutterPointerPhase::kPanZoomEnd;
+      return true;
+    default:
+      return false;
+  }
 }
 
-void AndroidShellHolder::DispatchPlatformMessage(JNIEnv* env,
-                                                 std::string name,
-                                                 jobject message_data,
-                                                 jint message_position,
-                                                 jint response_id) {
-  GetPlatformView()->DispatchPlatformMessage(env, std::move(name), message_data,
-                                             message_position, response_id);
+FlutterPointerDeviceKind ToFlutterPointerDeviceKind(int64_t kind) {
+  // Values match `PointerData::DeviceKind` in `pointer_data.h`:
+  // 0=kTouch, 1=kMouse, 2=kStylus, 3=kInvertedStylus, 4=kTrackpad.
+  switch (kind) {
+    case 0:
+      return kFlutterPointerDeviceKindTouch;
+    case 1:
+      return kFlutterPointerDeviceKindMouse;
+    case 2:
+      return kFlutterPointerDeviceKindStylus;
+    case 3:
+      return kFlutterPointerDeviceKindInvertedStylus;
+    case 4:
+      return kFlutterPointerDeviceKindTrackpad;
+    default:
+      return kFlutterPointerDeviceKindTouch;
+  }
 }
 
-void AndroidShellHolder::DispatchEmptyPlatformMessage(JNIEnv* env,
-                                                      std::string name,
-                                                      jint response_id) {
-  GetPlatformView()->DispatchEmptyPlatformMessage(env, std::move(name),
-                                                  response_id);
+FlutterPointerSignalKind ToFlutterPointerSignalKind(int64_t signal_kind) {
+  // Values match `PointerData::SignalKind` in `pointer_data.h`:
+  // 0=kNone, 1=kScroll, 2=kScrollInertiaCancel, 3=kScale.
+  switch (signal_kind) {
+    case 0:
+      return kFlutterPointerSignalKindNone;
+    case 1:
+      return kFlutterPointerSignalKindScroll;
+    case 2:
+      return kFlutterPointerSignalKindScrollInertiaCancel;
+    case 3:
+      return kFlutterPointerSignalKindScale;
+    default:
+      return kFlutterPointerSignalKindNone;
+  }
 }
 
-void AndroidShellHolder::DispatchPointerDataPacket(
-    std::unique_ptr<PointerDataPacket> packet) {
-  GetPlatformView()->DispatchPointerDataPacket(std::move(packet));
+}  // namespace
+
+void AndroidShellHolder::SetViewportMetrics(
+    int64_t view_id,
+    const AndroidViewportMetrics& metrics) {
+  // Match the validation in `PlatformView::SetViewportMetrics` before calling
+  // `SendWindowMetricsEvent`: invalid device pixel ratio or inverted
+  // width/height constraints must be rejected early without dispatching.
+  if (metrics.device_pixel_ratio <= 0.0 ||
+      metrics.physical_min_width_constraint >
+          metrics.physical_max_width_constraint ||
+      metrics.physical_min_height_constraint >
+          metrics.physical_max_height_constraint ||
+      metrics.physical_min_width_constraint < 0.0 ||
+      metrics.physical_max_width_constraint < 0.0 ||
+      metrics.physical_min_height_constraint < 0.0 ||
+      metrics.physical_max_height_constraint < 0.0) {
+    FML_DLOG(ERROR)
+        << "Invalid viewport metrics: device_pixel_ratio must be > 0 and "
+           "width/height constraints must be non-negative and ordered.";
+    return;
+  }
+
+  const size_t feature_count =
+      std::min({metrics.physical_display_features_type.size(),
+                metrics.physical_display_features_state.size(),
+                metrics.physical_display_features_bounds.size() / 4});
+  std::vector<FlutterDisplayFeature> features;
+  std::vector<const FlutterDisplayFeature*> feature_ptrs;
+  features.reserve(feature_count);
+  feature_ptrs.reserve(feature_count);
+  for (size_t i = 0; i < feature_count; ++i) {
+    FlutterDisplayFeature feature = {};
+    feature.struct_size = sizeof(FlutterDisplayFeature);
+    feature.bounds.left = metrics.physical_display_features_bounds[i * 4 + 0];
+    feature.bounds.top = metrics.physical_display_features_bounds[i * 4 + 1];
+    feature.bounds.right = metrics.physical_display_features_bounds[i * 4 + 2];
+    feature.bounds.bottom = metrics.physical_display_features_bounds[i * 4 + 3];
+    feature.type = static_cast<FlutterDisplayFeatureType>(
+        metrics.physical_display_features_type[i]);
+    feature.state = static_cast<FlutterDisplayFeatureState>(
+        metrics.physical_display_features_state[i]);
+    features.push_back(feature);
+  }
+  for (const auto& feature : features) {
+    feature_ptrs.push_back(&feature);
+  }
+
+  FlutterDisplayCornerRadii corner_radii = {};
+  corner_radii.struct_size = sizeof(FlutterDisplayCornerRadii);
+  corner_radii.top_left = metrics.top_left_corner_radius;
+  corner_radii.top_right = metrics.top_right_corner_radius;
+  corner_radii.bottom_right = metrics.bottom_right_corner_radius;
+  corner_radii.bottom_left = metrics.bottom_left_corner_radius;
+  const bool has_corner_radii = metrics.top_left_corner_radius >= 0.0 &&
+                                metrics.top_right_corner_radius >= 0.0 &&
+                                metrics.bottom_right_corner_radius >= 0.0 &&
+                                metrics.bottom_left_corner_radius >= 0.0;
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.width = static_cast<size_t>(std::max(0.0, metrics.physical_width));
+  event.height = static_cast<size_t>(std::max(0.0, metrics.physical_height));
+  event.pixel_ratio = metrics.device_pixel_ratio;
+  event.left = 0;
+  event.top = 0;
+  event.physical_view_inset_top = metrics.physical_view_inset_top;
+  event.physical_view_inset_right = metrics.physical_view_inset_right;
+  event.physical_view_inset_bottom = metrics.physical_view_inset_bottom;
+  event.physical_view_inset_left = metrics.physical_view_inset_left;
+  event.display_id = metrics.display_id;
+  event.view_id = view_id;
+  event.has_constraints =
+      (metrics.physical_min_width_constraint !=
+           metrics.physical_max_width_constraint ||
+       metrics.physical_min_height_constraint !=
+           metrics.physical_max_height_constraint ||
+       metrics.physical_min_width_constraint != metrics.physical_width ||
+       metrics.physical_min_height_constraint != metrics.physical_height);
+  event.min_width_constraint =
+      static_cast<size_t>(std::max(0.0, metrics.physical_min_width_constraint));
+  event.min_height_constraint = static_cast<size_t>(
+      std::max(0.0, metrics.physical_min_height_constraint));
+  event.max_width_constraint =
+      static_cast<size_t>(std::max(0.0, metrics.physical_max_width_constraint));
+  event.max_height_constraint = static_cast<size_t>(
+      std::max(0.0, metrics.physical_max_height_constraint));
+  event.physical_padding.top = metrics.physical_padding_top;
+  event.physical_padding.right = metrics.physical_padding_right;
+  event.physical_padding.bottom = metrics.physical_padding_bottom;
+  event.physical_padding.left = metrics.physical_padding_left;
+  event.physical_system_gesture_insets.top =
+      metrics.physical_system_gesture_inset_top;
+  event.physical_system_gesture_insets.right =
+      metrics.physical_system_gesture_inset_right;
+  event.physical_system_gesture_insets.bottom =
+      metrics.physical_system_gesture_inset_bottom;
+  event.physical_system_gesture_insets.left =
+      metrics.physical_system_gesture_inset_left;
+  event.physical_touch_slop = metrics.physical_touch_slop;
+  event.display_features_count = feature_ptrs.size();
+  event.display_features = feature_ptrs.empty() ? nullptr : feature_ptrs.data();
+  event.display_corner_radii = has_corner_radii ? &corner_radii : nullptr;
+
+  FlutterEngineResult result =
+      embedder_api_.SendWindowMetricsEvent(engine_.get(), &event);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineSendWindowMetricsEvent failed: " << result;
+  }
+}
+
+void AndroidShellHolder::DispatchPlatformMessage(const std::string& name,
+                                                 const void* message_data,
+                                                 int message_position,
+                                                 int response_id) {
+  if (message_position < 0) {
+    return;
+  }
+  FlutterPlatformMessageResponseHandle* response_handle = nullptr;
+  void* token = nullptr;
+  if (response_id != 0 &&
+      embedder_api_.PlatformMessageCreateResponseHandle != nullptr) {
+    token = PendingPlatformMessageResponseTable::Instance().Insert(jni_facade_,
+                                                                   response_id);
+    FlutterEngineResult create_result =
+        embedder_api_.PlatformMessageCreateResponseHandle(
+            engine_.get(), &PendingPlatformMessageResponseTable::OnDataCallback,
+            token, &response_handle);
+    if (create_result != kSuccess) {
+      PendingPlatformMessageResponseTable::Instance().Take(token);
+      response_handle = nullptr;
+    }
+  }
+
+  // `DispatchPlatformMessage` is called from Java when the message payload is
+  // non-null (even if `message_position == 0`). Ensure `message.message` is
+  // non-null so `FlutterEngineSendPlatformMessage` preserves the non-null
+  // 0-byte `ByteData(0)` distinction vs `DispatchEmptyPlatformMessage`.
+  static constexpr uint8_t kEmptyMessageByte = 0;
+  const uint8_t* bytes = static_cast<const uint8_t*>(message_data);
+  if (bytes == nullptr && message_position == 0) {
+    bytes = &kEmptyMessageByte;
+  }
+
+  FlutterPlatformMessage message = {};
+  message.struct_size = sizeof(FlutterPlatformMessage);
+  message.channel = name.c_str();
+  message.message = bytes;
+  message.message_size = static_cast<size_t>(message_position);
+  message.response_handle = response_handle;
+
+  FlutterEngineResult send_result =
+      embedder_api_.SendPlatformMessage(engine_.get(), &message);
+  if (send_result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineSendPlatformMessage failed: "
+                   << send_result;
+    if (token != nullptr) {
+      PendingPlatformMessageResponseTable::Instance().Take(token);
+    }
+  }
+
+  if (response_handle != nullptr &&
+      embedder_api_.PlatformMessageReleaseResponseHandle != nullptr) {
+    embedder_api_.PlatformMessageReleaseResponseHandle(engine_.get(),
+                                                       response_handle);
+  }
+}
+
+void AndroidShellHolder::DispatchEmptyPlatformMessage(const std::string& name,
+                                                      int response_id) {
+  FlutterPlatformMessageResponseHandle* response_handle = nullptr;
+  void* token = nullptr;
+  if (response_id != 0 &&
+      embedder_api_.PlatformMessageCreateResponseHandle != nullptr) {
+    token = PendingPlatformMessageResponseTable::Instance().Insert(jni_facade_,
+                                                                   response_id);
+    FlutterEngineResult create_result =
+        embedder_api_.PlatformMessageCreateResponseHandle(
+            engine_.get(), &PendingPlatformMessageResponseTable::OnDataCallback,
+            token, &response_handle);
+    if (create_result != kSuccess) {
+      PendingPlatformMessageResponseTable::Instance().Take(token);
+      response_handle = nullptr;
+    }
+  }
+
+  FlutterPlatformMessage message = {};
+  message.struct_size = sizeof(FlutterPlatformMessage);
+  message.channel = name.c_str();
+  message.message = nullptr;
+  message.message_size = 0;
+  message.response_handle = response_handle;
+
+  FlutterEngineResult send_result =
+      embedder_api_.SendPlatformMessage(engine_.get(), &message);
+  if (send_result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineSendPlatformMessage failed: "
+                   << send_result;
+    if (token != nullptr) {
+      PendingPlatformMessageResponseTable::Instance().Take(token);
+    }
+  }
+
+  if (response_handle != nullptr &&
+      embedder_api_.PlatformMessageReleaseResponseHandle != nullptr) {
+    embedder_api_.PlatformMessageReleaseResponseHandle(engine_.get(),
+                                                       response_handle);
+  }
+}
+
+void AndroidShellHolder::DispatchPointerDataPacket(const uint8_t* buffer,
+                                                   int size_bytes) {
+  if (buffer == nullptr || size_bytes <= 0) {
+    return;
+  }
+  const size_t total_bytes = static_cast<size_t>(size_bytes);
+  if (total_bytes % kAndroidPointerDataStride != 0) {
+    FML_DLOG(ERROR) << "PointerData packet size (" << total_bytes
+                    << ") is not a multiple of stride ("
+                    << kAndroidPointerDataStride << ").";
+    return;
+  }
+  const size_t count = total_bytes / kAndroidPointerDataStride;
+  std::vector<FlutterPointerEvent> events;
+  events.reserve(count);
+
+  for (size_t i = 0; i < count; ++i) {
+    RawPointerDataRecord raw = {};
+    std::memcpy(&raw, buffer + i * kAndroidPointerDataStride,
+                sizeof(RawPointerDataRecord));
+
+    FlutterPointerPhase phase = FlutterPointerPhase::kCancel;
+    if (!ToFlutterPointerPhase(raw.change, &phase)) {
+      continue;
+    }
+
+    FlutterPointerEvent event = {};
+    event.struct_size = sizeof(FlutterPointerEvent);
+    event.phase = phase;
+    event.timestamp = static_cast<size_t>(raw.time_stamp);
+    event.x = raw.physical_x;
+    event.y = raw.physical_y;
+    event.device = static_cast<int32_t>(raw.device);
+    event.signal_kind = ToFlutterPointerSignalKind(raw.signal_kind);
+    event.scroll_delta_x = raw.scroll_delta_x;
+    event.scroll_delta_y = raw.scroll_delta_y;
+    event.device_kind = ToFlutterPointerDeviceKind(raw.kind);
+    event.buttons = raw.buttons;
+    event.pan_x = raw.pan_x;
+    event.pan_y = raw.pan_y;
+    event.scale = raw.scale;
+    event.rotation = raw.rotation;
+    event.view_id = raw.view_id;
+    event.pressure = raw.pressure;
+    event.pressure_min = raw.pressure_min;
+    event.pressure_max = raw.pressure_max;
+    event.distance = raw.distance;
+    event.distance_max = raw.distance_max;
+    event.size = raw.size;
+    event.radius_major = raw.radius_major;
+    event.radius_minor = raw.radius_minor;
+    event.radius_min = raw.radius_min;
+    event.radius_max = raw.radius_max;
+    event.orientation = raw.orientation;
+    event.tilt = raw.tilt;
+    event.platform_data = raw.platform_data;
+    event.embedder_id = raw.embedder_id;
+    events.push_back(event);
+  }
+
+  if (events.empty()) {
+    return;
+  }
+
+  TRACE_EVENT0("flutter", "AndroidShellHolder::DispatchPointerDataPacket");
+  TRACE_FLOW_BEGIN("flutter", "PointerEvent", next_pointer_flow_id_);
+  next_pointer_flow_id_++;
+
+  FlutterEngineResult result = embedder_api_.SendPointerEvent(
+      engine_.get(), events.data(), events.size());
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineSendPointerEvent failed: " << result;
+  }
+}
+
+void AndroidShellHolder::InvokePlatformMessageResponseCallback(
+    int response_id,
+    const uint8_t* data,
+    size_t size) {
+  if (platform_message_handler_) {
+    platform_message_handler_->InvokePlatformMessageResponseCallback(
+        response_id, data, size);
+  }
+}
+
+void AndroidShellHolder::InvokePlatformMessageEmptyResponseCallback(
+    int response_id) {
+  if (platform_message_handler_) {
+    platform_message_handler_->InvokePlatformMessageEmptyResponseCallback(
+        response_id);
+  }
 }
 
 void AndroidShellHolder::DispatchSemanticsAction(JNIEnv* env,
@@ -624,11 +1122,6 @@ void AndroidShellHolder::UpdateAssetResolverByType(
 void AndroidShellHolder::NotifyLowMemoryWarning() {
   FML_DCHECK(engine_);
   GetShell(engine_.get()).NotifyLowMemoryWarning();
-}
-
-const std::shared_ptr<PlatformMessageHandler>&
-AndroidShellHolder::GetPlatformMessageHandler() const {
-  return platform_message_handler_;
 }
 
 Shell* AndroidShellHolder::GetShellForTesting() const {
