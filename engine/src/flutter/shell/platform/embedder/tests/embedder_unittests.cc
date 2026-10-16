@@ -11,6 +11,7 @@
 #include "embedder.h"
 #include "embedder_engine.h"
 #include "flutter/common/constants.h"
+#include "flutter/display_list/geometry/dl_path_builder.h"
 #include "flutter/flow/raster_cache.h"
 #include "flutter/fml/file.h"
 #include "flutter/fml/make_copyable.h"
@@ -24,6 +25,7 @@
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
 #include "flutter/runtime/dart_vm.h"
+#include "flutter/shell/platform/embedder/embedder_layers.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/shell/platform/embedder/tests/embedder_test.h"
@@ -4499,6 +4501,244 @@ TEST_F(EmbedderTest, QueryVulkanDriverSupport) {
             kSuccess);
   EXPECT_FALSE(is_known_bad);
 #endif
+}
+
+TEST(EmbedderTestNoFixture, PlatformViewClipPathAndRSEMutations) {
+  DlPathBuilder path_builder;
+  path_builder.SetFillType(DlPathFillType::kOdd);
+  path_builder.MoveTo(DlPoint(10.0f, 20.0f));
+  path_builder.LineTo(DlPoint(30.0f, 40.0f));
+  path_builder.QuadraticCurveTo(DlPoint(50.0f, 60.0f), DlPoint(70.0f, 80.0f));
+  path_builder.ConicCurveTo(DlPoint(90.0f, 100.0f), DlPoint(110.0f, 120.0f),
+                            0.707f);
+  path_builder.CubicCurveTo(DlPoint(130.0f, 140.0f), DlPoint(150.0f, 160.0f),
+                            DlPoint(170.0f, 180.0f));
+  path_builder.Close();
+  DlPath test_path = path_builder.TakePath();
+
+  MutatorsStack stack;
+  stack.PushClipRSE(DlRoundSuperellipse::MakeRectXY(
+      DlRect::MakeLTRB(5.0f, 10.0f, 105.0f, 210.0f), DlSize(4.0f, 8.0f)));
+  stack.PushClipPath(test_path);
+
+  EmbeddedViewParams params(DlMatrix(), DlSize(100.0f, 200.0f), stack);
+
+  // Case 1: Default capabilities (0) -> conics decomposed to quadratic curves.
+  {
+    EmbedderLayers layers(DlISize(800, 600), 1.0, DlMatrix(), 0,
+                          /*platform_view_mutation_capabilities=*/0);
+    FlutterBackingStore dummy_store = {};
+    dummy_store.struct_size = sizeof(FlutterBackingStore);
+    dummy_store.type = kFlutterBackingStoreTypeSoftware;
+    layers.PushBackingStoreLayer(&dummy_store,
+                                 {DlIRect::MakeLTRB(0, 0, 800, 600)});
+    layers.PushPlatformViewLayer(42, params);
+
+    bool invoked = false;
+    layers.InvokePresentCallback(
+        kFlutterImplicitViewId,
+        [&](FlutterViewId view_id,
+            const std::vector<const FlutterLayer*>& presented) {
+          invoked = true;
+          EXPECT_EQ(view_id, kFlutterImplicitViewId);
+          EXPECT_EQ(presented.size(), 2u);
+          if (presented.size() != 2u) {
+            return false;
+          }
+
+          EXPECT_EQ(presented[0]->type, kFlutterLayerContentTypeBackingStore);
+          EXPECT_NE(presented[0]->backing_store_present_info, nullptr);
+          if (presented[0]->backing_store_present_info != nullptr) {
+            EXPECT_EQ(
+                presented[0]
+                    ->backing_store_present_info->synchronization_fence_fd,
+                -1);
+          }
+
+          EXPECT_EQ(presented[1]->type, kFlutterLayerContentTypePlatformView);
+          const FlutterPlatformView* pv = presented[1]->platform_view;
+          EXPECT_NE(pv, nullptr);
+          EXPECT_EQ(pv->identifier, 42);
+          EXPECT_EQ(pv->mutations_count, 2u);
+          if (pv->mutations_count != 2u) {
+            return false;
+          }
+
+          // MutatorsStack iterates in reverse (top-down), or bottom-up?
+          // Let's check both mutations by type.
+          const FlutterPlatformViewMutation* rse_mut = nullptr;
+          const FlutterPlatformViewMutation* path_mut = nullptr;
+          for (size_t i = 0; i < pv->mutations_count; ++i) {
+            if (pv->mutations[i]->type ==
+                kFlutterPlatformViewMutationTypeClipRoundedRect) {
+              rse_mut = pv->mutations[i];
+            } else if (pv->mutations[i]->type ==
+                       kFlutterPlatformViewMutationTypeClipPath) {
+              path_mut = pv->mutations[i];
+            }
+          }
+          EXPECT_NE(rse_mut, nullptr);
+          EXPECT_NE(path_mut, nullptr);
+          if (rse_mut != nullptr) {
+            EXPECT_DOUBLE_EQ(rse_mut->clip_rounded_rect.rect.left, 5.0);
+            EXPECT_DOUBLE_EQ(rse_mut->clip_rounded_rect.rect.top, 10.0);
+            EXPECT_DOUBLE_EQ(rse_mut->clip_rounded_rect.rect.right, 105.0);
+            EXPECT_DOUBLE_EQ(rse_mut->clip_rounded_rect.rect.bottom, 210.0);
+            EXPECT_DOUBLE_EQ(
+                rse_mut->clip_rounded_rect.upper_left_corner_radius.width, 4.0);
+            EXPECT_DOUBLE_EQ(
+                rse_mut->clip_rounded_rect.upper_left_corner_radius.height,
+                8.0);
+          }
+          if (path_mut != nullptr && path_mut->clip_path != nullptr) {
+            const FlutterPath* fp = path_mut->clip_path;
+            EXPECT_EQ(fp->struct_size, sizeof(FlutterPath));
+            EXPECT_EQ(fp->fill_type, kFlutterPathFillTypeEvenOdd);
+            EXPECT_EQ(fp->conic_weights_count, 0u);
+            EXPECT_EQ(fp->conic_weights, nullptr);
+            EXPECT_GT(fp->verbs_count, 0u);
+            for (size_t i = 0; i < fp->verbs_count; ++i) {
+              EXPECT_NE(fp->verbs[i], kFlutterPathVerbConic);
+            }
+          }
+          return true;
+        });
+    EXPECT_TRUE(invoked);
+  }
+
+  // Case 2: Conics capability enabled -> kFlutterPathVerbConic preserved.
+  {
+    EmbedderLayers layers(DlISize(800, 600), 1.0, DlMatrix(), 0,
+                          kFlutterPlatformViewMutationCapabilityPathConics);
+    layers.PushPlatformViewLayer(42, params);
+
+    bool invoked = false;
+    layers.InvokePresentCallback(
+        kFlutterImplicitViewId,
+        [&](FlutterViewId view_id,
+            const std::vector<const FlutterLayer*>& presented) {
+          invoked = true;
+          EXPECT_EQ(presented.size(), 1u);
+          if (presented.size() != 1u) {
+            return false;
+          }
+          const FlutterPlatformView* pv = presented[0]->platform_view;
+          const FlutterPlatformViewMutation* path_mut = nullptr;
+          for (size_t i = 0; i < pv->mutations_count; ++i) {
+            if (pv->mutations[i]->type ==
+                kFlutterPlatformViewMutationTypeClipPath) {
+              path_mut = pv->mutations[i];
+            }
+          }
+          EXPECT_NE(path_mut, nullptr);
+          if (path_mut != nullptr && path_mut->clip_path != nullptr) {
+            const FlutterPath* fp = path_mut->clip_path;
+            EXPECT_EQ(fp->fill_type, kFlutterPathFillTypeEvenOdd);
+            EXPECT_EQ(fp->conic_weights_count, 1u);
+            EXPECT_NE(fp->conic_weights, nullptr);
+            if (fp->conic_weights != nullptr) {
+              EXPECT_NEAR(fp->conic_weights[0], 0.707, 1e-4);
+            }
+            // Move, Line, Quad, Conic, Cubic, closing Line, Close = 7 verbs
+            EXPECT_EQ(fp->verbs_count, 7u);
+            if (fp->verbs_count == 7u) {
+              EXPECT_EQ(fp->verbs[0], kFlutterPathVerbMove);
+              EXPECT_EQ(fp->verbs[1], kFlutterPathVerbLine);
+              EXPECT_EQ(fp->verbs[2], kFlutterPathVerbQuad);
+              EXPECT_EQ(fp->verbs[3], kFlutterPathVerbConic);
+              EXPECT_EQ(fp->verbs[4], kFlutterPathVerbCubic);
+              EXPECT_EQ(fp->verbs[5], kFlutterPathVerbLine);
+              EXPECT_EQ(fp->verbs[6], kFlutterPathVerbClose);
+            }
+            // 1 (Move) + 1 (Line) + 2 (Quad) + 2 (Conic) + 3 (Cubic) + 1
+            // (closing Line) + 0 (Close) = 10 points
+            EXPECT_EQ(fp->points_count, 10u);
+          }
+          return true;
+        });
+    EXPECT_TRUE(invoked);
+  }
+}
+
+TEST_F(EmbedderTest, CompositorBackingStoreIsRootLayer) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetCompositor(/*avoid_backing_store_cache=*/true);
+  builder.SetDartEntrypoint("can_composite_platform_views_with_known_scene");
+  builder.SetRenderTargetType(
+      EmbedderTestBackingStoreProducer::RenderTargetType::kSoftwareBuffer);
+
+  struct BackingStoreCapture {
+    EmbedderTestCompositor* compositor = nullptr;
+    std::vector<bool> is_root_layer_flags;
+  } capture;
+  capture.compositor = &context.GetCompositor();
+
+  builder.GetCompositor().user_data = &capture;
+  builder.GetCompositor().create_backing_store_callback =
+      [](const FlutterBackingStoreConfig* config,
+         FlutterBackingStore* backing_store_out, void* user_data) -> bool {
+    auto* cap = reinterpret_cast<BackingStoreCapture*>(user_data);
+    cap->is_root_layer_flags.push_back(config->is_root_layer);
+    return cap->compositor->CreateBackingStore(config, backing_store_out);
+  };
+  builder.GetCompositor().collect_backing_store_callback =
+      [](const FlutterBackingStore* backing_store, void* user_data) -> bool {
+    auto* cap = reinterpret_cast<BackingStoreCapture*>(user_data);
+    return cap->compositor->CollectBackingStore(backing_store);
+  };
+  builder.GetCompositor().present_view_callback =
+      [](const FlutterPresentViewInfo* info) -> bool {
+    auto* cap = reinterpret_cast<BackingStoreCapture*>(info->user_data);
+    return cap->compositor->Present(info->view_id, info->layers,
+                                    info->layers_count);
+  };
+
+  fml::CountDownLatch latch(4);
+
+  context.GetCompositor().SetNextPresentCallback(
+      [&](FlutterViewId view_id, const FlutterLayer** layers,
+          size_t layers_count) {
+        ASSERT_EQ(layers_count, 5u);
+        ASSERT_EQ(capture.is_root_layer_flags.size(), 3u);
+        EXPECT_TRUE(capture.is_root_layer_flags[0]);
+        EXPECT_FALSE(capture.is_root_layer_flags[1]);
+        EXPECT_FALSE(capture.is_root_layer_flags[2]);
+        for (size_t i = 0; i < layers_count; ++i) {
+          if (layers[i]->type == kFlutterLayerContentTypeBackingStore) {
+            ASSERT_NE(layers[i]->backing_store_present_info, nullptr);
+            EXPECT_EQ(
+                layers[i]->backing_store_present_info->synchronization_fence_fd,
+                -1);
+          }
+        }
+        latch.CountDown();
+      });
+
+  context.GetCompositor().SetPlatformViewRendererCallback(
+      [&](const FlutterLayer& layer, GrDirectContext*) -> sk_sp<SkImage> {
+        auto surface = CreateRenderSurface(layer, nullptr);
+        latch.CountDown();
+        return surface->makeImageSnapshot();
+      });
+
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&latch]() { latch.CountDown(); }));
+
+  auto engine = builder.LaunchEngine();
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+  ASSERT_TRUE(engine.is_valid());
+
+  latch.Wait();
 }
 
 }  // namespace testing

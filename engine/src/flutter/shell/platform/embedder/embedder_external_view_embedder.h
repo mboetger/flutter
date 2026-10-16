@@ -59,7 +59,8 @@ class EmbedderExternalViewEmbedder final : public ExternalViewEmbedder {
   EmbedderExternalViewEmbedder(
       bool avoid_backing_store_cache,
       const CreateRenderTargetCallback& create_render_target_callback,
-      const PresentCallback& present_callback);
+      const PresentCallback& present_callback,
+      uint64_t platform_view_mutation_capabilities = 0);
 
   //----------------------------------------------------------------------------
   /// @brief      Collects the external view embedder.
@@ -115,6 +116,7 @@ class EmbedderExternalViewEmbedder final : public ExternalViewEmbedder {
   const bool avoid_backing_store_cache_;
   const CreateRenderTargetCallback create_render_target_callback_;
   const PresentCallback present_callback_;
+  const uint64_t platform_view_mutation_capabilities_;
   SurfaceTransformationCallback surface_transformation_callback_;
   DlISize pending_frame_size_;
   double pending_device_pixel_ratio_ = 1.0;

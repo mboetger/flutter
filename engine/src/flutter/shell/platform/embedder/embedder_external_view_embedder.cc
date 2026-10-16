@@ -23,10 +23,13 @@ static const auto kRootViewIdentifier = EmbedderExternalView::ViewIdentifier{};
 EmbedderExternalViewEmbedder::EmbedderExternalViewEmbedder(
     bool avoid_backing_store_cache,
     const CreateRenderTargetCallback& create_render_target_callback,
-    const PresentCallback& present_callback)
+    const PresentCallback& present_callback,
+    uint64_t platform_view_mutation_capabilities)
     : avoid_backing_store_cache_(avoid_backing_store_cache),
       create_render_target_callback_(create_render_target_callback),
-      present_callback_(present_callback) {
+      present_callback_(present_callback),
+      platform_view_mutation_capabilities_(
+          platform_view_mutation_capabilities) {
   FML_DCHECK(create_render_target_callback_);
   FML_DCHECK(present_callback_);
 }
@@ -123,7 +126,8 @@ DlCanvas* EmbedderExternalViewEmbedder::CompositeEmbeddedView(int64_t view_id) {
 
 static FlutterBackingStoreConfig MakeBackingStoreConfig(
     int64_t view_id,
-    const DlISize& backing_store_size) {
+    const DlISize& backing_store_size,
+    bool is_root_layer = false) {
   FlutterBackingStoreConfig config = {};
 
   config.struct_size = sizeof(config);
@@ -131,6 +135,7 @@ static FlutterBackingStoreConfig MakeBackingStoreConfig(
   config.size.width = backing_store_size.width;
   config.size.height = backing_store_size.height;
   config.view_id = view_id;
+  config.is_root_layer = is_root_layer;
 
   return config;
 }
@@ -400,9 +405,8 @@ class Layer {
 /// Implements https://flutter.dev/go/optimized-platform-view-layers
 class LayerBuilder {
  public:
-  using RenderTargetProvider =
-      std::function<std::unique_ptr<EmbedderRenderTarget>(
-          const DlISize& frame_size)>;
+  using RenderTargetProvider = std::function<std::unique_ptr<
+      EmbedderRenderTarget>(const DlISize& frame_size, bool is_root_layer)>;
 
   explicit LayerBuilder(DlISize frame_size) : frame_size_(frame_size) {
     layers_.push_back(Layer());
@@ -425,9 +429,15 @@ class LayerBuilder {
 
   /// Prepares the render targets for all layers that have Flutter contents.
   void PrepareBackingStore(const RenderTargetProvider& target_provider) {
+    bool seen_any_layer = false;
     for (auto& layer : layers_) {
+      if (!layer.platform_views().empty()) {
+        seen_any_layer = true;
+      }
       if (layer.has_flutter_contents()) {
-        layer.SetRenderTarget(target_provider(frame_size_));
+        const bool is_root_layer = !seen_any_layer;
+        seen_any_layer = true;
+        layer.SetRenderTarget(target_provider(frame_size_, is_root_layer));
       }
     }
   }
@@ -558,18 +568,20 @@ void EmbedderExternalViewEmbedder::SubmitFlutterView(
     builder.AddExternalView(view.get());
   }
 
-  builder.PrepareBackingStore([&](const DlISize& frame_size) {
-    if (!avoid_backing_store_cache_) {
-      std::unique_ptr<EmbedderRenderTarget> target =
-          render_target_cache.GetRenderTarget(
-              EmbedderExternalView::RenderTargetDescriptor(frame_size));
-      if (target != nullptr) {
-        return target;
-      }
-    }
-    auto config = MakeBackingStoreConfig(flutter_view_id, frame_size);
-    return create_render_target_callback_(context, aiks_context, config);
-  });
+  builder.PrepareBackingStore(
+      [&](const DlISize& frame_size, bool is_root_layer) {
+        if (!avoid_backing_store_cache_) {
+          std::unique_ptr<EmbedderRenderTarget> target =
+              render_target_cache.GetRenderTarget(
+                  EmbedderExternalView::RenderTargetDescriptor(frame_size));
+          if (target != nullptr) {
+            return target;
+          }
+        }
+        auto config =
+            MakeBackingStoreConfig(flutter_view_id, frame_size, is_root_layer);
+        return create_render_target_callback_(context, aiks_context, config);
+      });
 
   // This is where unused render targets will be collected. Control may flow
   // to the embedder. Here, the embedder has the opportunity to trample on the
@@ -620,7 +632,8 @@ void EmbedderExternalViewEmbedder::SubmitFlutterView(
     // @warning: Embedder may trample on our OpenGL context here.
     EmbedderLayers presented_layers(
         pending_frame_size_, pending_device_pixel_ratio_,
-        pending_surface_transformation_, presentation_time);
+        pending_surface_transformation_, presentation_time,
+        platform_view_mutation_capabilities_);
 
     builder.PushLayers(presented_layers);
 

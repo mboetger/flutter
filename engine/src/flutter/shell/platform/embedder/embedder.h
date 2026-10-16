@@ -2195,6 +2195,63 @@ typedef struct {
 } FlutterVulkanBackingStore;
 
 typedef enum {
+  kFlutterPathFillTypeNonZero,
+  kFlutterPathFillTypeEvenOdd,
+} FlutterPathFillType;
+
+typedef enum {
+  kFlutterPathVerbMove,
+  kFlutterPathVerbLine,
+  kFlutterPathVerbQuad,
+  kFlutterPathVerbConic,
+  kFlutterPathVerbCubic,
+  kFlutterPathVerbClose,
+} FlutterPathVerb;
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterPath).
+  size_t struct_size;
+  /// The fill rule for this path.
+  FlutterPathFillType fill_type;
+  /// The number of entries in `verbs`.
+  size_t verbs_count;
+  /// The path verbs, in drawing order. Every contour begins with
+  /// `kFlutterPathVerbMove`. Valid only for the duration of the frame
+  /// presentation callback.
+  const FlutterPathVerb* verbs;
+  /// The number of entries in `points`. Equals the sum of the points used by
+  /// each verb: move 1, line 1, quad 2, conic 2, cubic 3, close 0.
+  size_t points_count;
+  /// The points, consumed in verb order. Valid only for the duration of the
+  /// frame presentation callback.
+  const FlutterPoint* points;
+  /// The number of entries in `conic_weights`. Equals the number of
+  /// `kFlutterPathVerbConic` verbs.
+  size_t conic_weights_count;
+  /// The conic weights, consumed in verb order. Valid only for the duration of
+  /// the frame presentation callback.
+  const double* conic_weights;
+  /// Conservative control-point bounds containing all points of the path, in
+  /// the same coordinate space. An embedder that cannot clip to a path clips
+  /// to this rectangle.
+  FlutterRect bounds;
+} FlutterPath;
+
+/// Optional platform view mutation features that a compositor can consume.
+///
+/// The engine only emits a mutation type or path verb that is gated by one of
+/// these bits when the compositor sets that bit in
+/// `FlutterCompositor.platform_view_mutation_capabilities`.
+typedef enum {
+  /// Only the default mutation types and path verbs are emitted.
+  kFlutterPlatformViewMutationCapabilityDefault = 0,
+  /// Clip paths may contain `kFlutterPathVerbConic` verbs. Without this bit,
+  /// the engine converts conics to quadratic Bezier curves before handing
+  /// paths to the embedder.
+  kFlutterPlatformViewMutationCapabilityPathConics = 1 << 0,
+} FlutterPlatformViewMutationCapability;
+
+typedef enum {
   /// Indicates that the Flutter application requested that an opacity be
   /// applied to the platform view.
   kFlutterPlatformViewMutationTypeOpacity,
@@ -2207,6 +2264,9 @@ typedef enum {
   /// Indicates that the Flutter application requested that the platform view be
   /// transformed before composition.
   kFlutterPlatformViewMutationTypeTransformation,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using an arbitrary path.
+  kFlutterPlatformViewMutationTypeClipPath,
 } FlutterPlatformViewMutationType;
 
 typedef struct {
@@ -2217,6 +2277,7 @@ typedef struct {
     FlutterRect clip_rect;
     FlutterRoundedRect clip_rounded_rect;
     FlutterTransformation transformation;
+    const FlutterPath* clip_path;
   };
 } FlutterPlatformViewMutation;
 
@@ -2294,6 +2355,18 @@ typedef struct {
   /// The identifier for the view that the engine will use this backing store to
   /// render into.
   FlutterViewId view_id;
+  /// True if this backing store is for the bottom-most layer of the frame for
+  /// `view_id`, with no platform view composited beneath it. The engine
+  /// requests at most one such backing store per view per frame, and none when
+  /// all Flutter contents are composited above platform views. False for all
+  /// other layers. Read this field only if `struct_size` covers it, and treat
+  /// it as false otherwise.
+  ///
+  /// An embedder may return the view's on-screen render target (for example,
+  /// the next swapchain image or default framebuffer) when this is true. The
+  /// engine's backing store cache ignores this field, so such an embedder must
+  /// set `FlutterCompositor.avoid_backing_store_cache` to true.
+  bool is_root_layer;
 } FlutterBackingStoreConfig;
 
 typedef enum {
@@ -2324,6 +2397,15 @@ typedef struct {
   /// outside of this area are transparent and the embedder may choose not
   /// to render them. Coordinates are in physical pixels.
   FlutterRegion* paint_region;
+
+  /// File descriptor representing a sync_fence / ASyncFence.
+  /// When presenting on Android API 34+ via SurfaceControl.Transaction,
+  /// the engine passes this fence to the embedder.
+  ///
+  /// The embedder takes ownership of this file descriptor and must close it
+  /// (for example, by passing it to SurfaceControl.Transaction.setBuffer or
+  /// calling close()). A value of -1 indicates no fence.
+  int synchronization_fence_fd;
 } FlutterBackingStorePresentInfo;
 
 typedef struct {
@@ -2448,6 +2530,10 @@ typedef struct {
   ///
   /// The callback should return true if the operation was successful.
   FlutterPresentViewCallback present_view_callback;
+  /// Bitmask of `FlutterPlatformViewMutationCapability` flags describing
+  /// optional platform view mutation features supported by this compositor.
+  /// Defaults to 0 (`kFlutterPlatformViewMutationCapabilityDefault`).
+  uint64_t platform_view_mutation_capabilities;
 } FlutterCompositor;
 
 typedef struct {

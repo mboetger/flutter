@@ -11,10 +11,12 @@ namespace flutter {
 EmbedderLayers::EmbedderLayers(DlISize frame_size,
                                double device_pixel_ratio,
                                DlMatrix root_surface_transformation,
-                               uint64_t presentation_time)
+                               uint64_t presentation_time,
+                               uint64_t platform_view_mutation_capabilities)
     : frame_size_(frame_size),
       device_pixel_ratio_(device_pixel_ratio),
       root_surface_transformation_(root_surface_transformation),
+      platform_view_mutation_capabilities_(platform_view_mutation_capabilities),
       presentation_time_(presentation_time) {}
 
 EmbedderLayers::~EmbedderLayers() = default;
@@ -61,6 +63,7 @@ void EmbedderLayers::PushBackingStoreLayer(
   auto present_info = std::make_unique<FlutterBackingStorePresentInfo>();
   present_info->struct_size = sizeof(FlutterBackingStorePresentInfo);
   present_info->paint_region = paint_region.get();
+  present_info->synchronization_fence_fd = -1;
   regions_referenced_.push_back(std::move(paint_region));
   layer.backing_store_present_info = present_info.get();
   layer.presentation_time = presentation_time_;
@@ -132,6 +135,66 @@ static std::unique_ptr<FlutterPlatformViewMutation> ConvertMutation(
   return std::make_unique<FlutterPlatformViewMutation>(mutation);
 }
 
+namespace {
+
+class FlutterPathReceiver final : public DlPathReceiver {
+ public:
+  FlutterPathReceiver(std::vector<FlutterPathVerb>& verbs,
+                      std::vector<FlutterPoint>& points,
+                      std::vector<double>& conic_weights,
+                      bool allow_conics)
+      : verbs_(verbs),
+        points_(points),
+        conic_weights_(conic_weights),
+        allow_conics_(allow_conics) {}
+
+  void MoveTo(const DlPoint& p2, bool will_be_closed) override {
+    verbs_.push_back(kFlutterPathVerbMove);
+    points_.push_back({static_cast<double>(p2.x), static_cast<double>(p2.y)});
+  }
+
+  void LineTo(const DlPoint& p2) override {
+    verbs_.push_back(kFlutterPathVerbLine);
+    points_.push_back({static_cast<double>(p2.x), static_cast<double>(p2.y)});
+  }
+
+  void QuadTo(const DlPoint& cp, const DlPoint& p2) override {
+    verbs_.push_back(kFlutterPathVerbQuad);
+    points_.push_back({static_cast<double>(cp.x), static_cast<double>(cp.y)});
+    points_.push_back({static_cast<double>(p2.x), static_cast<double>(p2.y)});
+  }
+
+  bool ConicTo(const DlPoint& cp, const DlPoint& p2, DlScalar weight) override {
+    if (!allow_conics_) {
+      return false;
+    }
+    verbs_.push_back(kFlutterPathVerbConic);
+    points_.push_back({static_cast<double>(cp.x), static_cast<double>(cp.y)});
+    points_.push_back({static_cast<double>(p2.x), static_cast<double>(p2.y)});
+    conic_weights_.push_back(static_cast<double>(weight));
+    return true;
+  }
+
+  void CubicTo(const DlPoint& cp1,
+               const DlPoint& cp2,
+               const DlPoint& p2) override {
+    verbs_.push_back(kFlutterPathVerbCubic);
+    points_.push_back({static_cast<double>(cp1.x), static_cast<double>(cp1.y)});
+    points_.push_back({static_cast<double>(cp2.x), static_cast<double>(cp2.y)});
+    points_.push_back({static_cast<double>(p2.x), static_cast<double>(p2.y)});
+  }
+
+  void Close() override { verbs_.push_back(kFlutterPathVerbClose); }
+
+ private:
+  std::vector<FlutterPathVerb>& verbs_;
+  std::vector<FlutterPoint>& points_;
+  std::vector<double>& conic_weights_;
+  bool allow_conics_;
+};
+
+}  // namespace
+
 void EmbedderLayers::PushPlatformViewLayer(
     FlutterPlatformViewIdentifier identifier,
     const EmbeddedViewParams& params) {
@@ -166,7 +229,46 @@ void EmbedderLayers::PushPlatformViewLayer(
                   .get());
         } break;
         case MutatorType::kClipPath: {
-          // Unsupported mutation.
+          const DlPath& dl_path = mutator->GetPath();
+          auto ref_path = std::make_unique<ReferencedPath>();
+          ref_path->path.struct_size = sizeof(FlutterPath);
+          ref_path->path.fill_type =
+              (dl_path.GetFillType() == DlPathFillType::kOdd)
+                  ? kFlutterPathFillTypeEvenOdd
+                  : kFlutterPathFillTypeNonZero;
+          const bool allow_conics =
+              (platform_view_mutation_capabilities_ &
+               kFlutterPlatformViewMutationCapabilityPathConics) != 0;
+          FlutterPathReceiver receiver(ref_path->verbs, ref_path->points,
+                                       ref_path->conic_weights, allow_conics);
+          dl_path.Dispatch(receiver);
+          ref_path->path.verbs_count = ref_path->verbs.size();
+          ref_path->path.verbs =
+              ref_path->verbs.empty() ? nullptr : ref_path->verbs.data();
+          ref_path->path.points_count = ref_path->points.size();
+          ref_path->path.points =
+              ref_path->points.empty() ? nullptr : ref_path->points.data();
+          ref_path->path.conic_weights_count = ref_path->conic_weights.size();
+          ref_path->path.conic_weights = ref_path->conic_weights.empty()
+                                             ? nullptr
+                                             : ref_path->conic_weights.data();
+          const DlRect bounds = dl_path.GetBounds();
+          ref_path->path.bounds = FlutterRect{
+              .left = bounds.GetLeft(),
+              .top = bounds.GetTop(),
+              .right = bounds.GetRight(),
+              .bottom = bounds.GetBottom(),
+          };
+          const FlutterPath* path_ptr =
+              &paths_referenced_.emplace_back(std::move(ref_path))->path;
+          FlutterPlatformViewMutation mutation = {};
+          mutation.type = kFlutterPlatformViewMutationTypeClipPath;
+          mutation.clip_path = path_ptr;
+          mutations_array.push_back(
+              mutations_referenced_
+                  .emplace_back(
+                      std::make_unique<FlutterPlatformViewMutation>(mutation))
+                  .get());
         } break;
         case MutatorType::kTransform: {
           const auto& matrix = mutator->GetMatrix();
