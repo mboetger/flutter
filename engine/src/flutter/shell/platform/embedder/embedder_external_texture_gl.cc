@@ -4,8 +4,10 @@
 
 #include "flutter/shell/platform/embedder/embedder_external_texture_gl.h"
 
+#include "flutter/display_list/effects/dl_color_source.h"
 #include "flutter/display_list/image/dl_image_skia.h"
 #include "flutter/fml/logging.h"
+#include "flutter/shell/platform/embedder/embedder_struct_macros.h"
 #include "impeller/core/texture_descriptor.h"
 #include "impeller/display_list/aiks_context.h"
 #include "impeller/display_list/dl_image_impeller.h"
@@ -27,6 +29,32 @@
 #include "third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h"
 
 namespace flutter {
+
+namespace {
+
+#ifndef GL_TEXTURE_EXTERNAL_OES
+#define GL_TEXTURE_EXTERNAL_OES 0x8D65
+#endif
+
+#ifndef GL_RGBA8_OES
+#define GL_RGBA8_OES 0x8058
+#endif
+
+DlMatrix ToDlMatrix(const FlutterTransformation& tr) {
+  if (tr.scaleX == 0.0 && tr.skewX == 0.0 && tr.transX == 0.0 &&
+      tr.skewY == 0.0 && tr.scaleY == 0.0 && tr.transY == 0.0 &&
+      tr.pers0 == 0.0 && tr.pers1 == 0.0 && tr.pers2 == 0.0) {
+    return DlMatrix();
+  }
+  return DlMatrix::MakeColumn(
+      static_cast<DlScalar>(tr.scaleX), static_cast<DlScalar>(tr.skewY), 0.0f,
+      static_cast<DlScalar>(tr.pers0), static_cast<DlScalar>(tr.skewX),
+      static_cast<DlScalar>(tr.scaleY), 0.0f, static_cast<DlScalar>(tr.pers1),
+      0.0f, 0.0f, 1.0f, 0.0f, static_cast<DlScalar>(tr.transX),
+      static_cast<DlScalar>(tr.transY), 0.0f, static_cast<DlScalar>(tr.pers2));
+}
+
+}  // namespace
 
 EmbedderExternalTextureGL::EmbedderExternalTextureGL(
     int64_t texture_identifier,
@@ -55,6 +83,27 @@ void EmbedderExternalTextureGL::Paint(PaintContext& context,
   const DlPaint* paint = context.paint;
 
   if (last_image_) {
+    if (!last_uv_transform_.IsIdentity()) {
+      DlAutoCanvasRestore auto_restore(canvas, true);
+      canvas->Translate(bounds.GetX(), bounds.GetY());
+      canvas->Scale(bounds.GetWidth(), bounds.GetHeight());
+
+      DlMatrix transform =
+          (DlMatrix::MakeScale({static_cast<DlScalar>(last_image_->width()),
+                                static_cast<DlScalar>(last_image_->height()),
+                                1.0f}) *
+           last_uv_transform_)
+              .Invert();
+
+      DlPaint paint_with_shader = paint ? *paint : DlPaint();
+      auto image_source =
+          DlColorSource::MakeImage(last_image_, DlTileMode::kClamp,
+                                   DlTileMode::kClamp, sampling, &transform);
+      paint_with_shader.setColorSource(image_source);
+      canvas->DrawRect(DlRect::MakeWH(1, 1), paint_with_shader);
+      return;
+    }
+
     DlRect image_bounds = DlRect::Make(last_image_->GetBounds());
     if (bounds != image_bounds) {
       canvas->DrawImageRect(last_image_, image_bounds, bounds, sampling, paint);
@@ -86,12 +135,16 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureSkia(
   }
   context->flushAndSubmit();
   context->resetContext(kAll_GrBackendState);
-  std::unique_ptr<FlutterOpenGLTexture> texture =
+  std::unique_ptr<FlutterOpenGLExternalTexture> texture =
       external_texture_callback_(texture_id, size.width(), size.height());
 
   if (!texture) {
     return nullptr;
   }
+
+  last_uv_transform_ = STRUCT_HAS_MEMBER(texture.get(), uv_transform)
+                           ? ToDlMatrix(texture->uv_transform)
+                           : DlMatrix();
 
   GrGLTextureInfo gr_texture_info = {texture->target, texture->name,
                                      texture->format};
@@ -136,12 +189,16 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpeller(
     int64_t texture_id,
     impeller::AiksContext* aiks_context,
     const SkISize& size) {
-  std::unique_ptr<FlutterOpenGLTexture> texture =
+  std::unique_ptr<FlutterOpenGLExternalTexture> texture =
       external_texture_callback_(texture_id, size.width(), size.height());
 
   if (!texture) {
     return nullptr;
   }
+
+  last_uv_transform_ = STRUCT_HAS_MEMBER(texture.get(), uv_transform)
+                           ? ToDlMatrix(texture->uv_transform)
+                           : DlMatrix();
 
   // Call the destruction callback if an error occurs.
   fml::ScopedCleanupClosure scoped_cleanup([&texture]() {
@@ -150,14 +207,24 @@ sk_sp<DlImage> EmbedderExternalTextureGL::ResolveTextureImpeller(
     }
   });
 
-  if (texture->format != GL_RGBA8) {
+  if (texture->format != GL_RGBA8 && texture->format != GL_RGBA8_OES) {
     FML_LOG(ERROR) << "Only support GL_RGBA8 format now";
     return nullptr;
   }
 
+  size_t width = size.width();
+  size_t height = size.height();
+  if (texture->width != 0 && texture->height != 0) {
+    width = texture->width;
+    height = texture->height;
+  }
+
   impeller::TextureDescriptor desc;
-  desc.size = impeller::ISize(texture->width, texture->height);
+  desc.size = impeller::ISize(width, height);
   desc.format = impeller::PixelFormat::kR8G8B8A8UNormInt;
+  if (texture->target == GL_TEXTURE_EXTERNAL_OES) {
+    desc.type = impeller::TextureType::kTextureExternalOES;
+  }
 
   impeller::ContextGLES& context =
       impeller::ContextGLES::Cast(*aiks_context->GetContext());

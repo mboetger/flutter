@@ -175,6 +175,11 @@ static bool IsOpenGLRendererConfigValid(const FlutterRendererConfig* config) {
     return false;
   }
 
+  if (SAFE_EXISTS(open_gl_config, gl_external_texture_frame_callback) &&
+      SAFE_EXISTS(open_gl_config, external_texture_frame_callback)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -2390,17 +2395,42 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
       external_texture_callback;
   if (config->type == kOpenGL) {
     const FlutterOpenGLRendererConfig* open_gl_config = &config->open_gl;
-    if (SAFE_ACCESS(open_gl_config, gl_external_texture_frame_callback,
-                    nullptr) != nullptr) {
+    if (SAFE_ACCESS(open_gl_config, external_texture_frame_callback, nullptr) !=
+        nullptr) {
       external_texture_callback =
-          [ptr = open_gl_config->gl_external_texture_frame_callback, user_data](
+          [ptr = open_gl_config->external_texture_frame_callback, user_data](
               int64_t texture_identifier, size_t width,
-              size_t height) -> std::unique_ptr<FlutterOpenGLTexture> {
-        std::unique_ptr<FlutterOpenGLTexture> texture =
-            std::make_unique<FlutterOpenGLTexture>();
+              size_t height) -> std::unique_ptr<FlutterOpenGLExternalTexture> {
+        auto texture = std::make_unique<FlutterOpenGLExternalTexture>();
+        texture->struct_size = sizeof(FlutterOpenGLExternalTexture);
         if (!ptr(user_data, texture_identifier, width, height, texture.get())) {
           return nullptr;
         }
+        return texture;
+      };
+      external_texture_resolver =
+          std::make_unique<ExternalTextureResolver>(external_texture_callback);
+    } else if (SAFE_ACCESS(open_gl_config, gl_external_texture_frame_callback,
+                           nullptr) != nullptr) {
+      external_texture_callback =
+          [ptr = open_gl_config->gl_external_texture_frame_callback, user_data](
+              int64_t texture_identifier, size_t width,
+              size_t height) -> std::unique_ptr<FlutterOpenGLExternalTexture> {
+        FlutterOpenGLTexture legacy_texture = {};
+        if (!ptr(user_data, texture_identifier, width, height,
+                 &legacy_texture)) {
+          return nullptr;
+        }
+        auto texture = std::make_unique<FlutterOpenGLExternalTexture>();
+        texture->struct_size = sizeof(FlutterOpenGLExternalTexture);
+        texture->target = legacy_texture.target;
+        texture->name = legacy_texture.name;
+        texture->format = legacy_texture.format;
+        texture->user_data = legacy_texture.user_data;
+        texture->destruction_callback = legacy_texture.destruction_callback;
+        texture->width = legacy_texture.width;
+        texture->height = legacy_texture.height;
+        texture->uv_transform = {};
         return texture;
       };
       external_texture_resolver =

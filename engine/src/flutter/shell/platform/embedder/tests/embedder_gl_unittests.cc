@@ -4537,7 +4537,8 @@ TEST_F(EmbedderTest, ExternalTextureGLRefreshedTooOften) {
   EmbedderExternalTextureGL::ExternalTextureCallback callback(
       [&](int64_t, size_t, size_t) {
         resolve_called = true;
-        auto res = std::make_unique<FlutterOpenGLTexture>();
+        auto res = std::make_unique<FlutterOpenGLExternalTexture>();
+        res->struct_size = sizeof(FlutterOpenGLExternalTexture);
         res->target = GL_TEXTURE_2D;
         res->name = name;
         res->format = GL_RGBA8;
@@ -4579,7 +4580,8 @@ TEST_F(EmbedderTest, ExternalTextureGLRefreshedTooOften) {
 TEST_F(EmbedderTest, ExternalTextureGLNullContextDoesNotCrash) {
   EmbedderExternalTextureGL::ExternalTextureCallback callback(
       [](int64_t, size_t, size_t) {
-        auto res = std::make_unique<FlutterOpenGLTexture>();
+        auto res = std::make_unique<FlutterOpenGLExternalTexture>();
+        res->struct_size = sizeof(FlutterOpenGLExternalTexture);
         res->target = GL_TEXTURE_2D;
         res->name = 1;
         res->format = GL_RGBA8;
@@ -4994,6 +4996,111 @@ TEST_F(EmbedderTest, RenderTextureWithImpellerOpenGLDestructCallback) {
   // After the second frame completes, Impeller will have collected the handle
   // of the first frame's texture and called its destruction callback.
   ASSERT_TRUE(destruction_callback_called);
+}
+
+TEST_F(EmbedderTest, CannotSpecifyBothOpenGLExternalTextureCallbacks) {
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  context.GetRendererConfig().open_gl.gl_external_texture_frame_callback =
+      [](void* user_data, int64_t texture_id, size_t width, size_t height,
+         FlutterOpenGLTexture* texture) -> bool { return false; };
+  context.GetRendererConfig().open_gl.external_texture_frame_callback =
+      [](void* user_data, int64_t texture_id, size_t width, size_t height,
+         FlutterOpenGLExternalTexture* texture) -> bool { return false; };
+
+  auto engine = builder.InitializeEngine();
+  ASSERT_FALSE(engine.is_valid());
+}
+
+TEST_F(EmbedderTest, RenderTextureWithImpellerOpenGLUVTransform) {
+  constexpr int kWidth = 800;
+  constexpr int kHeight = 600;
+  auto& context = GetEmbedderContext<EmbedderTestContextGL>();
+  EmbedderConfigBuilder builder(context);
+  fml::AutoResetWaitableEvent latch;
+  context.SetGLPresentCallback(
+      [&](FlutterPresentInfo present_info) { latch.Signal(); });
+  builder.AddCommandLineArgument("--enable-impeller");
+  builder.SetDartEntrypoint("render_texture_impeller_test");
+  builder.SetSurface(DlISize(kWidth, kHeight));
+  typedef void (*glGenTexturesProc)(GLsizei n, GLuint* textures);
+  typedef void (*glBindTextureProc)(GLenum n, GLuint texture);
+  typedef void (*glTexImage2DProc)(GLenum target, GLint level,
+                                   GLint internalformat, GLsizei width,
+                                   GLsizei height, GLint border, GLenum format,
+                                   GLenum type, const void* pixels);
+  static glGenTexturesProc glGenTextures = reinterpret_cast<glGenTexturesProc>(
+      context.GLGetProcAddress("glGenTextures"));
+  static glBindTextureProc glBindTexture = reinterpret_cast<glBindTextureProc>(
+      context.GLGetProcAddress("glBindTexture"));
+  static glTexImage2DProc glTexImage2D = reinterpret_cast<glTexImage2DProc>(
+      context.GLGetProcAddress("glTexImage2D"));
+
+  auto rendered_scene = context.GetNextSceneImage();
+  static auto destruction_callback = [](void* user_data) {
+    GLuint gl_texture =
+        static_cast<GLuint>(reinterpret_cast<uintptr_t>(user_data));
+    glDeleteTextures(1, &gl_texture);
+  };
+  context.GetRendererConfig().open_gl.external_texture_frame_callback =
+      [](void* user_data, int64_t texture_id, size_t width, size_t height,
+         FlutterOpenGLExternalTexture* texture) -> bool {
+    // Populate top half Blue and bottom half Red (vertically inverted relative
+    // to external_texture_impeller.png), then apply a vertical-flip
+    // uv_transform so the rendered result matches
+    // external_texture_impeller.png.
+    std::vector<uint8_t> buffer(kWidth * kHeight * 4);
+    for (int i = 0; i < kWidth * kHeight / 2; ++i) {
+      buffer[i * 4 + 0] = 0;    // Red channel
+      buffer[i * 4 + 1] = 0;    // Green channel
+      buffer[i * 4 + 2] = 255;  // Blue channel
+      buffer[i * 4 + 3] = 255;  // Alpha channel
+    }
+    for (int i = kWidth * kHeight / 2; i < kWidth * kHeight; ++i) {
+      buffer[i * 4 + 0] = 255;  // Red channel
+      buffer[i * 4 + 1] = 0;    // Green channel
+      buffer[i * 4 + 2] = 0;    // Blue channel
+      buffer[i * 4 + 3] = 255;  // Alpha channel
+    }
+
+    GLuint gl_texture = 0;
+    glGenTextures(1, &gl_texture);
+    glBindTexture(GL_TEXTURE_2D, gl_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, kWidth, kHeight, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, buffer.data());
+    texture->target = GL_TEXTURE_2D;
+    texture->name = gl_texture;
+    texture->format = GL_RGBA8;
+    texture->destruction_callback = destruction_callback;
+    texture->user_data = reinterpret_cast<void*>(gl_texture);
+    texture->width = width;
+    texture->height = height;
+    texture->uv_transform = {
+        1.0, 0.0,  0.0,  //
+        0.0, -1.0, 1.0,  //
+        0.0, 0.0,  1.0,  //
+    };
+    return true;
+  };
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  constexpr int64_t texture_id = 1;
+  ASSERT_EQ(FlutterEngineRegisterExternalTexture(engine.get(), texture_id),
+            kSuccess);
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = kWidth;
+  event.height = kHeight;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+  latch.Wait();
+  ASSERT_TRUE(
+      ImageMatchesFixture("external_texture_impeller.png", rendered_scene));
 }
 
 TEST_F(EmbedderTest, ImpellerOpenGLImageSnapshot) {

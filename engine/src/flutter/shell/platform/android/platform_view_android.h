@@ -119,10 +119,6 @@ class PlatformViewAndroid final {
 
   void RegisterTexture(std::shared_ptr<flutter::Texture> texture);
 
-  void UnregisterTexture(int64_t texture_id);
-
-  void MarkTextureFrameAvailable(int64_t texture_id);
-
   void UpdateAssetResolverByType(
       std::unique_ptr<AssetResolver> updated_asset_resolver,
       AssetResolver::AssetResolverType type);

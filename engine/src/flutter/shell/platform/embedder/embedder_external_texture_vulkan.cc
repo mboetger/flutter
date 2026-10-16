@@ -136,8 +136,11 @@ EmbedderExternalTextureSourceVulkan::EmbedderExternalTextureSourceVulkan(
   texture_image_ = impeller::vk::Image(
       reinterpret_cast<VkImage>(SAFE_ACCESS(embedder_desc, image, 0)));
 
-  needs_yuv_conversion_ = IsYuvFormat(
-      static_cast<VkFormat>(SAFE_ACCESS(embedder_desc, format, 0u)));
+  const FlutterVulkanYcbcrConversionInfo* ycbcr_info =
+      SAFE_ACCESS(embedder_desc, ycbcr_conversion_info, nullptr);
+  needs_yuv_conversion_ =
+      ycbcr_info != nullptr || IsYuvFormat(static_cast<VkFormat>(
+                                   SAFE_ACCESS(embedder_desc, format, 0u)));
   std::shared_ptr<impeller::YUVConversionVK> yuv_conversion;
   if (needs_yuv_conversion_) {
     yuv_conversion = CreateYUVConversion(context, embedder_desc);
@@ -197,6 +200,57 @@ EmbedderExternalTextureSourceVulkan::CreateYUVConversion(
   impeller::YUVConversionDescriptorVK conversion_chain;
   impeller::vk::SamplerYcbcrConversionCreateInfo& conversion_info =
       conversion_chain.get();
+
+  const FlutterVulkanYcbcrConversionInfo* ycbcr_info =
+      SAFE_ACCESS(embedder_desc, ycbcr_conversion_info, nullptr);
+  if (ycbcr_info != nullptr) {
+    conversion_info.format =
+        static_cast<impeller::vk::Format>(SAFE_ACCESS(ycbcr_info, format, 0u));
+    conversion_info.ycbcrModel =
+        static_cast<impeller::vk::SamplerYcbcrModelConversion>(
+            SAFE_ACCESS(ycbcr_info, ycbcr_model, 0u));
+    conversion_info.ycbcrRange = static_cast<impeller::vk::SamplerYcbcrRange>(
+        SAFE_ACCESS(ycbcr_info, ycbcr_range, 0u));
+    if (STRUCT_HAS_MEMBER(ycbcr_info, components)) {
+      conversion_info.components = {
+          static_cast<impeller::vk::ComponentSwizzle>(ycbcr_info->components.r),
+          static_cast<impeller::vk::ComponentSwizzle>(ycbcr_info->components.g),
+          static_cast<impeller::vk::ComponentSwizzle>(ycbcr_info->components.b),
+          static_cast<impeller::vk::ComponentSwizzle>(ycbcr_info->components.a),
+      };
+    } else {
+      conversion_info.components = {
+          impeller::vk::ComponentSwizzle::eIdentity,
+          impeller::vk::ComponentSwizzle::eIdentity,
+          impeller::vk::ComponentSwizzle::eIdentity,
+          impeller::vk::ComponentSwizzle::eIdentity,
+      };
+    }
+    conversion_info.xChromaOffset = static_cast<impeller::vk::ChromaLocation>(
+        SAFE_ACCESS(ycbcr_info, x_chroma_offset, 0u));
+    conversion_info.yChromaOffset = static_cast<impeller::vk::ChromaLocation>(
+        SAFE_ACCESS(ycbcr_info, y_chroma_offset, 0u));
+    conversion_info.chromaFilter = static_cast<impeller::vk::Filter>(
+        SAFE_ACCESS(ycbcr_info, chroma_filter, 0u));
+    conversion_info.forceExplicitReconstruction =
+        SAFE_ACCESS(ycbcr_info, force_explicit_reconstruction, 0u) != 0u;
+#if FML_OS_ANDROID
+    const uint64_t external_format =
+        SAFE_ACCESS(ycbcr_info, external_format, 0ull);
+    if (conversion_info.format == impeller::vk::Format::eUndefined &&
+        external_format != 0ull) {
+      conversion_chain.get<impeller::vk::ExternalFormatANDROID>()
+          .externalFormat = external_format;
+    } else {
+      conversion_chain.unlink<impeller::vk::ExternalFormatANDROID>();
+    }
+#endif  // FML_OS_ANDROID
+    return context.GetYUVConversionLibrary()->GetConversion(conversion_chain);
+  }
+
+#if FML_OS_ANDROID
+  conversion_chain.unlink<impeller::vk::ExternalFormatANDROID>();
+#endif  // FML_OS_ANDROID
 
   const impeller::vk::Format vk_format =
       static_cast<impeller::vk::Format>(SAFE_ACCESS(embedder_desc, format, 0u));
@@ -372,7 +426,9 @@ sk_sp<DlImage> EmbedderExternalTextureVulkan::ResolveTextureSkia(
   }
 
   VkFormat vk_format = static_cast<VkFormat>(SAFE_ACCESS(desc, format, 0u));
-  bool is_yuv = IsYuvFormat(vk_format);
+  const FlutterVulkanYcbcrConversionInfo* ycbcr_info =
+      SAFE_ACCESS(desc, ycbcr_conversion_info, nullptr);
+  bool is_yuv = ycbcr_info != nullptr || IsYuvFormat(vk_format);
 
   GrVkImageInfo image_info = {
       .fImage = reinterpret_cast<VkImage>(SAFE_ACCESS(desc, image, 0)),
@@ -386,9 +442,58 @@ sk_sp<DlImage> EmbedderExternalTextureVulkan::ResolveTextureSkia(
       .fLevelCount = 1,
   };
 
-  // For multi-planar YUV formats, populate the YCbCr conversion info so that
-  // Skia knows how to convert YUV to RGB when sampling the image.
-  if (is_yuv) {
+  // For multi-planar YUV formats or explicit YCbCr conversion descriptors,
+  // populate the YCbCr conversion info so that Skia knows how to convert YUV to
+  // RGB when sampling the image.
+  if (ycbcr_info != nullptr) {
+    VkComponentMapping components = {
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+    };
+    if (STRUCT_HAS_MEMBER(ycbcr_info, components)) {
+      components = {
+          static_cast<VkComponentSwizzle>(ycbcr_info->components.r),
+          static_cast<VkComponentSwizzle>(ycbcr_info->components.g),
+          static_cast<VkComponentSwizzle>(ycbcr_info->components.b),
+          static_cast<VkComponentSwizzle>(ycbcr_info->components.a),
+      };
+    }
+    const VkFormat ycbcr_format =
+        static_cast<VkFormat>(SAFE_ACCESS(ycbcr_info, format, 0u));
+    const uint64_t external_format =
+        SAFE_ACCESS(ycbcr_info, external_format, 0ull);
+    const VkSamplerYcbcrModelConversion ycbcr_model =
+        static_cast<VkSamplerYcbcrModelConversion>(
+            SAFE_ACCESS(ycbcr_info, ycbcr_model, 0u));
+    const VkSamplerYcbcrRange ycbcr_range = static_cast<VkSamplerYcbcrRange>(
+        SAFE_ACCESS(ycbcr_info, ycbcr_range, 0u));
+    const VkChromaLocation x_chroma_offset = static_cast<VkChromaLocation>(
+        SAFE_ACCESS(ycbcr_info, x_chroma_offset, 0u));
+    const VkChromaLocation y_chroma_offset = static_cast<VkChromaLocation>(
+        SAFE_ACCESS(ycbcr_info, y_chroma_offset, 0u));
+    const VkFilter chroma_filter =
+        static_cast<VkFilter>(SAFE_ACCESS(ycbcr_info, chroma_filter, 0u));
+    const VkBool32 force_explicit_reconstruction =
+        SAFE_ACCESS(ycbcr_info, force_explicit_reconstruction, 0u) ? VK_TRUE
+                                                                   : VK_FALSE;
+    const VkFormatFeatureFlags format_features =
+        static_cast<VkFormatFeatureFlags>(
+            SAFE_ACCESS(ycbcr_info, format_features, 0u));
+
+    if (ycbcr_format == VK_FORMAT_UNDEFINED && external_format != 0ull) {
+      image_info.fYcbcrConversionInfo = skgpu::VulkanYcbcrConversionInfo(
+          external_format, ycbcr_model, ycbcr_range, x_chroma_offset,
+          y_chroma_offset, chroma_filter, force_explicit_reconstruction,
+          components, format_features);
+    } else {
+      image_info.fYcbcrConversionInfo = skgpu::VulkanYcbcrConversionInfo(
+          ycbcr_format, ycbcr_model, ycbcr_range, x_chroma_offset,
+          y_chroma_offset, chroma_filter, force_explicit_reconstruction,
+          components, format_features);
+    }
+  } else if (is_yuv) {
     image_info.fYcbcrConversionInfo = skgpu::VulkanYcbcrConversionInfo(
         vk_format, VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709,
         VK_SAMPLER_YCBCR_RANGE_ITU_FULL, VK_CHROMA_LOCATION_COSITED_EVEN,

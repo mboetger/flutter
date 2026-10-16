@@ -545,18 +545,6 @@ void PlatformViewAndroid::RegisterTexture(
   }
 }
 
-void PlatformViewAndroid::UnregisterTexture(int64_t texture_id) {
-  if (platform_view_) {
-    platform_view_->UnregisterTexture(texture_id);
-  }
-}
-
-void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
-  if (platform_view_) {
-    platform_view_->MarkTextureFrameAvailable(texture_id);
-  }
-}
-
 void PlatformViewAndroid::UpdateAssetResolverByType(
     std::unique_ptr<AssetResolver> updated_asset_resolver,
     AssetResolver::AssetResolverType type) {

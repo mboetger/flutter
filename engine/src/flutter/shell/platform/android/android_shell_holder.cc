@@ -547,11 +547,21 @@ void AndroidShellHolder::RegisterImageTexture(
 }
 
 void AndroidShellHolder::UnregisterTexture(int64_t texture_id) {
-  GetPlatformView()->UnregisterTexture(texture_id);
+  FlutterEngineResult result =
+      embedder_api_.UnregisterExternalTexture(engine_.get(), texture_id);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineUnregisterExternalTexture failed: "
+                   << result;
+  }
 }
 
 void AndroidShellHolder::MarkTextureFrameAvailable(int64_t texture_id) {
-  GetPlatformView()->MarkTextureFrameAvailable(texture_id);
+  FlutterEngineResult result = embedder_api_.MarkExternalTextureFrameAvailable(
+      engine_.get(), texture_id);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineMarkExternalTextureFrameAvailable failed: "
+                   << result;
+  }
 }
 
 void AndroidShellHolder::ScheduleFrame() {

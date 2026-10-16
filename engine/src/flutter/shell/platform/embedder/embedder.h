@@ -540,6 +540,38 @@ typedef struct {
 } FlutterOpenGLTexture;
 
 typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterOpenGLExternalTexture).
+  size_t struct_size;
+  /// Target texture of the active texture unit (example GL_TEXTURE_2D,
+  /// GL_TEXTURE_RECTANGLE, or GL_TEXTURE_EXTERNAL_OES).
+  uint32_t target;
+  /// The name of the texture.
+  uint32_t name;
+  /// The texture format (example GL_RGBA8).
+  uint32_t format;
+  /// User data to be returned on the invocation of the destruction callback.
+  void* user_data;
+  /// Callback invoked (on an engine managed thread) that asks the embedder to
+  /// collect the texture.
+  VoidCallback destruction_callback;
+  /// Optional parameters for texture height/width, default is 0, non-zero means
+  /// the texture has the specified width/height.
+  size_t width;
+  size_t height;
+  /// UV transformation matrix (e.g., from Android's
+  /// SurfaceTexture.getTransformMatrix). An all-zero matrix or identity matrix
+  /// indicates no UV transformation.
+  FlutterTransformation uv_transform;
+} FlutterOpenGLExternalTexture;
+
+typedef bool (*FlutterOpenGLTextureFrameCallback)(
+    void* /* user data */,
+    int64_t /* texture identifier */,
+    size_t /* width */,
+    size_t /* height */,
+    FlutterOpenGLExternalTexture* /* texture out */);
+
+typedef struct {
   /// The format of the color attachment of the frame-buffer. For example,
   /// GL_RGBA8.
   ///
@@ -777,6 +809,10 @@ typedef struct {
   /// engine will call this method (on an internal engine managed thread) so
   /// that external texture details can be supplied to the engine for subsequent
   /// composition.
+  ///
+  /// @deprecated Use `external_texture_frame_callback` instead, which uses the
+  ///             extensible `FlutterOpenGLExternalTexture` struct with UV
+  ///             transformation support.
   TextureFrameCallback gl_external_texture_frame_callback;
   /// Specifying one (and only one) of the `fbo_callback` or
   /// `fbo_with_frame_info_callback` is required. Specifying both is an error
@@ -811,6 +847,12 @@ typedef struct {
   /// ID. Not specifying populate_existing_damage will result in full
   /// repaint (i.e. rendering all the pixels on the screen at every frame).
   FlutterFrameBufferWithDamageCallback populate_existing_damage;
+  /// When the embedder specifies that a texture has a frame available, the
+  /// engine will call this method (on an internal engine managed thread) so
+  /// that external texture details can be supplied to the engine for subsequent
+  /// composition. Specifying both `gl_external_texture_frame_callback` and
+  /// `external_texture_frame_callback` is an error.
+  FlutterOpenGLTextureFrameCallback external_texture_frame_callback;
 } FlutterOpenGLRendererConfig;
 
 /// Alias for id<MTLDevice>.
@@ -968,6 +1010,52 @@ typedef bool (*FlutterVulkanPresentCallback)(
     void* /* user data */,
     const FlutterVulkanImage* /* image */);
 
+/// Component swizzle values matching VkComponentSwizzle.
+typedef enum {
+  kFlutterVulkanComponentSwizzleIdentity = 0,
+  kFlutterVulkanComponentSwizzleZero = 1,
+  kFlutterVulkanComponentSwizzleOne = 2,
+  kFlutterVulkanComponentSwizzleR = 3,
+  kFlutterVulkanComponentSwizzleG = 4,
+  kFlutterVulkanComponentSwizzleB = 5,
+  kFlutterVulkanComponentSwizzleA = 6,
+} FlutterVulkanComponentSwizzle;
+
+/// Component mapping matching VkComponentMapping.
+typedef struct {
+  FlutterVulkanComponentSwizzle r;
+  FlutterVulkanComponentSwizzle g;
+  FlutterVulkanComponentSwizzle b;
+  FlutterVulkanComponentSwizzle a;
+} FlutterVulkanComponentMapping;
+
+/// YCbCr sampler conversion info for Vulkan external textures (e.g.,
+/// AHardwareBuffer-backed images with external formats).
+typedef struct {
+  /// Must be sizeof(FlutterVulkanYcbcrConversionInfo).
+  size_t struct_size;
+  /// VkFormat (may be VK_FORMAT_UNDEFINED when external_format is non-zero).
+  uint32_t format;
+  /// VkSamplerYcbcrModelConversion value.
+  uint32_t ycbcr_model;
+  /// VkSamplerYcbcrRange value.
+  uint32_t ycbcr_range;
+  /// Channel swizzle mapping.
+  FlutterVulkanComponentMapping components;
+  /// VkChromaLocation for x chroma offset.
+  uint32_t x_chroma_offset;
+  /// VkChromaLocation for y chroma offset.
+  uint32_t y_chroma_offset;
+  /// VkFilter for chroma reconstruction.
+  uint32_t chroma_filter;
+  /// VkBool32 for explicit reconstruction.
+  uint32_t force_explicit_reconstruction;
+  /// VkFormatFeatureFlags for the external format.
+  uint32_t format_features;
+  /// Android external format (VkExternalFormatANDROID::externalFormat), or 0.
+  uint64_t external_format;
+} FlutterVulkanYcbcrConversionInfo;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterVulkanExternalTexture).
   size_t struct_size;
@@ -989,6 +1077,9 @@ typedef struct {
   size_t width;
   /// Physical height of the texture.
   size_t height;
+  /// Optional pointer to YCbCr conversion descriptor when the image requires
+  /// custom or external-format YCbCr conversion. Can be null.
+  const FlutterVulkanYcbcrConversionInfo* ycbcr_conversion_info;
 } FlutterVulkanExternalTexture;
 
 /// Callback to provide an external texture for a given texture_id.

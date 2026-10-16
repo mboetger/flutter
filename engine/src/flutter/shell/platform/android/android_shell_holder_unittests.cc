@@ -317,5 +317,52 @@ TEST(AndroidShellHolder, SurfaceLifecycleRoutesThroughEmbedderApi) {
   EXPECT_EQ(notify_destroyed_calls, 1);
 }
 
+TEST(AndroidShellHolder, TextureLifecycleRoutesThroughEmbedderApi) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  static int mark_frame_available_calls;
+  static int unregister_texture_calls;
+  static int64_t last_marked_texture_id;
+  static int64_t last_unregistered_texture_id;
+  mark_frame_available_calls = 0;
+  unregister_texture_calls = 0;
+  last_marked_texture_id = 0;
+  last_unregistered_texture_id = 0;
+
+  FlutterEngineProcTable& api = holder->GetEmbedderApiForTesting();
+  static FlutterEngineMarkExternalTextureFrameAvailableFnPtr
+      saved_mark_frame_available;
+  static FlutterEngineUnregisterExternalTextureFnPtr saved_unregister_texture;
+  saved_mark_frame_available = api.MarkExternalTextureFrameAvailable;
+  saved_unregister_texture = api.UnregisterExternalTexture;
+
+  api.MarkExternalTextureFrameAvailable =
+      [](FLUTTER_API_SYMBOL(FlutterEngine) engine, int64_t texture_identifier) {
+        mark_frame_available_calls++;
+        last_marked_texture_id = texture_identifier;
+        return saved_mark_frame_available(engine, texture_identifier);
+      };
+  api.UnregisterExternalTexture = [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                     int64_t texture_identifier) {
+    unregister_texture_calls++;
+    last_unregistered_texture_id = texture_identifier;
+    return saved_unregister_texture(engine, texture_identifier);
+  };
+
+  constexpr int64_t kTestTextureId = 42;
+  holder->MarkTextureFrameAvailable(kTestTextureId);
+  EXPECT_EQ(mark_frame_available_calls, 1);
+  EXPECT_EQ(last_marked_texture_id, kTestTextureId);
+
+  holder->UnregisterTexture(kTestTextureId);
+  EXPECT_EQ(unregister_texture_calls, 1);
+  EXPECT_EQ(last_unregistered_texture_id, kTestTextureId);
+}
+
 }  // namespace testing
 }  // namespace flutter
