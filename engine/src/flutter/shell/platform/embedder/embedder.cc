@@ -3281,6 +3281,7 @@ FlutterEngineResult FlutterEngineUpdateSemanticsEnabled(
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
+  TRACE_EVENT0("flutter", "FlutterEngineUpdateSemanticsEnabled");
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)->SetSemanticsEnabled(
           enabled)) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
@@ -3295,6 +3296,7 @@ FlutterEngineResult FlutterEngineUpdateAccessibilityFeatures(
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
+  TRACE_EVENT0("flutter", "FlutterEngineUpdateAccessibilityFeatures");
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)
            ->SetAccessibilityFeatures(flags)) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
@@ -3767,6 +3769,7 @@ FlutterEngineResult FlutterEngineScheduleFrame(FLUTTER_API_SYMBOL(FlutterEngine)
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
 
+  TRACE_EVENT0("flutter", "FlutterEngineScheduleFrame");
   return reinterpret_cast<flutter::EmbedderEngine*>(engine)->ScheduleFrame()
              ? kSuccess
              : LOG_EMBEDDER_ERROR(kInvalidArguments,

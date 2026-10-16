@@ -178,9 +178,7 @@
     ],
     "android_shell_holder.cc": [
       "flutter/lib/ui/painting/image_generator_registry.h",
-      "flutter/shell/common/rasterizer.h",
-      "flutter/shell/common/run_configuration.h",
-      "flutter/shell/common/thread_host.h"
+      "flutter/shell/common/rasterizer.h"
     ],
     "android_shell_holder.h": [
       "flutter/shell/common/run_configuration.h",
