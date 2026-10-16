@@ -16,11 +16,11 @@
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
+#include "flutter/shell/platform/android/ndk/ndk_proc_table.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 #include "flutter/shell/platform/embedder/test_utils/proc_table_replacement.h"
-#include "impeller/toolkit/android/proc_table.h"
 
 namespace flutter {
 namespace testing {
@@ -126,16 +126,16 @@ TEST_F(PlatformViewAndroidJNIImplTest,
 
   // Stub the NDK call so the fake Java object is never dereferenced.
   auto& from_java_proc =
-      impeller::android::GetMutableProcTable().ASurfaceTransaction_fromJava;
-  auto* real_from_java = from_java_proc.proc;
-  from_java_proc.proc = [](JNIEnv*, jobject) -> ASurfaceTransaction* {
+      GetMutableNDKProcTableForTesting().ASurfaceTransaction_fromJava;
+  auto* real_from_java = from_java_proc;
+  from_java_proc = [](JNIEnv*, jobject) -> ASurfaceTransaction* {
     return reinterpret_cast<ASurfaceTransaction*>(0x3003);
   };
   struct RestoreProc {
-    decltype(from_java_proc.proc)* slot;
-    decltype(from_java_proc.proc) prev;
+    decltype(real_from_java)* slot;
+    decltype(real_from_java) prev;
     ~RestoreProc() { *slot = prev; }
-  } restore{&from_java_proc.proc, real_from_java};
+  } restore{&from_java_proc, real_from_java};
 
   EXPECT_CALL(mock_env, GetObjectRefType(_))
       .WillRepeatedly(Return(JNILocalRefType));
@@ -191,25 +191,25 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   const jobject kJavaTxObj = reinterpret_cast<jobject>(0x2002);
 
   // Stub the NDK calls so the fake objects are never dereferenced.
-  auto& proc_table = impeller::android::GetMutableProcTable();
-  auto* real_from_java = proc_table.ASurfaceTransaction_fromJava.proc;
-  auto* real_apply = proc_table.ASurfaceTransaction_apply.proc;
-  proc_table.ASurfaceTransaction_fromJava.proc =
+  auto& proc_table = GetMutableNDKProcTableForTesting();
+  auto* real_from_java = proc_table.ASurfaceTransaction_fromJava;
+  auto* real_apply = proc_table.ASurfaceTransaction_apply;
+  proc_table.ASurfaceTransaction_fromJava =
       [](JNIEnv*, jobject) -> ASurfaceTransaction* {
     return reinterpret_cast<ASurfaceTransaction*>(0x3003);
   };
   static ASurfaceTransaction* applied_tx;
   applied_tx = nullptr;
-  proc_table.ASurfaceTransaction_apply.proc = [](ASurfaceTransaction* tx) {
+  proc_table.ASurfaceTransaction_apply = [](ASurfaceTransaction* tx) {
     applied_tx = tx;
   };
   struct RestoreProcs {
-    impeller::android::ProcTable& table;
+    NDKProcTable& table;
     decltype(real_from_java) from_java;
     decltype(real_apply) apply;
     ~RestoreProcs() {
-      table.ASurfaceTransaction_fromJava.proc = from_java;
-      table.ASurfaceTransaction_apply.proc = apply;
+      table.ASurfaceTransaction_fromJava = from_java;
+      table.ASurfaceTransaction_apply = apply;
     }
   } restore{proc_table, real_from_java, real_apply};
 

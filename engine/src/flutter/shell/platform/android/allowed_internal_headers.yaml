@@ -7,7 +7,7 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 84,
+  "total_allowed_internal_headers": 82,
   "subsystems": {
     "common_graphics_and_display_list": {
       "count": 7,
@@ -22,7 +22,7 @@
       ]
     },
     "engine_core": {
-      "count": 10,
+      "count": 9,
       "allowed_headers": [
         "flutter/shell/common/platform_message_handler.h",
         "flutter/shell/common/platform_view.h",
@@ -32,8 +32,7 @@
         "flutter/shell/common/shell_io_manager.h",
         "flutter/shell/common/snapshot_surface_producer.h",
         "flutter/shell/common/switches.h",
-        "flutter/shell/common/thread_host.h",
-        "flutter/shell/common/vsync_waiter.h"
+        "flutter/shell/common/thread_host.h"
       ]
     },
     "flow": {
@@ -45,7 +44,7 @@
       ]
     },
     "impeller": {
-      "count": 36,
+      "count": 35,
       "allowed_headers": [
         "flutter/impeller/base/flags.h",
         "flutter/impeller/base/validation.h",
@@ -73,7 +72,6 @@
         "flutter/impeller/renderer/backend/vulkan/texture_vk.h",
         "flutter/impeller/renderer/backend/vulkan/vk.h",
         "flutter/impeller/renderer/context.h",
-        "flutter/impeller/toolkit/android/choreographer.h",
         "flutter/impeller/toolkit/android/hardware_buffer.h",
         "flutter/impeller/toolkit/android/proc_table.h",
         "flutter/impeller/toolkit/android/surface_transaction.h",
@@ -248,7 +246,6 @@
     ],
     "flutter_main.cc": [
       "flutter/impeller/base/validation.h",
-      "flutter/impeller/toolkit/android/proc_table.h",
       "flutter/lib/ui/plugins/callback_cache.h",
       "flutter/runtime/dart_vm.h",
       "flutter/shell/common/switches.h",
@@ -336,7 +333,6 @@
     ],
     "platform_view_android_jni_impl.cc": [
       "flutter/flow/embedded_views.h",
-      "flutter/impeller/toolkit/android/proc_table.h",
       "flutter/lib/ui/plugins/callback_cache.h"
     ],
     "surface/android_native_window.h": [
@@ -387,12 +383,6 @@
       "flutter/impeller/toolkit/egl/display.h",
       "flutter/impeller/toolkit/egl/surface.h",
       "flutter/impeller/toolkit/glvk/trampoline.h"
-    ],
-    "vsync_waiter_android.cc": [
-      "flutter/impeller/toolkit/android/choreographer.h"
-    ],
-    "vsync_waiter_android.h": [
-      "flutter/shell/common/vsync_waiter.h"
     ]
   }
 }

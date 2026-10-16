@@ -152,8 +152,6 @@ class PlatformViewAndroid final {
 
   void OnPreEngineRestart() const;
 
-  std::unique_ptr<VsyncWaiter> CreateVSyncWaiter();
-
   std::unique_ptr<Surface> CreateRenderingSurface();
 
   std::shared_ptr<ExternalViewEmbedder> CreateExternalViewEmbedder();

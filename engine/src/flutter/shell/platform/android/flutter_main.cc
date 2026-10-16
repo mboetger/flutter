@@ -25,8 +25,8 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/flutter_main.h"
+#include "flutter/shell/platform/android/ndk/ndk_proc_table.h"
 #include "impeller/base/validation.h"
-#include "impeller/toolkit/android/proc_table.h"
 #include "txt/platform.h"
 
 namespace flutter {
@@ -107,8 +107,7 @@ void FlutterMain::Init(JNIEnv* env,
   // Turn systracing on if ATrace_isEnabled is true and the user did not already
   // request systracing
   if (!settings.trace_systrace) {
-    settings.trace_systrace =
-        impeller::android::GetProcTable().TraceIsEnabled();
+    settings.trace_systrace = GetNDKProcTable().TraceIsEnabled();
     if (settings.trace_systrace) {
       __android_log_print(
           ANDROID_LOG_INFO, "Flutter",

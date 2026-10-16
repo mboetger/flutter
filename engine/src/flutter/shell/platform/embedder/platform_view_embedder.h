@@ -72,11 +72,8 @@ class PlatformViewEmbedder final : public PlatformView {
     std::function<std::shared_ptr<impeller::Context>()>
         get_impeller_context_callback;                      // optional
     std::function<void()> setup_impeller_context_callback;  // optional
-    std::function<std::unique_ptr<VsyncWaiter>()>
-        create_vsync_waiter_callback;  // optional
     std::function<void(intptr_t)>
         request_dart_deferred_library_callback;  // optional
-    std::function<double(double, int)> get_scaled_font_size_callback;
     std::function<void(std::string)> set_application_locale_callback;
     std::function<void(bool)> set_semantics_tree_enabled_callback;
     std::shared_ptr<PlatformMessageHandler> custom_platform_message_handler;
@@ -191,10 +188,6 @@ class PlatformViewEmbedder final : public PlatformView {
   void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
                                     const std::string error_message,
                                     bool transient) override;
-
-  // |PlatformView|
-  double GetScaledFontSize(double unscaled_font_size,
-                           int configuration_id) const override;
 
   // |PlatformView|
   void SetApplicationLocale(std::string locale) override;

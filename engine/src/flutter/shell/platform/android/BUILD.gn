@@ -50,6 +50,7 @@ executable("flutter_shell_native_unittests") {
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
     "image_lru_unittests.cc",
+    "ndk/ndk_proc_table_unittests.cc",
     "platform_view_android_jni_impl_unittests.cc",
     "platform_view_android_unittests.cc",
   ]
@@ -90,7 +91,14 @@ source_set("flutter_embedder_native_src") {
   check_includes = true
   defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
 
-  sources = []
+  sources = [
+    "ndk/choreographer.cc",
+    "ndk/choreographer.h",
+    "ndk/ndk_proc_table.cc",
+    "ndk/ndk_proc_table.h",
+    "vsync_waiter_android.cc",
+    "vsync_waiter_android.h",
+  ]
 
   public_deps = [
     "//flutter/assets",
@@ -153,8 +161,6 @@ source_set("flutter_shell_native_src") {
     "surface_texture_external_texture_gl_impeller.h",
     "surface_texture_external_texture_vk_impeller.cc",
     "surface_texture_external_texture_vk_impeller.h",
-    "vsync_waiter_android.cc",
-    "vsync_waiter_android.h",
   ]
 
   if (!slimpeller) {

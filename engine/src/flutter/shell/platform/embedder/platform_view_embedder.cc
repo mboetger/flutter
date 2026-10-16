@@ -302,9 +302,6 @@ void PlatformViewEmbedder::ReleaseResourceContext() const {
 
 // |PlatformView|
 std::unique_ptr<VsyncWaiter> PlatformViewEmbedder::CreateVSyncWaiter() {
-  if (platform_dispatch_table_.create_vsync_waiter_callback != nullptr) {
-    return platform_dispatch_table_.create_vsync_waiter_callback();
-  }
   if (!platform_dispatch_table_.vsync_callback) {
     // Superclass implementation creates a timer based fallback.
     return PlatformView::CreateVSyncWaiter();
@@ -358,16 +355,6 @@ void PlatformViewEmbedder::LoadDartDeferredLibraryError(
     bool transient) {
   delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
                                          transient);
-}
-
-// |PlatformView|
-double PlatformViewEmbedder::GetScaledFontSize(double unscaled_font_size,
-                                               int configuration_id) const {
-  if (platform_dispatch_table_.get_scaled_font_size_callback != nullptr) {
-    return platform_dispatch_table_.get_scaled_font_size_callback(
-        unscaled_font_size, configuration_id);
-  }
-  return PlatformView::GetScaledFontSize(unscaled_font_size, configuration_id);
 }
 
 // |PlatformView|

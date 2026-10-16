@@ -20,12 +20,12 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
-#include "flutter/impeller/toolkit/android/proc_table.h"
 #include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
+#include "flutter/shell/platform/android/ndk/ndk_proc_table.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 
 #define ANDROID_SHELL_HOLDER \
@@ -2062,9 +2062,13 @@ ASurfaceTransaction* PlatformViewAndroidJNIImpl::createTransaction(
     return nullptr;
   }
 
+  const NDKProcTable& ndk = GetNDKProcTable();
+  if (!ndk.ASurfaceTransaction_fromJava) {
+    FML_LOG(ERROR) << "ASurfaceTransaction_fromJava needs API level 34.";
+    return nullptr;
+  }
   ASurfaceTransaction* native_tx =
-      impeller::android::GetProcTable().ASurfaceTransaction_fromJava(
-          env, transaction.obj());
+      ndk.ASurfaceTransaction_fromJava(env, transaction.obj());
   if (native_tx == nullptr) {
     return nullptr;
   }
@@ -2097,7 +2101,10 @@ ASurfaceTransaction* PlatformViewAndroidJNIImpl::createTransaction(
       // This keeps the completion callback registered by
       // `SurfaceTransaction::Apply` from being dropped, which would leak the
       // buffer it holds. The global ref keeps `native_tx` valid until Reset.
-      impeller::android::GetProcTable().ASurfaceTransaction_apply(native_tx);
+      if (const NDKProcTable& ndk = GetNDKProcTable();
+          ndk.ASurfaceTransaction_apply) {
+        ndk.ASurfaceTransaction_apply(native_tx);
+      }
     }
     global_tx->Reset();
   };

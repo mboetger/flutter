@@ -44,7 +44,6 @@
 #include "flutter/shell/platform/android/platform_message_response_android.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
 #include "flutter/shell/platform/android/surface/snapshot_surface_producer.h"
-#include "flutter/shell/platform/android/vsync_waiter_android.h"
 
 namespace flutter {
 
@@ -417,11 +416,6 @@ void PlatformViewAndroid::RegisterImageTexture(
       FML_CHECK(false);
       break;
   }
-}
-
-// |PlatformView|
-std::unique_ptr<VsyncWaiter> PlatformViewAndroid::CreateVSyncWaiter() {
-  return std::make_unique<VsyncWaiterAndroid>(task_runners_);
 }
 
 // |PlatformView|
