@@ -14,11 +14,11 @@
       "enforce": "ratchet"
     },
     "embedder_internal_includes": {
-      "count": 0,
+      "count": 1,
       "enforce": "ratchet"
     },
     "engine_internal_includes": {
-      "count": 153,
+      "count": 151,
       "enforce": "ratchet"
     },
     "unique_internal_headers": {
@@ -30,7 +30,7 @@
       "enforce": "ratchet"
     },
     "platform_view_android_overrides": {
-      "count": 21,
+      "count": 20,
       "enforce": "ratchet"
     },
     "gn_internal_deps": {
@@ -42,5 +42,12 @@
       "enforce": "zero"
     }
   },
-  "history": []
+  "history": [
+    {
+      "metric": "embedder_internal_includes",
+      "from": 0,
+      "to": 1,
+      "reason": "Phase 1 transitional seam: AndroidSurface inherits from EmbedderSurface"
+    }
+  ]
 }

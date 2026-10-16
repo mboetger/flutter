@@ -79,5 +79,27 @@ TEST(EmbedderSurfaceGLImpellerTest, GLES2ContextDoesNotHaveGLES3Shaders) {
       std::string_view(reinterpret_cast<const char*>(source->GetMapping()));
   EXPECT_THAT(text, StartsWith("#version 100"));
 }
+
+TEST(EmbedderSurfaceGLImpellerTest,
+     DefersContextCreationUntilSetupImpellerContext) {
+  impeller::testing::MockGLES::Init(flatbuffers::nullopt, "OpenGL ES 3.0");
+  int make_current_calls = 0;
+  auto gl_dispatch_table = StubDispatchTable(/* version */ "OpenGL ES 3.0");
+  gl_dispatch_table.gl_make_current_callback = [&make_current_calls]() {
+    make_current_calls++;
+    return true;
+  };
+  auto surface = EmbedderSurfaceGLImpeller(gl_dispatch_table,
+                                           /* fbo_reset_after_present */ false,
+                                           /* external_view_embedder */ nullptr,
+                                           /* io_task_runner */ nullptr);
+
+  EXPECT_EQ(make_current_calls, 0);
+  EXPECT_EQ(surface.impeller_context_, nullptr);
+
+  surface.SetupImpellerContext();
+  EXPECT_EQ(make_current_calls, 1);
+  EXPECT_NE(surface.impeller_context_, nullptr);
+}
 }  // namespace testing
 }  // namespace flutter

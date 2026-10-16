@@ -11,6 +11,10 @@ AndroidSurface::AndroidSurface() = default;
 
 AndroidSurface::~AndroidSurface() = default;
 
+std::unique_ptr<Surface> AndroidSurface::CreateGPUSurface() {
+  return CreateGPUSurface(nullptr);
+}
+
 std::unique_ptr<Surface> AndroidSurface::CreateSnapshotSurface() {
   return nullptr;
 }
@@ -19,6 +23,15 @@ std::shared_ptr<impeller::Context> AndroidSurface::GetImpellerContext() {
   return nullptr;
 }
 
+std::shared_ptr<impeller::Context> AndroidSurface::CreateImpellerContext()
+    const {
+  return const_cast<AndroidSurface*>(this)->GetImpellerContext();
+}
+
 void AndroidSurface::SetupImpellerSurface() {}
+
+void AndroidSurface::SetupImpellerContext() {
+  SetupImpellerSurface();
+}
 
 }  // namespace flutter

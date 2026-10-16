@@ -151,12 +151,37 @@ std::unique_ptr<Surface> PlatformViewEmbedder::CreateRenderingSurface() {
 // |PlatformView|
 std::shared_ptr<ExternalViewEmbedder>
 PlatformViewEmbedder::CreateExternalViewEmbedder() {
-  return external_view_embedder_;
+  if (external_view_embedder_) {
+    return external_view_embedder_;
+  }
+  if (embedder_surface_) {
+    return embedder_surface_->CreateExternalViewEmbedder();
+  }
+  return nullptr;
+}
+
+// |PlatformView|
+std::unique_ptr<SnapshotSurfaceProducer>
+PlatformViewEmbedder::CreateSnapshotSurfaceProducer() {
+  if (embedder_surface_ == nullptr) {
+    return nullptr;
+  }
+  return embedder_surface_->CreateSnapshotSurfaceProducer();
 }
 
 std::shared_ptr<impeller::Context> PlatformViewEmbedder::GetImpellerContext()
     const {
+  if (embedder_surface_ == nullptr) {
+    return nullptr;
+  }
   return embedder_surface_->CreateImpellerContext();
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::SetupImpellerContext() {
+  if (embedder_surface_ != nullptr) {
+    embedder_surface_->SetupImpellerContext();
+  }
 }
 
 // |PlatformView|

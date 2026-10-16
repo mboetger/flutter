@@ -26,6 +26,8 @@ class AndroidSurfaceVKImpeller : public AndroidSurface {
   // |AndroidSurface|
   bool IsValid() const override;
 
+  using AndroidSurface::CreateGPUSurface;
+
   // |AndroidSurface|
   std::unique_ptr<Surface> CreateGPUSurface(
       GrDirectContext* gr_context) override;

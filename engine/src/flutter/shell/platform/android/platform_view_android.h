@@ -107,11 +107,6 @@ class PlatformViewAndroid final : public PlatformView {
                                     const std::string error_message,
                                     bool transient) override;
 
-  // |PlatformView|
-  void UpdateAssetResolverByType(
-      std::unique_ptr<AssetResolver> updated_asset_resolver,
-      AssetResolver::AssetResolverType type) override;
-
   const std::shared_ptr<AndroidContext>& GetAndroidContext() {
     return android_context_;
   }

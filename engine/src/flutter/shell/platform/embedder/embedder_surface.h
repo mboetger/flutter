@@ -9,6 +9,7 @@
 #include "flutter/flow/embedded_views.h"
 #include "flutter/flow/surface.h"
 #include "flutter/fml/macros.h"
+#include "flutter/shell/common/snapshot_surface_producer.h"
 
 namespace flutter {
 
@@ -23,6 +24,13 @@ class EmbedderSurface {
   virtual std::unique_ptr<Surface> CreateGPUSurface() = 0;
 
   virtual std::shared_ptr<impeller::Context> CreateImpellerContext() const;
+
+  virtual void SetupImpellerContext();
+
+  virtual std::shared_ptr<ExternalViewEmbedder> CreateExternalViewEmbedder();
+
+  virtual std::unique_ptr<SnapshotSurfaceProducer>
+  CreateSnapshotSurfaceProducer();
 
   virtual sk_sp<GrDirectContext> CreateResourceContext() const;
 

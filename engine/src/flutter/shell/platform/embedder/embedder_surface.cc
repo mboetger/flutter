@@ -15,6 +15,18 @@ std::shared_ptr<impeller::Context> EmbedderSurface::CreateImpellerContext()
   return nullptr;
 }
 
+void EmbedderSurface::SetupImpellerContext() {}
+
+std::shared_ptr<ExternalViewEmbedder>
+EmbedderSurface::CreateExternalViewEmbedder() {
+  return nullptr;
+}
+
+std::unique_ptr<SnapshotSurfaceProducer>
+EmbedderSurface::CreateSnapshotSurfaceProducer() {
+  return nullptr;
+}
+
 sk_sp<GrDirectContext> EmbedderSurface::CreateResourceContext() const {
   return nullptr;
 }

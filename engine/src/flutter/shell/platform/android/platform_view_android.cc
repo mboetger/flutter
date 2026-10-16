@@ -483,7 +483,7 @@ void PlatformViewAndroid::ReleaseResourceContext() const {
 std::shared_ptr<impeller::Context> PlatformViewAndroid::GetImpellerContext()
     const {
   if (android_surface_) {
-    return android_surface_->GetImpellerContext();
+    return android_surface_->CreateImpellerContext();
   }
   return android_context_->GetImpellerContext();
 }
@@ -520,13 +520,6 @@ void PlatformViewAndroid::LoadDartDeferredLibraryError(
     bool transient) {
   delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
                                          transient);
-}
-
-// |PlatformView|
-void PlatformViewAndroid::UpdateAssetResolverByType(
-    std::unique_ptr<AssetResolver> updated_asset_resolver,
-    AssetResolver::AssetResolverType type) {
-  delegate_.UpdateAssetResolverByType(std::move(updated_asset_resolver), type);
 }
 
 void PlatformViewAndroid::InstallFirstFrameCallback() {
@@ -566,7 +559,7 @@ bool PlatformViewAndroid::IsSurfaceControlEnabled() const {
 
 void PlatformViewAndroid::SetupImpellerContext() {
   android_context_->SetupImpellerContext();
-  android_surface_->SetupImpellerSurface();
+  android_surface_->SetupImpellerContext();
 }
 
 }  // namespace flutter

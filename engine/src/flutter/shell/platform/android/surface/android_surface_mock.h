@@ -22,6 +22,8 @@ class AndroidSurfaceMock final : public GPUSurfaceGLDelegate,
 
   MOCK_METHOD(void, TeardownOnScreenContext, (), (override));
 
+  using AndroidSurface::CreateGPUSurface;
+
   MOCK_METHOD(std::unique_ptr<Surface>,
               CreateGPUSurface,
               (GrDirectContext * gr_context),

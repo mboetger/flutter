@@ -58,11 +58,17 @@ class EmbedderSurfaceVulkanImpeller final : public EmbedderSurface,
   // |GPUSurfaceVulkanDelegate|
   std::shared_ptr<impeller::Context> CreateImpellerContext() const override;
 
+  // |EmbedderSurface|
+  void SetupImpellerContext() override;
+
  private:
   bool valid_ = false;
+  bool context_initialized_ = false;
   fml::RefPtr<vulkan::VulkanProcTable> vk_;
   VulkanDispatchTable vulkan_dispatch_table_;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
+  impeller::ContextVK::Settings context_settings_;
+  impeller::Flags impeller_flags_;
   std::shared_ptr<impeller::ContextVK> context_;
 
   // |EmbedderSurface|

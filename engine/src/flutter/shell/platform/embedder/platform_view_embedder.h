@@ -116,6 +116,9 @@ class PlatformViewEmbedder final : public PlatformView {
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override;
 
+  // |PlatformView|
+  void SetupImpellerContext() override;
+
  private:
   class EmbedderPlatformMessageHandler;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
@@ -128,6 +131,10 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   std::shared_ptr<ExternalViewEmbedder> CreateExternalViewEmbedder() override;
+
+  // |PlatformView|
+  std::unique_ptr<SnapshotSurfaceProducer> CreateSnapshotSurfaceProducer()
+      override;
 
   // |PlatformView|
   std::shared_ptr<impeller::Context> GetImpellerContext() const override;

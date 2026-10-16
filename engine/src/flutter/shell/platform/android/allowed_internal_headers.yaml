@@ -350,10 +350,6 @@
     "surface/android_native_window.h": [
       "flutter/display_list/geometry/dl_geometry_types.h"
     ],
-    "surface/android_surface.h": [
-      "flutter/flow/embedded_views.h",
-      "flutter/flow/surface.h"
-    ],
     "surface/snapshot_surface_producer.h": [
       "flutter/flow/surface.h",
       "flutter/shell/common/snapshot_surface_producer.h"

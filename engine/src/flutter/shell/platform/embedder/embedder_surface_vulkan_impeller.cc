@@ -34,7 +34,8 @@ EmbedderSurfaceVulkanImpeller::EmbedderSurfaceVulkanImpeller(
     : vk_(fml::MakeRefCounted<vulkan::VulkanProcTable>(
           vulkan_dispatch_table.get_instance_proc_address)),
       vulkan_dispatch_table_(vulkan_dispatch_table),
-      external_view_embedder_(std::move(external_view_embedder)) {
+      external_view_embedder_(std::move(external_view_embedder)),
+      impeller_flags_(impeller_flags) {
   // Make sure all required members of the dispatch table are checked.
   if (!vulkan_dispatch_table_.get_instance_proc_address ||
       !vulkan_dispatch_table_.get_next_image ||
@@ -51,11 +52,10 @@ EmbedderSurfaceVulkanImpeller::EmbedderSurfaceVulkanImpeller(
           impeller_framebuffer_blend_shaders_vk_data,
           impeller_framebuffer_blend_shaders_vk_length),
   };
-  impeller::ContextVK::Settings settings;
-  settings.shader_libraries_data = shader_mappings;
-  settings.proc_address_callback =
+  context_settings_.shader_libraries_data = shader_mappings;
+  context_settings_.proc_address_callback =
       vulkan_dispatch_table.get_instance_proc_address;
-  settings.flags = impeller_flags;
+  context_settings_.flags = impeller_flags;
 
   impeller::ContextVK::EmbedderData data;
   data.instance = instance;
@@ -71,26 +71,37 @@ EmbedderSurfaceVulkanImpeller::EmbedderSurfaceVulkanImpeller(
   for (auto i = 0u; i < device_extension_count; i++) {
     data.device_extensions.push_back(std::string{device_extensions[i]});
   }
-  settings.embedder_data = data;
-
-  context_ = impeller::ContextVK::Create(std::move(settings));
-  if (!context_) {
-    FML_LOG(ERROR) << "Failed to initialize Vulkan Context.";
-    return;
-  }
-
-  if (impeller_flags.use_sdfs) {
-    FML_LOG(IMPORTANT) << "Using the Impeller rendering backend (VulkanSDF).";
-  } else {
-    FML_LOG(IMPORTANT) << "Using the Impeller rendering backend (Vulkan).";
-  }
+  context_settings_.embedder_data = data;
   valid_ = true;
 }
 
 EmbedderSurfaceVulkanImpeller::~EmbedderSurfaceVulkanImpeller() {}
 
+void EmbedderSurfaceVulkanImpeller::SetupImpellerContext() {
+  if (context_initialized_ || !valid_) {
+    return;
+  }
+  context_initialized_ = true;
+
+  context_ = impeller::ContextVK::Create(std::move(context_settings_));
+  if (!context_) {
+    FML_LOG(ERROR) << "Failed to initialize Vulkan Context.";
+    valid_ = false;
+    return;
+  }
+
+  if (impeller_flags_.use_sdfs) {
+    FML_LOG(IMPORTANT) << "Using the Impeller rendering backend (VulkanSDF).";
+  } else {
+    FML_LOG(IMPORTANT) << "Using the Impeller rendering backend (Vulkan).";
+  }
+}
+
 std::shared_ptr<impeller::Context>
 EmbedderSurfaceVulkanImpeller::CreateImpellerContext() const {
+  if (!context_initialized_) {
+    const_cast<EmbedderSurfaceVulkanImpeller*>(this)->SetupImpellerContext();
+  }
   return context_;
 }
 
@@ -118,6 +129,12 @@ bool EmbedderSurfaceVulkanImpeller::IsValid() const {
 
 // |EmbedderSurface|
 std::unique_ptr<Surface> EmbedderSurfaceVulkanImpeller::CreateGPUSurface() {
+  if (!context_initialized_) {
+    SetupImpellerContext();
+  }
+  if (!valid_ || !context_) {
+    return nullptr;
+  }
   // The compositor presents when one is supplied; see GPUSurfaceVulkanImpeller.
   const bool render_to_surface = !external_view_embedder_;
   return std::make_unique<GPUSurfaceVulkanImpeller>(this, context_,

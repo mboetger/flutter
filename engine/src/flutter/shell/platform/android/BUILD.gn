@@ -173,12 +173,9 @@ source_set("flutter_shell_native_src") {
     ]
   }
 
-  sources += get_target_outputs(":icudtl_asm")
-
   public_deps = [
     ":android_gpu_configuration",
     ":flutter_embedder_native_src",
-    ":icudtl_asm",
     ":image_generator",
     "//flutter/assets",
     "//flutter/common",
