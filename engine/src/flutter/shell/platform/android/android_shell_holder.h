@@ -92,6 +92,63 @@ class AndroidShellHolder {
 
   fml::WeakPtr<PlatformViewAndroid> GetPlatformView();
 
+  void NotifySurfaceCreated(fml::RefPtr<AndroidNativeWindow> native_window);
+
+  void NotifySurfaceWindowChanged(
+      fml::RefPtr<AndroidNativeWindow> native_window);
+
+  void NotifySurfaceChanged(const DlISize& size);
+
+  void NotifySurfaceDestroyed();
+
+  void SetViewportMetrics(int64_t view_id, const ViewportMetrics& metrics);
+
+  void DispatchPlatformMessage(JNIEnv* env,
+                               std::string name,
+                               jobject message_data,
+                               jint message_position,
+                               jint response_id);
+
+  void DispatchEmptyPlatformMessage(JNIEnv* env,
+                                    std::string name,
+                                    jint response_id);
+
+  void DispatchPointerDataPacket(std::unique_ptr<PointerDataPacket> packet);
+
+  void DispatchSemanticsAction(JNIEnv* env,
+                               jint id,
+                               jint action,
+                               jobject args,
+                               jint args_position);
+
+  void SetSemanticsEnabled(bool enabled);
+
+  void SetAccessibilityFeatures(int32_t flags);
+
+  void RegisterExternalTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);
+
+  void RegisterImageTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
+      ImageExternalTexture::ImageLifecycle lifecycle);
+
+  void UnregisterTexture(int64_t texture_id);
+
+  void MarkTextureFrameAvailable(int64_t texture_id);
+
+  void ScheduleFrame();
+
+  void LoadDartDeferredLibrary(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions);
+
+  void UpdateAssetResolverByType(
+      std::unique_ptr<AssetResolver> updated_asset_resolver,
+      AssetResolver::AssetResolverType type);
+
   bool IsSurfaceControlEnabled();
 
   Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,

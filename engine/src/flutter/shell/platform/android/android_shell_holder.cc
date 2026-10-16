@@ -396,6 +396,109 @@ fml::WeakPtr<PlatformViewAndroid> AndroidShellHolder::GetPlatformView() {
   return platform_view_;
 }
 
+void AndroidShellHolder::NotifySurfaceCreated(
+    fml::RefPtr<AndroidNativeWindow> native_window) {
+  GetPlatformView()->NotifyCreated(std::move(native_window));
+}
+
+void AndroidShellHolder::NotifySurfaceWindowChanged(
+    fml::RefPtr<AndroidNativeWindow> native_window) {
+  GetPlatformView()->NotifySurfaceWindowChanged(std::move(native_window));
+}
+
+void AndroidShellHolder::NotifySurfaceChanged(const DlISize& size) {
+  GetPlatformView()->NotifyChanged(size);
+}
+
+void AndroidShellHolder::NotifySurfaceDestroyed() {
+  GetPlatformView()->NotifyDestroyed();
+}
+
+void AndroidShellHolder::SetViewportMetrics(int64_t view_id,
+                                            const ViewportMetrics& metrics) {
+  GetPlatformView()->SetViewportMetrics(view_id, metrics);
+}
+
+void AndroidShellHolder::DispatchPlatformMessage(JNIEnv* env,
+                                                 std::string name,
+                                                 jobject message_data,
+                                                 jint message_position,
+                                                 jint response_id) {
+  GetPlatformView()->DispatchPlatformMessage(env, std::move(name), message_data,
+                                             message_position, response_id);
+}
+
+void AndroidShellHolder::DispatchEmptyPlatformMessage(JNIEnv* env,
+                                                      std::string name,
+                                                      jint response_id) {
+  GetPlatformView()->DispatchEmptyPlatformMessage(env, std::move(name),
+                                                  response_id);
+}
+
+void AndroidShellHolder::DispatchPointerDataPacket(
+    std::unique_ptr<PointerDataPacket> packet) {
+  GetPlatformView()->DispatchPointerDataPacket(std::move(packet));
+}
+
+void AndroidShellHolder::DispatchSemanticsAction(JNIEnv* env,
+                                                 jint id,
+                                                 jint action,
+                                                 jobject args,
+                                                 jint args_position) {
+  GetPlatformView()->DispatchSemanticsAction(env, id, action, args,
+                                             args_position);
+}
+
+void AndroidShellHolder::SetSemanticsEnabled(bool enabled) {
+  GetPlatformView()->SetSemanticsEnabled(enabled);
+}
+
+void AndroidShellHolder::SetAccessibilityFeatures(int32_t flags) {
+  GetPlatformView()->SetAccessibilityFeatures(flags);
+}
+
+void AndroidShellHolder::RegisterExternalTexture(
+    int64_t texture_id,
+    const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
+  GetPlatformView()->RegisterExternalTexture(texture_id, surface_texture);
+}
+
+void AndroidShellHolder::RegisterImageTexture(
+    int64_t texture_id,
+    const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
+    ImageExternalTexture::ImageLifecycle lifecycle) {
+  GetPlatformView()->RegisterImageTexture(texture_id, image_texture_entry,
+                                          lifecycle);
+}
+
+void AndroidShellHolder::UnregisterTexture(int64_t texture_id) {
+  GetPlatformView()->UnregisterTexture(texture_id);
+}
+
+void AndroidShellHolder::MarkTextureFrameAvailable(int64_t texture_id) {
+  GetPlatformView()->MarkTextureFrameAvailable(texture_id);
+}
+
+void AndroidShellHolder::ScheduleFrame() {
+  GetPlatformView()->ScheduleFrame();
+}
+
+void AndroidShellHolder::LoadDartDeferredLibrary(
+    intptr_t loading_unit_id,
+    std::unique_ptr<const fml::Mapping> snapshot_data,
+    std::unique_ptr<const fml::Mapping> snapshot_instructions) {
+  GetPlatformView()->LoadDartDeferredLibrary(loading_unit_id,
+                                             std::move(snapshot_data),
+                                             std::move(snapshot_instructions));
+}
+
+void AndroidShellHolder::UpdateAssetResolverByType(
+    std::unique_ptr<AssetResolver> updated_asset_resolver,
+    AssetResolver::AssetResolverType type) {
+  GetPlatformView()->UpdateAssetResolverByType(
+      std::move(updated_asset_resolver), type);
+}
+
 void AndroidShellHolder::NotifyLowMemoryWarning() {
   FML_DCHECK(shell_);
   shell_->NotifyLowMemoryWarning();
