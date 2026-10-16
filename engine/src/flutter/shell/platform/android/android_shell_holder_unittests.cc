@@ -170,7 +170,7 @@ TEST(AndroidShellHolder, Create) {
   EXPECT_NE(holder->GetPlatformView().get(), nullptr);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
-  holder->GetPlatformView()->NotifyCreated(window);
+  holder->NotifySurfaceCreated(window);
 }
 
 TEST(AndroidShellHolder, HandlePlatformMessage) {
@@ -184,7 +184,7 @@ TEST(AndroidShellHolder, HandlePlatformMessage) {
   EXPECT_NE(holder->GetPlatformView().get(), nullptr);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
-  holder->GetPlatformView()->NotifyCreated(window);
+  holder->NotifySurfaceCreated(window);
   EXPECT_TRUE(holder->GetPlatformMessageHandler());
   size_t data_size = 4;
   fml::MallocMapping bytes =
@@ -210,7 +210,7 @@ TEST(AndroidShellHolder, CreateWithMergedPlatformAndUIThread) {
       settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
-  holder->GetPlatformView()->NotifyCreated(window);
+  holder->NotifySurfaceCreated(window);
 
   EXPECT_EQ(
       holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
@@ -226,7 +226,7 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
       settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
-  holder->GetPlatformView()->NotifyCreated(window);
+  holder->NotifySurfaceCreated(window);
 
   EXPECT_NE(
       holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
@@ -253,6 +253,68 @@ TEST(AndroidShellHolder, StartsWithDetachedLifecycleState) {
                 ->GetPlatformData()
                 .lifecycle_state,
             "AppLifecycleState.detached");
+}
+
+TEST(AndroidShellHolder, SurfaceLifecycleRoutesThroughEmbedderApi) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  static int notify_created_calls;
+  static int set_next_frame_callback_calls;
+  static int schedule_frame_calls;
+  static int notify_destroyed_calls;
+  notify_created_calls = 0;
+  set_next_frame_callback_calls = 0;
+  schedule_frame_calls = 0;
+  notify_destroyed_calls = 0;
+
+  FlutterEngineProcTable& api = holder->GetEmbedderApiForTesting();
+  auto real_notify_created = api.NotifyCreated;
+  auto real_set_next_frame_callback = api.SetNextFrameCallback;
+  auto real_schedule_frame = api.ScheduleFrame;
+  auto real_notify_destroyed = api.NotifyDestroyed;
+  static FlutterEngineNotifyCreatedFnPtr saved_notify_created;
+  static FlutterEngineSetNextFrameCallbackFnPtr saved_set_next_frame_callback;
+  static FlutterEngineScheduleFrameFnPtr saved_schedule_frame;
+  static FlutterEngineNotifyDestroyedFnPtr saved_notify_destroyed;
+  saved_notify_created = real_notify_created;
+  saved_set_next_frame_callback = real_set_next_frame_callback;
+  saved_schedule_frame = real_schedule_frame;
+  saved_notify_destroyed = real_notify_destroyed;
+
+  api.NotifyCreated = [](FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+    notify_created_calls++;
+    return saved_notify_created(engine);
+  };
+  api.SetNextFrameCallback = [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                VoidCallback callback, void* user_data) {
+    set_next_frame_callback_calls++;
+    return saved_set_next_frame_callback(engine, callback, user_data);
+  };
+  api.ScheduleFrame = [](FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+    schedule_frame_calls++;
+    return saved_schedule_frame(engine);
+  };
+  api.NotifyDestroyed = [](FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+    notify_destroyed_calls++;
+    return saved_notify_destroyed(engine);
+  };
+
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->NotifySurfaceCreated(window);
+  EXPECT_EQ(notify_created_calls, 1);
+  EXPECT_EQ(set_next_frame_callback_calls, 1);
+
+  holder->NotifySurfaceWindowChanged(window);
+  EXPECT_EQ(schedule_frame_calls, 1);
+
+  holder->NotifySurfaceDestroyed();
+  EXPECT_EQ(notify_destroyed_calls, 1);
 }
 
 }  // namespace testing

@@ -443,12 +443,29 @@ fml::WeakPtr<PlatformViewAndroid> AndroidShellHolder::GetPlatformView() {
 
 void AndroidShellHolder::NotifySurfaceCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
+  if (GetPlatformView()->HasAndroidSurface()) {
+    FlutterEngineResult callback_result = embedder_api_.SetNextFrameCallback(
+        engine_.get(),
+        [](void* user_data) {
+          static_cast<PlatformViewAndroid*>(user_data)->OnNextFrame();
+        },
+        platform_view_android_.get());
+    if (callback_result != kSuccess) {
+      FML_LOG(ERROR) << "FlutterEngineSetNextFrameCallback failed: "
+                     << callback_result;
+    }
+  }
   GetPlatformView()->NotifyCreated(std::move(native_window));
+  FlutterEngineResult result = embedder_api_.NotifyCreated(engine_.get());
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineNotifyCreated failed: " << result;
+  }
 }
 
 void AndroidShellHolder::NotifySurfaceWindowChanged(
     fml::RefPtr<AndroidNativeWindow> native_window) {
   GetPlatformView()->NotifySurfaceWindowChanged(std::move(native_window));
+  ScheduleFrame();
 }
 
 void AndroidShellHolder::NotifySurfaceChanged(const DlISize& size) {
@@ -456,6 +473,10 @@ void AndroidShellHolder::NotifySurfaceChanged(const DlISize& size) {
 }
 
 void AndroidShellHolder::NotifySurfaceDestroyed() {
+  FlutterEngineResult result = embedder_api_.NotifyDestroyed(engine_.get());
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineNotifyDestroyed failed: " << result;
+  }
   GetPlatformView()->NotifyDestroyed();
 }
 

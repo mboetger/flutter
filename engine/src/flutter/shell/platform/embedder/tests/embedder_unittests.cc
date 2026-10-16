@@ -4431,6 +4431,76 @@ TEST_F(EmbedderTest, PlatformThreadIsolatesWithCustomPlatformTaskRunner) {
   ASSERT_EQ(platform_thread_id, ffi_call_thread_id);
 }
 
+TEST_F(EmbedderTest, DeferSurfaceCreationDelaysNotifyCreatedUntilExplicitCall) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(800, 600));
+  builder.SetDartEntrypoint("draw_solid_red");
+  builder.GetProjectArgs().defer_surface_creation = true;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(event);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 1.0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+
+  ASSERT_EQ(FlutterEngineNotifyCreated(nullptr), kInvalidArguments);
+  ASSERT_EQ(FlutterEngineNotifyDestroyed(nullptr), kInvalidArguments);
+
+  fml::AutoResetWaitableEvent callback_latch;
+  VoidCallback callback = [](void* user_data) {
+    static_cast<fml::AutoResetWaitableEvent*>(user_data)->Signal();
+  };
+  ASSERT_EQ(FlutterEngineSetNextFrameCallback(engine.get(), callback,
+                                              &callback_latch),
+            kSuccess);
+  ASSERT_EQ(FlutterEngineNotifyCreated(engine.get()), kSuccess);
+  ASSERT_EQ(FlutterEngineScheduleFrame(engine.get()), kSuccess);
+
+  callback_latch.Wait();
+
+  ASSERT_EQ(FlutterEngineNotifyDestroyed(engine.get()), kSuccess);
+}
+
+TEST_F(EmbedderTest, QueryVulkanDriverSupport) {
+  bool is_known_bad = false;
+  FlutterVulkanDriverProperties props = {};
+  props.struct_size = sizeof(FlutterVulkanDriverProperties);
+
+  EXPECT_EQ(FlutterEngineQueryVulkanDriverSupport(nullptr, &is_known_bad),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineQueryVulkanDriverSupport(&props, nullptr),
+            kInvalidArguments);
+
+#if defined(SHELL_ENABLE_VULKAN) && defined(IMPELLER_SUPPORTS_RENDERING)
+  // Qualcomm (0x5143) Adreno 630 is on Impeller's known-bad Vulkan driver list.
+  props.api_version = (1u << 22) | (1u << 12);
+  props.driver_version = 1u;
+  props.vendor_id = 0x5143;
+  props.device_id = 1u;
+  props.device_type = 1u;  // VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+  props.device_name = "Adreno (TM) 630";
+  is_known_bad = false;
+  EXPECT_EQ(FlutterEngineQueryVulkanDriverSupport(&props, &is_known_bad),
+            kSuccess);
+  EXPECT_TRUE(is_known_bad);
+
+  // ARM (0x13B5) Mali-G710 is a supported Vulkan driver.
+  props.api_version = (1u << 22) | (3u << 12);
+  props.vendor_id = 0x13B5;
+  props.device_name = "Mali-G710";
+  is_known_bad = true;
+  EXPECT_EQ(FlutterEngineQueryVulkanDriverSupport(&props, &is_known_bad),
+            kSuccess);
+  EXPECT_FALSE(is_known_bad);
+#endif
+}
+
 }  // namespace testing
 }  // namespace flutter
 

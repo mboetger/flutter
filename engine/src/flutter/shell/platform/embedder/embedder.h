@@ -2879,7 +2879,33 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// When true, `FlutterEngineRunInitialized` launches the shell and root
+  /// isolate without calling `NotifyCreated`. The embedder must subsequently
+  /// call `FlutterEngineNotifyCreated` once a render surface or native window
+  /// exists.
+  bool defer_surface_creation;
 } FlutterProjectArgs;
+
+/// Properties of a Vulkan physical device driver queried against Impeller's
+/// known-bad driver list via `FlutterEngineQueryVulkanDriverSupport`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterVulkanDriverProperties).
+  size_t struct_size;
+  /// Vulkan API version reported by VkPhysicalDeviceProperties::apiVersion.
+  uint32_t api_version;
+  /// Driver version reported by VkPhysicalDeviceProperties::driverVersion.
+  uint32_t driver_version;
+  /// PCI/Khronos vendor ID reported by VkPhysicalDeviceProperties::vendorID.
+  uint32_t vendor_id;
+  /// Device ID reported by VkPhysicalDeviceProperties::deviceID.
+  uint32_t device_id;
+  /// Physical device type reported by VkPhysicalDeviceProperties::deviceType.
+  uint32_t device_type;
+  /// NUL-terminated device name string from
+  /// VkPhysicalDeviceProperties::deviceName; only read during the call.
+  const char* device_name;
+} FlutterVulkanDriverProperties;
 
 typedef struct {
   /// The size of this struct. Must be
@@ -3681,6 +3707,58 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Notify the engine that the render surface or native window was
+///             created.
+///
+///             Must be called on the platform thread after the embedder's
+///             window surface exists and is ready for the raster thread to
+///             acquire images or framebuffers.
+///
+/// @param[in]  engine  A running engine instance.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyCreated(FLUTTER_API_SYMBOL(FlutterEngine)
+                                                   engine);
+
+//------------------------------------------------------------------------------
+/// @brief      Notify the engine that the render surface or native window is
+///             being destroyed.
+///
+///             Must be called on the platform thread before the embedder
+///             releases the underlying window surface. This call blocks until
+///             the raster thread has torn down the on-screen render surface and
+///             the IO thread has drained pending GPU resource deletions.
+///
+/// @param[in]  engine  A running engine instance.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDestroyed(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+
+//------------------------------------------------------------------------------
+/// @brief      Queries whether a Vulkan physical device driver is on Impeller's
+///             known-bad driver blocklist.
+///
+///             This function is stateless and may be called on any thread
+///             before `FlutterEngineInitialize`.
+///
+/// @param[in]  properties        The physical device driver properties.
+/// @param[out] out_is_known_bad  Set to true if the driver is known to be
+///                               non-functional with Impeller Vulkan, false
+///                               otherwise.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineQueryVulkanDriverSupport(
+    const FlutterVulkanDriverProperties* properties,
+    bool* out_is_known_bad);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -3815,6 +3893,13 @@ typedef FlutterEngineResult (*FlutterEngineRemoveViewFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterViewFocusEvent* event);
+typedef FlutterEngineResult (*FlutterEngineNotifyCreatedFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+typedef FlutterEngineResult (*FlutterEngineNotifyDestroyedFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+typedef FlutterEngineResult (*FlutterEngineQueryVulkanDriverSupportFnPtr)(
+    const FlutterVulkanDriverProperties* properties,
+    bool* out_is_known_bad);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3865,6 +3950,9 @@ typedef struct {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineNotifyCreatedFnPtr NotifyCreated;
+  FlutterEngineNotifyDestroyedFnPtr NotifyDestroyed;
+  FlutterEngineQueryVulkanDriverSupportFnPtr QueryVulkanDriverSupport;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

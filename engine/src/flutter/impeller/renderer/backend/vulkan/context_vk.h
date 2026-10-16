@@ -113,6 +113,7 @@ class ContextVK final : public Context,
     std::shared_ptr<DeviceHolderImpl> device_holder;
     std::unique_ptr<DebugReportVK> debug_report;
     std::unique_ptr<DriverInfoVK> driver_info;
+    vk::PhysicalDeviceProperties physical_device_properties;
 
     /// Finish initializing the `ContextVK` for the selected physical device.
     /// Consumes this `DeviceSelection`.

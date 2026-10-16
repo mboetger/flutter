@@ -10,6 +10,7 @@
 #include "flutter/impeller/entity/vk/framebuffer_blend_shaders_vk.h"
 #include "flutter/impeller/entity/vk/modern_shaders_vk.h"
 #include "flutter/impeller/renderer/backend/vulkan/context_vk.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 #include "shell/platform/android/android_rendering_selector.h"
 #include "shell/platform/android/context/android_context.h"
 
@@ -57,7 +58,19 @@ static std::shared_ptr<impeller::Context> CreateImpellerContext(
   if (!selection.ok()) {
     return nullptr;
   }
-  if (selection->driver_info->IsKnownBadDriver()) {
+  const auto& props = selection->physical_device_properties;
+  FlutterVulkanDriverProperties driver_props = {};
+  driver_props.struct_size = sizeof(FlutterVulkanDriverProperties);
+  driver_props.api_version = props.apiVersion;
+  driver_props.driver_version = props.driverVersion;
+  driver_props.vendor_id = props.vendorID;
+  driver_props.device_id = props.deviceID;
+  driver_props.device_type = static_cast<uint32_t>(props.deviceType);
+  driver_props.device_name = props.deviceName.data();
+  bool is_known_bad = false;
+  if (FlutterEngineQueryVulkanDriverSupport(&driver_props, &is_known_bad) !=
+          kSuccess ||
+      is_known_bad) {
     FML_LOG(INFO)
         << "Known bad Vulkan driver encountered, falling back to OpenGLES.";
     return nullptr;

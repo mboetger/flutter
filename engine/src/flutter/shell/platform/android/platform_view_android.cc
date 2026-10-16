@@ -186,8 +186,6 @@ PlatformViewAndroid::~PlatformViewAndroid() = default;
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
   if (android_surface_) {
-    InstallFirstFrameCallback();
-
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),
@@ -197,10 +195,6 @@ void PlatformViewAndroid::NotifyCreated(
           latch.Signal();
         });
     latch.Wait();
-  }
-
-  if (platform_view_) {
-    platform_view_->NotifyCreated();
   }
 }
 
@@ -218,15 +212,9 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
         });
     latch.Wait();
   }
-
-  ScheduleFrame();
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
-  if (platform_view_) {
-    platform_view_->NotifyDestroyed();
-  }
-
   if (android_surface_) {
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
@@ -550,18 +538,6 @@ void PlatformViewAndroid::DispatchPointerDataPacket(
   }
 }
 
-void PlatformViewAndroid::SetSemanticsEnabled(bool enabled) {
-  if (platform_view_) {
-    platform_view_->SetSemanticsEnabled(enabled);
-  }
-}
-
-void PlatformViewAndroid::SetAccessibilityFeatures(int32_t flags) {
-  if (platform_view_) {
-    platform_view_->SetAccessibilityFeatures(flags);
-  }
-}
-
 void PlatformViewAndroid::RegisterTexture(
     std::shared_ptr<flutter::Texture> texture) {
   if (platform_view_) {
@@ -581,12 +557,6 @@ void PlatformViewAndroid::MarkTextureFrameAvailable(int64_t texture_id) {
   }
 }
 
-void PlatformViewAndroid::ScheduleFrame() {
-  if (platform_view_) {
-    platform_view_->ScheduleFrame();
-  }
-}
-
 void PlatformViewAndroid::UpdateAssetResolverByType(
     std::unique_ptr<AssetResolver> updated_asset_resolver,
     AssetResolver::AssetResolverType type) {
@@ -596,21 +566,14 @@ void PlatformViewAndroid::UpdateAssetResolverByType(
   }
 }
 
-void PlatformViewAndroid::InstallFirstFrameCallback() {
-  // On Platform Task Runner.
-  if (!platform_view_) {
-    return;
-  }
-  platform_view_->SetNextFrameCallback(
-      [platform_view = GetWeakPtr(),
-       platform_task_runner = task_runners_.GetPlatformTaskRunner()]() {
-        // On GPU Task Runner.
-        platform_task_runner->PostTask([platform_view]() {
-          // Back on Platform Task Runner.
-          if (platform_view) {
-            platform_view->FireFirstFrameCallback();
-          }
-        });
+void PlatformViewAndroid::OnNextFrame() {
+  // Called on the raster task runner.
+  task_runners_.GetPlatformTaskRunner()->PostTask(
+      [platform_view = GetWeakPtr()]() {
+        // Back on the platform task runner.
+        if (platform_view) {
+          platform_view->FireFirstFrameCallback();
+        }
       });
 }
 

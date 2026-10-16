@@ -299,8 +299,9 @@ absl::StatusOr<ContextVK::DeviceSelection> ContextVK::SelectDevice(
     device_holder->physical_device = settings.embedder_data->physical_device;
   }
 
-  auto driver_info =
-      std::make_unique<DriverInfoVK>(device_holder->physical_device);
+  auto physical_device_properties =
+      device_holder->physical_device.getProperties();
+  auto driver_info = std::make_unique<DriverInfoVK>(physical_device_properties);
 
   return DeviceSelection{
       .settings = std::move(settings),
@@ -308,6 +309,7 @@ absl::StatusOr<ContextVK::DeviceSelection> ContextVK::SelectDevice(
       .device_holder = std::move(device_holder),
       .debug_report = std::move(debug_report),
       .driver_info = std::move(driver_info),
+      .physical_device_properties = physical_device_properties,
   };
 }
 

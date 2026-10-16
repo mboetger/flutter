@@ -42,7 +42,8 @@ class EmbedderEngine {
       const Shell::CreateCallback<PlatformView>& on_create_platform_view,
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
-          external_texture_resolver);
+          external_texture_resolver,
+      bool defer_surface_creation = false);
 
   ~EmbedderEngine();
 
@@ -84,6 +85,8 @@ class EmbedderEngine {
   bool NotifyCreated();
 
   bool NotifyDestroyed();
+
+  bool DeferSurfaceCreation() const;
 
   bool RunRootIsolate();
 
@@ -140,6 +143,7 @@ class EmbedderEngine {
   std::unique_ptr<ShellArgs> shell_args_;
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
+  bool defer_surface_creation_ = false;
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderEngine);
 };

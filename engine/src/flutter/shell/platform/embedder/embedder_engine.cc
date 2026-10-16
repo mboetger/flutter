@@ -28,14 +28,16 @@ EmbedderEngine::EmbedderEngine(
     std::optional<RunConfiguration> run_configuration,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
-    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver)
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    bool defer_surface_creation)
     : thread_host_(std::move(thread_host)),
       task_runners_(task_runners),
       run_configuration_(std::move(run_configuration)),
       shell_args_(std::make_unique<ShellArgs>(settings,
                                               on_create_platform_view,
                                               on_create_rasterizer)),
-      external_texture_resolver_(std::move(external_texture_resolver)) {}
+      external_texture_resolver_(std::move(external_texture_resolver)),
+      defer_surface_creation_(defer_surface_creation) {}
 
 EmbedderEngine::EmbedderEngine(const TaskRunners& task_runners,
                                std::unique_ptr<Shell> spawned_shell)
@@ -168,6 +170,10 @@ bool EmbedderEngine::NotifyDestroyed() {
   shell_->GetPlatformView()->NotifyDestroyed();
 
   return true;
+}
+
+bool EmbedderEngine::DeferSurfaceCreation() const {
+  return defer_surface_creation_;
 }
 
 bool EmbedderEngine::SetViewportMetrics(

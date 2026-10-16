@@ -104,6 +104,9 @@ extern const intptr_t kPlatformStrongDillSize;
 #ifdef SHELL_ENABLE_VULKAN
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
 #include "third_party/skia/include/gpu/ganesh/vk/GrVkTypes.h"
+#ifdef IMPELLER_SUPPORTS_RENDERING
+#include "impeller/renderer/backend/vulkan/driver_info_vk.h"  // nogncheck
+#endif  // IMPELLER_SUPPORTS_RENDERING
 #endif  // SHELL_ENABLE_VULKAN
 
 const int32_t kFlutterSemanticsNodeIdBatchEnd = -1;
@@ -2546,15 +2549,19 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
         "Could not infer the Flutter project to run from given arguments.");
   }
 
+  bool defer_surface_creation =
+      SAFE_ACCESS(args, defer_surface_creation, false);
+
   // Create the engine but don't launch the shell or run the root isolate.
   auto embedder_engine = std::make_unique<flutter::EmbedderEngine>(
-      std::move(thread_host),               //
-      std::move(task_runners),              //
-      std::move(settings),                  //
-      std::move(run_configuration),         //
-      on_create_platform_view,              //
-      on_create_rasterizer,                 //
-      std::move(external_texture_resolver)  //
+      std::move(thread_host),                //
+      std::move(task_runners),               //
+      std::move(settings),                   //
+      std::move(run_configuration),          //
+      on_create_platform_view,               //
+      on_create_rasterizer,                  //
+      std::move(external_texture_resolver),  //
+      defer_surface_creation                 //
   );
 
   // Release the ownership of the embedder engine to the caller.
@@ -2584,8 +2591,10 @@ FlutterEngineResult FlutterEngineRunInitialized(
                               "initialization arguments.");
   }
 
-  // Step 2: Tell the platform view to initialize itself.
-  if (!embedder_engine->NotifyCreated()) {
+  // Step 2: Tell the platform view to initialize itself unless the embedder
+  // defers surface creation until FlutterEngineNotifyCreated.
+  if (!embedder_engine->DeferSurfaceCreation() &&
+      !embedder_engine->NotifyCreated()) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                               "Could not create platform view components.");
   }
@@ -3806,6 +3815,65 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineNotifyCreated(FLUTTER_API_SYMBOL(FlutterEngine)
+                                                   engine) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->NotifyCreated()) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not create platform view components.");
+  }
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineNotifyDestroyed(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->NotifyDestroyed()) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not destroy platform view components.");
+  }
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineQueryVulkanDriverSupport(
+    const FlutterVulkanDriverProperties* properties,
+    bool* out_is_known_bad) {
+  if (properties == nullptr || out_is_known_bad == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Null properties or output pointer passed to "
+                              "FlutterEngineQueryVulkanDriverSupport.");
+  }
+#if defined(SHELL_ENABLE_VULKAN) && defined(IMPELLER_SUPPORTS_RENDERING)
+  impeller::vk::PhysicalDeviceProperties vk_props = {};
+  vk_props.apiVersion = SAFE_ACCESS(properties, api_version, 0u);
+  vk_props.driverVersion = SAFE_ACCESS(properties, driver_version, 0u);
+  vk_props.vendorID = SAFE_ACCESS(properties, vendor_id, 0u);
+  vk_props.deviceID = SAFE_ACCESS(properties, device_id, 0u);
+  vk_props.deviceType = static_cast<impeller::vk::PhysicalDeviceType>(
+      SAFE_ACCESS(properties, device_type, 0u));
+  const char* device_name = SAFE_ACCESS(properties, device_name, nullptr);
+  if (device_name != nullptr) {
+    std::strncpy(vk_props.deviceName.data(), device_name,
+                 vk_props.deviceName.size() - 1);
+    vk_props.deviceName[vk_props.deviceName.size() - 1] = '\0';
+  }
+  impeller::DriverInfoVK driver_info(vk_props);
+  *out_is_known_bad = driver_info.IsKnownBadDriver();
+  return kSuccess;
+#else
+  *out_is_known_bad = true;
+  return LOG_EMBEDDER_ERROR(
+      kInternalInconsistency,
+      "Impeller Vulkan rendering is not enabled in this build.");
+#endif
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -3862,6 +3930,9 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(AddView, FlutterEngineAddView);
   SET_PROC(RemoveView, FlutterEngineRemoveView);
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
+  SET_PROC(NotifyCreated, FlutterEngineNotifyCreated);
+  SET_PROC(NotifyDestroyed, FlutterEngineNotifyDestroyed);
+  SET_PROC(QueryVulkanDriverSupport, FlutterEngineQueryVulkanDriverSupport);
 #undef SET_PROC
 
   return kSuccess;

@@ -117,21 +117,19 @@ class PlatformViewAndroid final {
 
   void DispatchPointerDataPacket(std::unique_ptr<PointerDataPacket> packet);
 
-  void SetSemanticsEnabled(bool enabled);
-
-  void SetAccessibilityFeatures(int32_t flags);
-
   void RegisterTexture(std::shared_ptr<flutter::Texture> texture);
 
   void UnregisterTexture(int64_t texture_id);
 
   void MarkTextureFrameAvailable(int64_t texture_id);
 
-  void ScheduleFrame();
-
   void UpdateAssetResolverByType(
       std::unique_ptr<AssetResolver> updated_asset_resolver,
       AssetResolver::AssetResolverType type);
+
+  bool HasAndroidSurface() const { return android_surface_ != nullptr; }
+
+  void OnNextFrame();
 
   const std::shared_ptr<AndroidContext>& GetAndroidContext() {
     return android_context_;
@@ -193,8 +191,6 @@ class PlatformViewAndroid final {
   std::unique_ptr<AndroidSurface> android_surface_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   bool android_meets_hcpp_criteria_ = false;
-
-  void InstallFirstFrameCallback();
 
   void FireFirstFrameCallback();
 
