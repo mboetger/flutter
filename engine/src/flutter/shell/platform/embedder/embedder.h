@@ -2859,6 +2859,89 @@ typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
 
+/// A read-only byte mapping returned by a `FlutterCustomAssetResolver` when
+/// resolving an asset.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAssetMapping).
+  size_t struct_size;
+  /// Pointer to the asset bytes, or NULL if the asset was not found.
+  const uint8_t* mapping;
+  /// Size of `mapping` in bytes.
+  size_t size;
+  /// Optional embedder baton passed to `release_callback`.
+  void* user_data;
+  /// Optional callback invoked by the engine when it no longer needs `mapping`.
+  VoidCallback release_callback;
+} FlutterAssetMapping;
+
+/// Callback invoked by the engine to resolve an asset by its relative path
+/// (for example, `"AssetManifest.bin"` or `"kernel_blob.bin"`).
+///
+/// May be called on any engine thread (UI, raster, IO, or worker). If the
+/// asset is found, the embedder populates `mapping_out` and returns `true`;
+/// otherwise it returns `false`.
+typedef bool (*FlutterAssetResolverGetAsMappingCallback)(
+    const char* asset_name,
+    void* user_data,
+    FlutterAssetMapping* mapping_out);
+
+/// Describes a custom asset resolver registered via `FlutterProjectArgs`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterCustomAssetResolver).
+  size_t struct_size;
+  /// Opaque baton passed to `get_as_mapping_callback`.
+  void* user_data;
+  /// Callback that resolves an asset name into a `FlutterAssetMapping`.
+  FlutterAssetResolverGetAsMappingCallback get_as_mapping_callback;
+} FlutterCustomAssetResolver;
+
+/// Callback invoked when the Dart VM requests a deferred library loading unit
+/// to be downloaded and loaded by the embedder.
+typedef void (*FlutterRequestDartDeferredLibraryCallback)(
+    intptr_t loading_unit_id,
+    void* user_data);
+
+/// Describes a resolved Dart deferred library (split AOT ELF or kernel assets)
+/// supplied to `FlutterEngineLoadDartDeferredLibrary`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDartDeferredLibrary).
+  size_t struct_size;
+  /// Loading unit identifier requested via
+  /// `FlutterRequestDartDeferredLibraryCallback`.
+  intptr_t loading_unit_id;
+  /// Read-only snapshot data buffer for the loading unit.
+  const uint8_t* snapshot_data;
+  /// Size of `snapshot_data` in bytes (may be 0 for symbol references).
+  size_t snapshot_data_size;
+  /// Read-execute snapshot instructions buffer for the loading unit.
+  const uint8_t* snapshot_instructions;
+  /// Size of `snapshot_instructions` in bytes (may be 0 for symbol references).
+  size_t snapshot_instructions_size;
+  /// Optional path to a directory or archive containing assets for the loading
+  /// unit, or NULL if no new assets accompany this unit.
+  const char* assets_path;
+  /// Optional custom asset resolvers for the loading unit.
+  size_t custom_asset_resolvers_count;
+  const FlutterCustomAssetResolver* custom_asset_resolvers;
+  /// Optional baton passed to `destruction_callback`.
+  void* user_data;
+  /// Optional callback invoked once both snapshot mappings have been released.
+  VoidCallback destruction_callback;
+} FlutterDartDeferredLibrary;
+
+/// Describes a failure to resolve or load a Dart deferred library loading unit.
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterDartDeferredLibraryLoadError).
+  size_t struct_size;
+  /// Loading unit identifier that failed to load.
+  intptr_t loading_unit_id;
+  /// NUL-terminated human-readable error message.
+  const char* error_message;
+  /// If true, the loading unit is permanently unavailable until a new install.
+  bool transient;
+} FlutterDartDeferredLibraryLoadError;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
@@ -3179,6 +3262,27 @@ typedef struct {
   /// call `FlutterEngineNotifyCreated` once a render surface or native window
   /// exists.
   bool defer_surface_creation;
+
+  /// Number of custom asset resolvers in `custom_asset_resolvers`.
+  size_t custom_asset_resolvers_count;
+
+  /// Optional array of custom asset resolvers (such as Android APK
+  /// `AAssetManager` providers) consulted by the engine's `AssetManager`.
+  const FlutterCustomAssetResolver* custom_asset_resolvers;
+
+  /// Optional callback invoked when the Dart VM requests a deferred library
+  /// loading unit to be resolved and loaded via
+  /// `FlutterEngineLoadDartDeferredLibrary`.
+  FlutterRequestDartDeferredLibraryCallback
+      request_dart_deferred_library_callback;
+
+  /// When true, `platform_message_callback` may be invoked directly on the
+  /// thread that sent the platform message (such as the UI thread or a
+  /// background isolate thread) rather than always hopping to the platform
+  /// thread, allowing embedders like Android (`PlatformMessageHandlerAndroid`)
+  /// to route channel messages onto background task queues without an extra
+  /// platform-thread hop.
+  bool enable_direct_platform_message_dispatch;
 } FlutterProjectArgs;
 
 /// Properties of a Vulkan physical device driver queried against Impeller's
@@ -4053,6 +4157,34 @@ FlutterEngineResult FlutterEngineQueryVulkanDriverSupport(
     const FlutterVulkanDriverProperties* properties,
     bool* out_is_known_bad);
 
+//------------------------------------------------------------------------------
+/// @brief      Loads a resolved Dart deferred library loading unit into the
+///             running engine.
+///
+/// @param[in]  engine   The running engine instance.
+/// @param[in]  library  The resolved deferred library descriptor.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* library);
+
+//------------------------------------------------------------------------------
+/// @brief      Notifies the engine that a requested Dart deferred library
+///             loading unit failed to resolve or load.
+///
+/// @param[in]  engine  The running engine instance.
+/// @param[in]  error   The error descriptor.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4194,6 +4326,13 @@ typedef FlutterEngineResult (*FlutterEngineNotifyDestroyedFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineQueryVulkanDriverSupportFnPtr)(
     const FlutterVulkanDriverProperties* properties,
     bool* out_is_known_bad);
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* library);
+typedef FlutterEngineResult (
+    *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4247,6 +4386,9 @@ typedef struct {
   FlutterEngineNotifyCreatedFnPtr NotifyCreated;
   FlutterEngineNotifyDestroyedFnPtr NotifyDestroyed;
   FlutterEngineQueryVulkanDriverSupportFnPtr QueryVulkanDriverSupport;
+  FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
+  FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
+      NotifyDartDeferredLibraryLoadError;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

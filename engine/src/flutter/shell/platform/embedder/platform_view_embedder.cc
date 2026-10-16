@@ -4,6 +4,7 @@
 
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
+#include <atomic>
 #include <utility>
 
 #include "flutter/fml/make_copyable.h"
@@ -15,11 +16,36 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
  public:
   EmbedderPlatformMessageHandler(
       fml::WeakPtr<PlatformView> parent,
-      fml::RefPtr<fml::TaskRunner> platform_task_runner)
+      fml::RefPtr<fml::TaskRunner> platform_task_runner,
+      PlatformMessageResponseCallback direct_dispatch_callback,
+      bool enable_direct_platform_message_dispatch)
       : parent_(std::move(parent)),
-        platform_task_runner_(std::move(platform_task_runner)) {}
+        platform_task_runner_(std::move(platform_task_runner)),
+        direct_dispatch_callback_(std::move(direct_dispatch_callback)),
+        enable_direct_platform_message_dispatch_(
+            enable_direct_platform_message_dispatch) {}
+
+  void Shutdown() { is_alive_.store(false, std::memory_order_release); }
 
   virtual void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) {
+    if (enable_direct_platform_message_dispatch_) {
+      if (!message) {
+        return;
+      }
+      if (!is_alive_.load(std::memory_order_acquire)) {
+        FML_DLOG(WARNING) << "Deleted engine dropping message on channel "
+                          << message->channel();
+        return;
+      }
+      if (direct_dispatch_callback_ == nullptr) {
+        if (message->response()) {
+          message->response()->CompleteEmpty();
+        }
+        return;
+      }
+      direct_dispatch_callback_(std::move(message));
+      return;
+    }
     platform_task_runner_->PostTask(fml::MakeCopyable(
         [parent = parent_, message = std::move(message)]() mutable {
           if (parent) {
@@ -32,7 +58,7 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
   }
 
   virtual bool DoesHandlePlatformMessageOnPlatformThread() const {
-    return true;
+    return !enable_direct_platform_message_dispatch_;
   }
 
   virtual void InvokePlatformMessageResponseCallback(
@@ -43,6 +69,9 @@ class PlatformViewEmbedder::EmbedderPlatformMessageHandler
  private:
   fml::WeakPtr<PlatformView> parent_;
   fml::RefPtr<fml::TaskRunner> platform_task_runner_;
+  PlatformMessageResponseCallback direct_dispatch_callback_;
+  bool enable_direct_platform_message_dispatch_ = false;
+  std::atomic<bool> is_alive_{true};
 };
 
 PlatformViewEmbedder::PlatformViewEmbedder(
@@ -57,13 +86,19 @@ PlatformViewEmbedder::PlatformViewEmbedder(
       embedder_surface_(
           std::make_unique<EmbedderSurfaceSoftware>(software_dispatch_table,
                                                     external_view_embedder_)),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    GetWeakPtr(),
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table.platform_message_response_callback,
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
       platform_message_handler_(
           platform_dispatch_table.custom_platform_message_handler
               ? platform_dispatch_table.custom_platform_message_handler
-              : std::shared_ptr<PlatformMessageHandler>(
-                    new EmbedderPlatformMessageHandler(
-                        GetWeakPtr(),
-                        task_runners.GetPlatformTaskRunner()))),
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 
 #ifdef SHELL_ENABLE_GL
@@ -76,13 +111,19 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    GetWeakPtr(),
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table.platform_message_response_callback,
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
       platform_message_handler_(
           platform_dispatch_table.custom_platform_message_handler
               ? platform_dispatch_table.custom_platform_message_handler
-              : std::shared_ptr<PlatformMessageHandler>(
-                    new EmbedderPlatformMessageHandler(
-                        GetWeakPtr(),
-                        task_runners.GetPlatformTaskRunner()))),
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -96,13 +137,19 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    GetWeakPtr(),
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table.platform_message_response_callback,
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
       platform_message_handler_(
           platform_dispatch_table.custom_platform_message_handler
               ? platform_dispatch_table.custom_platform_message_handler
-              : std::shared_ptr<PlatformMessageHandler>(
-                    new EmbedderPlatformMessageHandler(
-                        GetWeakPtr(),
-                        task_runners.GetPlatformTaskRunner()))),
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -116,17 +163,27 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    GetWeakPtr(),
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table.platform_message_response_callback,
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
       platform_message_handler_(
           platform_dispatch_table.custom_platform_message_handler
               ? platform_dispatch_table.custom_platform_message_handler
-              : std::shared_ptr<PlatformMessageHandler>(
-                    new EmbedderPlatformMessageHandler(
-                        GetWeakPtr(),
-                        task_runners.GetPlatformTaskRunner()))),
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
-PlatformViewEmbedder::~PlatformViewEmbedder() = default;
+PlatformViewEmbedder::~PlatformViewEmbedder() {
+  if (embedder_platform_message_handler_) {
+    embedder_platform_message_handler_->Shutdown();
+  }
+}
 
 void PlatformViewEmbedder::UpdateSemantics(
     int64_t view_id,
@@ -278,7 +335,29 @@ void PlatformViewEmbedder::RequestDartDeferredLibrary(
       nullptr) {
     platform_dispatch_table_.request_dart_deferred_library_callback(
         loading_unit_id);
+  } else {
+    delegate_.LoadDartDeferredLibraryError(
+        loading_unit_id,
+        "Deferred library loading is not supported by this embedder.", false);
   }
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::LoadDartDeferredLibrary(
+    intptr_t loading_unit_id,
+    std::unique_ptr<const fml::Mapping> snapshot_data,
+    std::unique_ptr<const fml::Mapping> snapshot_instructions) {
+  delegate_.LoadDartDeferredLibrary(loading_unit_id, std::move(snapshot_data),
+                                    std::move(snapshot_instructions));
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::LoadDartDeferredLibraryError(
+    intptr_t loading_unit_id,
+    const std::string error_message,
+    bool transient) {
+  delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
+                                         transient);
 }
 
 // |PlatformView|

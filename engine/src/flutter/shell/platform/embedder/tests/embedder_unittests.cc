@@ -4889,6 +4889,174 @@ TEST_F(EmbedderTest, WindowMetricsEventExtendedFields) {
             "cutout:unknown:175.0,0.0,225.0,20.0");
 }
 
+TEST_F(EmbedderTest, CustomAssetResolverResolvesAndHotSwapsAssets) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("customEntrypoint");
+
+  std::string real_assets_path = builder.GetProjectArgs().assets_path;
+  std::string kernel_path =
+      fml::paths::JoinPaths({real_assets_path, "kernel_blob.bin"});
+  auto real_kernel_mapping = fml::FileMapping::CreateReadOnly(kernel_path);
+  ASSERT_NE(real_kernel_mapping, nullptr);
+
+  struct CustomAssetStore {
+    std::shared_ptr<fml::Mapping> active_kernel_mapping;
+    std::atomic<int> resolve_count{0};
+    std::atomic<int> release_count{0};
+  } store;
+
+  FlutterCustomAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterCustomAssetResolver);
+  resolver.user_data = &store;
+  resolver.get_as_mapping_callback = [](const char* asset_name, void* user_data,
+                                        FlutterAssetMapping* mapping_out) {
+    auto* store_ptr = static_cast<CustomAssetStore*>(user_data);
+    store_ptr->resolve_count.fetch_add(1);
+    if (std::string_view(asset_name) != "kernel_blob.bin" ||
+        store_ptr->active_kernel_mapping == nullptr) {
+      return false;
+    }
+    mapping_out->struct_size = sizeof(FlutterAssetMapping);
+    mapping_out->mapping = store_ptr->active_kernel_mapping->GetMapping();
+    mapping_out->size = store_ptr->active_kernel_mapping->GetSize();
+    mapping_out->user_data = store_ptr;
+    mapping_out->release_callback = [](void* data) {
+      static_cast<CustomAssetStore*>(data)->release_count.fetch_add(1);
+    };
+    return true;
+  };
+
+  // Clear assets_path so the engine relies exclusively on
+  // custom_asset_resolvers.
+  builder.GetProjectArgs().assets_path = nullptr;
+  builder.GetProjectArgs().custom_asset_resolvers_count = 1;
+  builder.GetProjectArgs().custom_asset_resolvers = &resolver;
+
+  // 1. Before hot-swapping the kernel mapping into `store`, engine
+  // initialization fails to resolve kernel_blob.bin.
+  {
+    auto failed_engine = builder.InitializeEngine();
+    EXPECT_FALSE(failed_engine.is_valid());
+    EXPECT_GE(store.resolve_count.load(), 1);
+  }
+
+  // 2. Hot-swap the kernel mapping via `user_data` and launch the engine with
+  // assets_path == nullptr.
+  store.active_kernel_mapping = std::move(real_kernel_mapping);
+  fml::AutoResetWaitableEvent ready_latch;
+  context.AddFfiNativeCallback(
+      "SayHiFromCustomEntrypoint",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+  engine.reset();
+  EXPECT_GE(store.release_count.load(), 1);
+}
+
+TEST_F(EmbedderTest, DeferredLibraryProcTableAndLifecycle) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+  EXPECT_NE(procs.LoadDartDeferredLibrary, nullptr);
+  EXPECT_NE(procs.NotifyDartDeferredLibraryLoadError, nullptr);
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(nullptr, nullptr),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(nullptr, nullptr),
+            kInvalidArguments);
+
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("customEntrypoint");
+
+  fml::AutoResetWaitableEvent ready_latch;
+  context.AddFfiNativeCallback(
+      "SayHiFromCustomEntrypoint",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+
+  // Null snapshot pointers must be rejected with kInvalidArguments.
+  FlutterDartDeferredLibrary invalid_lib = {};
+  invalid_lib.struct_size = sizeof(FlutterDartDeferredLibrary);
+  invalid_lib.loading_unit_id = 2;
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &invalid_lib),
+            kInvalidArguments);
+
+  // Valid buffers invoke destruction_callback once both snapshot mappings are
+  // released by the engine.
+  fml::AutoResetWaitableEvent destroy_latch;
+  const uint8_t dummy_data[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+  const uint8_t dummy_instr[8] = {8, 7, 6, 5, 4, 3, 2, 1};
+  FlutterDartDeferredLibrary valid_lib = {};
+  valid_lib.struct_size = sizeof(FlutterDartDeferredLibrary);
+  valid_lib.loading_unit_id = 2;
+  valid_lib.snapshot_data = dummy_data;
+  valid_lib.snapshot_data_size = sizeof(dummy_data);
+  valid_lib.snapshot_instructions = dummy_instr;
+  valid_lib.snapshot_instructions_size = sizeof(dummy_instr);
+  valid_lib.user_data = &destroy_latch;
+  valid_lib.destruction_callback = [](void* data) {
+    static_cast<fml::AutoResetWaitableEvent*>(data)->Signal();
+  };
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &valid_lib),
+            kSuccess);
+  destroy_latch.Wait();
+
+  FlutterDartDeferredLibraryLoadError err = {};
+  err.struct_size = sizeof(FlutterDartDeferredLibraryLoadError);
+  err.loading_unit_id = 3;
+  err.error_message = "Failed to download split APK";
+  err.transient = true;
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(engine.get(), &err),
+            kSuccess);
+}
+
+TEST_F(EmbedderTest, DirectPlatformMessageDispatchInvokesCallbackOnUIThread) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("canSpecifyCustomUITaskRunner");
+  builder.GetProjectArgs().enable_direct_platform_message_dispatch = true;
+
+  std::thread::id platform_thread_id = std::this_thread::get_id();
+  std::thread::id callback_thread_id;
+  fml::AutoResetWaitableEvent ready_latch;
+  fml::AutoResetWaitableEvent message_latch;
+
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  builder.SetPlatformMessageCallback(
+      [&](const FlutterPlatformMessage* message) {
+        if (std::string_view(message->channel) == "OhHi") {
+          callback_thread_id = std::this_thread::get_id();
+          message_latch.Signal();
+        }
+      });
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+  // Drain the initial Shell::Setup platform-thread message routing task.
+  fml::MessageLoop::GetCurrent().RunExpiredTasksNow();
+  message_latch.Wait();
+
+  // Because enable_direct_platform_message_dispatch is true and UI/platform
+  // threads are separate in this test, the callback is invoked on the UI
+  // thread rather than on the platform thread.
+  EXPECT_NE(callback_thread_id, std::thread::id());
+  EXPECT_NE(callback_thread_id, platform_thread_id);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

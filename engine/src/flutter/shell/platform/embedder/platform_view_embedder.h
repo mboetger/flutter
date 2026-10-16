@@ -80,6 +80,7 @@ class PlatformViewEmbedder final : public PlatformView {
     std::function<void(std::string)> set_application_locale_callback;
     std::function<void(bool)> set_semantics_tree_enabled_callback;
     std::shared_ptr<PlatformMessageHandler> custom_platform_message_handler;
+    bool enable_direct_platform_message_dispatch = false;
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -143,6 +144,8 @@ class PlatformViewEmbedder final : public PlatformView {
   class EmbedderPlatformMessageHandler;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
   std::unique_ptr<EmbedderSurface> embedder_surface_;
+  std::shared_ptr<EmbedderPlatformMessageHandler>
+      embedder_platform_message_handler_;
   std::shared_ptr<PlatformMessageHandler> platform_message_handler_;
   PlatformDispatchTable platform_dispatch_table_;
 
@@ -177,6 +180,17 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
+
+  // |PlatformView|
+  void LoadDartDeferredLibrary(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions) override;
+
+  // |PlatformView|
+  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
+                                    const std::string error_message,
+                                    bool transient) override;
 
   // |PlatformView|
   double GetScaledFontSize(double unscaled_font_size,

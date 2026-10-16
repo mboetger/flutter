@@ -2116,6 +2116,76 @@ CreateEmbedderSemanticsUpdateCallback(const FlutterProjectArgs* args,
   return nullptr;
 }
 
+namespace {
+
+class EmbedderCustomAssetResolver final : public flutter::AssetResolver {
+ public:
+  EmbedderCustomAssetResolver(FlutterAssetResolverGetAsMappingCallback callback,
+                              void* user_data)
+      : callback_(callback), user_data_(user_data) {}
+
+  ~EmbedderCustomAssetResolver() override = default;
+
+  // |AssetResolver|
+  bool IsValid() const override { return callback_ != nullptr; }
+
+  // |AssetResolver|
+  bool IsValidAfterAssetManagerChange() const override { return true; }
+
+  // |AssetResolver|
+  AssetResolverType GetType() const override {
+    return AssetResolverType::kApkAssetProvider;
+  }
+
+  // |AssetResolver|
+  std::unique_ptr<fml::Mapping> GetAsMapping(
+      const std::string& asset_name) const override {
+    if (callback_ == nullptr) {
+      return nullptr;
+    }
+    FlutterAssetMapping asset_mapping = {};
+    asset_mapping.struct_size = sizeof(FlutterAssetMapping);
+    if (!callback_(asset_name.c_str(), user_data_, &asset_mapping)) {
+      return nullptr;
+    }
+    const FlutterAssetMapping* asset_mapping_ptr = &asset_mapping;
+    const uint8_t* mapping_ptr =
+        SAFE_ACCESS(asset_mapping_ptr, mapping, nullptr);
+    size_t mapping_size = SAFE_ACCESS(asset_mapping_ptr, size, 0);
+    VoidCallback release_callback =
+        SAFE_ACCESS(asset_mapping_ptr, release_callback, nullptr);
+    void* release_user_data =
+        SAFE_ACCESS(asset_mapping_ptr, user_data, nullptr);
+    if (mapping_ptr == nullptr && mapping_size > 0) {
+      if (release_callback != nullptr) {
+        release_callback(release_user_data);
+      }
+      return nullptr;
+    }
+    return std::make_unique<fml::NonOwnedMapping>(
+        mapping_ptr, mapping_size,
+        [release_callback, release_user_data](const uint8_t* /*data*/,
+                                              size_t /*size*/) {
+          if (release_callback != nullptr) {
+            release_callback(release_user_data);
+          }
+        });
+  }
+
+  // |AssetResolver|
+  bool operator==(const AssetResolver& other) const override {
+    return this == &other;
+  }
+
+ private:
+  FlutterAssetResolverGetAsMappingCallback callback_ = nullptr;
+  void* user_data_ = nullptr;
+
+  FML_DISALLOW_COPY_AND_ASSIGN(EmbedderCustomAssetResolver);
+};
+
+}  // namespace
+
 FlutterEngineResult FlutterEngineRun(size_t version,
                                      const FlutterRendererConfig* config,
                                      const FlutterProjectArgs* args,
@@ -2156,7 +2226,15 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
                               "The Flutter project arguments were missing.");
   }
 
-  if (SAFE_ACCESS(args, assets_path, nullptr) == nullptr) {
+  size_t custom_asset_resolvers_count =
+      SAFE_ACCESS(args, custom_asset_resolvers_count, 0);
+  const FlutterCustomAssetResolver* custom_asset_resolvers =
+      SAFE_ACCESS(args, custom_asset_resolvers, nullptr);
+  bool has_custom_asset_resolvers =
+      custom_asset_resolvers_count > 0 && custom_asset_resolvers != nullptr;
+
+  if (SAFE_ACCESS(args, assets_path, nullptr) == nullptr &&
+      !has_custom_asset_resolvers) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "The assets path in the Flutter project arguments was missing.");
@@ -2223,17 +2301,52 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   }
 
   settings.icu_data_path = icu_data_path;
-  settings.assets_path = args->assets_path;
+  if (SAFE_ACCESS(args, assets_path, nullptr) != nullptr) {
+    settings.assets_path = args->assets_path;
+  }
   settings.leak_vm = !SAFE_ACCESS(args, shutdown_dart_vm_when_done, false);
   settings.old_gen_heap_size = SAFE_ACCESS(args, dart_old_gen_heap_size, -1);
   settings.enable_wide_gamut = SAFE_ACCESS(args, enable_wide_gamut, false);
 
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+  if (fml::UniqueFD::traits_type::IsValid(settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(settings.assets_dir), true));
+  }
+  if (!settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
+  if (has_custom_asset_resolvers) {
+    for (size_t i = 0; i < custom_asset_resolvers_count; ++i) {
+      const FlutterCustomAssetResolver* resolver_desc =
+          &custom_asset_resolvers[i];
+      auto callback =
+          SAFE_ACCESS(resolver_desc, get_as_mapping_callback, nullptr);
+      if (callback == nullptr) {
+        return LOG_EMBEDDER_ERROR(
+            kInvalidArguments,
+            "Custom asset resolver callback must not be null.");
+      }
+      asset_manager->PushBack(std::make_unique<EmbedderCustomAssetResolver>(
+          callback, SAFE_ACCESS(resolver_desc, user_data, nullptr)));
+    }
+  }
+
   if (!flutter::DartVM::IsRunningPrecompiledCode()) {
-    // Verify the assets path contains Dart 2 kernel assets.
+    // Verify the assets path or custom asset resolvers contain Dart 2 kernel
+    // assets.
     const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
-    std::string application_kernel_path = fml::paths::JoinPaths(
-        {settings.assets_path, kApplicationKernelSnapshotFileName});
-    if (!fml::IsFile(application_kernel_path)) {
+    bool has_kernel_file =
+        !settings.assets_path.empty() &&
+        fml::IsFile(fml::paths::JoinPaths(
+            {settings.assets_path, kApplicationKernelSnapshotFileName}));
+    bool has_kernel_mapping =
+        has_kernel_file || (asset_manager->GetAsMapping(
+                                kApplicationKernelSnapshotFileName) != nullptr);
+    if (!has_kernel_mapping) {
       return LOG_EMBEDDER_ERROR(
           kInvalidArguments,
           "Not running in AOT mode but could not resolve the kernel binary.");
@@ -2410,6 +2523,15 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
         };
   }
 
+  std::function<void(intptr_t)> request_dart_deferred_library_callback =
+      nullptr;
+  if (SAFE_ACCESS(args, request_dart_deferred_library_callback, nullptr) !=
+      nullptr) {
+    request_dart_deferred_library_callback =
+        [ptr = args->request_dart_deferred_library_callback, user_data](
+            intptr_t loading_unit_id) { ptr(loading_unit_id, user_data); };
+  }
+
   auto external_view_embedder_result = InferExternalViewEmbedderFromArgs(
       SAFE_ACCESS(args, compositor, nullptr), settings.enable_impeller);
   if (!external_view_embedder_result.ok()) {
@@ -2428,6 +2550,10 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
           channel_update_callback,                    //
           view_focus_change_request_callback,         //
   };
+  platform_dispatch_table.request_dart_deferred_library_callback =
+      request_dart_deferred_library_callback;
+  platform_dispatch_table.enable_direct_platform_message_dispatch =
+      SAFE_ACCESS(args, enable_direct_platform_message_dispatch, false);
 
   impeller::Flags impeller_flags;
   impeller_flags.use_sdfs = settings.impeller_use_sdfs;
@@ -2609,8 +2735,9 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   };
 
-  auto run_configuration =
-      flutter::RunConfiguration::InferFromSettings(settings);
+  flutter::RunConfiguration run_configuration(
+      flutter::IsolateConfiguration::InferFromSettings(settings, asset_manager),
+      asset_manager);
 
   if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{args->custom_dart_entrypoint};
@@ -3968,6 +4095,118 @@ FlutterEngineResult FlutterEngineQueryVulkanDriverSupport(
 #endif
 }
 
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* library) {
+  if (engine == nullptr || library == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Invalid engine handle or deferred library descriptor.");
+  }
+  auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine not running.");
+  }
+  const uint8_t* snapshot_data = SAFE_ACCESS(library, snapshot_data, nullptr);
+  const uint8_t* snapshot_instructions =
+      SAFE_ACCESS(library, snapshot_instructions, nullptr);
+  if (snapshot_data == nullptr || snapshot_instructions == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Deferred library snapshot_data and "
+                              "snapshot_instructions must not be null.");
+  }
+  intptr_t loading_unit_id = SAFE_ACCESS(library, loading_unit_id, 0);
+  size_t snapshot_data_size = SAFE_ACCESS(library, snapshot_data_size, 0);
+  size_t snapshot_instructions_size =
+      SAFE_ACCESS(library, snapshot_instructions_size, 0);
+  VoidCallback destruction_callback =
+      SAFE_ACCESS(library, destruction_callback, nullptr);
+  void* user_data = SAFE_ACCESS(library, user_data, nullptr);
+
+  const char* assets_path = SAFE_ACCESS(library, assets_path, nullptr);
+  if (assets_path != nullptr && ::strlen(assets_path) > 0) {
+    if (auto platform_view = embedder_engine->GetShell().GetPlatformView()) {
+      platform_view->UpdateAssetResolverByType(
+          std::make_unique<flutter::DirectoryAssetBundle>(
+              fml::OpenDirectory(assets_path, false,
+                                 fml::FilePermission::kRead),
+              true),
+          flutter::AssetResolver::AssetResolverType::kDirectoryAssetBundle);
+    }
+  }
+  size_t custom_resolvers_count =
+      SAFE_ACCESS(library, custom_asset_resolvers_count, 0);
+  const FlutterCustomAssetResolver* custom_resolvers =
+      SAFE_ACCESS(library, custom_asset_resolvers, nullptr);
+  if (custom_resolvers_count > 0 && custom_resolvers != nullptr) {
+    if (auto platform_view = embedder_engine->GetShell().GetPlatformView()) {
+      for (size_t i = 0; i < custom_resolvers_count; ++i) {
+        const FlutterCustomAssetResolver* desc = &custom_resolvers[i];
+        auto callback = SAFE_ACCESS(desc, get_as_mapping_callback, nullptr);
+        if (callback != nullptr) {
+          platform_view->UpdateAssetResolverByType(
+              std::make_unique<EmbedderCustomAssetResolver>(
+                  callback, SAFE_ACCESS(desc, user_data, nullptr)),
+              flutter::AssetResolver::AssetResolverType::kApkAssetProvider);
+        }
+      }
+    }
+  }
+
+  struct DeferredLibraryLifetime {
+    VoidCallback callback = nullptr;
+    void* user_data = nullptr;
+    ~DeferredLibraryLifetime() {
+      if (callback != nullptr) {
+        callback(user_data);
+      }
+    }
+  };
+  auto lifetime = std::make_shared<DeferredLibraryLifetime>();
+  lifetime->callback = destruction_callback;
+  lifetime->user_data = user_data;
+
+  auto data_mapping = std::make_unique<const fml::NonOwnedMapping>(
+      snapshot_data, snapshot_data_size,
+      [lifetime](const uint8_t* /*data*/, size_t /*size*/) {});
+  auto instructions_mapping = std::make_unique<const fml::NonOwnedMapping>(
+      snapshot_instructions, snapshot_instructions_size,
+      [lifetime](const uint8_t* /*data*/, size_t /*size*/) {});
+
+  if (!embedder_engine->LoadDartDeferredLibrary(
+          loading_unit_id, std::move(data_mapping),
+          std::move(instructions_mapping))) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not load Dart deferred library.");
+  }
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error) {
+  if (engine == nullptr || error == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Invalid engine handle or deferred library load error descriptor.");
+  }
+  auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine not running.");
+  }
+  intptr_t loading_unit_id = SAFE_ACCESS(error, loading_unit_id, 0);
+  const char* error_message = SAFE_ACCESS(error, error_message, nullptr);
+  bool transient = SAFE_ACCESS(error, transient, false);
+  std::string message = error_message != nullptr ? error_message : "";
+  if (!embedder_engine->LoadDartDeferredLibraryError(loading_unit_id, message,
+                                                     transient)) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not notify Dart deferred library load error.");
+  }
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4027,6 +4266,9 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(NotifyCreated, FlutterEngineNotifyCreated);
   SET_PROC(NotifyDestroyed, FlutterEngineNotifyDestroyed);
   SET_PROC(QueryVulkanDriverSupport, FlutterEngineQueryVulkanDriverSupport);
+  SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
+  SET_PROC(NotifyDartDeferredLibraryLoadError,
+           FlutterEngineNotifyDartDeferredLibraryLoadError);
 #undef SET_PROC
 
   return kSuccess;
