@@ -93,7 +93,6 @@ static jfieldID g_jni_shell_holder_field = nullptr;
   V(g_on_end_frame2_method, endFrame2, "()V")                                 \
   V(g_show_overlay_surface2_method, showOverlaySurface2, "()V")               \
   V(g_hide_overlay_surface2_method, hideOverlaySurface2, "()V")               \
-  V(g_get_scaled_font_size_method, getScaledFontSize, "(FI)F")                \
   V(g_update_custom_accessibility_actions_method,                             \
     updateCustomAccessibilityActions,                                         \
     "(Ljava/nio/ByteBuffer;[Ljava/lang/String;)V")                            \
@@ -1458,23 +1457,6 @@ void PlatformViewAndroidJNIImpl::FlutterViewHandlePlatformMessageResponse(
   }
 
   FML_CHECK(fml::jni::CheckException(env));
-}
-
-double PlatformViewAndroidJNIImpl::FlutterViewGetScaledFontSize(
-    double font_size,
-    int configuration_id) const {
-  JNIEnv* env = fml::jni::AttachCurrentThread();
-
-  auto java_object = java_object_.get(env);
-  if (java_object.is_null()) {
-    return -3;
-  }
-
-  const jfloat scaledSize = env->CallFloatMethod(
-      java_object.obj(), g_get_scaled_font_size_method,
-      static_cast<jfloat>(font_size), static_cast<jint>(configuration_id));
-  FML_CHECK(fml::jni::CheckException(env));
-  return static_cast<double>(scaledSize);
 }
 
 void PlatformViewAndroidJNIImpl::FlutterViewUpdateSemantics(

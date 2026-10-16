@@ -13,8 +13,6 @@ import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
 import android.os.Looper;
-import android.util.DisplayMetrics;
-import android.util.TypedValue;
 import android.view.Surface;
 import android.view.SurfaceControl;
 import android.view.SurfaceHolder;
@@ -33,7 +31,6 @@ import io.flutter.embedding.engine.mutatorsstack.FlutterMutatorsStack;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
 import io.flutter.embedding.engine.renderer.FlutterUiResizeListener;
 import io.flutter.embedding.engine.renderer.SurfaceTextureWrapper;
-import io.flutter.embedding.engine.systemchannels.SettingsChannel;
 import io.flutter.plugin.common.StandardMessageCodec;
 import io.flutter.plugin.localization.LocalizationPlugin;
 import io.flutter.plugin.platform.PlatformViewsController;
@@ -399,8 +396,6 @@ public class FlutterJNI {
   @Nullable private PlatformViewsController2 platformViewsController2;
 
   @Nullable private DeferredComponentManager deferredComponentManager;
-
-  @Nullable private SettingsChannel settingsChannel;
 
   @NonNull
   private final Set<EngineLifecycleListener> engineLifecycleListeners = new CopyOnWriteArraySet<>();
@@ -1530,30 +1525,6 @@ public class FlutterJNI {
   }
 
   // ----- End Localization Support ----
-  @Nullable
-  public float getScaledFontSize(float fontSize, int configurationId) {
-    final DisplayMetrics metrics =
-        this.settingsChannel == null
-            ? null
-            : this.settingsChannel.getPastDisplayMetrics(configurationId);
-    if (metrics == null) {
-      Log.e(
-          TAG,
-          "getScaledFontSize called with configurationId "
-              + configurationId
-              + ", which can't be found.");
-      return -1f;
-    }
-    return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, fontSize, metrics)
-        / metrics.density;
-  }
-
-  // ----- Start Settings Channel Support ----
-  @UiThread
-  public void setSettingsChannel(@Nullable SettingsChannel settingsChannel) {
-    ensureRunningOnMainThread();
-    this.settingsChannel = settingsChannel;
-  }
 
   // ----- Start Deferred Components Support ----
 

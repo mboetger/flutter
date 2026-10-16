@@ -1332,15 +1332,29 @@ class PlatformDispatcher {
     };
     final systemFontFamily = data['systemFontFamily'] as String?;
     final configurationId = data['configurationId'] as int?;
+    final rawCurves = data['fontScaleCurves'] as List<Object?>?;
+    List<(double, double)>? fontScaleCurves;
+    if (rawCurves != null && rawCurves.isNotEmpty) {
+      fontScaleCurves = <(double, double)>[
+        for (final Object? entry in rawCurves)
+          if (entry case {'unscaled': final num unscaled, 'scaled': final num scaled})
+            (unscaled.toDouble(), scaled.toDouble()),
+      ];
+    }
     final _PlatformConfiguration previousConfiguration = _configuration;
     final platformBrightnessChanged =
         previousConfiguration.platformBrightness != platformBrightness;
     final textScaleFactorChanged = previousConfiguration.textScaleFactor != textScaleFactor;
+    final fontScaleCurvesChanged = !_fontScaleCurvesEqual(
+      previousConfiguration.fontScaleCurves,
+      fontScaleCurves,
+    );
     final alwaysUse24HourFormatChanged =
         previousConfiguration.alwaysUse24HourFormat != alwaysUse24HourFormat;
     final systemFontFamilyChanged = previousConfiguration.systemFontFamily != systemFontFamily;
     if (!platformBrightnessChanged &&
         !textScaleFactorChanged &&
+        !fontScaleCurvesChanged &&
         !alwaysUse24HourFormatChanged &&
         !systemFontFamilyChanged &&
         configurationId == null) {
@@ -1352,9 +1366,11 @@ class PlatformDispatcher {
       platformBrightness: platformBrightness,
       systemFontFamily: systemFontFamily,
       configurationId: configurationId,
+      fontScaleCurves: fontScaleCurves,
+      updateFontScaleCurves: true,
     );
     _invoke(onPlatformConfigurationChanged, _onPlatformConfigurationChangedZone);
-    if (textScaleFactorChanged) {
+    if (textScaleFactorChanged || fontScaleCurvesChanged) {
       _cachedFontSizes = null;
       _invoke(onTextScaleFactorChanged, _onTextScaleFactorChangedZone);
     }
@@ -1573,6 +1589,11 @@ class PlatformDispatcher {
       return unscaledFontSize;
     }
 
+    final List<(double, double)>? curves = _configuration.fontScaleCurves;
+    if (curves != null && curves.isNotEmpty) {
+      return _interpolateFontScaleCurve(unscaledFontSize, curves);
+    }
+
     final int unscaledFloor = unscaledFontSize.floor();
     final int unscaledCeil = unscaledFontSize.ceil();
     if (unscaledFloor == unscaledCeil) {
@@ -1589,6 +1610,45 @@ class PlatformDispatcher {
       (final double lower, final double upper) =>
         lower + (upper - lower) * (unscaledFontSize - unscaledFloor),
     };
+  }
+
+  static bool _fontScaleCurvesEqual(List<(double, double)>? a, List<(double, double)>? b) {
+    if (identical(a, b)) {
+      return true;
+    }
+    if (a == null || b == null || a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  double _interpolateFontScaleCurve(double unscaledFontSize, List<(double, double)> curves) {
+    if (unscaledFontSize == 0.0) {
+      return 0.0;
+    }
+    final (double firstUnscaled, double firstScaled) = curves.first;
+    if (unscaledFontSize <= firstUnscaled) {
+      return firstUnscaled > 0.0
+          ? unscaledFontSize * (firstScaled / firstUnscaled)
+          : unscaledFontSize * textScaleFactor;
+    }
+    for (var i = 0; i < curves.length - 1; i++) {
+      final (double x0, double y0) = curves[i];
+      final (double x1, double y1) = curves[i + 1];
+      if (unscaledFontSize <= x1) {
+        final double span = x1 - x0;
+        return span > 0.0 ? y0 + (y1 - y0) * ((unscaledFontSize - x0) / span) : y0;
+      }
+    }
+    final (double lastUnscaled, double lastScaled) = curves.last;
+    return lastUnscaled > 0.0
+        ? lastScaled * (unscaledFontSize / lastUnscaled)
+        : unscaledFontSize * textScaleFactor;
   }
 
   // The cache is cleared when the text scale factor changes.
@@ -1908,6 +1968,7 @@ class _PlatformConfiguration {
     this.defaultRouteName,
     this.systemFontFamily,
     this.configurationId,
+    this.fontScaleCurves,
     this.lineHeightScaleFactorOverride,
     this.letterSpacingOverride,
     this.wordSpacingOverride,
@@ -1924,6 +1985,8 @@ class _PlatformConfiguration {
     String? defaultRouteName,
     String? systemFontFamily,
     int? configurationId,
+    List<(double, double)>? fontScaleCurves,
+    bool updateFontScaleCurves = false,
   }) {
     return _PlatformConfiguration(
       accessibilityFeatures: accessibilityFeatures ?? this.accessibilityFeatures,
@@ -1935,6 +1998,9 @@ class _PlatformConfiguration {
       defaultRouteName: defaultRouteName ?? this.defaultRouteName,
       systemFontFamily: systemFontFamily ?? this.systemFontFamily,
       configurationId: configurationId ?? this.configurationId,
+      fontScaleCurves: updateFontScaleCurves
+          ? fontScaleCurves
+          : (fontScaleCurves ?? this.fontScaleCurves),
       lineHeightScaleFactorOverride: lineHeightScaleFactorOverride,
       letterSpacingOverride: letterSpacingOverride,
       wordSpacingOverride: wordSpacingOverride,
@@ -1986,6 +2052,10 @@ class _PlatformConfiguration {
   /// configuration updates from the embedder yet. The _getScaledFontSize
   /// function should not be called in either case.
   final int? configurationId;
+
+  /// Sampled `(unscaledSp, scaledDp)` lookup points sent over the
+  /// `flutter/settings` channel for non-linear text scaling.
+  final List<(double, double)>? fontScaleCurves;
 
   /// The system-reported height of the text, as a multiple of the font size.
   final double? lineHeightScaleFactorOverride;

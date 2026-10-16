@@ -1496,6 +1496,26 @@ void hooksTests() async {
     );
     expectIdentical(runZonePlatformBrightness, innerZone);
     expectEquals(platformBrightness, Brightness.dark);
+
+    _callHook(
+      '_updateUserSettingsData',
+      1,
+      '{"textScaleFactor": 1.5, "platformBrightness": "dark", "alwaysUse24HourFormat": true, '
+          '"fontScaleCurves": [{"unscaled": 10.0, "scaled": 15.0}, {"unscaled": 20.0, "scaled": 25.0}]}',
+    );
+    expectEquals(PlatformDispatcher.instance.scaleFontSize(0.0), 0.0);
+    expectEquals(PlatformDispatcher.instance.scaleFontSize(5.0), 7.5);
+    expectEquals(PlatformDispatcher.instance.scaleFontSize(10.0), 15.0);
+    expectEquals(PlatformDispatcher.instance.scaleFontSize(15.0), 20.0);
+    expectEquals(PlatformDispatcher.instance.scaleFontSize(20.0), 25.0);
+    expectEquals(PlatformDispatcher.instance.scaleFontSize(40.0), 50.0);
+
+    _callHook(
+      '_updateUserSettingsData',
+      1,
+      '{"textScaleFactor": 1.0, "platformBrightness": "light", "alwaysUse24HourFormat": false}',
+    );
+    expectEquals(PlatformDispatcher.instance.scaleFontSize(15.0), 15.0);
   });
 
   await test('onFrameDataChanged preserves callback zone', () {

@@ -338,6 +338,7 @@ namespace {
 using SetSemanticsEnabledFn = void (*)(JNIEnv*, jobject, jlong, jboolean);
 using SetAccessibilityFeaturesFn = void (*)(JNIEnv*, jobject, jlong, jint);
 using ScheduleFrameFn = void (*)(JNIEnv*, jobject, jlong);
+using UpdateDisplayMetricsFn = void (*)(JNIEnv*, jobject, jlong);
 
 // Runs PlatformViewAndroid::Register against |mock_env| and returns the
 // function registered for the FlutterJNI native called |name|, or nullptr.
@@ -541,6 +542,57 @@ TEST_F(PlatformViewAndroidJNIImplTest, ScheduleFrameCallsEmbedderApi) {
                  reinterpret_cast<jlong>(holder.get()));
 
   EXPECT_EQ(calls, 1);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, UpdateDisplayMetricsCallsEmbedderApi) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+  auto update_display_metrics = reinterpret_cast<UpdateDisplayMetricsFn>(
+      RegisterNativesAndFind(mock_env, "nativeUpdateDisplayMetrics"));
+  ASSERT_NE(update_display_metrics, nullptr);
+
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<JNIMock>();
+  constexpr double kExpectedRefreshRate = 120.0;
+  constexpr double kExpectedWidth = 1080.0;
+  constexpr double kExpectedHeight = 2400.0;
+  constexpr double kExpectedDensity = 3.0;
+  EXPECT_CALL(*jni, GetDisplayRefreshRate())
+      .WillOnce(Return(kExpectedRefreshRate));
+  EXPECT_CALL(*jni, GetDisplayWidth()).WillOnce(Return(kExpectedWidth));
+  EXPECT_CALL(*jni, GetDisplayHeight()).WillOnce(Return(kExpectedHeight));
+  EXPECT_CALL(*jni, GetDisplayDensity()).WillOnce(Return(kExpectedDensity));
+
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  std::vector<FlutterEngineDisplay> displays;
+  holder->GetEmbedderApiForTesting().NotifyDisplayUpdate = MOCK_ENGINE_PROC(
+      NotifyDisplayUpdate,
+      ([&displays](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                   FlutterEngineDisplaysUpdateType update_type,
+                   const FlutterEngineDisplay* engine_displays,
+                   size_t display_count) {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_EQ(update_type, kFlutterEngineDisplaysUpdateTypeStartup);
+        for (size_t i = 0; i < display_count; ++i) {
+          displays.push_back(engine_displays[i]);
+        }
+        return kSuccess;
+      }));
+
+  update_display_metrics(&mock_env, reinterpret_cast<jobject>(123),
+                         reinterpret_cast<jlong>(holder.get()));
+
+  ASSERT_EQ(displays.size(), 1u);
+  EXPECT_EQ(displays[0].display_id, 0u);
+  EXPECT_TRUE(displays[0].single_display);
+  EXPECT_DOUBLE_EQ(displays[0].refresh_rate, kExpectedRefreshRate);
+  EXPECT_EQ(displays[0].width, static_cast<size_t>(kExpectedWidth));
+  EXPECT_EQ(displays[0].height, static_cast<size_t>(kExpectedHeight));
+  EXPECT_DOUBLE_EQ(displays[0].device_pixel_ratio, kExpectedDensity);
 }
 
 // The load order is exercised with an injected loader rather than real

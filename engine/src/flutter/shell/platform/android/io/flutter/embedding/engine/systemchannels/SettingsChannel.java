@@ -9,17 +9,17 @@ import static io.flutter.Build.API_LEVELS;
 import android.annotation.SuppressLint;
 import android.os.Build;
 import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.UiThread;
-import androidx.annotation.VisibleForTesting;
 import io.flutter.Log;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.plugin.common.BasicMessageChannel;
 import io.flutter.plugin.common.JSONMessageCodec;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SettingsChannel {
   private static final String TAG = "SettingsChannel";
@@ -30,10 +30,17 @@ public class SettingsChannel {
   private static final String BRIEFLY_SHOW_PASSWORD = "brieflyShowPassword";
   private static final String ALWAYS_USE_24_HOUR_FORMAT = "alwaysUse24HourFormat";
   private static final String PLATFORM_BRIGHTNESS = "platformBrightness";
-  private static final String CONFIGURATION_ID = "configurationId";
+  private static final String FONT_SCALE_CURVES = "fontScaleCurves";
+  private static final String FONT_SCALE_CURVE_UNSCALED = "unscaled";
+  private static final String FONT_SCALE_CURVE_SCALED = "scaled";
 
-  // When hasNonlinearTextScalingSupport() returns false, this will not be initialized.
-  @VisibleForTesting final ConfigurationQueue configurationQueue = new ConfigurationQueue();
+  // Standard unscaled font sizes (in sp) used by Android 14+ FontScaleConverter lookup tables:
+  // 8sp, 10sp, 12sp, 14sp, 18sp, 20sp, 24sp, 30sp, and 100sp.
+  private static final float[] FONT_SCALE_SAMPLE_SIZES_SP =
+      new float[] {8f, 10f, 12f, 14f, 18f, 20f, 24f, 30f, 100f};
+
+  // Number of keys ("unscaled" and "scaled") in each serialized curve point map.
+  private static final int FONT_SCALE_CURVE_POINT_ENTRY_COUNT = 2;
 
   @NonNull public final BasicMessageChannel<Object> channel;
 
@@ -44,14 +51,6 @@ public class SettingsChannel {
   @SuppressLint("AnnotateVersionCheck")
   public static boolean hasNonlinearTextScalingSupport() {
     return Build.VERSION.SDK_INT >= API_LEVELS.API_34;
-  }
-
-  // This method will only be called on Flutter's UI thread.
-  public DisplayMetrics getPastDisplayMetrics(int configId) {
-    assert hasNonlinearTextScalingSupport();
-    final ConfigurationQueue.SentConfiguration configuration =
-        configurationQueue.getConfiguration(configId);
-    return configuration == null ? null : configuration.displayMetrics;
   }
 
   @NonNull
@@ -115,16 +114,26 @@ public class SettingsChannel {
               + "platformBrightness: "
               + message.get(PLATFORM_BRIGHTNESS));
       final DisplayMetrics metrics = this.displayMetrics;
-      if (!hasNonlinearTextScalingSupport() || metrics == null) {
-        channel.send(message);
-        return;
+      if (hasNonlinearTextScalingSupport() && metrics != null && metrics.density > 0.0f) {
+        final Object rawScaleFactor = message.get(TEXT_SCALE_FACTOR);
+        final float textScaleFactor =
+            rawScaleFactor instanceof Number ? ((Number) rawScaleFactor).floatValue() : 1.0f;
+        if (textScaleFactor != 1.0f) {
+          final List<Map<String, Object>> curves =
+              new ArrayList<>(FONT_SCALE_SAMPLE_SIZES_SP.length);
+          for (float sp : FONT_SCALE_SAMPLE_SIZES_SP) {
+            final float scaled =
+                TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, metrics)
+                    / metrics.density;
+            final Map<String, Object> point = new HashMap<>(FONT_SCALE_CURVE_POINT_ENTRY_COUNT);
+            point.put(FONT_SCALE_CURVE_UNSCALED, sp);
+            point.put(FONT_SCALE_CURVE_SCALED, scaled);
+            curves.add(point);
+          }
+          message.put(FONT_SCALE_CURVES, curves);
+        }
       }
-      final ConfigurationQueue.SentConfiguration sentConfiguration =
-          new ConfigurationQueue.SentConfiguration(metrics);
-      final BasicMessageChannel.Reply deleteCallback =
-          configurationQueue.enqueueConfiguration(sentConfiguration);
-      message.put(CONFIGURATION_ID, sentConfiguration.generationNumber);
-      channel.send(message, deleteCallback);
+      channel.send(message);
     }
   }
 
@@ -142,129 +151,6 @@ public class SettingsChannel {
 
     PlatformBrightness(@NonNull String name) {
       this.name = name;
-    }
-  }
-
-  /**
-   * A FIFO queue that maintains generations of configurations that are potentially used by the
-   * Flutter application.
-   *
-   * <p>Platform configurations needed by the Flutter app (for example, text scale factor) are
-   * retrived on the platform thread, serialized and sent to the Flutter application running on the
-   * Flutter UI thread. However, configurations exposed as functions that take parameters are
-   * typically not serializable. To allow the Flutter app to access these configurations, one
-   * possible solution is to create dart bindings that allow the Flutter framework to invoke these
-   * functions via JNI synchronously. To ensure the serialized configuration and these functions
-   * represent the same set of configurations at any given time, a "generation" id is used in these
-   * synchronous calls, to keep them consistent with the serialized configuration that the Flutter
-   * app most recently received and is currently using.
-   *
-   * <p>A unique generation identifier is generated by the {@link SettingsChannel} and associated
-   * with a configuration when it sends a serialized configuration to the Flutter framework. This
-   * queue keeps different generations of configurations that could be used by the Flutter
-   * framework, and cleans up old configurations that the Flutter framework no longer uses. When the
-   * Flutter framework invokes a function to access the configuration with a generation identifier,
-   * this queue finds the configuration with that identifier and also cleans up configurations that
-   * are no longer needed.
-   *
-   * <p>This mechanism is only needed because {@code TypedValue#applyDimension} does not take the
-   * current text scale factor as an input. Once the AndroidX API that allows us to query the scaled
-   * font size with a pure function is available, we can scrap this class and make the
-   * implementation much simpler.
-   */
-  @VisibleForTesting
-  static class ConfigurationQueue {
-    @VisibleForTesting
-    final ConcurrentLinkedQueue<SentConfiguration> sentQueue = new ConcurrentLinkedQueue<>();
-
-    // The current SentConfiguration the Flutter application is using, according
-    // to the most recent getConfiguration call.
-    //
-    // This instance variable will only be accessed by getConfiguration, on
-    // Flutter's UI thread.
-    private SentConfiguration currentConfiguration;
-
-    /**
-     * Returns the {@link SentConfiguration} associated with the given {@code configGeneration}, and
-     * removes configurations older than the returned configurations from the queue as they are no
-     * longer needed.
-     */
-    public SentConfiguration getConfiguration(int configGeneration) {
-      if (currentConfiguration == null) {
-        currentConfiguration = sentQueue.poll();
-      }
-
-      // Remove the older entries, up to the entry associated with
-      // configGeneration. Here we assume the generationNumber never overflows.
-      while (currentConfiguration != null
-          && currentConfiguration.generationNumber < configGeneration) {
-        currentConfiguration = sentQueue.poll();
-      }
-
-      if (currentConfiguration == null) {
-        Log.e(
-            TAG,
-            "Cannot find config with generation: "
-                + configGeneration
-                + ", after exhausting the queue.");
-        return null;
-      } else if (currentConfiguration.generationNumber != configGeneration) {
-        Log.e(
-            TAG,
-            "Cannot find config with generation: "
-                + configGeneration
-                + ", the oldest config is now: "
-                + currentConfiguration.generationNumber);
-        return null;
-      }
-      return currentConfiguration;
-    }
-
-    private SentConfiguration previousEnqueuedConfiguration;
-
-    /**
-     * Adds the most recently sent {@link SentConfiguration} to the queue.
-     *
-     * @return a {@link BasicMessageChannel.Reply} whose {@code reply} method must be called when
-     *     the embedder receives the reply for the sent configuration, to properly clean up older
-     *     configurations in the queue.
-     */
-    @UiThread
-    @Nullable
-    public BasicMessageChannel.Reply enqueueConfiguration(SentConfiguration config) {
-      sentQueue.add(config);
-      final SentConfiguration configurationToRemove = previousEnqueuedConfiguration;
-      previousEnqueuedConfiguration = config;
-      return configurationToRemove == null
-          ? null
-          : new BasicMessageChannel.Reply() {
-            @UiThread
-            @Override
-            public void reply(Object reply) {
-              // Removes the SentConfiguration sent right before `config`. Since
-              // platform messages are also FIFO older messages will be removed
-              // before newer ones.
-              sentQueue.remove(configurationToRemove);
-              if (!sentQueue.isEmpty()) {
-                Log.e(
-                    TAG,
-                    "The queue becomes empty after removing config generation "
-                        + configurationToRemove.generationNumber);
-              }
-            }
-          };
-    }
-
-    public static class SentConfiguration {
-      private static int nextConfigGeneration = Integer.MIN_VALUE;
-
-      @NonNull public final int generationNumber;
-      @NonNull private final DisplayMetrics displayMetrics;
-
-      public SentConfiguration(@NonNull DisplayMetrics displayMetrics) {
-        this.generationNumber = nextConfigGeneration++;
-        this.displayMetrics = displayMetrics;
-      }
     }
   }
 }

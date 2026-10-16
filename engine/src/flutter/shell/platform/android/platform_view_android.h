@@ -171,9 +171,6 @@ class PlatformViewAndroid final {
 
   void RequestDartDeferredLibrary(intptr_t loading_unit_id);
 
-  double GetScaledFontSize(double unscaled_font_size,
-                           int configuration_id) const;
-
  private:
   PlatformView::Delegate& delegate_;
   const flutter::TaskRunners task_runners_;

@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include <algorithm>
 #include <memory>
 #include <optional>
 
@@ -17,9 +18,7 @@
 #include "flutter/fml/cpu_affinity.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
-#include "flutter/lib/ui/painting/image_generator_registry.h"
 #include "flutter/shell/common/rasterizer.h"
-#include "flutter/shell/platform/android/android_display.h"
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
@@ -78,11 +77,6 @@ static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
   dispatch_table.request_dart_deferred_library_callback =
       [platform_view](intptr_t loading_unit_id) {
         platform_view->RequestDartDeferredLibrary(loading_unit_id);
-      };
-  dispatch_table.get_scaled_font_size_callback =
-      [platform_view](double unscaled_font_size, int configuration_id) {
-        return platform_view->GetScaledFontSize(unscaled_font_size,
-                                                configuration_id);
       };
   dispatch_table.set_application_locale_callback =
       [platform_view](std::string locale) {
@@ -285,6 +279,8 @@ AndroidShellHolder::AndroidShellHolder(
 
   platform_view_ = weak_platform_view;
   FML_DCHECK(platform_view_);
+  platform_message_handler_ =
+      platform_view_android_->GetPlatformMessageHandler();
   is_valid_ = engine_ != nullptr;
 }
 
@@ -308,11 +304,13 @@ AndroidShellHolder::AndroidShellHolder(
       android_rendering_api_(rendering_api) {
   FML_DCHECK(jni_facade);
   FML_DCHECK(engine_);
-  FML_DCHECK(GetShell(engine_.get()).IsSetup());
   FML_DCHECK(platform_view_android_);
   FML_DCHECK(platform_view_);
   FML_DCHECK(thread_host_);
+  platform_message_handler_ =
+      platform_view_android_->GetPlatformMessageHandler();
   is_valid_ = engine_ != nullptr;
+  FML_DCHECK(IsValid());
 }
 
 AndroidShellHolder::~AndroidShellHolder() {
@@ -344,9 +342,8 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
     const std::string& initial_route,
     const std::vector<std::string>& entrypoint_args,
     int64_t engine_id) const {
-  FML_DCHECK(engine_ && GetShell(engine_.get()).IsSetup())
-      << "A new Shell can only be spawned "
-         "if the current Shell is properly constructed";
+  FML_DCHECK(IsValid()) << "A new Shell can only be spawned "
+                           "if the current Shell is properly constructed";
 
   // Pull out the new PlatformViewAndroid from the new Shell to feed to it to
   // the new AndroidShellHolder.
@@ -594,7 +591,7 @@ void AndroidShellHolder::NotifyLowMemoryWarning() {
 
 const std::shared_ptr<PlatformMessageHandler>&
 AndroidShellHolder::GetPlatformMessageHandler() const {
-  return GetShell(engine_.get()).GetPlatformMessageHandler();
+  return platform_message_handler_;
 }
 
 Shell* AndroidShellHolder::GetShellForTesting() const {
@@ -641,9 +638,27 @@ std::optional<RunConfiguration> AndroidShellHolder::BuildRunConfiguration(
 }
 
 void AndroidShellHolder::UpdateDisplayMetrics() {
-  std::vector<std::unique_ptr<Display>> displays;
-  displays.push_back(std::make_unique<AndroidDisplay>(jni_facade_));
-  GetShell(engine_.get()).OnDisplayUpdates(std::move(displays));
+  // FlutterJNI initializes displayWidth, displayHeight, and displayDensity to
+  // -1.0f before Java reports display metrics; clamp negative values to 0.0 so
+  // casting to size_t never wraps around.
+  constexpr FlutterEngineDisplayId kImplicitDisplayId = 0;
+  constexpr size_t kSingleDisplayCount = 1;
+  FlutterEngineDisplay display = {};
+  display.struct_size = sizeof(FlutterEngineDisplay);
+  display.display_id = kImplicitDisplayId;
+  display.single_display = true;
+  display.refresh_rate = std::max(0.0, jni_facade_->GetDisplayRefreshRate());
+  display.width =
+      static_cast<size_t>(std::max(0.0, jni_facade_->GetDisplayWidth()));
+  display.height =
+      static_cast<size_t>(std::max(0.0, jni_facade_->GetDisplayHeight()));
+  display.device_pixel_ratio = std::max(0.0, jni_facade_->GetDisplayDensity());
+  FlutterEngineResult result = embedder_api_.NotifyDisplayUpdate(
+      engine_.get(), kFlutterEngineDisplaysUpdateTypeStartup, &display,
+      kSingleDisplayCount);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineNotifyDisplayUpdate failed: " << result;
+  }
 }
 
 bool AndroidShellHolder::IsSurfaceControlEnabled() {

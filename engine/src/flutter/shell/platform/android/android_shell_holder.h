@@ -183,6 +183,7 @@ class AndroidShellHolder {
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
+  std::shared_ptr<PlatformMessageHandler> platform_message_handler_;
   std::shared_ptr<ThreadHost> thread_host_;
   UniqueEngine engine_;
   // The embedder API functions that the holder calls engine_ through.

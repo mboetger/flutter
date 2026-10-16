@@ -7,7 +7,7 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 86,
+  "total_allowed_internal_headers": 84,
   "subsystems": {
     "common_graphics_and_display_list": {
       "count": 7,
@@ -22,9 +22,8 @@
       ]
     },
     "engine_core": {
-      "count": 11,
+      "count": 10,
       "allowed_headers": [
-        "flutter/shell/common/display.h",
         "flutter/shell/common/platform_message_handler.h",
         "flutter/shell/common/platform_view.h",
         "flutter/shell/common/rasterizer.h",
@@ -87,10 +86,9 @@
       ]
     },
     "lib_ui": {
-      "count": 5,
+      "count": 4,
       "allowed_headers": [
         "flutter/lib/ui/painting/image_generator.h",
-        "flutter/lib/ui/painting/image_generator_registry.h",
         "flutter/lib/ui/plugins/callback_cache.h",
         "flutter/lib/ui/window/platform_message.h",
         "flutter/lib/ui/window/platform_message_response.h"
@@ -164,9 +162,6 @@
       "flutter/impeller/entity/vk/modern_shaders_vk.h",
       "flutter/impeller/renderer/backend/vulkan/context_vk.h"
     ],
-    "android_display.h": [
-      "flutter/shell/common/display.h"
-    ],
     "android_egl_surface.h": [
       "flutter/display_list/geometry/dl_geometry_types.h"
     ],
@@ -177,7 +172,6 @@
       "flutter/lib/ui/painting/image_generator.h"
     ],
     "android_shell_holder.cc": [
-      "flutter/lib/ui/painting/image_generator_registry.h",
       "flutter/shell/common/rasterizer.h"
     ],
     "android_shell_holder.h": [
