@@ -39,11 +39,21 @@ EmbedderEngine::EmbedderEngine(
       external_texture_resolver_(std::move(external_texture_resolver)),
       defer_surface_creation_(defer_surface_creation) {}
 
-EmbedderEngine::EmbedderEngine(const TaskRunners& task_runners,
-                               std::unique_ptr<Shell> spawned_shell)
-    : task_runners_(task_runners), shell_(std::move(spawned_shell)) {}
+EmbedderEngine::EmbedderEngine(
+    std::shared_ptr<EmbedderThreadHost> thread_host,
+    const TaskRunners& task_runners,
+    std::unique_ptr<Shell> spawned_shell,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    bool defer_surface_creation)
+    : thread_host_(std::move(thread_host)),
+      task_runners_(task_runners),
+      shell_(std::move(spawned_shell)),
+      external_texture_resolver_(std::move(external_texture_resolver)),
+      defer_surface_creation_(defer_surface_creation) {}
 
-EmbedderEngine::~EmbedderEngine() = default;
+EmbedderEngine::~EmbedderEngine() {
+  ClearVMServiceUriCallback();
+}
 
 bool EmbedderEngine::LaunchShell() {
   return LaunchShell(flutter::PlatformData());
@@ -67,6 +77,14 @@ bool EmbedderEngine::LaunchShell(const PlatformData& platform_data) {
   // shell again.
   shell_args_.reset();
 
+  if (shell_) {
+    for (auto& decoder : pending_image_decoders_) {
+      shell_->RegisterImageDecoder(std::move(decoder.first), decoder.second);
+    }
+    pending_image_decoders_.clear();
+    RegisterVMServiceUriCallbackIfNeeded();
+  }
+
   return IsValid();
 }
 
@@ -74,7 +92,9 @@ std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
     RunConfiguration run_configuration,
     const std::string& initial_route,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
-    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer) const {
+    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    bool defer_surface_creation) const {
   if (!IsValid()) {
     return nullptr;
   }
@@ -86,17 +106,23 @@ std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
   }
   const TaskRunners task_runners = spawned_shell->GetTaskRunners();
   // std::make_unique cannot reach the private constructor.
-  return std::unique_ptr<EmbedderEngine>(
-      new EmbedderEngine(task_runners, std::move(spawned_shell)));
+  return std::unique_ptr<EmbedderEngine>(new EmbedderEngine(
+      thread_host_, task_runners, std::move(spawned_shell),
+      std::move(external_texture_resolver), defer_surface_creation));
 }
 
 bool EmbedderEngine::CollectShell() {
+  ClearVMServiceUriCallback();
   shell_.reset();
   return IsValid();
 }
 
 void EmbedderEngine::CollectThreadHost() {
   if (!thread_host_) {
+    return;
+  }
+  if (thread_host_.use_count() > 1) {
+    thread_host_.reset();
     return;
   }
 
@@ -413,6 +439,61 @@ bool EmbedderEngine::LoadDartDeferredLibraryError(
   platform_view->LoadDartDeferredLibraryError(loading_unit_id, error_message,
                                               transient);
   return true;
+}
+
+void EmbedderEngine::AddImageDecoder(ImageGeneratorFactory factory,
+                                     int32_t priority) {
+  if (!factory) {
+    return;
+  }
+  if (shell_) {
+    shell_->RegisterImageDecoder(std::move(factory), priority);
+  } else {
+    pending_image_decoders_.emplace_back(std::move(factory), priority);
+  }
+}
+
+void EmbedderEngine::SetVMServiceUriCallback(
+    std::function<void(const std::string&)> callback) {
+  ClearVMServiceUriCallback();
+  vm_service_uri_callback_ = std::move(callback);
+  if (shell_) {
+    RegisterVMServiceUriCallbackIfNeeded();
+  }
+}
+
+void EmbedderEngine::RegisterVMServiceUriCallbackIfNeeded() {
+  if (!vm_service_uri_callback_ || vm_service_uri_callback_handle_ != 0) {
+    return;
+  }
+  vm_service_callback_alive_ = std::make_shared<std::atomic<bool>>(true);
+  auto alive = vm_service_callback_alive_;
+  auto callback = vm_service_uri_callback_;
+  auto platform_runner = task_runners_.GetPlatformTaskRunner();
+  vm_service_uri_callback_handle_ = DartServiceIsolate::AddServerStatusCallback(
+      [alive, callback, platform_runner](const std::string& uri) {
+        if (!platform_runner) {
+          return;
+        }
+        fml::TaskRunner::RunNowOrPostTask(
+            platform_runner, [alive, callback, uri]() {
+              if (alive->load(std::memory_order_acquire)) {
+                callback(uri);
+              }
+            });
+      });
+}
+
+void EmbedderEngine::ClearVMServiceUriCallback() {
+  if (vm_service_callback_alive_) {
+    vm_service_callback_alive_->store(false, std::memory_order_release);
+    vm_service_callback_alive_.reset();
+  }
+  if (vm_service_uri_callback_handle_ != 0) {
+    DartServiceIsolate::RemoveServerStatusCallback(
+        vm_service_uri_callback_handle_);
+    vm_service_uri_callback_handle_ = 0;
+  }
 }
 
 Shell& EmbedderEngine::GetShell() {

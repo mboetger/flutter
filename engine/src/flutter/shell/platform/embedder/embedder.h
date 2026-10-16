@@ -386,6 +386,10 @@ typedef enum {
   kRaster = 3,
 } FlutterThreadPriority;
 
+/// Callback invoked by the engine to configure thread scheduling priority for
+/// engine-managed task runner threads.
+typedef void (*FlutterThreadPrioritySetter)(FlutterThreadPriority);
+
 typedef struct _FlutterEngine* FLUTTER_API_SYMBOL(FlutterEngine);
 
 /// Unique identifier for views.
@@ -2218,7 +2222,7 @@ typedef struct {
   const FlutterTaskRunnerDescription* render_task_runner;
   /// Specify a callback that is used to set the thread priority for embedder
   /// task runners.
-  void (*thread_priority_setter)(FlutterThreadPriority);
+  FlutterThreadPrioritySetter thread_priority_setter;
   /// Specify the task runner for the thread on which the UI tasks will be run.
   /// This may be same as platform_task_runner, in which case the Flutter engine
   /// will run the UI isolate on platform thread.
@@ -2942,6 +2946,115 @@ typedef struct {
   bool transient;
 } FlutterDartDeferredLibraryLoadError;
 
+/// Metadata describing a registered Dart callback resolved from the
+/// process-wide callback cache.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDartCallbackInformation).
+  size_t struct_size;
+  /// Null-terminated UTF-8 name of the Dart function (owned by the engine).
+  const char* name;
+  /// Null-terminated UTF-8 declaring class name, or empty string for a
+  /// top-level function. Never null.
+  const char* class_name;
+  /// Null-terminated UTF-8 URI of the declaring Dart library.
+  const char* library_path;
+} FlutterDartCallbackInformation;
+
+/// Supported decoded pixel color formats for custom `FlutterImageGenerator`s.
+typedef enum {
+  kFlutterImageGeneratorColorTypeRGBA8888,
+  kFlutterImageGeneratorColorTypeBGRA8888,
+} FlutterImageGeneratorColorType;
+
+/// Supported decoded pixel alpha formats for custom `FlutterImageGenerator`s.
+typedef enum {
+  kFlutterImageGeneratorAlphaTypeOpaque,
+  kFlutterImageGeneratorAlphaTypePremul,
+  kFlutterImageGeneratorAlphaTypeUnpremul,
+} FlutterImageGeneratorAlphaType;
+
+/// Image header metadata returned by a custom `FlutterImageGenerator`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageGeneratorInfo).
+  size_t struct_size;
+  /// Width of the decoded image in pixels.
+  uint32_t width;
+  /// Height of the decoded image in pixels.
+  uint32_t height;
+  /// Pixel color format of the decoded image.
+  FlutterImageGeneratorColorType color_type;
+  /// Alpha premultiplication format of the decoded image.
+  FlutterImageGeneratorAlphaType alpha_type;
+} FlutterImageGeneratorInfo;
+
+/// Callback invoked by the engine to query decoded image header metadata.
+typedef bool (*FlutterImageGeneratorGetInfoCallback)(
+    void* user_data,
+    FlutterImageGeneratorInfo* info_out);
+
+/// Callback invoked by the engine to decode image pixels into `pixels`.
+typedef bool (*FlutterImageGeneratorGetPixelsCallback)(
+    void* user_data,
+    const FlutterImageGeneratorInfo* info,
+    void* pixels,
+    size_t row_bytes);
+
+/// Instance of a custom image decoder created for a single encoded image
+/// buffer.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageGenerator).
+  size_t struct_size;
+  /// Opaque baton passed to `get_info`, `get_pixels`, and
+  /// `destruction_callback`.
+  void* user_data;
+  /// Callback that populates the decoded image dimensions and pixel format.
+  FlutterImageGeneratorGetInfoCallback get_info;
+  /// Callback that writes decoded pixels into `pixels`.
+  FlutterImageGeneratorGetPixelsCallback get_pixels;
+  /// Optional callback invoked when the image generator is destroyed.
+  VoidCallback destruction_callback;
+} FlutterImageGenerator;
+
+/// Factory callback invoked by the engine to instantiate a custom
+/// `FlutterImageGenerator` for an encoded image byte buffer.
+typedef bool (*FlutterImageGeneratorFactoryCallback)(
+    void* user_data,
+    const uint8_t* data,
+    size_t data_size,
+    FlutterImageGenerator* generator_out);
+
+/// Registration descriptor for a custom image decoder supplied via
+/// `FlutterProjectArgs::image_generators`.
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterImageGeneratorRegistration).
+  size_t struct_size;
+  /// Factory callback that inspects encoded image bytes and populates
+  /// `generator_out` when supported.
+  FlutterImageGeneratorFactoryCallback create_generator;
+  /// Priority relative to built-in decoders (built-in Skia decoders use 0;
+  /// negative values act as fallback decoders).
+  int32_t priority;
+  /// Opaque baton passed to `create_generator` and `destruction_callback`.
+  void* user_data;
+  /// Optional callback invoked when the registration is released.
+  VoidCallback destruction_callback;
+} FlutterImageGeneratorRegistration;
+
+/// Information passed to `FlutterVMServiceUriCallback` when the Dart VM
+/// Service starts listening.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterVMServiceUriInfo).
+  size_t struct_size;
+  /// Null-terminated UTF-8 URI of the listening Dart VM Service.
+  const char* uri;
+} FlutterVMServiceUriInfo;
+
+/// Callback invoked on the platform thread once the Dart VM Service is
+/// listening.
+typedef void (*FlutterVMServiceUriCallback)(const FlutterVMServiceUriInfo* info,
+                                            void* user_data);
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
@@ -3283,7 +3396,44 @@ typedef struct {
   /// to route channel messages onto background task queues without an extra
   /// platform-thread hop.
   bool enable_direct_platform_message_dispatch;
+
+  /// Number of custom image generator registrations in `image_generators`.
+  size_t image_generators_count;
+
+  /// Optional array of pointers to custom image generator registrations (such
+  /// as Android SDK `ImageDecoder` fallback decoders).
+  const FlutterImageGeneratorRegistration** image_generators;
+
+  /// Optional callback invoked on the platform thread once the Dart VM Service
+  /// is listening (and never invoked after `FlutterEngineShutdown`).
+  FlutterVMServiceUriCallback vm_service_uri_callback;
 } FlutterProjectArgs;
+
+/// Configuration passed to `FlutterEngineSpawn` to create a lightweight child
+/// engine sharing the parent engine's Dart VM, isolate group, task runners,
+/// and GPU context.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineSpawnInfo).
+  size_t struct_size;
+  /// Optional Dart entrypoint function name. If NULL or empty, defaults to
+  /// "main".
+  const char* entrypoint;
+  /// Optional Dart library URI containing `entrypoint`. If NULL or empty, uses
+  /// the root library.
+  const char* library_uri;
+  /// Optional initial navigation route for the spawned isolate.
+  const char* initial_route;
+  /// Optional command-line arguments passed to the Dart entrypoint.
+  const char* const* entrypoint_argv;
+  /// Number of entries in `entrypoint_argv`.
+  int entrypoint_argc;
+  /// User data baton passed to callbacks invoked for the spawned engine.
+  void* user_data;
+  /// Project arguments for the spawned engine.
+  const FlutterProjectArgs* project_args;
+  /// Renderer configuration for the spawned engine.
+  const FlutterRendererConfig* renderer_config;
+} FlutterEngineSpawnInfo;
 
 /// Properties of a Vulkan physical device driver queried against Impeller's
 /// known-bad driver list via `FlutterEngineQueryVulkanDriverSupport`.
@@ -4185,6 +4335,67 @@ FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibraryLoadError* error);
 
+//------------------------------------------------------------------------------
+/// @brief      Spawns a new Flutter engine instance from an existing running
+///             parent engine, sharing the Dart VM, isolate group, task
+///             runners, and GPU context.
+///
+///             The spawned engine is returned in a running state. If
+///             `config->project_args->defer_surface_creation` is false, the
+///             spawned platform view's `NotifyCreated` is invoked before this
+///             call returns.
+///
+/// @param[in]  parent_engine       A running parent engine instance.
+/// @param[in]  config              The spawn configuration.
+/// @param[out] spawned_engine_out  The spawned engine handle on success.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
+                                           parent_engine,
+                                       const FlutterEngineSpawnInfo* config,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           spawned_engine_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Initializes the process-wide Dart callback cache directory and
+///             loads any persisted callback handles from disk.
+///
+/// @param[in]  directory  Null-terminated path to the directory where the
+///                        callback cache file is stored.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineInitializeCallbackCache(const char* directory);
+
+//------------------------------------------------------------------------------
+/// @brief      Looks up metadata for a registered Dart callback handle in the
+///             process-wide callback cache.
+///
+/// @param[in]  handle    The callback handle.
+/// @param[out] info_out  Populated with the callback's function name, class
+///                       name, and library URI if found.
+///
+/// @return     `kSuccess` if the handle was found, `kInvalidArguments`
+///             otherwise.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineGetCallbackInformation(
+    int64_t handle,
+    FlutterDartCallbackInformation* info_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Warms up the process-wide default system font manager singleton.
+///             May be called on any background worker thread prior to
+///             `FlutterEngineInitialize`.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4333,6 +4544,17 @@ typedef FlutterEngineResult (
     *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibraryLoadError* error);
+typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
+    const FlutterEngineSpawnInfo* config,
+    FLUTTER_API_SYMBOL(FlutterEngine) * spawned_engine_out);
+typedef FlutterEngineResult (*FlutterEngineInitializeCallbackCacheFnPtr)(
+    const char* directory);
+typedef FlutterEngineResult (*FlutterEngineGetCallbackInformationFnPtr)(
+    int64_t handle,
+    FlutterDartCallbackInformation* info_out);
+typedef FlutterEngineResult (*FlutterEnginePrefetchDefaultFontManagerFnPtr)(
+    void);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4389,6 +4611,10 @@ typedef struct {
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
       NotifyDartDeferredLibraryLoadError;
+  FlutterEngineSpawnFnPtr Spawn;
+  FlutterEngineInitializeCallbackCacheFnPtr InitializeCallbackCache;
+  FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
+  FlutterEnginePrefetchDefaultFontManagerFnPtr PrefetchDefaultFontManager;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

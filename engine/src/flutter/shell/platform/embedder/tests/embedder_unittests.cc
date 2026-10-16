@@ -5057,6 +5057,111 @@ TEST_F(EmbedderTest, DirectPlatformMessageDispatchInvokesCallbackOnUIThread) {
   EXPECT_NE(callback_thread_id, platform_thread_id);
 }
 
+TEST_F(EmbedderTest, SpawnSharesThreadHostAndRunsChildEngine) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder parent_builder(context);
+  parent_builder.SetSurface(DlISize(1, 1));
+  parent_builder.SetDartEntrypoint("customEntrypoint");
+
+  fml::CountDownLatch ready_latch(2);
+  context.AddFfiNativeCallback(
+      "SayHiFromCustomEntrypoint",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.CountDown(); }));
+
+  auto parent_engine = parent_builder.LaunchEngine();
+  ASSERT_TRUE(parent_engine.is_valid());
+
+  EmbedderConfigBuilder child_builder(context);
+  child_builder.SetSurface(DlISize(1, 1));
+  child_builder.SetDartEntrypoint("customEntrypoint");
+
+  FlutterEngineSpawnInfo spawn_info = {};
+  spawn_info.struct_size = sizeof(FlutterEngineSpawnInfo);
+  spawn_info.entrypoint = "customEntrypoint";
+  spawn_info.user_data = &context;
+  spawn_info.project_args = &child_builder.GetProjectArgs();
+  spawn_info.renderer_config = &context.GetRendererConfig();
+
+  FlutterEngine raw_child = nullptr;
+  ASSERT_EQ(FlutterEngineSpawn(parent_engine.get(), &spawn_info, &raw_child),
+            kSuccess);
+  ASSERT_NE(raw_child, nullptr);
+  UniqueEngine child_engine(raw_child);
+
+  ready_latch.Wait();
+
+  // Shut down child then parent to verify shared EmbedderThreadHost lifecycle.
+  child_engine.reset();
+  parent_engine.reset();
+}
+
+TEST(EmbedderTestNoFixture, CallbackCacheAndUtilityProcTable) {
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&procs), kSuccess);
+  EXPECT_NE(procs.Spawn, nullptr);
+  EXPECT_NE(procs.InitializeCallbackCache, nullptr);
+  EXPECT_NE(procs.GetCallbackInformation, nullptr);
+  EXPECT_NE(procs.PrefetchDefaultFontManager, nullptr);
+
+  EXPECT_EQ(FlutterEngineInitializeCallbackCache(nullptr), kInvalidArguments);
+  fml::ScopedTemporaryDirectory temp_dir;
+  ASSERT_TRUE(temp_dir.fd().is_valid());
+  EXPECT_EQ(FlutterEngineInitializeCallbackCache(temp_dir.path().c_str()),
+            kSuccess);
+
+  FlutterDartCallbackInformation info = {};
+  info.struct_size = sizeof(FlutterDartCallbackInformation);
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(0, nullptr), kInvalidArguments);
+  // Handle 999999999 is not registered in the cache.
+  EXPECT_EQ(FlutterEngineGetCallbackInformation(999999999, &info),
+            kInvalidArguments);
+
+  EXPECT_EQ(FlutterEnginePrefetchDefaultFontManager(), kSuccess);
+}
+
+TEST_F(EmbedderTest, ThreadPrioritySetterAndCustomImageGeneratorRegistration) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("customEntrypoint");
+
+  static std::atomic<int> priority_calls{0};
+  priority_calls.store(0);
+
+  FlutterTaskRunnerDescription ui_runner = {};
+  ui_runner.struct_size = sizeof(FlutterTaskRunnerDescription);
+  ui_runner.user_data = nullptr;
+  ui_runner.runs_task_on_current_thread_callback = [](void*) { return false; };
+  ui_runner.post_task_callback = [](FlutterTask, uint64_t, void*) {};
+
+  FlutterCustomTaskRunners custom_runners = {};
+  custom_runners.struct_size = sizeof(FlutterCustomTaskRunners);
+  custom_runners.thread_priority_setter = [](FlutterThreadPriority) {
+    priority_calls.fetch_add(1);
+  };
+  builder.GetProjectArgs().custom_task_runners = &custom_runners;
+
+  FlutterImageGeneratorRegistration reg = {};
+  reg.struct_size = sizeof(FlutterImageGeneratorRegistration);
+  reg.priority = 10;
+  reg.create_generator = [](void*, const uint8_t*, size_t,
+                            FlutterImageGenerator*) { return false; };
+  const FlutterImageGeneratorRegistration* regs[] = {&reg};
+  builder.GetProjectArgs().image_generators_count = 1;
+  builder.GetProjectArgs().image_generators = regs;
+
+  fml::AutoResetWaitableEvent ready_latch;
+  context.AddFfiNativeCallback(
+      "SayHiFromCustomEntrypoint",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+  EXPECT_GE(priority_calls.load(), 1);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

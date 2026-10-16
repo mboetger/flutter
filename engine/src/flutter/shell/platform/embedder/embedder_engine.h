@@ -5,12 +5,17 @@
 #ifndef FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_ENGINE_H_
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_ENGINE_H_
 
+#include <atomic>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "flutter/fml/macros.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/shell.h"
 #include "flutter/shell/common/thread_host.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -74,7 +79,10 @@ class EmbedderEngine {
       RunConfiguration run_configuration,
       const std::string& initial_route,
       const Shell::CreateCallback<PlatformView>& on_create_platform_view,
-      const Shell::CreateCallback<Rasterizer>& on_create_rasterizer) const;
+      const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+      std::unique_ptr<EmbedderExternalTextureResolver>
+          external_texture_resolver = nullptr,
+      bool defer_surface_creation = false) const;
 
   bool CollectShell();
 
@@ -139,20 +147,37 @@ class EmbedderEngine {
                                     const std::string& error_message,
                                     bool transient);
 
+  void AddImageDecoder(ImageGeneratorFactory factory, int32_t priority);
+
+  void SetVMServiceUriCallback(
+      std::function<void(const std::string&)> callback);
+
   Shell& GetShell();
 
  private:
   // Adopts |spawned_shell|, a running shell returned by Shell::Spawn.
-  EmbedderEngine(const TaskRunners& task_runners,
-                 std::unique_ptr<Shell> spawned_shell);
+  EmbedderEngine(std::shared_ptr<EmbedderThreadHost> thread_host,
+                 const TaskRunners& task_runners,
+                 std::unique_ptr<Shell> spawned_shell,
+                 std::unique_ptr<EmbedderExternalTextureResolver>
+                     external_texture_resolver,
+                 bool defer_surface_creation);
 
-  std::unique_ptr<EmbedderThreadHost> thread_host_;
+  void RegisterVMServiceUriCallbackIfNeeded();
+  void ClearVMServiceUriCallback();
+
+  std::shared_ptr<EmbedderThreadHost> thread_host_;
   TaskRunners task_runners_;
   std::optional<RunConfiguration> run_configuration_;
   std::unique_ptr<ShellArgs> shell_args_;
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
   bool defer_surface_creation_ = false;
+  std::vector<std::pair<ImageGeneratorFactory, int32_t>>
+      pending_image_decoders_;
+  std::function<void(const std::string&)> vm_service_uri_callback_;
+  std::shared_ptr<std::atomic<bool>> vm_service_callback_alive_;
+  DartServiceIsolate::CallbackHandle vm_service_uri_callback_handle_ = 0;
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderEngine);
 };
