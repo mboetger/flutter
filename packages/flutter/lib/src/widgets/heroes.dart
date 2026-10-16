@@ -496,12 +496,20 @@ class _HeroFlightManifest {
 
   // The bounding box for `context`'s render object,  in `ancestorContext`'s
   // render object's coordinate space.
-  static Rect _boundingBoxFor(BuildContext context, BuildContext? ancestorContext) {
-    assert(ancestorContext != null);
-    final box = context.findRenderObject()! as RenderBox;
-    assert(box.hasSize && box.size.isFinite);
+  static Rect? _boundingBoxFor(BuildContext context, BuildContext? ancestorContext) {
+    if (ancestorContext == null) {
+      return null;
+    }
+    final RenderObject? renderObject = context.findRenderObject();
+    if (renderObject == null) {
+      return null;
+    }
+    final box = renderObject as RenderBox;
+    if (!box.hasSize || !box.size.isFinite) {
+      return null;
+    }
     return MatrixUtils.transformRect(
-      box.getTransformTo(ancestorContext?.findRenderObject()),
+      box.getTransformTo(ancestorContext.findRenderObject()),
       Offset.zero & box.size,
     );
   }
@@ -509,13 +517,13 @@ class _HeroFlightManifest {
   /// The bounding box of [fromHero], in [fromRoute]'s coordinate space.
   ///
   /// This property should only be accessed in [_HeroFlight.start].
-  late final Rect fromHeroLocation = _boundingBoxFor(fromHero.context, fromRoute.subtreeContext);
+  late final Rect? fromHeroLocation = _boundingBoxFor(fromHero.context, fromRoute.subtreeContext);
 
   /// The bounding box of [toHero], in [toRoute]'s coordinate space.
   ///
   /// This property should only be accessed in [_HeroFlight.start] or
   /// [_HeroFlight.divert].
-  late final Rect toHeroLocation = _boundingBoxFor(toHero.context, toRoute.subtreeContext);
+  late final Rect? toHeroLocation = _boundingBoxFor(toHero.context, toRoute.subtreeContext);
 
   /// Whether this [_HeroFlightManifest] is valid and can be used to start or
   /// divert a [_HeroFlight].
@@ -524,7 +532,8 @@ class _HeroFlightManifest {
   /// [_HeroFlightManifest], this flag must be checked to ensure the [RectTween]
   /// the [_HeroFlightManifest] produces does not contain coordinates that have
   /// [double.infinity] or [double.nan].
-  late final bool isValid = toHeroLocation.isFinite && (isDiverted || fromHeroLocation.isFinite);
+  late final bool isValid =
+      (toHeroLocation?.isFinite ?? false) && (isDiverted || (fromHeroLocation?.isFinite ?? false));
 
   @override
   String toString() {
