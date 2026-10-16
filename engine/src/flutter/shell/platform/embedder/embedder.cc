@@ -1698,6 +1698,68 @@ MakeViewportMetricsFromWindowMetrics(
            "physical height or width.";
   }
 
+  const FlutterEdgeInsets default_insets = {0.0, 0.0, 0.0, 0.0};
+  const FlutterEdgeInsets padding =
+      SAFE_ACCESS(flutter_metrics, physical_padding, default_insets);
+  metrics.physical_padding_top = padding.top;
+  metrics.physical_padding_right = padding.right;
+  metrics.physical_padding_bottom = padding.bottom;
+  metrics.physical_padding_left = padding.left;
+
+  const FlutterEdgeInsets gesture_insets = SAFE_ACCESS(
+      flutter_metrics, physical_system_gesture_insets, default_insets);
+  metrics.physical_system_gesture_inset_top = gesture_insets.top;
+  metrics.physical_system_gesture_inset_right = gesture_insets.right;
+  metrics.physical_system_gesture_inset_bottom = gesture_insets.bottom;
+  metrics.physical_system_gesture_inset_left = gesture_insets.left;
+
+  const double touch_slop =
+      SAFE_ACCESS(flutter_metrics, physical_touch_slop, -1.0);
+  metrics.physical_touch_slop = touch_slop > 0.0 ? touch_slop : -1.0;
+
+  const FlutterDisplayCornerRadii* corner_radii =
+      SAFE_ACCESS(flutter_metrics, display_corner_radii, nullptr);
+  if (corner_radii != nullptr) {
+    const double top_left = SAFE_ACCESS(corner_radii, top_left, -1.0);
+    const double top_right = SAFE_ACCESS(corner_radii, top_right, -1.0);
+    const double bottom_right = SAFE_ACCESS(corner_radii, bottom_right, -1.0);
+    const double bottom_left = SAFE_ACCESS(corner_radii, bottom_left, -1.0);
+    if (top_left >= 0.0 && top_right >= 0.0 && bottom_right >= 0.0 &&
+        bottom_left >= 0.0) {
+      metrics.physical_display_corner_radius_top_left = top_left;
+      metrics.physical_display_corner_radius_top_right = top_right;
+      metrics.physical_display_corner_radius_bottom_right = bottom_right;
+      metrics.physical_display_corner_radius_bottom_left = bottom_left;
+    }
+  }
+
+  const size_t display_features_count =
+      SAFE_ACCESS(flutter_metrics, display_features_count, 0);
+  const FlutterDisplayFeature** display_features =
+      SAFE_ACCESS(flutter_metrics, display_features, nullptr);
+  if (display_features_count > 0 && display_features != nullptr) {
+    metrics.physical_display_features_bounds.reserve(display_features_count *
+                                                     4);
+    metrics.physical_display_features_type.reserve(display_features_count);
+    metrics.physical_display_features_state.reserve(display_features_count);
+    const FlutterRect default_rect = {0.0, 0.0, 0.0, 0.0};
+    for (size_t i = 0; i < display_features_count; ++i) {
+      const FlutterDisplayFeature* feature = display_features[i];
+      if (feature == nullptr) {
+        continue;
+      }
+      const FlutterRect bounds = SAFE_ACCESS(feature, bounds, default_rect);
+      metrics.physical_display_features_bounds.push_back(bounds.left);
+      metrics.physical_display_features_bounds.push_back(bounds.top);
+      metrics.physical_display_features_bounds.push_back(bounds.right);
+      metrics.physical_display_features_bounds.push_back(bounds.bottom);
+      metrics.physical_display_features_type.push_back(static_cast<int>(
+          SAFE_ACCESS(feature, type, kFlutterDisplayFeatureTypeUnknown)));
+      metrics.physical_display_features_state.push_back(static_cast<int>(
+          SAFE_ACCESS(feature, state, kFlutterDisplayFeatureStateUnknown)));
+    }
+  }
+
   return metrics;
 }
 

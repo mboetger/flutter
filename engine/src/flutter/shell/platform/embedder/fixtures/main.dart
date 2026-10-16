@@ -1547,6 +1547,36 @@ void window_metrics_event_all_view_ids() {
 
 @pragma('vm:entry-point')
 // ignore: non_constant_identifier_names
+void window_metrics_event_extended() {
+  PlatformDispatcher.instance.onMetricsChanged = () {
+    final FlutterView view = PlatformDispatcher.instance.implicitView!;
+    final ViewPadding p = view.viewPadding;
+    final ViewPadding g = view.systemGestureInsets;
+    final double? slop = view.gestureSettings.physicalTouchSlop;
+    final DisplayCornerRadii? radii = view.displayCornerRadii;
+    final List<String> features = view.displayFeatures
+        .map(
+          (DisplayFeature f) =>
+              '${f.type.name}:${f.state.name}:${f.bounds.left},${f.bounds.top},${f.bounds.right},${f.bounds.bottom}',
+        )
+        .toList();
+    final radiiStr = radii == null
+        ? 'null'
+        : '${radii.topLeft},${radii.topRight},${radii.bottomRight},${radii.bottomLeft}';
+    signalNativeMessage(
+      'padding=${p.left},${p.top},${p.right},${p.bottom};'
+      'gesture=${g.left},${g.top},${g.right},${g.bottom};'
+      'slop=$slop;'
+      'radii=$radiiStr;'
+      'features=${features.join("|")}',
+    );
+  };
+
+  signalNativeTest();
+}
+
+@pragma('vm:entry-point')
+// ignore: non_constant_identifier_names
 void remove_view_callback_too_early() {
   signalNativeTest();
 }

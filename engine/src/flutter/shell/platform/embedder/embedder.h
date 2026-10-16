@@ -1188,6 +1188,45 @@ typedef struct {
 /// stable until the Flutter application restarts.
 typedef uint64_t FlutterEngineDisplayId;
 
+/// Distances from each edge of a rectangle, in physical pixels.
+/// Frozen value struct (like `FlutterRect`) embedded by value.
+typedef struct {
+  double left;
+  double top;
+  double right;
+  double bottom;
+} FlutterEdgeInsets;
+
+/// Radii of the four display corners, in physical pixels.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDisplayCornerRadii).
+  size_t struct_size;
+  double top_left;
+  double top_right;
+  double bottom_right;
+  double bottom_left;
+} FlutterDisplayCornerRadii;
+
+typedef enum {
+  kFlutterDisplayFeatureTypeUnknown = 0,
+  kFlutterDisplayFeatureTypeFold = 1,
+  kFlutterDisplayFeatureTypeHinge = 2,
+  kFlutterDisplayFeatureTypeCutout = 3,
+} FlutterDisplayFeatureType;
+
+typedef enum {
+  kFlutterDisplayFeatureStateUnknown = 0,
+  kFlutterDisplayFeatureStatePostureFlat = 1,
+  kFlutterDisplayFeatureStatePostureHalfOpened = 2,
+} FlutterDisplayFeatureState;
+
+typedef struct {
+  size_t struct_size;
+  FlutterRect bounds;
+  FlutterDisplayFeatureType type;
+  FlutterDisplayFeatureState state;
+} FlutterDisplayFeature;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterWindowMetricsEvent).
   size_t struct_size;
@@ -1236,6 +1275,23 @@ typedef struct {
   /// If |has_constraints| is `true`, this must be greater than or equal to
   /// |min_height_constraint| and |height|.
   size_t max_height_constraint;
+  /// Physical window padding (for example, status bar, navigation bar,
+  /// cutouts).
+  FlutterEdgeInsets physical_padding;
+  /// System gesture insets (for example, Android 10+ edge back gestures).
+  FlutterEdgeInsets physical_system_gesture_insets;
+  /// Physical touch slop threshold in physical pixels for scroll
+  /// disambiguation. A non-positive value (<= 0.0, including zero-initialized
+  /// structs) indicates that the platform does not specify a custom touch slop
+  /// and the framework default should be used.
+  double physical_touch_slop;
+  /// Display corner radii in physical pixels, or NULL when unknown or
+  /// unsupported (for example on Android < API 31 or desktop platforms).
+  const FlutterDisplayCornerRadii* display_corner_radii;
+  /// Number of display features in the `display_features` array.
+  size_t display_features_count;
+  /// Array of pointers to physical display features (foldable hinges, cutouts).
+  const FlutterDisplayFeature** display_features;
 } FlutterWindowMetricsEvent;
 
 typedef struct {
@@ -1795,6 +1851,47 @@ typedef struct {
   int32_t heading_level;
 } FlutterSemanticsNode;
 
+/// Semantic role of a `FlutterSemanticsNode2`.
+typedef enum {
+  kFlutterSemanticsRoleNone = 0,
+  kFlutterSemanticsRoleTab = 1,
+  kFlutterSemanticsRoleTabBar = 2,
+  kFlutterSemanticsRoleTabPanel = 3,
+  kFlutterSemanticsRoleDialog = 4,
+  kFlutterSemanticsRoleAlertDialog = 5,
+  kFlutterSemanticsRoleTable = 6,
+  kFlutterSemanticsRoleCell = 7,
+  kFlutterSemanticsRoleRow = 8,
+  kFlutterSemanticsRoleColumnHeader = 9,
+  kFlutterSemanticsRoleDragHandle = 10,
+  kFlutterSemanticsRoleSpinButton = 11,
+  kFlutterSemanticsRoleComboBox = 12,
+  kFlutterSemanticsRoleMenuBar = 13,
+  kFlutterSemanticsRoleMenu = 14,
+  kFlutterSemanticsRoleMenuItem = 15,
+  kFlutterSemanticsRoleMenuItemCheckbox = 16,
+  kFlutterSemanticsRoleMenuItemRadio = 17,
+  kFlutterSemanticsRoleList = 18,
+  kFlutterSemanticsRoleListItem = 19,
+  kFlutterSemanticsRoleForm = 20,
+  kFlutterSemanticsRoleTooltip = 21,
+  kFlutterSemanticsRoleLoadingSpinner = 22,
+  kFlutterSemanticsRoleProgressBar = 23,
+  kFlutterSemanticsRoleHotKey = 24,
+  kFlutterSemanticsRoleRadioGroup = 25,
+  kFlutterSemanticsRoleStatus = 26,
+  kFlutterSemanticsRoleAlert = 27,
+  kFlutterSemanticsRoleComplementary = 28,
+  kFlutterSemanticsRoleContentInfo = 29,
+  kFlutterSemanticsRoleMain = 30,
+  kFlutterSemanticsRoleNavigation = 31,
+  kFlutterSemanticsRoleRegion = 32,
+  kFlutterSemanticsRoleSearch = 33,
+  kFlutterSemanticsRoleSlider = 34,
+  kFlutterSemanticsRoleListBox = 35,
+  kFlutterSemanticsRoleOption = 36,
+} FlutterSemanticsRole;
+
 /// A node in the Flutter semantics tree.
 ///
 /// The semantics tree is maintained during the semantics phase of the pipeline
@@ -1909,6 +2006,26 @@ typedef struct {
   /// This is usually used for UI testing with tools that work by querying the
   /// native accessibility, like UI Automator, XCUITest, or Appium.
   const char* identifier;
+  /// The maximum character length of the text field's value, or -1 if unset.
+  int32_t max_value_length;
+  /// The current character length of the text field's value, or -1 if unset.
+  int32_t current_value_length;
+  /// The target URL when this node represents a link, or empty string if none.
+  const char* link_url;
+  /// BCP 47 locale tag for this node, or empty string if unset.
+  const char* locale;
+  /// Minimum value for range/slider nodes, or empty string if unset.
+  const char* min_value;
+  /// Maximum value for range/slider nodes, or empty string if unset.
+  const char* max_value;
+  /// The hit-test transform from this node's coordinate system to its parent's
+  /// coordinate system.
+  FlutterTransformation hit_test_transform;
+  /// The semantic role of this node.
+  FlutterSemanticsRole role;
+  /// The number of entries in `children_in_hit_test_order` (which may differ
+  /// from `child_count`, the length of `children_in_traversal_order`).
+  size_t hit_test_child_count;
 } FlutterSemanticsNode2;
 
 /// `FlutterSemanticsCustomAction` ID used as a sentinel to signal the end of a

@@ -26,6 +26,7 @@
 #include "flutter/fml/time/time_point.h"
 #include "flutter/runtime/dart_vm.h"
 #include "flutter/shell/platform/embedder/embedder_layers.h"
+#include "flutter/shell/platform/embedder/embedder_semantics_update.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
 #include "flutter/shell/platform/embedder/tests/embedder_test.h"
@@ -4739,6 +4740,153 @@ TEST_F(EmbedderTest, CompositorBackingStoreIsRootLayer) {
   ASSERT_TRUE(engine.is_valid());
 
   latch.Wait();
+}
+
+TEST(EmbedderTestNoFixture, EmbedderSemanticsUpdate2ExtendedFields) {
+  SemanticsNode node;
+  node.id = 7;
+  node.flags.isTextField = true;
+  node.maxValueLength = 100;
+  node.currentValueLength = 12;
+  node.linkUrl = "https://flutter.dev";
+  node.locale = "en-US";
+  node.minValue = "10";
+  node.maxValue = "90";
+  node.hitTestTransform = SkM44::Scale(2.0f, 3.0f, 1.0f);
+  node.role = SemanticsRole::kSlider;
+  node.childrenInTraversalOrder = {1, 2};
+  node.childrenInHitTestOrder = {2, 1, 3};
+
+  auto spell_out = std::make_shared<SpellOutStringAttribute>();
+  spell_out->start = 0;
+  spell_out->end = 4;
+  spell_out->type = StringAttributeType::kSpellOut;
+  node.label = "Test";
+  node.labelAttributes = {spell_out};
+
+  SemanticsNodeUpdates nodes;
+  nodes.emplace(node.id, node);
+  CustomAccessibilityActionUpdates actions;
+
+  EmbedderSemanticsUpdate2 update(/*view_id=*/0, nodes, actions);
+  FlutterSemanticsUpdate2* c_update = update.get();
+  ASSERT_NE(c_update, nullptr);
+  ASSERT_EQ(c_update->node_count, 1u);
+  const FlutterSemanticsNode2* c_node = c_update->nodes[0];
+  ASSERT_NE(c_node, nullptr);
+  EXPECT_EQ(c_node->struct_size, sizeof(FlutterSemanticsNode2));
+  ASSERT_NE(c_node->flags2, nullptr);
+  EXPECT_EQ(c_node->flags2->struct_size, sizeof(FlutterSemanticsFlags));
+  EXPECT_TRUE(c_node->flags2->is_text_field);
+  EXPECT_EQ(c_node->max_value_length, 100);
+  EXPECT_EQ(c_node->current_value_length, 12);
+  EXPECT_STREQ(c_node->link_url, "https://flutter.dev");
+  EXPECT_STREQ(c_node->locale, "en-US");
+  EXPECT_STREQ(c_node->min_value, "10");
+  EXPECT_STREQ(c_node->max_value, "90");
+  EXPECT_DOUBLE_EQ(c_node->hit_test_transform.scaleX, 2.0);
+  EXPECT_DOUBLE_EQ(c_node->hit_test_transform.scaleY, 3.0);
+  EXPECT_EQ(c_node->role, kFlutterSemanticsRoleSlider);
+  EXPECT_EQ(c_node->child_count, 2u);
+  EXPECT_EQ(c_node->hit_test_child_count, 3u);
+
+  ASSERT_EQ(c_node->label_attribute_count, 1u);
+  ASSERT_NE(c_node->label_attributes, nullptr);
+  ASSERT_NE(c_node->label_attributes[0], nullptr);
+  EXPECT_EQ(c_node->label_attributes[0]->type,
+            FlutterStringAttributeType::kSpellOut);
+  ASSERT_NE(c_node->label_attributes[0]->spell_out, nullptr);
+  EXPECT_EQ(c_node->label_attributes[0]->spell_out->struct_size,
+            sizeof(FlutterSpellOutStringAttribute));
+}
+
+TEST_F(EmbedderTest, WindowMetricsEventExtendedFields) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  builder.SetDartEntrypoint("window_metrics_event_extended");
+
+  fml::AutoResetWaitableEvent ready_latch, message_latch;
+  std::string last_message;
+  context.AddFfiNativeCallback(
+      "SignalNativeTest",
+      CREATE_FFI_LAMBDA([&ready_latch]() { ready_latch.Signal(); }));
+  context.AddFfiNativeCallback(
+      "SignalNativeMessage", CREATE_FFI_LAMBDA([&](Dart_Handle message_handle) {
+        last_message =
+            tonic::DartConverter<std::string>::FromDart(message_handle);
+        message_latch.Signal();
+      }));
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+  ready_latch.Wait();
+
+  // 1. Zero-initialized extended fields -> unset touch slop (null), null radii.
+  FlutterWindowMetricsEvent default_event = {};
+  default_event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  default_event.width = 800;
+  default_event.height = 600;
+  default_event.pixel_ratio = 2.0;
+  default_event.view_id = 0;
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &default_event),
+            kSuccess);
+  message_latch.Wait();
+  EXPECT_EQ(last_message,
+            "padding=0.0,0.0,0.0,0.0;"
+            "gesture=0.0,0.0,0.0,0.0;"
+            "slop=null;"
+            "radii=null;"
+            "features=");
+
+  // 2. Populated padding, system gesture insets, touch slop, corner radii, and
+  // display features.
+  FlutterDisplayCornerRadii radii = {};
+  radii.struct_size = sizeof(FlutterDisplayCornerRadii);
+  radii.top_left = 12.0;
+  radii.top_right = 14.0;
+  radii.bottom_right = 16.0;
+  radii.bottom_left = 18.0;
+
+  FlutterDisplayFeature hinge = {};
+  hinge.struct_size = sizeof(FlutterDisplayFeature);
+  hinge.bounds = {390.0, 0.0, 410.0, 600.0};
+  hinge.type = kFlutterDisplayFeatureTypeHinge;
+  hinge.state = kFlutterDisplayFeatureStatePostureHalfOpened;
+
+  FlutterDisplayFeature cutout = {};
+  cutout.struct_size = sizeof(FlutterDisplayFeature);
+  cutout.bounds = {350.0, 0.0, 450.0, 40.0};
+  cutout.type = kFlutterDisplayFeatureTypeCutout;
+  cutout.state = kFlutterDisplayFeatureStateUnknown;
+
+  const FlutterDisplayFeature* features[] = {&hinge, &cutout};
+
+  FlutterWindowMetricsEvent full_event = {};
+  full_event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  full_event.width = 800;
+  full_event.height = 600;
+  full_event.pixel_ratio = 2.0;
+  full_event.view_id = 0;
+  full_event.physical_padding = {10.0, 20.0, 30.0, 40.0};
+  full_event.physical_system_gesture_insets = {5.0, 6.0, 7.0, 8.0};
+  full_event.physical_touch_slop = 16.0;
+  full_event.display_corner_radii = &radii;
+  full_event.display_features_count = 2;
+  full_event.display_features = features;
+
+  ASSERT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &full_event),
+            kSuccess);
+  message_latch.Wait();
+  // Note: DisplayFeature bounds in Dart are converted to logical pixels
+  // (divided by devicePixelRatio = 2.0).
+  EXPECT_EQ(last_message,
+            "padding=10.0,20.0,30.0,40.0;"
+            "gesture=5.0,6.0,7.0,8.0;"
+            "slop=16.0;"
+            "radii=12.0,14.0,16.0,18.0;"
+            "features=hinge:postureHalfOpened:195.0,0.0,205.0,300.0|"
+            "cutout:unknown:175.0,0.0,225.0,20.0");
 }
 
 }  // namespace testing
