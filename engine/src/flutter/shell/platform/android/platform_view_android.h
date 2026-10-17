@@ -24,9 +24,13 @@ namespace flutter {
 
 class AndroidSurfaceFactoryImpl : public AndroidSurfaceFactory {
  public:
+  //----------------------------------------------------------------------------
+  /// @param[in]  create_transaction  Passed to the Vulkan surfaces it creates.
+  ///
   AndroidSurfaceFactoryImpl(const std::shared_ptr<AndroidContext>& context,
                             bool enable_impeller,
-                            bool lazy_shader_mode);
+                            bool lazy_shader_mode,
+                            CreateSurfaceTransaction create_transaction);
 
   ~AndroidSurfaceFactoryImpl() override;
 
@@ -36,6 +40,7 @@ class AndroidSurfaceFactoryImpl : public AndroidSurfaceFactory {
   const std::shared_ptr<AndroidContext>& android_context_;
   const bool enable_impeller_;
   const bool lazy_shader_mode_;
+  const CreateSurfaceTransaction create_transaction_;
 };
 
 class PlatformViewAndroid final {
@@ -117,7 +122,7 @@ class PlatformViewAndroid final {
 
   std::unique_ptr<SnapshotSurfaceProducer> CreateSnapshotSurfaceProducer();
 
-  sk_sp<GrDirectContext> CreateResourceContext() const;
+  bool MakeResourceContextCurrent() const;
 
   void ReleaseResourceContext() const;
 

@@ -13,14 +13,13 @@
 #include "flutter/impeller/renderer/backend/vulkan/context_vk.h"
 #include "flutter/impeller/renderer/backend/vulkan/swapchain/swapchain_vk.h"
 #include "flutter/shell/gpu/gpu_surface_vulkan_impeller.h"
-#include "flutter/vulkan/vulkan_native_surface_android.h"
-#include "impeller/renderer/backend/vulkan/swapchain/ahb/ahb_swapchain_vk.h"
-#include "impeller/toolkit/android/surface_transaction.h"
 
 namespace flutter {
 
 AndroidSurfaceVKImpeller::AndroidSurfaceVKImpeller(
-    const std::shared_ptr<AndroidContextVKImpeller>& android_context) {
+    const std::shared_ptr<AndroidContextVKImpeller>& android_context,
+    CreateSurfaceTransaction create_transaction)
+    : create_transaction_(std::move(create_transaction)) {
   is_valid_ = android_context->IsValid();
 
   auto& context_vk =
@@ -73,8 +72,7 @@ bool AndroidSurfaceVKImpeller::ResourceContextClearCurrent() {
 }
 
 bool AndroidSurfaceVKImpeller::SetNativeWindow(
-    fml::RefPtr<AndroidNativeWindow> window,
-    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
+    fml::RefPtr<AndroidNativeWindow> window) {
   if (window && (native_window_ == window)) {
     return OnScreenSurfaceResize(window->GetSize());
   }
@@ -85,10 +83,11 @@ bool AndroidSurfaceVKImpeller::SetNativeWindow(
     return false;
   }
 
-  impeller::CreateTransactionCB cb = [jni_facade = jni_facade]() {
-    FML_CHECK(jni_facade) << "JNI was nullptr";
+  impeller::CreateTransactionCB cb = [create_transaction =
+                                          create_transaction_]() {
     std::function<void()> publish_callback;
-    ASurfaceTransaction* tx = jni_facade->createTransaction(publish_callback);
+    ASurfaceTransaction* tx =
+        create_transaction ? create_transaction(publish_callback) : nullptr;
     if (tx == nullptr) {
       return impeller::android::SurfaceTransaction();
     }

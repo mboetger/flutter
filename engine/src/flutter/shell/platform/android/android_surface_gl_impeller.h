@@ -6,7 +6,6 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_SURFACE_GL_IMPELLER_H_
 
 #include "flutter/fml/macros.h"
-#include "flutter/impeller/renderer/context.h"
 #include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/android_context_gl_impeller.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
@@ -45,9 +44,7 @@ class AndroidSurfaceGLImpeller final : public GPUSurfaceGLDelegate,
   bool ResourceContextClearCurrent() override;
 
   // |AndroidSurface|
-  bool SetNativeWindow(
-      fml::RefPtr<AndroidNativeWindow> window,
-      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) override;
+  bool SetNativeWindow(fml::RefPtr<AndroidNativeWindow> window) override;
 
   // |AndroidSurface|
   std::unique_ptr<Surface> CreateSnapshotSurface() override;

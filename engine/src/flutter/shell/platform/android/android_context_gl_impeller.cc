@@ -5,8 +5,6 @@
 #include "flutter/shell/platform/android/android_context_gl_impeller.h"
 
 #include "flutter/impeller/renderer/backend/gles/context_gles.h"
-#include "flutter/impeller/renderer/backend/gles/proc_table_gles.h"
-#include "flutter/impeller/renderer/backend/gles/reactor_gles.h"
 #include "flutter/impeller/toolkit/egl/context.h"
 #include "flutter/impeller/toolkit/egl/surface.h"
 #include "impeller/entity/gles/entity_shaders_gles.h"

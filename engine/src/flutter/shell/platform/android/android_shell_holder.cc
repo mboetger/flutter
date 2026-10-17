@@ -76,8 +76,8 @@ static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
   dispatch_table.create_snapshot_surface_producer_callback = [platform_view]() {
     return platform_view->CreateSnapshotSurfaceProducer();
   };
-  dispatch_table.create_resource_context_callback = [platform_view]() {
-    return platform_view->CreateResourceContext();
+  dispatch_table.make_resource_current_callback = [platform_view]() {
+    return platform_view->MakeResourceContextCurrent();
   };
   dispatch_table.release_resource_context_callback = [platform_view]() {
     platform_view->ReleaseResourceContext();
@@ -537,11 +537,10 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
 
   const uint64_t spawned_holder_id = NextHolderId();
   // embedder.h has no spawn API yet.
-  std::unique_ptr<EmbedderEngine> spawned =
-      reinterpret_cast<EmbedderEngine*>(engine_.get())
-          ->Spawn(std::move(config.value()), initial_route,
-                  on_create_platform_view, on_create_rasterizer,
-                  MakeExternalTextureResolver(spawned_holder_id));
+  auto spawned = reinterpret_cast<EmbedderEngine*>(engine_.get())
+                     ->Spawn(std::move(config.value()), initial_route,
+                             on_create_platform_view, on_create_rasterizer,
+                             MakeExternalTextureResolver(spawned_holder_id));
   UniqueEngine engine(
       reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(spawned.release()));
 

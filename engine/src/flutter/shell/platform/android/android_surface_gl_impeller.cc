@@ -8,7 +8,6 @@
 #include <sys/system_properties.h>
 #endif
 
-#include "flutter/common/graphics/gl_context_switch.h"
 #include "flutter/fml/logging.h"
 #include "flutter/impeller/toolkit/egl/surface.h"
 #include "flutter/shell/gpu/gpu_surface_gl_impeller.h"
@@ -139,8 +138,7 @@ bool AndroidSurfaceGLImpeller::ResourceContextClearCurrent() {
 
 // |AndroidSurface|
 bool AndroidSurfaceGLImpeller::SetNativeWindow(
-    fml::RefPtr<AndroidNativeWindow> window,
-    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
+    fml::RefPtr<AndroidNativeWindow> window) {
   native_window_ = std::move(window);
   return RecreateOnscreenSurfaceAndMakeOnscreenContextCurrent();
 }

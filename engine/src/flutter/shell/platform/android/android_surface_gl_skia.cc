@@ -99,8 +99,7 @@ bool AndroidSurfaceGLSkia::ResourceContextClearCurrent() {
 }
 
 bool AndroidSurfaceGLSkia::SetNativeWindow(
-    fml::RefPtr<AndroidNativeWindow> window,
-    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
+    fml::RefPtr<AndroidNativeWindow> window) {
   FML_DCHECK(IsValid());
   FML_DCHECK(window);
   native_window_ = window;
