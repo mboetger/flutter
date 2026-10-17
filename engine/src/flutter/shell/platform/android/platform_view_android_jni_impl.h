@@ -73,7 +73,8 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void SurfaceTextureUpdateTexImage(JavaLocalRef surface_texture) override;
 
-  SkM44 SurfaceTextureGetTransformMatrix(JavaLocalRef surface_texture) override;
+  std::array<float, 16> SurfaceTextureGetTransformMatrix(
+      JavaLocalRef surface_texture) override;
 
   void SurfaceTextureDetachFromGLContext(JavaLocalRef surface_texture) override;
 
@@ -86,14 +87,16 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void HardwareBufferClose(JavaLocalRef hardware_buffer) override;
 
-  void FlutterViewOnDisplayPlatformView(int view_id,
-                                        int x,
-                                        int y,
-                                        int width,
-                                        int height,
-                                        int viewWidth,
-                                        int viewHeight,
-                                        MutatorsStack mutators_stack) override;
+  void FlutterViewOnDisplayPlatformView(
+      int view_id,
+      int x,
+      int y,
+      int width,
+      int height,
+      int viewWidth,
+      int viewHeight,
+      const FlutterPlatformViewMutation* const* mutations,
+      size_t mutations_count) override;
 
   void FlutterViewDisplayOverlaySurface(int surface_id,
                                         int x,
@@ -135,14 +138,16 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void destroyOverlaySurface2() override;
 
-  void onDisplayPlatformView2(int32_t view_id,
-                              int32_t x,
-                              int32_t y,
-                              int32_t width,
-                              int32_t height,
-                              int32_t viewWidth,
-                              int32_t viewHeight,
-                              MutatorsStack mutators_stack) override;
+  void onDisplayPlatformView2(
+      int32_t view_id,
+      int32_t x,
+      int32_t y,
+      int32_t width,
+      int32_t height,
+      int32_t viewWidth,
+      int32_t viewHeight,
+      const FlutterPlatformViewMutation* const* mutations,
+      size_t mutations_count) override;
 
   void hidePlatformView2(int32_t view_id) override;
 

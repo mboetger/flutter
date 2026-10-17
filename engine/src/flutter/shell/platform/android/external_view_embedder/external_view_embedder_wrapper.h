@@ -5,14 +5,24 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_EXTERNAL_VIEW_EMBEDDER_EXTERNAL_VIEW_EMBEDDER_WRAPPER_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_EXTERNAL_VIEW_EMBEDDER_EXTERNAL_VIEW_EMBEDDER_WRAPPER_H_
 
+#include <memory>
+
 #include "flutter/common/task_runners.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_2.h"
-#include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
+
+/// Adapts a `FlutterNativeWindowCompositor` C-API callback table into an
+/// `AndroidExternalViewEmbedderDelegate`, converting `MutatorsStack` into
+/// `FlutterPlatformViewMutation` arrays.
+std::shared_ptr<AndroidExternalViewEmbedderDelegate>
+MakeNativeWindowCompositorDelegate(
+    const FlutterNativeWindowCompositor* compositor,
+    void* fallback_user_data = nullptr);
 
 //------------------------------------------------------------------------------
 /// A wrapper for the android external view embedder classes that dynamically
@@ -25,7 +35,7 @@ class AndroidExternalViewEmbedderWrapper final : public ExternalViewEmbedder {
   AndroidExternalViewEmbedderWrapper(
       bool meets_hcpp_criteria,
       const AndroidContext& android_context,
-      std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+      std::shared_ptr<AndroidExternalViewEmbedderDelegate> jni_facade,
       std::shared_ptr<AndroidSurfaceFactory> surface_factory,
       const TaskRunners& task_runners);
 
@@ -82,7 +92,7 @@ class AndroidExternalViewEmbedderWrapper final : public ExternalViewEmbedder {
   const bool meets_hcpp_criteria_;
   const AndroidContext& android_context_;
   const TaskRunners& task_runners_;
-  std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
+  std::shared_ptr<AndroidExternalViewEmbedderDelegate> jni_facade_;
   std::shared_ptr<AndroidSurfaceFactory> surface_factory_;
   std::unique_ptr<AndroidExternalViewEmbedder> non_hcpp_view_embedder_;
   std::unique_ptr<AndroidExternalViewEmbedder2> hcpp_view_embedder_;

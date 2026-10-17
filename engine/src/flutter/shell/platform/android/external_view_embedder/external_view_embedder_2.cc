@@ -6,7 +6,6 @@
 
 #include <cmath>
 
-#include "display_list/dl_color.h"
 #include "flow/view_slicer.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/trace_event.h"
@@ -37,7 +36,7 @@ int32_t ToPhysicalPixels(DlScalar size_points, double device_pixel_ratio) {
 
 AndroidExternalViewEmbedder2::AndroidExternalViewEmbedder2(
     const AndroidContext& android_context,
-    std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+    std::shared_ptr<AndroidExternalViewEmbedderDelegate> jni_facade,
     std::shared_ptr<AndroidSurfaceFactory> surface_factory,
     const TaskRunners& task_runners)
     : ExternalViewEmbedder(),

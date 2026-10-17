@@ -2478,7 +2478,80 @@ typedef struct {
   /// will be a transformation mutation to make sure subsequent mutations are in
   /// the correct coordinate space.
   const FlutterPlatformViewMutation** mutations;
+  /// The bounding rectangle of the platform view in physical pixels after
+  /// applying its mutations and the root surface transformation.
+  FlutterRect transformed_bounds;
 } FlutterPlatformView;
+
+/// An opaque handle to a platform native window (`ANativeWindow*` on Android).
+typedef void* FlutterNativeWindowHandle;
+
+/// An overlay surface created by the embedder for hybrid composition in a
+/// native-window renderer (`kNativeWindow`).
+typedef struct {
+  size_t struct_size;
+  int32_t id;
+  /// Borrowed native window handle (`ANativeWindow*` on Android) for the
+  /// overlay surface. The engine acquires its own reference if non-null.
+  FlutterNativeWindowHandle window;
+} FlutterNativeWindowOverlay;
+
+/// Platform-view and overlay-surface callbacks for a native-window renderer
+/// (`kNativeWindow`), covering both surface-pool hybrid composition and
+/// `ASurfaceControl`-backed hybrid composition (HCPP).
+typedef struct FlutterNativeWindowCompositor {
+  size_t struct_size;
+  /// Optional user data passed to every callback in this struct. If null, the
+  /// `user_data` from `FlutterNativeWindowRendererConfig` is used.
+  void* user_data;
+  VoidCallback begin_frame_callback;
+  VoidCallback end_frame_callback;
+  bool (*create_overlay_surface_callback)(
+      void* /* user data */,
+      FlutterNativeWindowOverlay* /* overlay out */);
+  VoidCallback destroy_overlay_surfaces_callback;
+  void (*display_overlay_surface_callback)(void* /* user data */,
+                                           int32_t /* surface_id */,
+                                           int32_t /* x */,
+                                           int32_t /* y */,
+                                           int32_t /* width */,
+                                           int32_t /* height */);
+  void (*display_platform_view_callback)(
+      void* /* user data */,
+      int32_t /* view_id */,
+      int32_t /* x */,
+      int32_t /* y */,
+      int32_t /* width */,
+      int32_t /* height */,
+      int32_t /* view_width */,
+      int32_t /* view_height */,
+      const FlutterPlatformViewMutation* const* /* mutations */,
+      size_t /* mutations_count */);
+  VoidCallback swap_transaction_callback;
+  bool (*create_overlay_surface2_callback)(
+      void* /* user data */,
+      FlutterNativeWindowOverlay* /* overlay out */);
+  VoidCallback destroy_overlay_surface2_callback;
+  VoidCallback end_frame2_callback;
+  VoidCallback show_overlay_surface2_callback;
+  VoidCallback hide_overlay_surface2_callback;
+  void (*display_platform_view2_callback)(
+      void* /* user data */,
+      int32_t /* view_id */,
+      int32_t /* x */,
+      int32_t /* y */,
+      int32_t /* width */,
+      int32_t /* height */,
+      int32_t /* view_width */,
+      int32_t /* view_height */,
+      const FlutterPlatformViewMutation* const* /* mutations */,
+      size_t /* mutations_count */);
+  void (*hide_platform_view2_callback)(void* /* user data */,
+                                       int32_t /* view_id */);
+  void (*maybe_resize_surface_view_callback)(void* /* user data */,
+                                             int32_t /* width */,
+                                             int32_t /* height */);
+} FlutterNativeWindowCompositor;
 
 typedef enum {
   /// Specifies an OpenGL backing store. Can either be an OpenGL texture or

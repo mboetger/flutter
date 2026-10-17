@@ -5,9 +5,10 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_SURFACE_ANDROID_NATIVE_WINDOW_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_SURFACE_ANDROID_NATIVE_WINDOW_H_
 
-#include "flutter/fml/build_config.h"
+#include <cstddef>
+#include <cstdint>
 
-#include "flutter/display_list/geometry/dl_geometry_types.h"
+#include "flutter/fml/build_config.h"
 #include "flutter/fml/macros.h"
 #include "flutter/fml/memory/ref_counted.h"
 
@@ -30,7 +31,9 @@ class AndroidNativeWindow
 
   Handle handle() const;
 
-  DlISize GetSize() const;
+  int32_t GetWidth() const;
+
+  int32_t GetHeight() const;
 
   /// Returns true when this AndroidNativeWindow is not backed by a real window
   /// (used for testing).

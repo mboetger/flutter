@@ -13,7 +13,6 @@
 #include "flutter/fml/trace_event.h"
 #include "flutter/impeller/display_list/dl_image_impeller.h"
 #include "flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h"
-#include "flutter/impeller/renderer/backend/vulkan/surface_context_vk.h"
 #include "flutter/impeller/renderer/backend/vulkan/texture_vk.h"
 #include "flutter/impeller/toolkit/android/hardware_buffer.h"
 
@@ -123,14 +122,14 @@ void SurfaceTextureExternalTextureVKImpeller::ProcessFrame(
     return;
   }
   DlMatrix matrix = context.canvas->GetMatrix();
-  DlRect mapped_bounds = ToDlRect(bounds).TransformAndClipBounds(matrix);
+  DlRect mapped_bounds =
+      DlRect::MakeXYWH(bounds.x(), bounds.y(), bounds.width(), bounds.height())
+          .TransformAndClipBounds(matrix);
 
-  const auto& surface_context =
-      SurfaceContextVK::Cast(*context.aiks_context->GetContext());
-  const auto& context_vk = ContextVK::Cast(*surface_context.GetParent());
+  const auto& context_vk = *context_;
 
   auto dst_texture = GetCachedTextureSource(
-      surface_context.GetParent(),                                        //
+      context_,                                                           //
       ISize::MakeWH(mapped_bounds.GetWidth(), mapped_bounds.GetHeight())  //
   );
   if (!dst_texture || !dst_texture->IsValid()) {
@@ -168,8 +167,8 @@ void SurfaceTextureExternalTextureVKImpeller::ProcessFrame(
 
   glDeleteTextures(1u, &src_gl_texture);
 
-  dl_image_ = DlImageImpeller::Make(
-      std::make_shared<TextureVK>(surface_context.GetParent(), dst_texture));
+  dl_image_ =
+      DlImageImpeller::Make(std::make_shared<TextureVK>(context_, dst_texture));
 }
 
 // |SurfaceTextureExternalTexture|
@@ -226,8 +225,10 @@ void SurfaceTextureExternalTextureVKImpeller::DrawFrame(
     PaintContext& context,
     const SkRect& bounds,
     const DlImageSampling sampling) const {
-  context.canvas->DrawImageRect(dl_image_, ToDlRect(bounds), sampling,
-                                context.paint);
+  context.canvas->DrawImageRect(
+      dl_image_,
+      DlRect::MakeXYWH(bounds.x(), bounds.y(), bounds.width(), bounds.height()),
+      sampling, context.paint);
 }
 
 }  // namespace flutter

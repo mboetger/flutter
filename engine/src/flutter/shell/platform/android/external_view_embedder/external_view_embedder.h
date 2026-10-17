@@ -11,7 +11,6 @@
 #include "flutter/flow/embedded_views.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/surface_pool.h"
-#include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
 
 namespace flutter {
@@ -19,8 +18,9 @@ namespace flutter {
 //------------------------------------------------------------------------------
 /// Allows to embed Android views into a Flutter application.
 ///
-/// This class calls Java methods via |PlatformViewAndroidJNI| to manage the
-/// lifecycle of the Android view corresponding to |flutter::PlatformViewLayer|.
+/// This class calls platform methods via |AndroidExternalViewEmbedderDelegate|
+/// to manage the lifecycle of the Android view corresponding to
+/// |flutter::PlatformViewLayer|.
 ///
 /// It also orchestrates overlay surfaces. These are Android views
 /// that render above (by Z order) the Android view corresponding to
@@ -30,7 +30,7 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
  public:
   AndroidExternalViewEmbedder(
       const AndroidContext& android_context,
-      std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+      std::shared_ptr<AndroidExternalViewEmbedderDelegate> jni_facade,
       std::shared_ptr<AndroidSurfaceFactory> surface_factory,
       const TaskRunners& task_runners);
 
@@ -95,8 +95,8 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
   // Provides metadata to the Android surfaces.
   const AndroidContext& android_context_;
 
-  // Allows to call methods in Java.
-  const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
+  // Allows to call methods in the platform embedding.
+  const std::shared_ptr<AndroidExternalViewEmbedderDelegate> jni_facade_;
 
   // Allows to create surfaces.
   const std::shared_ptr<AndroidSurfaceFactory> surface_factory_;

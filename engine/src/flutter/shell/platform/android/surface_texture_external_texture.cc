@@ -41,7 +41,9 @@ void SurfaceTextureExternalTexture::Paint(PaintContext& context,
   const bool should_process_frame =
       !freeze || ShouldUpdate() || dl_image_ == nullptr;
   if (should_process_frame) {
-    ProcessFrame(context, ToSkRect(bounds));
+    ProcessFrame(context,
+                 SkRect::MakeXYWH(bounds.GetX(), bounds.GetY(),
+                                  bounds.GetWidth(), bounds.GetHeight()));
   }
   // If process frame failed, this may not be in attached state.
   if (state_ != AttachmentState::kAttached) {
@@ -54,14 +56,18 @@ void SurfaceTextureExternalTexture::Paint(PaintContext& context,
     return;
   }
 
-  DrawFrame(context, ToSkRect(bounds), sampling);
+  DrawFrame(context,
+            SkRect::MakeXYWH(bounds.GetX(), bounds.GetY(), bounds.GetWidth(),
+                             bounds.GetHeight()),
+            sampling);
 }
 
 void SurfaceTextureExternalTexture::DrawFrame(
     PaintContext& context,
     const SkRect& bounds,
     const DlImageSampling sampling) const {
-  auto transform = ToDlMatrix(GetCurrentUVTransformation());
+  DlMatrix transform;
+  GetCurrentUVTransformation().getColMajor(transform.m);
 
   // Android's SurfaceTexture transform matrix works on texture coordinate
   // lookups in the range 0.0-1.0, while Skia's Shader transform matrix works on
@@ -131,8 +137,11 @@ bool SurfaceTextureExternalTexture::ShouldUpdate() {
 void SurfaceTextureExternalTexture::Update() {
   jni_facade_->SurfaceTextureUpdateTexImage(
       fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
-  transform_ = jni_facade_->SurfaceTextureGetTransformMatrix(
-      fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
+  std::array<float, 16> transformation =
+      jni_facade_->SurfaceTextureGetTransformMatrix(
+          fml::jni::ScopedJavaLocalRef<jobject>(surface_texture_));
+  static_assert(sizeof(SkScalar) == sizeof(float));
+  transform_ = SkM44::ColMajor(transformation.data());
 }
 
 const SkM44& SurfaceTextureExternalTexture::GetCurrentUVTransformation() const {

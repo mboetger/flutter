@@ -203,6 +203,14 @@ void EmbedderLayers::PushPlatformViewLayer(
     view.struct_size = sizeof(FlutterPlatformView);
     view.identifier = identifier;
 
+    const auto transformed_view_bounds =
+        params.finalBoundingRect().TransformAndClipBounds(
+            root_surface_transformation_);
+    view.transformed_bounds.left = transformed_view_bounds.GetLeft();
+    view.transformed_bounds.top = transformed_view_bounds.GetTop();
+    view.transformed_bounds.right = transformed_view_bounds.GetRight();
+    view.transformed_bounds.bottom = transformed_view_bounds.GetBottom();
+
     const auto& mutators = params.mutatorsStack();
 
     std::vector<const FlutterPlatformViewMutation*> mutations_array;

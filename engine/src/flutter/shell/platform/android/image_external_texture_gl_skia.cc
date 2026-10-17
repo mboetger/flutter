@@ -9,6 +9,8 @@
 #include "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h"
 #include "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
 
+class SkColorSpace : public SkNVRefCnt<SkColorSpace> {};
+
 namespace flutter {
 
 ImageExternalTextureGLSkia::ImageExternalTextureGLSkia(

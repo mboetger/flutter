@@ -36,7 +36,9 @@ void ImageExternalTexture::Paint(PaintContext& context,
   Attach(context);
   const bool should_process_frame = !freeze;
   if (should_process_frame) {
-    ProcessFrame(context, ToSkRect(bounds));
+    ProcessFrame(context,
+                 SkRect::MakeXYWH(bounds.GetX(), bounds.GetY(),
+                                  bounds.GetWidth(), bounds.GetHeight()));
   }
   if (dl_image_) {
     context.canvas->DrawImageRect(

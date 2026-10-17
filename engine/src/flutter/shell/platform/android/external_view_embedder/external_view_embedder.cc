@@ -36,7 +36,7 @@ int32_t ToPhysicalPixels(DlScalar size_points, double device_pixel_ratio) {
 
 AndroidExternalViewEmbedder::AndroidExternalViewEmbedder(
     const AndroidContext& android_context,
-    std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
+    std::shared_ptr<AndroidExternalViewEmbedderDelegate> jni_facade,
     std::shared_ptr<AndroidSurfaceFactory> surface_factory,
     const TaskRunners& task_runners)
     : ExternalViewEmbedder(),
