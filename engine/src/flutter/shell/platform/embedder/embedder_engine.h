@@ -210,6 +210,18 @@ PlatformViewEmbedder::UpdateSemanticsCallback MakeSemanticsUpdateCallback(
     FlutterUpdateSemanticsCallback2 callback,
     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Builds the `ImageGeneratorFactory` that wraps a
+///             `FlutterImageGeneratorRegistration` in an
+///             `EmbedderCustomImageGenerator`.
+///
+///             Defined in `embedder.cc`. Shared with in-process embedders that
+///             register custom image decoders through the C-API
+///             `FlutterImageGeneratorRegistration` contract.
+///
+ImageGeneratorFactory MakeImageGeneratorFactory(
+    const FlutterImageGeneratorRegistration& registration);
+
 }  // namespace flutter
 
 #endif  // FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_ENGINE_H_

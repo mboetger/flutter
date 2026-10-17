@@ -86,15 +86,6 @@ class PlatformViewAndroid final {
       const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
       ImageExternalTexture::ImageLifecycle lifecycle);
 
-  void LoadDartDeferredLibrary(
-      intptr_t loading_unit_id,
-      std::unique_ptr<const fml::Mapping> snapshot_data,
-      std::unique_ptr<const fml::Mapping> snapshot_instructions);
-
-  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
-                                    const std::string error_message,
-                                    bool transient);
-
   void RegisterTexture(std::shared_ptr<flutter::Texture> texture);
 
   void UpdateAssetResolverByType(

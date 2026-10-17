@@ -20,7 +20,6 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
@@ -318,15 +317,18 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
 static jobject LookupCallbackInformation(JNIEnv* env,
                                          /* unused */ jobject,
                                          jlong handle) {
-  auto cbInfo = flutter::DartCallbackCache::GetCallbackInformation(handle);
-  if (cbInfo == nullptr) {
+  FlutterDartCallbackInformation cb_info = {};
+  cb_info.struct_size = sizeof(FlutterDartCallbackInformation);
+  if (FlutterEngineGetCallbackInformation(handle, &cb_info) != kSuccess) {
     return nullptr;
   }
-  return env->NewObject(g_flutter_callback_info_class->obj(),
-                        g_flutter_callback_info_constructor,
-                        env->NewStringUTF(cbInfo->name.c_str()),
-                        env->NewStringUTF(cbInfo->class_name.c_str()),
-                        env->NewStringUTF(cbInfo->library_path.c_str()));
+  return env->NewObject(
+      g_flutter_callback_info_class->obj(), g_flutter_callback_info_constructor,
+      env->NewStringUTF(cb_info.name != nullptr ? cb_info.name : ""),
+      env->NewStringUTF(cb_info.class_name != nullptr ? cb_info.class_name
+                                                      : ""),
+      env->NewStringUTF(cb_info.library_path != nullptr ? cb_info.library_path
+                                                        : ""));
 }
 
 static void SetViewportMetrics(JNIEnv* env,
@@ -712,20 +714,23 @@ static void LoadDartDeferredLibrary(JNIEnv* env,
       search_paths,
       [](const std::string& path) { return ::dlopen(path.c_str(), RTLD_NOW); });
   if (handle == nullptr) {
-    LoadLoadingUnitFailure(loading_unit_id,
-                           "No lib .so found for provided search paths.", true);
+    ANDROID_SHELL_HOLDER->LoadDartDeferredLibraryError(
+        loading_unit_id, "No lib .so found for provided search paths.", true);
     return;
   }
   fml::RefPtr<fml::NativeLibrary> native_lib =
       fml::NativeLibrary::CreateWithHandle(handle, false);
 
   // Resolve symbols.
+  static constexpr char kIsolateDataSymbol[] = "_kDartIsolateSnapshotData";
+  static constexpr char kIsolateInstructionsSymbol[] =
+      "_kDartIsolateSnapshotInstructions";
   std::unique_ptr<const fml::SymbolMapping> data_mapping =
-      std::make_unique<const fml::SymbolMapping>(
-          native_lib, DartSnapshot::kIsolateDataSymbol);
+      std::make_unique<const fml::SymbolMapping>(native_lib,
+                                                 kIsolateDataSymbol);
   std::unique_ptr<const fml::SymbolMapping> instructions_mapping =
-      std::make_unique<const fml::SymbolMapping>(
-          native_lib, DartSnapshot::kIsolateInstructionsSymbol);
+      std::make_unique<const fml::SymbolMapping>(native_lib,
+                                                 kIsolateInstructionsSymbol);
 
   ANDROID_SHELL_HOLDER->LoadDartDeferredLibrary(
       loading_unit_id, std::move(data_mapping),

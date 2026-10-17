@@ -1104,6 +1104,29 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   EXPECT_EQ(calls[1].view_id, 0);
 }
 
+TEST_F(PlatformViewAndroidJNIImplTest, NotifyLowMemoryWarningCallsEmbedderApi) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+  auto notify_low_memory = reinterpret_cast<ScheduleFrameFn>(
+      RegisterNativesAndFind(mock_env, "nativeNotifyLowMemoryWarning"));
+  ASSERT_NE(notify_low_memory, nullptr);
+
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
+  ASSERT_TRUE(holder->IsValid());
+  int calls = 0;
+  holder->GetEmbedderApiForTesting().NotifyLowMemoryWarning =
+      MOCK_ENGINE_PROC(NotifyLowMemoryWarning,
+                       ([&calls](FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+                         EXPECT_NE(engine, nullptr);
+                         calls++;
+                         return kSuccess;
+                       }));
+
+  notify_low_memory(&mock_env, reinterpret_cast<jobject>(123),
+                    reinterpret_cast<jlong>(holder.get()));
+  EXPECT_EQ(calls, 1);
+}
+
 // The load order is exercised with an injected loader rather than real
 // dlopen(): the property under test is purely the ordering (first-to-last,
 // stop at the first that loads), and a fake loader makes that deterministic

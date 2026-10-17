@@ -25,6 +25,7 @@
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/context/android_context.h"
+#include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
@@ -288,6 +289,29 @@ AndroidShellHolder::AndroidShellHolder(
       /*thread_host=*/nullptr, task_runners, settings_,
       /*run_configuration=*/std::nullopt, on_create_platform_view,
       on_create_rasterizer, /*external_texture_resolver=*/nullptr);
+
+  auto* io_runner_ptr =
+      new fml::RefPtr<fml::TaskRunner>(task_runners.GetIOTaskRunner());
+  FlutterImageGeneratorRegistration image_generator_registration = {};
+  image_generator_registration.struct_size =
+      sizeof(FlutterImageGeneratorRegistration);
+  image_generator_registration.priority = -1;
+  image_generator_registration.user_data = io_runner_ptr;
+  image_generator_registration.create_generator =
+      [](void* user_data, const uint8_t* data, size_t data_size,
+         FlutterImageGenerator* generator_out) -> bool {
+    auto* runner = static_cast<fml::RefPtr<fml::TaskRunner>*>(user_data);
+    return AndroidImageGenerator::CreateGenerator(data, data_size, *runner,
+                                                  generator_out);
+  };
+  image_generator_registration.destruction_callback = [](void* user_data) {
+    delete static_cast<fml::RefPtr<fml::TaskRunner>*>(user_data);
+  };
+  engine->AddImageDecoder(
+      MakeImageGeneratorFactory(image_generator_registration),
+      image_generator_registration.priority);
+  engine->SetVMServiceUriCallback(&FlutterMain::OnVMServiceUriAvailable);
+
   if (engine->LaunchShell(GetDefaultPlatformData())) {
     engine_.reset(
         reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(engine.release()));
@@ -303,13 +327,6 @@ AndroidShellHolder::AndroidShellHolder(
           }
         });
 
-    GetShell(engine_.get())
-        .RegisterImageDecoder(
-            [runner = task_runners.GetIOTaskRunner()](sk_sp<SkData> buffer) {
-              return AndroidImageGenerator::MakeFromData(std::move(buffer),
-                                                         runner);
-            },
-            -1);
     FML_LOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
   }
 
@@ -1122,9 +1139,56 @@ void AndroidShellHolder::LoadDartDeferredLibrary(
     intptr_t loading_unit_id,
     std::unique_ptr<const fml::Mapping> snapshot_data,
     std::unique_ptr<const fml::Mapping> snapshot_instructions) {
-  GetPlatformView()->LoadDartDeferredLibrary(loading_unit_id,
-                                             std::move(snapshot_data),
-                                             std::move(snapshot_instructions));
+  if (!snapshot_data || !snapshot_instructions) {
+    return;
+  }
+  struct DeferredLibraryMappings {
+    std::unique_ptr<const fml::Mapping> data;
+    std::unique_ptr<const fml::Mapping> instructions;
+  };
+  const uint8_t* data_ptr = snapshot_data->GetMapping();
+  const size_t data_size = snapshot_data->GetSize();
+  const uint8_t* instr_ptr = snapshot_instructions->GetMapping();
+  const size_t instr_size = snapshot_instructions->GetSize();
+  auto* mappings = new DeferredLibraryMappings{
+      std::move(snapshot_data), std::move(snapshot_instructions)};
+
+  FlutterDartDeferredLibrary library = {};
+  library.struct_size = sizeof(FlutterDartDeferredLibrary);
+  library.loading_unit_id = loading_unit_id;
+  library.snapshot_data = data_ptr;
+  library.snapshot_data_size = data_size;
+  library.snapshot_instructions = instr_ptr;
+  library.snapshot_instructions_size = instr_size;
+  library.user_data = mappings;
+  library.destruction_callback = [](void* user_data) {
+    delete static_cast<DeferredLibraryMappings*>(user_data);
+  };
+
+  FlutterEngineResult result =
+      embedder_api_.LoadDartDeferredLibrary(engine_.get(), &library);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineLoadDartDeferredLibrary failed: " << result;
+    delete mappings;
+  }
+}
+
+void AndroidShellHolder::LoadDartDeferredLibraryError(
+    intptr_t loading_unit_id,
+    const std::string& error_message,
+    bool transient) {
+  FlutterDartDeferredLibraryLoadError error = {};
+  error.struct_size = sizeof(FlutterDartDeferredLibraryLoadError);
+  error.loading_unit_id = loading_unit_id;
+  error.error_message = error_message.c_str();
+  error.transient = transient;
+
+  FlutterEngineResult result =
+      embedder_api_.NotifyDartDeferredLibraryLoadError(engine_.get(), &error);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineNotifyDartDeferredLibraryLoadError failed: "
+                   << result;
+  }
 }
 
 void AndroidShellHolder::UpdateAssetResolverByType(
@@ -1135,8 +1199,11 @@ void AndroidShellHolder::UpdateAssetResolverByType(
 }
 
 void AndroidShellHolder::NotifyLowMemoryWarning() {
-  FML_DCHECK(engine_);
-  GetShell(engine_.get()).NotifyLowMemoryWarning();
+  FlutterEngineResult result =
+      embedder_api_.NotifyLowMemoryWarning(engine_.get());
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineNotifyLowMemoryWarning failed: " << result;
+  }
 }
 
 Shell* AndroidShellHolder::GetShellForTesting() const {
@@ -1152,7 +1219,7 @@ std::optional<RunConfiguration> AndroidShellHolder::BuildRunConfiguration(
     const std::string& libraryUrl,
     const std::vector<std::string>& entrypoint_args) const {
   std::unique_ptr<IsolateConfiguration> isolate_configuration;
-  if (flutter::DartVM::IsRunningPrecompiledCode()) {
+  if (embedder_api_.RunsAOTCompiledDartCode()) {
     isolate_configuration = IsolateConfiguration::CreateForAppSnapshot();
   } else {
     std::unique_ptr<fml::Mapping> kernel_blob =

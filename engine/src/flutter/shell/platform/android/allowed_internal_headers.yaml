@@ -7,7 +7,7 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 79,
+  "total_allowed_internal_headers": 73,
   "subsystems": {
     "common_graphics_and_display_list": {
       "count": 7,
@@ -82,20 +82,6 @@
         "flutter/impeller/toolkit/glvk/trampoline.h"
       ]
     },
-    "lib_ui": {
-      "count": 2,
-      "allowed_headers": [
-        "flutter/lib/ui/painting/image_generator.h",
-        "flutter/lib/ui/plugins/callback_cache.h"
-      ]
-    },
-    "runtime": {
-      "count": 2,
-      "allowed_headers": [
-        "flutter/runtime/dart_service_isolate.h",
-        "flutter/runtime/dart_vm.h"
-      ]
-    },
     "shell_gpu_and_vulkan": {
       "count": 6,
       "allowed_headers": [
@@ -108,10 +94,9 @@
       ]
     },
     "txt_and_skia": {
-      "count": 16,
+      "count": 14,
       "allowed_headers": [
         "flutter/third_party/abseil-cpp/absl/container/flat_hash_set.h",
-        "flutter/third_party/skia/include/codec/SkCodecAnimation.h",
         "flutter/third_party/skia/include/core/SkAlphaType.h",
         "flutter/third_party/skia/include/core/SkColorSpace.h",
         "flutter/third_party/skia/include/core/SkColorType.h",
@@ -124,8 +109,7 @@
         "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h",
         "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
         "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h",
-        "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h",
-        "flutter/txt/platform.h"
+        "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h"
       ]
     }
   },
@@ -159,12 +143,6 @@
     ],
     "android_egl_surface.h": [
       "flutter/display_list/geometry/dl_geometry_types.h"
-    ],
-    "android_image_generator.cc": [
-      "flutter/third_party/skia/include/codec/SkCodecAnimation.h"
-    ],
-    "android_image_generator.h": [
-      "flutter/lib/ui/painting/image_generator.h"
     ],
     "android_shell_holder.cc": [
       "flutter/shell/common/rasterizer.h"
@@ -242,14 +220,7 @@
       "flutter/flow/surface.h"
     ],
     "flutter_main.cc": [
-      "flutter/impeller/base/validation.h",
-      "flutter/lib/ui/plugins/callback_cache.h",
-      "flutter/runtime/dart_vm.h",
-      "flutter/shell/common/switches.h",
-      "flutter/txt/platform.h"
-    ],
-    "flutter_main.h": [
-      "flutter/runtime/dart_service_isolate.h"
+      "flutter/shell/common/switches.h"
     ],
     "image_external_texture.cc": [
       "flutter/impeller/toolkit/android/proc_table.h"
@@ -317,8 +288,7 @@
       "flutter/shell/common/snapshot_surface_producer.h"
     ],
     "platform_view_android_jni_impl.cc": [
-      "flutter/flow/embedded_views.h",
-      "flutter/lib/ui/plugins/callback_cache.h"
+      "flutter/flow/embedded_views.h"
     ],
     "surface/android_native_window.h": [
       "flutter/display_list/geometry/dl_geometry_types.h"

@@ -6,11 +6,17 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_IMAGE_GENERATOR_H_
 
 #include <jni.h>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <vector>
 
+#include "flutter/fml/macros.h"
+#include "flutter/fml/mapping.h"
 #include "flutter/fml/memory/ref_ptr.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/task_runner.h"
-#include "flutter/lib/ui/painting/image_generator.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -18,43 +24,27 @@ namespace testing {
 FML_TEST_CLASS(AndroidImageGenerator, HeaderDecodeDimensionMismatch);
 }
 
-class AndroidImageGenerator : public ImageGenerator {
+class AndroidImageGenerator {
  private:
-  explicit AndroidImageGenerator(sk_sp<SkData> buffer);
+  explicit AndroidImageGenerator(std::vector<uint8_t> buffer);
 
  public:
   ~AndroidImageGenerator();
 
-  // |ImageGenerator|
-  const SkImageInfo& GetInfo() override;
+  bool GetInfo(FlutterImageGeneratorInfo* info_out);
 
-  // |ImageGenerator|
-  unsigned int GetFrameCount() const override;
-
-  // |ImageGenerator|
-  unsigned int GetPlayCount() const override;
-
-  // |ImageGenerator|
-  const ImageGenerator::FrameInfo GetFrameInfo(
-      unsigned int frame_index) override;
-
-  // |ImageGenerator|
-  SkISize GetScaledDimensions(float desired_scale) override;
-
-  // |ImageGenerator|
-  bool GetPixels(const SkImageInfo& info,
+  bool GetPixels(const FlutterImageGeneratorInfo* info,
                  void* pixels,
-                 size_t row_bytes,
-                 unsigned int frame_index,
-                 std::optional<unsigned int> prior_frame) override;
+                 size_t row_bytes);
 
   void DecodeImage();
 
   static bool Register(JNIEnv* env);
 
-  static std::shared_ptr<ImageGenerator> MakeFromData(
-      sk_sp<SkData> data,
-      const fml::RefPtr<fml::TaskRunner>& task_runner);
+  static bool CreateGenerator(const uint8_t* data,
+                              size_t data_size,
+                              const fml::RefPtr<fml::TaskRunner>& task_runner,
+                              FlutterImageGenerator* generator_out);
 
   static void NativeImageHeaderCallback(JNIEnv* env,
                                         jclass jcaller,
@@ -66,10 +56,11 @@ class AndroidImageGenerator : public ImageGenerator {
   FML_FRIEND_TEST(testing::AndroidImageGenerator,
                   HeaderDecodeDimensionMismatch);
 
-  sk_sp<SkData> data_;
-  sk_sp<SkData> software_decoded_data_;
+  std::vector<uint8_t> data_;
+  std::unique_ptr<fml::Mapping> software_decoded_data_;
 
-  SkImageInfo image_info_;
+  int width_ = -1;
+  int height_ = -1;
 
   /// Blocks until the header of the image has been decoded and the image
   /// dimensions have been determined.
@@ -79,8 +70,9 @@ class AndroidImageGenerator : public ImageGenerator {
   fml::ManualResetWaitableEvent fully_decoded_latch_;
 
   static std::shared_ptr<AndroidImageGenerator> MakeForTesting(
-      const SkImageInfo& header_info,
-      sk_sp<SkData> decoded_data);
+      int width,
+      int height,
+      std::unique_ptr<fml::Mapping> decoded_data);
 
   void DoDecodeImage();
 

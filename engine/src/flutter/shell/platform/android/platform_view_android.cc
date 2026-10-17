@@ -424,24 +424,6 @@ void PlatformViewAndroid::RequestDartDeferredLibrary(intptr_t loading_unit_id) {
   return;  // TODO(garyq): Call LoadDartDeferredLibraryFailure()
 }
 
-// |PlatformView|
-void PlatformViewAndroid::LoadDartDeferredLibrary(
-    intptr_t loading_unit_id,
-    std::unique_ptr<const fml::Mapping> snapshot_data,
-    std::unique_ptr<const fml::Mapping> snapshot_instructions) {
-  delegate_.LoadDartDeferredLibrary(loading_unit_id, std::move(snapshot_data),
-                                    std::move(snapshot_instructions));
-}
-
-// |PlatformView|
-void PlatformViewAndroid::LoadDartDeferredLibraryError(
-    intptr_t loading_unit_id,
-    const std::string error_message,
-    bool transient) {
-  delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
-                                         transient);
-}
-
 void PlatformViewAndroid::RegisterTexture(
     std::shared_ptr<flutter::Texture> texture) {
   if (platform_view_) {

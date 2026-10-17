@@ -731,5 +731,113 @@ TEST(AndroidShellHolder, SemanticsUpdateRoutesThroughCallbackToDelegate) {
   EXPECT_EQ(captured_node_strings[0], "submit_btn");
 }
 
+TEST(AndroidShellHolder,
+     LoadDartDeferredLibraryAndErrorRouteThroughEmbedderApi) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  bool load_called = false;
+  intptr_t captured_unit_id = 0;
+  std::vector<uint8_t> captured_data;
+  std::vector<uint8_t> captured_instr;
+  VoidCallback saved_destruction_callback = nullptr;
+  void* saved_user_data = nullptr;
+
+  auto& api = holder->GetEmbedderApiForTesting();
+  api.LoadDartDeferredLibrary = MOCK_ENGINE_PROC(
+      LoadDartDeferredLibrary, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                    const FlutterDartDeferredLibrary* library) {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_NE(library, nullptr);
+        load_called = true;
+        captured_unit_id = library->loading_unit_id;
+        captured_data.assign(
+            library->snapshot_data,
+            library->snapshot_data + library->snapshot_data_size);
+        captured_instr.assign(library->snapshot_instructions,
+                              library->snapshot_instructions +
+                                  library->snapshot_instructions_size);
+        saved_destruction_callback = library->destruction_callback;
+        saved_user_data = library->user_data;
+        return kSuccess;
+      }));
+
+  bool data_mapping_destroyed = false;
+  bool instr_mapping_destroyed = false;
+  const uint8_t kDataBytes[3] = {1, 2, 3};
+  const uint8_t kInstrBytes[2] = {4, 5};
+  auto data_mapping = std::make_unique<fml::NonOwnedMapping>(
+      kDataBytes, sizeof(kDataBytes),
+      [&data_mapping_destroyed](const uint8_t*, size_t) {
+        data_mapping_destroyed = true;
+      });
+  auto instr_mapping = std::make_unique<fml::NonOwnedMapping>(
+      kInstrBytes, sizeof(kInstrBytes),
+      [&instr_mapping_destroyed](const uint8_t*, size_t) {
+        instr_mapping_destroyed = true;
+      });
+
+  holder->LoadDartDeferredLibrary(42, std::move(data_mapping),
+                                  std::move(instr_mapping));
+  EXPECT_TRUE(load_called);
+  EXPECT_EQ(captured_unit_id, 42);
+  EXPECT_THAT(captured_data, ::testing::ElementsAre(1, 2, 3));
+  EXPECT_THAT(captured_instr, ::testing::ElementsAre(4, 5));
+  EXPECT_FALSE(data_mapping_destroyed);
+  EXPECT_FALSE(instr_mapping_destroyed);
+
+  ASSERT_NE(saved_destruction_callback, nullptr);
+  saved_destruction_callback(saved_user_data);
+  EXPECT_TRUE(data_mapping_destroyed);
+  EXPECT_TRUE(instr_mapping_destroyed);
+
+  bool error_called = false;
+  intptr_t error_unit_id = 0;
+  std::string error_msg;
+  bool error_transient = false;
+  api.NotifyDartDeferredLibraryLoadError = MOCK_ENGINE_PROC(
+      NotifyDartDeferredLibraryLoadError,
+      ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+           const FlutterDartDeferredLibraryLoadError* error) {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_NE(error, nullptr);
+        error_called = true;
+        error_unit_id = error->loading_unit_id;
+        error_msg = error->error_message != nullptr ? error->error_message : "";
+        error_transient = error->transient;
+        return kSuccess;
+      }));
+
+  holder->LoadDartDeferredLibraryError(99, "missing split apk", true);
+  EXPECT_TRUE(error_called);
+  EXPECT_EQ(error_unit_id, 99);
+  EXPECT_EQ(error_msg, "missing split apk");
+  EXPECT_TRUE(error_transient);
+}
+
+TEST(AndroidShellHolder, NotifyLowMemoryWarningCallsEmbedderApi) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  int calls = 0;
+  holder->GetEmbedderApiForTesting().NotifyLowMemoryWarning = MOCK_ENGINE_PROC(
+      NotifyLowMemoryWarning, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+        EXPECT_NE(engine, nullptr);
+        calls++;
+        return kSuccess;
+      }));
+
+  holder->NotifyLowMemoryWarning();
+  EXPECT_EQ(calls, 1);
+}
+
 }  // namespace testing
 }  // namespace flutter

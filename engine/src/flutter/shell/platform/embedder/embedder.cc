@@ -2477,6 +2477,15 @@ bool ConfigureEmbedderEngineCallbacksAndDecoders(
 
 }  // namespace
 
+namespace flutter {
+
+ImageGeneratorFactory MakeImageGeneratorFactory(
+    const FlutterImageGeneratorRegistration& registration) {
+  return CreateEmbedderImageGeneratorFactory(registration);
+}
+
+}  // namespace flutter
+
 FlutterEngineResult FlutterEngineRun(size_t version,
                                      const FlutterRendererConfig* config,
                                      const FlutterProjectArgs* args,
