@@ -1000,7 +1000,10 @@ AndroidShellHolder::~AndroidShellHolder() {
 
 void AndroidShellHolder::EngineDeleter::operator()(
     FLUTTER_API_SYMBOL(FlutterEngine) engine) const {
-  FlutterEngineResult result = FlutterEngineShutdown(engine);
+  FlutterEngineProcTable embedder_api = {};
+  embedder_api.struct_size = sizeof(FlutterEngineProcTable);
+  FlutterEngineGetProcAddresses(&embedder_api);
+  FlutterEngineResult result = embedder_api.Shutdown(engine);
   if (result != kSuccess) {
     FML_LOG(ERROR) << "FlutterEngineShutdown failed: " << result;
   }

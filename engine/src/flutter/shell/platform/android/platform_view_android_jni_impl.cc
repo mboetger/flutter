@@ -317,9 +317,12 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
 static jobject LookupCallbackInformation(JNIEnv* env,
                                          /* unused */ jobject,
                                          jlong handle) {
+  FlutterEngineProcTable embedder_api = {};
+  embedder_api.struct_size = sizeof(FlutterEngineProcTable);
+  FlutterEngineGetProcAddresses(&embedder_api);
   FlutterDartCallbackInformation cb_info = {};
   cb_info.struct_size = sizeof(FlutterDartCallbackInformation);
-  if (FlutterEngineGetCallbackInformation(handle, &cb_info) != kSuccess) {
+  if (embedder_api.GetCallbackInformation(handle, &cb_info) != kSuccess) {
     return nullptr;
   }
   return env->NewObject(

@@ -8,8 +8,6 @@
 #include <jni.h>
 
 #include "flutter/fml/macros.h"
-#include "flutter/shell/common/platform_view.h"
-#include "flutter/shell/common/snapshot_surface_producer.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 

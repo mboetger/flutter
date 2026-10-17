@@ -87,59 +87,41 @@ bin_to_assembly("icudtl_asm") {
   executable = false
 }
 
-source_set("flutter_embedder_native_src") {
+source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
   check_includes = true
   defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
 
   sources = [
-    "apk_asset_provider.cc",
-    "apk_asset_provider.h",
-    "ndk/choreographer.cc",
-    "ndk/choreographer.h",
-    "ndk/ndk_proc_table.cc",
-    "ndk/ndk_proc_table.h",
-    "vsync_waiter_android.cc",
-    "vsync_waiter_android.h",
-  ]
-
-  public_deps = [
-    ":image_generator",
-    "//flutter/assets",
-    "//flutter/common",
-    "//flutter/fml",
-    "//flutter/shell/platform/embedder:embedder_headers",
-  ]
-
-  public_configs = [ "//flutter:config" ]
-}
-
-source_set("flutter_shell_native_src") {
-  visibility = [ ":*" ]
-
-  sources = [
     "android_shell_holder.cc",
     "android_shell_holder.h",
+    "apk_asset_provider.cc",
+    "apk_asset_provider.h",
     "flutter_main.cc",
     "flutter_main.h",
     "jni_texture_source.cc",
     "jni_texture_source.h",
     "library_loader.cc",
+    "ndk/choreographer.cc",
+    "ndk/choreographer.h",
+    "ndk/ndk_proc_table.cc",
+    "ndk/ndk_proc_table.h",
     "platform_message_handler_android.cc",
     "platform_message_handler_android.h",
     "platform_view_android.cc",
     "platform_view_android.h",
     "platform_view_android_jni_impl.cc",
     "platform_view_android_jni_impl.h",
+    "vsync_waiter_android.cc",
+    "vsync_waiter_android.h",
   ]
 
   public_deps = [
     ":android_gpu_configuration",
-    ":flutter_embedder_native_src",
+    ":image_generator",
     "//flutter/assets",
     "//flutter/common",
     "//flutter/fml",
-    "//flutter/shell/common",
     "//flutter/shell/platform/android/jni",
     "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface:native_window",
@@ -148,8 +130,6 @@ source_set("flutter_shell_native_src") {
   ]
 
   public_configs = [ "//flutter:config" ]
-
-  defines = []
 
   libs = [
     "android",

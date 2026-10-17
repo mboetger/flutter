@@ -7,20 +7,7 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 2,
-  "subsystems": {
-    "engine_core": {
-      "count": 2,
-      "allowed_headers": [
-        "flutter/shell/common/platform_view.h",
-        "flutter/shell/common/snapshot_surface_producer.h"
-      ]
-    }
-  },
-  "allowed_legacy_files": {
-    "platform_view_android.h": [
-      "flutter/shell/common/platform_view.h",
-      "flutter/shell/common/snapshot_surface_producer.h"
-    ]
-  }
+  "total_allowed_internal_headers": 0,
+  "subsystems": {},
+  "allowed_legacy_files": {}
 }

@@ -145,10 +145,14 @@ void FlutterMain::Init(JNIEnv* env,
   fml::paths::InitializeAndroidCachesPath(
       fml::jni::JavaStringToString(env, engineCachesPath));
 
-  FlutterEngineInitializeCallbackCache(
+  FlutterEngineProcTable embedder_api = {};
+  embedder_api.struct_size = sizeof(FlutterEngineProcTable);
+  FlutterEngineGetProcAddresses(&embedder_api);
+
+  embedder_api.InitializeCallbackCache(
       fml::jni::JavaStringToString(env, appStoragePath).c_str());
 
-  if (!FlutterEngineRunsAOTCompiledDartCode() && kernelPath) {
+  if (!embedder_api.RunsAOTCompiledDartCode() && kernelPath) {
     // Check to see if the appropriate kernel files are present and configure
     // settings accordingly.
     auto application_kernel_path =
@@ -226,7 +230,10 @@ void FlutterMain::OnVMServiceUriAvailable(const std::string& uri) {
 
 static void PrefetchDefaultFontManager(JNIEnv* env, jclass jcaller) {
   // Initialize a singleton owned by Skia.
-  FlutterEnginePrefetchDefaultFontManager();
+  FlutterEngineProcTable embedder_api = {};
+  embedder_api.struct_size = sizeof(FlutterEngineProcTable);
+  FlutterEngineGetProcAddresses(&embedder_api);
+  embedder_api.PrefetchDefaultFontManager();
 }
 
 bool FlutterMain::Register(JNIEnv* env) {
