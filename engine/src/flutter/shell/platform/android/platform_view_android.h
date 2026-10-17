@@ -77,12 +77,6 @@ class PlatformViewAndroid final {
 
   void NotifyDestroyed();
 
-  void DispatchSemanticsAction(JNIEnv* env,
-                               jint id,
-                               jint action,
-                               jobject args,
-                               jint args_position);
-
   void RegisterExternalTexture(
       int64_t texture_id,
       const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);
@@ -120,9 +114,7 @@ class PlatformViewAndroid final {
 
   void SetupImpellerContext();
 
-  void UpdateSemantics(int64_t view_id,
-                       flutter::SemanticsNodeUpdates update,
-                       flutter::CustomAccessibilityActionUpdates actions);
+  void UpdateSemantics(const FlutterSemanticsUpdate2& update);
 
   void SetApplicationLocale(std::string locale);
 

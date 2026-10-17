@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "flutter/shell/common/platform_view.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -25,9 +25,7 @@ class PlatformViewAndroidDelegate {
   static constexpr int kEmptyStringIndex = -1;
   explicit PlatformViewAndroidDelegate(
       std::shared_ptr<PlatformViewAndroidJNI> jni_facade);
-  void UpdateSemantics(
-      const flutter::SemanticsNodeUpdates& update,
-      const flutter::CustomAccessibilityActionUpdates& actions);
+  void UpdateSemantics(const FlutterSemanticsUpdate2& update);
 
  private:
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;

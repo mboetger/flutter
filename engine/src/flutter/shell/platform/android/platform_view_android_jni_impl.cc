@@ -526,10 +526,13 @@ static void DispatchSemanticsAction(JNIEnv* env,
                                     jint action,
                                     jobject args,
                                     jint args_position) {
-  ANDROID_SHELL_HOLDER->DispatchSemanticsAction(env,           //
-                                                id,            //
+  const uint8_t* args_data =
+      args != nullptr
+          ? static_cast<const uint8_t*>(env->GetDirectBufferAddress(args))
+          : nullptr;
+  ANDROID_SHELL_HOLDER->DispatchSemanticsAction(id,            //
                                                 action,        //
-                                                args,          //
+                                                args_data,     //
                                                 args_position  //
   );
 }

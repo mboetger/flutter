@@ -36,12 +36,14 @@ static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
     const std::shared_ptr<VsyncWaiterAndroid>& vsync_waiter,
     PlatformMessageHandlerAndroid* message_handler) {
   PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
-  dispatch_table.update_semantics_callback =
-      [platform_view](int64_t view_id, flutter::SemanticsNodeUpdates update,
-                      flutter::CustomAccessibilityActionUpdates actions) {
-        platform_view->UpdateSemantics(view_id, std::move(update),
-                                       std::move(actions));
-      };
+  dispatch_table.update_semantics_callback = MakeSemanticsUpdateCallback(
+      [](const FlutterSemanticsUpdate2* update, void* user_data) {
+        if (update != nullptr && user_data != nullptr) {
+          static_cast<PlatformViewAndroid*>(user_data)->UpdateSemantics(
+              *update);
+        }
+      },
+      platform_view);
   dispatch_table.platform_message_response_callback =
       MakePlatformMessageResponseCallback(
           [](const FlutterPlatformMessage* message, void* user_data) {
@@ -1038,13 +1040,26 @@ void AndroidShellHolder::InvokePlatformMessageEmptyResponseCallback(
   }
 }
 
-void AndroidShellHolder::DispatchSemanticsAction(JNIEnv* env,
-                                                 jint id,
-                                                 jint action,
-                                                 jobject args,
-                                                 jint args_position) {
-  GetPlatformView()->DispatchSemanticsAction(env, id, action, args,
-                                             args_position);
+void AndroidShellHolder::DispatchSemanticsAction(int32_t node_id,
+                                                 int32_t action,
+                                                 const uint8_t* args_data,
+                                                 int32_t args_length) {
+  // The Android embedder currently targets the implicit view (ID 0).
+  constexpr FlutterViewId kImplicitViewId = 0;
+  FlutterSendSemanticsActionInfo info = {};
+  info.struct_size = sizeof(FlutterSendSemanticsActionInfo);
+  info.node_id = node_id;
+  info.action = static_cast<FlutterSemanticsAction>(action);
+  info.data = (args_data != nullptr && args_length > 0) ? args_data : nullptr;
+  info.data_length = (args_data != nullptr && args_length > 0)
+                         ? static_cast<size_t>(args_length)
+                         : 0;
+  info.view_id = kImplicitViewId;
+  FlutterEngineResult result =
+      embedder_api_.SendSemanticsAction(engine_.get(), &info);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineSendSemanticsAction failed: " << result;
+  }
 }
 
 void AndroidShellHolder::SetSemanticsEnabled(bool enabled) {

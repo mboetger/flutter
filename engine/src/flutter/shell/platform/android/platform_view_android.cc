@@ -243,38 +243,10 @@ void PlatformViewAndroid::OnPreEngineRestart() const {
   jni_facade_->FlutterViewOnPreEngineRestart();
 }
 
-void PlatformViewAndroid::DispatchSemanticsAction(JNIEnv* env,
-                                                  jint node_id,
-                                                  jint action,
-                                                  jobject args,
-                                                  jint args_position) {
-  // TODO(team-android): Remove implicit view assumption.
-  // https://github.com/flutter/flutter/issues/142845
-  if (env->IsSameObject(args, NULL)) {
-    if (platform_view_) {
-      platform_view_->DispatchSemanticsAction(
-          kImplicitViewId, node_id,
-          static_cast<flutter::SemanticsAction>(action), fml::MallocMapping());
-    }
-    return;
-  }
-
-  uint8_t* args_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(args));
-  auto args_vector = fml::MallocMapping::Copy(args_data, args_position);
-
-  if (platform_view_) {
-    platform_view_->DispatchSemanticsAction(
-        kImplicitViewId, node_id, static_cast<flutter::SemanticsAction>(action),
-        std::move(args_vector));
-  }
-}
-
 // |PlatformView|
 void PlatformViewAndroid::UpdateSemantics(
-    int64_t view_id,
-    flutter::SemanticsNodeUpdates update,
-    flutter::CustomAccessibilityActionUpdates actions) {
-  platform_view_android_delegate_.UpdateSemantics(update, actions);
+    const FlutterSemanticsUpdate2& update) {
+  platform_view_android_delegate_.UpdateSemantics(update);
 }
 
 // |PlatformView|

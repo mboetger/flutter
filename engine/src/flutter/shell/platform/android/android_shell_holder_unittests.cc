@@ -678,5 +678,58 @@ TEST(AndroidShellHolder, VsyncBatonsReturnThroughFlutterEngineOnVsync) {
             static_cast<int64_t>(calls[0].frame_start_time_nanos));
 }
 
+TEST(AndroidShellHolder, SemanticsUpdateRoutesThroughCallbackToDelegate) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  flutter::SemanticsNodeUpdates nodes;
+  flutter::SemanticsNode node;
+  node.id = 5;
+  node.label = "submit_btn";
+  node.traversalParent = 2;
+  node.role = flutter::SemanticsRole::kSlider;
+  nodes.insert({5, node});
+
+  flutter::CustomAccessibilityActionUpdates actions;
+  flutter::CustomAccessibilityAction action;
+  action.id = 9;
+  action.overrideId = 10;
+  action.label = "custom_lbl";
+  action.hint = "custom_hint";
+  actions.insert({9, action});
+
+  std::vector<uint8_t> captured_node_buf;
+  std::vector<std::string> captured_node_strings;
+  EXPECT_CALL(*jni, FlutterViewUpdateSemantics(::testing::_, ::testing::_,
+                                               ::testing::_))
+      .WillOnce([&](std::vector<uint8_t> buffer,
+                    std::vector<std::string> strings,
+                    std::vector<std::vector<uint8_t>>) {
+        captured_node_buf = std::move(buffer);
+        captured_node_strings = std::move(strings);
+      });
+  EXPECT_CALL(*jni, FlutterViewUpdateCustomAccessibilityActions(::testing::_,
+                                                                ::testing::_))
+      .Times(1);
+
+  holder->GetShellForTesting()->GetPlatformView()->UpdateSemantics(
+      0, std::move(nodes), std::move(actions));
+
+  ASSERT_EQ(captured_node_buf.size(),
+            PlatformViewAndroidDelegate::kBytesPerNode);
+  const auto* words =
+      reinterpret_cast<const int32_t*>(captured_node_buf.data());
+  EXPECT_EQ(words[0], 5);   // node.id
+  EXPECT_EQ(words[11], 2);  // node.traversalParent
+  EXPECT_EQ(words[15],
+            static_cast<int32_t>(flutter::SemanticsRole::kSlider));  // role
+  ASSERT_EQ(captured_node_strings.size(), 1u);
+  EXPECT_EQ(captured_node_strings[0], "submit_btn");
+}
+
 }  // namespace testing
 }  // namespace flutter

@@ -375,6 +375,8 @@ using DispatchEmptyPlatformMessageFn =
     void (*)(JNIEnv*, jobject, jlong, jstring, jint);
 using DispatchPointerDataPacketFn =
     void (*)(JNIEnv*, jobject, jlong, jobject, jint);
+using DispatchSemanticsActionFn =
+    void (*)(JNIEnv*, jobject, jlong, jint, jint, jobject, jint);
 using CleanupMessageDataFn = void (*)(JNIEnv*, jobject, jlong);
 using InvokePlatformMessageResponseCallbackFn =
     void (*)(JNIEnv*, jobject, jlong, jint, jobject, jint);
@@ -1037,6 +1039,69 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   cleanup_fn(&mock_env, reinterpret_cast<jobject>(123),
              reinterpret_cast<jlong>(payload));
   EXPECT_TRUE(destroyed);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       DispatchSemanticsActionCallsSendSemanticsAction) {
+  MockJNIEnvProvider env_provider;
+  MockJNIEnv& mock_env = env_provider.env();
+  auto dispatch_semantics = reinterpret_cast<DispatchSemanticsActionFn>(
+      RegisterNativesAndFind(mock_env, "nativeDispatchSemanticsAction"));
+  ASSERT_NE(dispatch_semantics, nullptr);
+
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
+  ASSERT_TRUE(holder->IsValid());
+
+  struct ActionCall {
+    int32_t node_id;
+    FlutterSemanticsAction action;
+    std::vector<uint8_t> data;
+    FlutterViewId view_id;
+  };
+  std::vector<ActionCall> calls;
+  holder->GetEmbedderApiForTesting().SendSemanticsAction = MOCK_ENGINE_PROC(
+      SendSemanticsAction, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                const FlutterSendSemanticsActionInfo* info) {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_NE(info, nullptr);
+        ActionCall call;
+        call.node_id = static_cast<int32_t>(info->node_id);
+        call.action = info->action;
+        if (info->data != nullptr && info->data_length > 0) {
+          call.data.assign(info->data, info->data + info->data_length);
+        }
+        call.view_id = info->view_id;
+        calls.push_back(std::move(call));
+        return kSuccess;
+      }));
+
+  // 1. Action without arguments (args == nullptr).
+  dispatch_semantics(&mock_env, reinterpret_cast<jobject>(123),
+                     reinterpret_cast<jlong>(holder.get()), /*id=*/7,
+                     /*action=*/static_cast<jint>(kFlutterSemanticsActionTap),
+                     /*args=*/nullptr, /*args_position=*/0);
+  ASSERT_EQ(calls.size(), 1u);
+  EXPECT_EQ(calls[0].node_id, 7);
+  EXPECT_EQ(calls[0].action, kFlutterSemanticsActionTap);
+  EXPECT_TRUE(calls[0].data.empty());
+  EXPECT_EQ(calls[0].view_id, 0);
+
+  // 2. Action with direct ByteBuffer arguments.
+  const uint8_t kArgsBytes[4] = {0xAA, 0xBB, 0xCC, 0xDD};
+  const jobject kJavaArgs = reinterpret_cast<jobject>(0x701);
+  EXPECT_CALL(mock_env, GetDirectBufferAddress(kJavaArgs))
+      .WillOnce(Return(const_cast<uint8_t*>(kArgsBytes)));
+
+  dispatch_semantics(
+      &mock_env, reinterpret_cast<jobject>(123),
+      reinterpret_cast<jlong>(holder.get()), /*id=*/12,
+      /*action=*/static_cast<jint>(kFlutterSemanticsActionSetText),
+      /*args=*/kJavaArgs, /*args_position=*/4);
+  ASSERT_EQ(calls.size(), 2u);
+  EXPECT_EQ(calls[1].node_id, 12);
+  EXPECT_EQ(calls[1].action, kFlutterSemanticsActionSetText);
+  EXPECT_THAT(calls[1].data, ElementsAre(0xAA, 0xBB, 0xCC, 0xDD));
+  EXPECT_EQ(calls[1].view_id, 0);
 }
 
 // The load order is exercised with an injected loader rather than real

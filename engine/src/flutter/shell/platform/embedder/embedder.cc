@@ -1813,6 +1813,20 @@ MakePlatformMessageResponseCallback(FlutterPlatformMessageCallback callback,
       };
 }
 
+PlatformViewEmbedder::UpdateSemanticsCallback MakeSemanticsUpdateCallback(
+    FlutterUpdateSemanticsCallback2 callback,
+    void* user_data) {
+  if (callback == nullptr) {
+    return nullptr;
+  }
+  return [callback, user_data](
+             int64_t view_id, const flutter::SemanticsNodeUpdates& nodes,
+             const flutter::CustomAccessibilityActionUpdates& actions) {
+    flutter::EmbedderSemanticsUpdate2 update{view_id, nodes, actions};
+    callback(update.get(), user_data);
+  };
+}
+
 }  // namespace flutter
 
 struct LoadedElfDeleter {
@@ -2105,13 +2119,8 @@ flutter::PlatformViewEmbedder::UpdateSemanticsCallback
 CreateEmbedderSemanticsUpdateCallbackV3(
     FlutterUpdateSemanticsCallback2 update_semantics_callback,
     void* user_data) {
-  return [update_semantics_callback, user_data](
-             int64_t view_id, const flutter::SemanticsNodeUpdates& nodes,
-             const flutter::CustomAccessibilityActionUpdates& actions) {
-    flutter::EmbedderSemanticsUpdate2 update{view_id, nodes, actions};
-
-    update_semantics_callback(update.get(), user_data);
-  };
+  return flutter::MakeSemanticsUpdateCallback(update_semantics_callback,
+                                              user_data);
 }
 
 // Creates a callback that receives semantic updates from the engine
@@ -3906,11 +3915,18 @@ FlutterEngineResult FlutterEngineSendSemanticsAction(
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
   }
+  if (info == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid semantics action info.");
+  }
   auto engine_action = static_cast<flutter::SemanticsAction>(info->action);
+  fml::MallocMapping args_mapping =
+      (info->data != nullptr && info->data_length > 0)
+          ? fml::MallocMapping::Copy(info->data, info->data_length)
+          : fml::MallocMapping();
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)
-           ->DispatchSemanticsAction(
-               info->view_id, info->node_id, engine_action,
-               fml::MallocMapping::Copy(info->data, info->data_length))) {
+           ->DispatchSemanticsAction(info->view_id, info->node_id,
+                                     engine_action, std::move(args_mapping))) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                               "Could not dispatch semantics action.");
   }

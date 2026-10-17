@@ -1942,10 +1942,9 @@ typedef enum {
   kFlutterSemanticsRoleMain = 30,
   kFlutterSemanticsRoleNavigation = 31,
   kFlutterSemanticsRoleRegion = 32,
-  kFlutterSemanticsRoleSearch = 33,
-  kFlutterSemanticsRoleSlider = 34,
-  kFlutterSemanticsRoleListBox = 35,
-  kFlutterSemanticsRoleOption = 36,
+  kFlutterSemanticsRoleSlider = 33,
+  kFlutterSemanticsRoleListBox = 34,
+  kFlutterSemanticsRoleOption = 35,
 } FlutterSemanticsRole;
 
 /// A node in the Flutter semantics tree.
@@ -2082,6 +2081,8 @@ typedef struct {
   /// The number of entries in `children_in_hit_test_order` (which may differ
   /// from `child_count`, the length of `children_in_traversal_order`).
   size_t hit_test_child_count;
+  /// The logical parent node ID in accessibility traversal order, or 0 if none.
+  int32_t traversal_parent;
 } FlutterSemanticsNode2;
 
 /// `FlutterSemanticsCustomAction` ID used as a sentinel to signal the end of a

@@ -13,7 +13,7 @@ source_set("jni") {
 
   public_configs = [ "//flutter:config" ]
 
-  deps = [
+  public_deps = [
     "//flutter/flow",
     "//flutter/fml",
     "//flutter/shell/platform/android/surface:native_window",
@@ -29,7 +29,7 @@ source_set("jni_mock") {
 
   public_configs = [ "//flutter:config" ]
 
-  deps = [ ":jni" ]
+  public_deps = [ ":jni" ]
 }
 
 source_set("mock_jni_env") {

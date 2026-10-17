@@ -4754,6 +4754,7 @@ TEST(EmbedderTestNoFixture, EmbedderSemanticsUpdate2ExtendedFields) {
   node.maxValue = "90";
   node.hitTestTransform = SkM44::Scale(2.0f, 3.0f, 1.0f);
   node.role = SemanticsRole::kSlider;
+  node.traversalParent = 42;
   node.childrenInTraversalOrder = {1, 2};
   node.childrenInHitTestOrder = {2, 1, 3};
 
@@ -4787,6 +4788,7 @@ TEST(EmbedderTestNoFixture, EmbedderSemanticsUpdate2ExtendedFields) {
   EXPECT_DOUBLE_EQ(c_node->hit_test_transform.scaleX, 2.0);
   EXPECT_DOUBLE_EQ(c_node->hit_test_transform.scaleY, 3.0);
   EXPECT_EQ(c_node->role, kFlutterSemanticsRoleSlider);
+  EXPECT_EQ(c_node->traversal_parent, 42);
   EXPECT_EQ(c_node->child_count, 2u);
   EXPECT_EQ(c_node->hit_test_child_count, 3u);
 

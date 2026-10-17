@@ -14,12 +14,9 @@ source_set("platform_view_android_delegate") {
   public_configs = [ "//flutter:config" ]
 
   deps = [
-    "//flutter/common",
     "//flutter/fml",
-    "//flutter/lib/ui",
-    "//flutter/shell/common",
     "//flutter/shell/platform/android/jni",
-    "//flutter/skia",
+    "//flutter/shell/platform/embedder:embedder_headers",
   ]
 }
 
@@ -38,6 +35,5 @@ executable("platform_view_android_delegate_unittests") {
     "//flutter/shell/platform/android/jni:jni_mock",
     "//flutter/testing",
     "//flutter/testing:dart",
-    "//flutter/txt",
   ]
 }

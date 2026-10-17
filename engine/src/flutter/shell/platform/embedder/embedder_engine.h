@@ -196,6 +196,20 @@ PlatformViewEmbedder::PlatformMessageResponseCallback
 MakePlatformMessageResponseCallback(FlutterPlatformMessageCallback callback,
                                     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Builds the `PlatformViewEmbedder` semantics-update callback
+///             that translates engine semantics node and custom-action updates
+///             into a `FlutterSemanticsUpdate2` and invokes `callback`.
+///
+///             Defined in `embedder.cc`. Shared with in-process embedders that
+///             construct `PlatformViewEmbedder` directly but want to receive
+///             semantics updates through the C-API `FlutterSemanticsUpdate2`
+///             contract.
+///
+PlatformViewEmbedder::UpdateSemanticsCallback MakeSemanticsUpdateCallback(
+    FlutterUpdateSemanticsCallback2 callback,
+    void* user_data);
+
 }  // namespace flutter
 
 #endif  // FLUTTER_SHELL_PLATFORM_EMBEDDER_EMBEDDER_ENGINE_H_

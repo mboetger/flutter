@@ -158,11 +158,10 @@ class AndroidShellHolder {
 
   void InvokePlatformMessageEmptyResponseCallback(int response_id);
 
-  void DispatchSemanticsAction(JNIEnv* env,
-                               jint id,
-                               jint action,
-                               jobject args,
-                               jint args_position);
+  void DispatchSemanticsAction(int32_t node_id,
+                               int32_t action,
+                               const uint8_t* args_data,
+                               int32_t args_length);
 
   void SetSemanticsEnabled(bool enabled);
 

@@ -316,9 +316,6 @@
       "flutter/shell/common/platform_view.h",
       "flutter/shell/common/snapshot_surface_producer.h"
     ],
-    "platform_view_android_delegate/platform_view_android_delegate.h": [
-      "flutter/shell/common/platform_view.h"
-    ],
     "platform_view_android_jni_impl.cc": [
       "flutter/flow/embedded_views.h",
       "flutter/lib/ui/plugins/callback_cache.h"

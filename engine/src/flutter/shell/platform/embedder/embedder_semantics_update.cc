@@ -444,6 +444,7 @@ void EmbedderSemanticsUpdate2::AddNode(const SemanticsNode& node) {
       flutter_hit_test_transform,
       ToFlutterSemanticsRole(node.role),
       node.childrenInHitTestOrder.size(),
+      node.traversalParent,
   });
 }
 
