@@ -9,6 +9,7 @@
 #include <mutex>
 #include <vector>
 
+#include "flutter/common/switches.h"
 #include "flutter/flow/frame_timings.h"
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
@@ -900,6 +901,19 @@ TEST(AndroidShellHolder, NotifyLowMemoryWarningCallsEmbedderApi) {
 
   holder->NotifyLowMemoryWarning();
   EXPECT_EQ(calls, 1);
+}
+
+TEST(AndroidShellHolder, EnableEmbedderApiDefaultsToTrueOnAndroid) {
+  Settings default_settings;
+  EXPECT_TRUE(default_settings.enable_embedder_api);
+
+  fml::CommandLine default_cmd =
+      fml::CommandLineFromInitializerList({"flutter"});
+  EXPECT_TRUE(SettingsFromCommandLine(default_cmd).enable_embedder_api);
+
+  fml::CommandLine disabled_cmd = fml::CommandLineFromInitializerList(
+      {"flutter", "--enable-embedder-api=false"});
+  EXPECT_FALSE(SettingsFromCommandLine(disabled_cmd).enable_embedder_api);
 }
 
 }  // namespace testing
