@@ -20,6 +20,7 @@
 #include "flutter/shell/platform/android/platform_view_android.h"
 #include "flutter/shell/platform/android/platform_view_android_jni_impl.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/test_utils/proc_table_replacement.h"
 
 namespace flutter {
@@ -440,8 +441,10 @@ void* RegisterNativesAndFind(MockJNIEnv& mock_env, const char* name) {
 // with RunNowAndFlushMessages, so they are visible as soon as the native
 // returns.
 const PlatformData& RuntimePlatformData(const AndroidShellHolder& holder) {
-  return holder.GetShellForTesting()
-      ->GetEngine()
+  auto* engine =
+      reinterpret_cast<EmbedderEngine*>(holder.GetEngineForTesting());
+  return engine->GetShell()
+      .GetEngine()
       ->GetRuntimeController()
       ->GetPlatformData();
 }
@@ -1320,6 +1323,249 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   mark_frame_available(&mock_env, jcaller, shell_holder, kImageTextureId);
   unregister_texture(&mock_env, jcaller, shell_holder, kSurfaceTextureId);
   unregister_texture(&mock_env, jcaller, shell_holder, kImageTextureId);
+}
+
+namespace {
+
+class TestAPKAssetProviderImpl : public APKAssetProviderInternal {
+ public:
+  explicit TestAPKAssetProviderImpl(std::string payload)
+      : payload_(std::move(payload)) {}
+
+  std::unique_ptr<fml::Mapping> GetAsMapping(
+      const std::string& asset_name) const override {
+    if (asset_name == "test_asset.txt") {
+      return std::make_unique<fml::DataMapping>(payload_);
+    }
+    return nullptr;
+  }
+
+ private:
+  std::string payload_;
+};
+
+}  // namespace
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       UpdateJavaAssetManagerCallsEmbedderApiAndResolvesAssets) {
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
+  ASSERT_TRUE(holder->IsValid());
+
+  bool called = false;
+  holder->GetEmbedderApiForTesting().UpdateAssetResolver = MOCK_ENGINE_PROC(
+      UpdateAssetResolver, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                const FlutterCustomAssetResolver* resolver) {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_NE(resolver, nullptr);
+        EXPECT_EQ(resolver->struct_size, sizeof(FlutterCustomAssetResolver));
+        FlutterAssetMapping mapping = {};
+        mapping.struct_size = sizeof(FlutterAssetMapping);
+        EXPECT_TRUE(resolver->get_as_mapping_callback(
+            "test_asset.txt", resolver->user_data, &mapping));
+        EXPECT_EQ(std::string(reinterpret_cast<const char*>(mapping.mapping),
+                              mapping.size),
+                  "updated_asset_content");
+        if (mapping.release_callback) {
+          mapping.release_callback(mapping.user_data);
+        }
+        if (resolver->destruction_callback) {
+          resolver->destruction_callback(resolver->user_data);
+        }
+        called = true;
+        return kSuccess;
+      }));
+
+  auto provider = std::make_unique<APKAssetProvider>(
+      std::make_shared<TestAPKAssetProviderImpl>("updated_asset_content"));
+  holder->UpdateJavaAssetManager(std::move(provider));
+  EXPECT_TRUE(called);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       UpdateJavaAssetManagerRealProcForwardsToEngine) {
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
+  ASSERT_TRUE(holder->IsValid());
+
+  auto asset_manager = std::make_shared<AssetManager>();
+  asset_manager->PushBack(std::make_unique<APKAssetProvider>(
+      std::make_shared<TestAPKAssetProviderImpl>("initial_asset")));
+  auto* embedder_engine =
+      reinterpret_cast<EmbedderEngine*>(holder->GetEngineForTesting());
+  embedder_engine->GetShell().GetEngine()->UpdateAssetManager(asset_manager);
+
+  auto initial_mapping = asset_manager->GetAsMapping("test_asset.txt");
+  ASSERT_NE(initial_mapping, nullptr);
+  EXPECT_EQ(
+      std::string(reinterpret_cast<const char*>(initial_mapping->GetMapping()),
+                  initial_mapping->GetSize()),
+      "initial_asset");
+
+  auto provider = std::make_unique<APKAssetProvider>(
+      std::make_shared<TestAPKAssetProviderImpl>("real_proc_asset"));
+  holder->UpdateJavaAssetManager(std::move(provider));
+
+  auto updated_mapping = asset_manager->GetAsMapping("test_asset.txt");
+  ASSERT_NE(updated_mapping, nullptr);
+  EXPECT_EQ(
+      std::string(reinterpret_cast<const char*>(updated_mapping->GetMapping()),
+                  updated_mapping->GetSize()),
+      "real_proc_asset");
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       ScreenshotCallsEmbedderApiAndFreesScreenshot) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<JNIMock>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  // Fake RGBA pixel buffer (4 bytes = 1 pixel) returned by the mocked C-API.
+  constexpr uint8_t kFakePixelBytes[] = {0xAA, 0xBB, 0xCC, 0xDD};
+  constexpr size_t kFakeScreenshotWidth = 640;
+  constexpr size_t kFakeScreenshotHeight = 480;
+  bool screenshot_called = false;
+  bool free_screenshot_called = false;
+  FlutterScreenshotType captured_type = kFlutterScreenshotTypeSkiaPicture;
+  bool captured_base64_encode = false;
+
+  holder->GetEmbedderApiForTesting().Screenshot = MOCK_ENGINE_PROC(
+      Screenshot, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                       const FlutterScreenshotRequest* request,
+                       FlutterScreenshot* screenshot_out) {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_NE(request, nullptr);
+        EXPECT_EQ(request->struct_size, sizeof(FlutterScreenshotRequest));
+        captured_type = request->type;
+        captured_base64_encode = request->base64_encode;
+        EXPECT_NE(screenshot_out, nullptr);
+        EXPECT_EQ(screenshot_out->struct_size, sizeof(FlutterScreenshot));
+        screenshot_out->data = kFakePixelBytes;
+        screenshot_out->data_size = sizeof(kFakePixelBytes);
+        screenshot_out->frame_width =
+            static_cast<int32_t>(kFakeScreenshotWidth);
+        screenshot_out->frame_height =
+            static_cast<int32_t>(kFakeScreenshotHeight);
+        screenshot_out->format = kFlutterScreenshotFormatR8G8B8A8UNormInt;
+        screenshot_out->frame_type = "ScreenshotType::UncompressedImage";
+        screenshot_called = true;
+        return kSuccess;
+      }));
+
+  holder->GetEmbedderApiForTesting().FreeScreenshot =
+      MOCK_ENGINE_PROC(FreeScreenshot, ([&](FlutterScreenshot* screenshot) {
+                         EXPECT_NE(screenshot, nullptr);
+                         EXPECT_EQ(screenshot->data, kFakePixelBytes);
+                         free_screenshot_called = true;
+                         return kSuccess;
+                       }));
+
+  AndroidShellHolder::ScreenshotData result = holder->Screenshot(
+      kFlutterScreenshotTypeUncompressedImage, /*base64_encode=*/true);
+
+  EXPECT_TRUE(screenshot_called);
+  EXPECT_TRUE(free_screenshot_called);
+  EXPECT_EQ(captured_type, kFlutterScreenshotTypeUncompressedImage);
+  EXPECT_TRUE(captured_base64_encode);
+  ASSERT_NE(result.data.GetMapping(), nullptr);
+  ASSERT_EQ(result.data.GetSize(), sizeof(kFakePixelBytes));
+  EXPECT_EQ(std::memcmp(result.data.GetMapping(), kFakePixelBytes,
+                        sizeof(kFakePixelBytes)),
+            0);
+  EXPECT_EQ(result.width, static_cast<int32_t>(kFakeScreenshotWidth));
+  EXPECT_EQ(result.height, static_cast<int32_t>(kFakeScreenshotHeight));
+  EXPECT_EQ(result.format, "ScreenshotType::UncompressedImage");
+  EXPECT_EQ(result.pixel_format, kFlutterScreenshotFormatR8G8B8A8UNormInt);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, LaunchCallsLaunchEngineEmbedderApi) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<JNIMock>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  // Simulate AOT mode so Launch proceeds without needing a kernel file on disk.
+  holder->GetEmbedderApiForTesting().RunsAOTCompiledDartCode =
+      MOCK_ENGINE_PROC(RunsAOTCompiledDartCode, ([]() { return true; }));
+
+  // Expect display metrics query during Launch.
+  constexpr double kRefreshRateHz = 60.0;
+  constexpr double kDisplayWidthPx = 1080.0;
+  constexpr double kDisplayHeightPx = 1920.0;
+  constexpr double kDisplayDensity = 2.0;
+  EXPECT_CALL(*jni, GetDisplayRefreshRate()).WillOnce(Return(kRefreshRateHz));
+  EXPECT_CALL(*jni, GetDisplayWidth()).WillOnce(Return(kDisplayWidthPx));
+  EXPECT_CALL(*jni, GetDisplayHeight()).WillOnce(Return(kDisplayHeightPx));
+  EXPECT_CALL(*jni, GetDisplayDensity()).WillOnce(Return(kDisplayDensity));
+
+  bool launch_engine_called = false;
+  std::string captured_entrypoint;
+  std::string captured_library;
+  std::vector<std::string> captured_args;
+  int64_t captured_engine_id = 0;
+
+  holder->GetEmbedderApiForTesting().LaunchEngine = MOCK_ENGINE_PROC(
+      LaunchEngine, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                         const FlutterEngineRunConfiguration* config) {
+        EXPECT_NE(engine, nullptr);
+        EXPECT_NE(config, nullptr);
+        if (config != nullptr) {
+          EXPECT_EQ(config->struct_size, sizeof(FlutterEngineRunConfiguration));
+          if (config->custom_dart_entrypoint != nullptr) {
+            captured_entrypoint = config->custom_dart_entrypoint;
+          }
+          if (config->custom_dart_entrypoint_library != nullptr) {
+            captured_library = config->custom_dart_entrypoint_library;
+          }
+          for (int i = 0; i < config->dart_entrypoint_argc; ++i) {
+            captured_args.emplace_back(config->dart_entrypoint_argv[i]);
+          }
+          captured_engine_id = config->engine_id;
+        }
+        launch_engine_called = true;
+        return kSuccess;
+      }));
+
+  constexpr int64_t kTestEngineId = 77;
+  holder->Launch(/*apk_asset_provider=*/nullptr, "customMain",
+                 "package:my_app/main.dart", {"--foo", "--bar"}, kTestEngineId);
+
+  EXPECT_TRUE(launch_engine_called);
+  EXPECT_EQ(captured_entrypoint, "customMain");
+  EXPECT_EQ(captured_library, "package:my_app/main.dart");
+  EXPECT_THAT(captured_args, ElementsAre("--foo", "--bar"));
+  EXPECT_EQ(captured_engine_id, kTestEngineId);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest, DestroyCallsShutdownEmbedderApi) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<JNIMock>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+  ASSERT_TRUE(holder->IsValid());
+
+  FLUTTER_API_SYMBOL(FlutterEngine)
+  expected_engine = holder->GetEngineForTesting();
+  ASSERT_NE(expected_engine, nullptr);
+
+  bool shutdown_called = false;
+  FlutterEngineShutdownFnPtr real_shutdown =
+      holder->GetEmbedderApiForTesting().Shutdown;
+  ASSERT_NE(real_shutdown, nullptr);
+
+  holder->GetEmbedderApiForTesting().Shutdown = MOCK_ENGINE_PROC(
+      Shutdown, ([&](FLUTTER_API_SYMBOL(FlutterEngine) engine) {
+        EXPECT_EQ(engine, expected_engine);
+        shutdown_called = true;
+        return real_shutdown(engine);
+      }));
+
+  holder.reset();
+  EXPECT_TRUE(shutdown_called);
 }
 
 }  // namespace testing

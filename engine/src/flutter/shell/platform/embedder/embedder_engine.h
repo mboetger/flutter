@@ -30,6 +30,13 @@ struct ShellArgs;
 // instance of the Flutter engine.
 class EmbedderEngine {
  public:
+  // Creates the PlatformView for a Shell given only the PlatformView::Delegate
+  // view of that Shell and its task runners, so callers do not need the full
+  // Shell definition.
+  using PlatformViewFactory =
+      std::function<std::unique_ptr<PlatformView>(PlatformView::Delegate&,
+                                                  const TaskRunners&)>;
+
   //----------------------------------------------------------------------------
   /// @param[in]  thread_host  The threads and custom task runners of the
   ///             engine. May be null when the embedder owns the threads behind
@@ -49,7 +56,20 @@ class EmbedderEngine {
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
           external_texture_resolver,
-      bool defer_surface_creation = false);
+      bool defer_surface_creation = false,
+      const PlatformData& platform_data = PlatformData());
+
+  // Same as above, with |on_create_platform_view| taking a
+  // PlatformView::Delegate& instead of a Shell&, and a default Rasterizer.
+  EmbedderEngine(std::unique_ptr<EmbedderThreadHost> thread_host,
+                 const TaskRunners& task_runners,
+                 const Settings& settings,
+                 std::optional<RunConfiguration> run_configuration,
+                 const PlatformViewFactory& on_create_platform_view,
+                 std::unique_ptr<EmbedderExternalTextureResolver>
+                     external_texture_resolver,
+                 bool defer_surface_creation = false,
+                 const PlatformData& platform_data = PlatformData());
 
   ~EmbedderEngine();
 
@@ -85,6 +105,32 @@ class EmbedderEngine {
           external_texture_resolver = nullptr,
       bool defer_surface_creation = false) const;
 
+  // Same as above, with |on_create_platform_view| taking a
+  // PlatformView::Delegate& instead of a Shell&, and a default Rasterizer.
+  std::unique_ptr<EmbedderEngine> Spawn(
+      RunConfiguration run_configuration,
+      const std::string& initial_route,
+      const PlatformViewFactory& on_create_platform_view,
+      std::unique_ptr<EmbedderExternalTextureResolver>
+          external_texture_resolver = nullptr,
+      bool defer_surface_creation = false) const;
+
+  // Same as above, building the RunConfiguration from |config|. Returns
+  // nullptr if |config| is invalid.
+  std::unique_ptr<EmbedderEngine> Spawn(
+      const FlutterEngineRunConfiguration* config,
+      const std::string& initial_route,
+      const PlatformViewFactory& on_create_platform_view,
+      std::unique_ptr<EmbedderExternalTextureResolver>
+          external_texture_resolver = nullptr,
+      bool defer_surface_creation = false) const;
+
+  // Builds a RunConfiguration from |config|, or returns std::nullopt if
+  // |config| is null, malformed, or its kernel blob cannot be mapped.
+  static std::optional<RunConfiguration> BuildRunConfiguration(
+      const FlutterEngineRunConfiguration* config,
+      std::string* error_out = nullptr);
+
   bool CollectShell();
 
   void CollectThreadHost();
@@ -95,9 +141,17 @@ class EmbedderEngine {
 
   bool NotifyDestroyed();
 
+  bool IsSurfaceCreated() const;
+
   bool DeferSurfaceCreation() const;
 
   bool RunRootIsolate();
+
+  bool LaunchEngine(RunConfiguration run_configuration);
+
+  bool UpdateAssetResolverByType(
+      std::unique_ptr<AssetResolver> updated_asset_resolver,
+      AssetResolver::AssetResolverType type);
 
   bool IsValid() const;
 
@@ -153,6 +207,9 @@ class EmbedderEngine {
   void SetVMServiceUriCallback(
       std::function<void(const std::string&)> callback);
 
+  Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
+                                    bool base64_encode);
+
   Shell& GetShell();
 
  private:
@@ -174,6 +231,7 @@ class EmbedderEngine {
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
   bool defer_surface_creation_ = false;
+  bool is_surface_created_ = false;
   std::vector<std::pair<ImageGeneratorFactory, int32_t>>
       pending_image_decoders_;
   std::function<void(const std::string&)> vm_service_uri_callback_;
@@ -221,6 +279,14 @@ PlatformViewEmbedder::UpdateSemanticsCallback MakeSemanticsUpdateCallback(
 ///
 ImageGeneratorFactory MakeImageGeneratorFactory(
     const FlutterImageGeneratorRegistration& registration);
+
+//------------------------------------------------------------------------------
+/// @brief      Builds an `AssetResolver` of type `kApkAssetProvider` from a
+///             `FlutterCustomAssetResolver` descriptor. Defined in
+///             `embedder.cc`.
+///
+std::unique_ptr<AssetResolver> CreateEmbedderCustomAssetResolver(
+    const FlutterCustomAssetResolver* desc);
 
 }  // namespace flutter
 

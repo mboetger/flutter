@@ -9,9 +9,7 @@
 #include <type_traits>
 
 #include "flutter/fml/macros.h"
-#include "flutter/shell/common/run_configuration.h"
-#include "flutter/shell/common/shell.h"
-#include "flutter/shell/common/thread_host.h"
+#include "flutter/fml/thread.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -21,6 +19,8 @@
 #include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
+
+class AndroidEngineCallbacks;
 
 /// Viewport metrics reported by `FlutterJNI.setViewportMetrics`, expressed
 /// without depending on `flutter/lib/ui/window/viewport_metrics.h` so
@@ -76,6 +76,14 @@ struct AndroidViewportMetrics {
 ///
 class AndroidShellHolder {
  public:
+  struct ScreenshotData {
+    fml::MallocMapping data;
+    int32_t width = 0;
+    int32_t height = 0;
+    std::string format;
+    FlutterScreenshotFormat pixel_format = kFlutterScreenshotFormatUnknown;
+  };
+
   AndroidShellHolder(const flutter::Settings& settings,
                      std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
                      AndroidRenderingAPI android_rendering_api);
@@ -191,21 +199,20 @@ class AndroidShellHolder {
                                     const std::string& error_message,
                                     bool transient);
 
-  void UpdateAssetResolverByType(
-      std::unique_ptr<AssetResolver> updated_asset_resolver,
-      AssetResolver::AssetResolverType type);
+  void UpdateJavaAssetManager(std::unique_ptr<APKAssetProvider> asset_provider);
 
   bool IsSurfaceControlEnabled();
 
-  Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
-                                    bool base64_encode);
+  ScreenshotData Screenshot(FlutterScreenshotType type, bool base64_encode);
 
   void NotifyLowMemoryWarning();
 
   void UpdateDisplayMetrics();
 
   // Visible for testing.
-  Shell* GetShellForTesting() const;
+  FLUTTER_API_SYMBOL(FlutterEngine) GetEngineForTesting() const {
+    return engine_.get();
+  }
 
   // Visible for testing. Replacing an entry changes what the holder calls.
   FlutterEngineProcTable& GetEmbedderApiForTesting();
@@ -220,12 +227,23 @@ class AndroidShellHolder {
       std::unique_ptr<std::remove_pointer_t<FLUTTER_API_SYMBOL(FlutterEngine)>,
                       EngineDeleter>;
 
+  // Owns the Android shell's dedicated UI, raster, and IO threads, shared
+  // across shells spawned via Spawn().
+  struct ThreadHost {
+    std::unique_ptr<fml::Thread> ui_thread;
+    std::unique_ptr<fml::Thread> raster_thread;
+    std::unique_ptr<fml::Thread> io_thread;
+  };
+
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
   std::unique_ptr<PlatformViewAndroid> platform_view_android_;
   fml::WeakPtr<PlatformViewAndroid> platform_view_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
   std::shared_ptr<ThreadHost> thread_host_;
+  // The state behind the engine's FlutterProjectArgs callbacks. The engine
+  // passes it back to them as user_data, so it must outlive the engine.
+  std::unique_ptr<AndroidEngineCallbacks> engine_callbacks_;
   UniqueEngine engine_;
   // The embedder API functions that the holder calls engine_ through.
   FlutterEngineProcTable embedder_api_;
@@ -253,6 +271,7 @@ class AndroidShellHolder {
       const flutter::Settings& settings,
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
       const std::shared_ptr<ThreadHost>& thread_host,
+      std::unique_ptr<AndroidEngineCallbacks> engine_callbacks,
       UniqueEngine engine,
       uint64_t holder_id,
       std::unique_ptr<APKAssetProvider> apk_asset_provider,
@@ -262,10 +281,6 @@ class AndroidShellHolder {
       std::shared_ptr<VsyncWaiterAndroid> vsync_waiter,
       AndroidRenderingAPI rendering_api);
   static void ThreadDestructCallback(void* value);
-  std::optional<RunConfiguration> BuildRunConfiguration(
-      const std::string& entrypoint,
-      const std::string& libraryUrl,
-      const std::vector<std::string>& entrypoint_args) const;
 
   bool IsNDKImageDecoderAvailable();
 

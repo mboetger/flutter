@@ -8,8 +8,6 @@
 #include <android/sensor.h>
 
 #include "flutter/impeller/toolkit/android/hardware_buffer.h"
-#include "flutter/impeller/toolkit/egl/image.h"
-#include "flutter/impeller/toolkit/gles/texture.h"
 
 namespace flutter {
 

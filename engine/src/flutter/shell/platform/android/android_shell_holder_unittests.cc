@@ -17,6 +17,7 @@
 #include "flutter/shell/common/shell.h"
 #include "flutter/shell/common/vsync_waiter.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/test_utils/proc_table_replacement.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -179,13 +180,14 @@ constexpr fml::TimeDelta kDefaultFrameInterval =
 // Creates a holder without calling NotifyCreated: a fake window makes the
 // Impeller GLES reactor abort on devices.
 std::unique_ptr<AndroidShellHolder> CreateHolderWithoutSurface(
-    Settings::MergedPlatformUIThread merged_platform_ui_thread) {
+    Settings::MergedPlatformUIThread merged_platform_ui_thread,
+    std::shared_ptr<MockPlatformViewAndroidJNI> jni =
+        std::make_shared<MockPlatformViewAndroidJNI>()) {
   Settings settings;
   settings.enable_software_rendering = false;
   settings.merged_platform_ui_thread = merged_platform_ui_thread;
   return std::make_unique<AndroidShellHolder>(
-      settings, std::make_shared<MockPlatformViewAndroidJNI>(),
-      AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, std::move(jni), AndroidRenderingAPI::kImpellerOpenGLES);
 }
 
 // Dispatches the ALooper of the current thread, which runs both fml tasks and
@@ -254,6 +256,12 @@ class VsyncFrameRecorder
   std::vector<Frame> frames_;
 };
 
+Shell* GetShellForTesting(const AndroidShellHolder& holder) {
+  auto* engine =
+      reinterpret_cast<EmbedderEngine*>(holder.GetEngineForTesting());
+  return engine ? &engine->GetShell() : nullptr;
+}
+
 // Requests one frame from the vsync waiter the platform view creates for the
 // shell, from the UI thread like the animator does, and checks how it is
 // delivered.
@@ -263,9 +271,8 @@ void ExpectOneFrameOnUIThread(
       CreateHolderWithoutSurface(merged_platform_ui_thread);
   ASSERT_TRUE(holder->IsValid());
   fml::RefPtr<fml::TaskRunner> ui_task_runner =
-      holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner();
-  PlatformView& platform_view =
-      *holder->GetShellForTesting()->GetPlatformView();
+      GetShellForTesting(*holder)->GetTaskRunners().GetUITaskRunner();
+  PlatformView& platform_view = *GetShellForTesting(*holder)->GetPlatformView();
   std::shared_ptr<VsyncWaiter> vsync_waiter = platform_view.CreateVSyncWaiter();
   auto recorder = std::make_shared<VsyncFrameRecorder>(ui_task_runner);
 
@@ -435,8 +442,8 @@ TEST(AndroidShellHolder, CreateWithMergedPlatformAndUIThread) {
   holder->NotifySurfaceCreated(window);
 
   EXPECT_EQ(
-      holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
-      holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+      GetShellForTesting(*holder)->GetTaskRunners().GetUITaskRunner(),
+      GetShellForTesting(*holder)->GetTaskRunners().GetPlatformTaskRunner());
 }
 
 TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
@@ -451,8 +458,8 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
   holder->NotifySurfaceCreated(window);
 
   EXPECT_NE(
-      holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner(),
-      holder->GetShellForTesting()->GetTaskRunners().GetPlatformTaskRunner());
+      GetShellForTesting(*holder)->GetTaskRunners().GetUITaskRunner(),
+      GetShellForTesting(*holder)->GetTaskRunners().GetPlatformTaskRunner());
 }
 
 TEST(AndroidShellHolder, StartsWithDetachedLifecycleState) {
@@ -469,7 +476,7 @@ TEST(AndroidShellHolder, StartsWithDetachedLifecycleState) {
 
   // Frames stay off until Java reports a lifecycle state over
   // flutter/lifecycle.
-  EXPECT_EQ(holder->GetShellForTesting()
+  EXPECT_EQ(GetShellForTesting(*holder)
                 ->GetEngine()
                 ->GetRuntimeController()
                 ->GetPlatformData()
@@ -601,10 +608,9 @@ TEST(AndroidShellHolder, PendingVsyncIsDeliveredOnceAfterHolderIsDestroyed) {
       CreateHolderWithoutSurface(Settings::MergedPlatformUIThread::kEnabled);
   ASSERT_TRUE(holder->IsValid());
   fml::RefPtr<fml::TaskRunner> ui_task_runner =
-      holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner();
+      GetShellForTesting(*holder)->GetTaskRunners().GetUITaskRunner();
   ASSERT_TRUE(ui_task_runner->RunsTasksOnCurrentThread());
-  PlatformView& platform_view =
-      *holder->GetShellForTesting()->GetPlatformView();
+  PlatformView& platform_view = *GetShellForTesting(*holder)->GetPlatformView();
   // The test keeps the waiter alive. In an app the shell owns it and it dies
   // with the holder.
   std::shared_ptr<VsyncWaiter> vsync_waiter = platform_view.CreateVSyncWaiter();
@@ -638,7 +644,7 @@ TEST(AndroidShellHolder, VsyncBatonsReturnThroughFlutterEngineOnVsync) {
       CreateHolderWithoutSurface(Settings::MergedPlatformUIThread::kEnabled);
   ASSERT_TRUE(holder->IsValid());
   fml::RefPtr<fml::TaskRunner> ui_task_runner =
-      holder->GetShellForTesting()->GetTaskRunners().GetUITaskRunner();
+      GetShellForTesting(*holder)->GetTaskRunners().GetUITaskRunner();
   // With merged threads every call below happens on the test thread.
   ASSERT_TRUE(ui_task_runner->RunsTasksOnCurrentThread());
 
@@ -660,8 +666,7 @@ TEST(AndroidShellHolder, VsyncBatonsReturnThroughFlutterEngineOnVsync) {
                              frame_target_time_nanos);
       }));
 
-  PlatformView& platform_view =
-      *holder->GetShellForTesting()->GetPlatformView();
+  PlatformView& platform_view = *GetShellForTesting(*holder)->GetPlatformView();
   std::shared_ptr<VsyncWaiter> vsync_waiter = platform_view.CreateVSyncWaiter();
   auto recorder = std::make_shared<VsyncFrameRecorder>(ui_task_runner);
   vsync_waiter->AsyncWaitForVsync(recorder->Callback());
@@ -718,7 +723,7 @@ TEST(AndroidShellHolder, SemanticsUpdateRoutesThroughCallbackToDelegate) {
                                                                 ::testing::_))
       .Times(1);
 
-  holder->GetShellForTesting()->GetPlatformView()->UpdateSemantics(
+  GetShellForTesting(*holder)->GetPlatformView()->UpdateSemantics(
       0, std::move(nodes), std::move(actions));
 
   ASSERT_EQ(captured_node_buf.size(),
@@ -731,6 +736,62 @@ TEST(AndroidShellHolder, SemanticsUpdateRoutesThroughCallbackToDelegate) {
             static_cast<int32_t>(flutter::SemanticsRole::kSlider));  // role
   ASSERT_EQ(captured_node_strings.size(), 1u);
   EXPECT_EQ(captured_node_strings[0], "submit_btn");
+}
+
+// java.util.Locale may report legacy language codes ("iw" for Hebrew), so the
+// locale Java picks can differ from every supported locale. The engine gets
+// Java's codes unchanged, as before the callbacks went through embedder.h.
+TEST(AndroidShellHolder, ComputePlatformResolvedLocalesKeepsJavaCodes) {
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithoutSurface(
+      Settings::MergedPlatformUIThread::kEnabled, jni);
+  ASSERT_TRUE(holder->IsValid());
+  const std::vector<std::string> supported = {"en", "US", "", "he", "IL", ""};
+  EXPECT_CALL(*jni, FlutterViewComputePlatformResolvedLocale(supported))
+      .WillOnce([](std::vector<std::string>) {
+        return std::make_unique<std::vector<std::string>>(
+            std::initializer_list<std::string>{"iw", "IL", ""});
+      });
+
+  PlatformViewAndroid& platform_view = *holder->GetPlatformView();
+  std::unique_ptr<std::vector<std::string>> resolved =
+      platform_view.ComputePlatformResolvedLocales(supported);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_THAT(*resolved, ::testing::ElementsAre("iw", "IL", ""));
+}
+
+TEST(AndroidShellHolder, ComputePlatformResolvedLocalesWithoutAnswerIsEmpty) {
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithoutSurface(
+      Settings::MergedPlatformUIThread::kEnabled, jni);
+  ASSERT_TRUE(holder->IsValid());
+  const std::vector<std::string> supported = {"en", "US", ""};
+  EXPECT_CALL(*jni, FlutterViewComputePlatformResolvedLocale(supported))
+      .WillOnce([](std::vector<std::string>) {
+        return std::make_unique<std::vector<std::string>>();
+      });
+
+  PlatformViewAndroid& platform_view = *holder->GetPlatformView();
+  std::unique_ptr<std::vector<std::string>> resolved =
+      platform_view.ComputePlatformResolvedLocales(supported);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_TRUE(resolved->empty());
+}
+
+TEST(AndroidShellHolder, SpawnReturnsNullWhenKernelBlobUnreadable) {
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithoutSurface(
+      Settings::MergedPlatformUIThread::kEnabled, jni);
+  ASSERT_TRUE(holder->IsValid());
+
+  if (!holder->GetEmbedderApiForTesting().RunsAOTCompiledDartCode()) {
+    // Sample engine ID (1) passed to Spawn when kernel_blob_path is unset.
+    constexpr int64_t kSpawnedEngineId = 1;
+    std::unique_ptr<AndroidShellHolder> spawned = holder->Spawn(
+        jni, /*entrypoint=*/"main", /*libraryUrl=*/"",
+        /*initial_route=*/"/", /*entrypoint_args=*/{}, kSpawnedEngineId);
+    EXPECT_EQ(spawned, nullptr);
+  }
 }
 
 TEST(AndroidShellHolder,

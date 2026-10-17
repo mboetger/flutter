@@ -401,6 +401,16 @@ void PlatformViewEmbedder::SetSemanticsTreeEnabled(bool enabled) {
 }
 
 // |PlatformView|
+double PlatformViewEmbedder::GetScaledFontSize(double unscaled_font_size,
+                                               int configuration_id) const {
+  if (platform_dispatch_table_.get_scaled_font_size_callback != nullptr) {
+    return platform_dispatch_table_.get_scaled_font_size_callback(
+        unscaled_font_size, configuration_id);
+  }
+  return PlatformView::GetScaledFontSize(unscaled_font_size, configuration_id);
+}
+
+// |PlatformView|
 void PlatformViewEmbedder::OnPreEngineRestart() const {
   if (platform_dispatch_table_.on_pre_engine_restart_callback != nullptr) {
     platform_dispatch_table_.on_pre_engine_restart_callback();

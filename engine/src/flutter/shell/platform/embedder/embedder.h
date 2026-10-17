@@ -2280,6 +2280,15 @@ typedef struct {
   /// This may be same as platform_task_runner, in which case the Flutter engine
   /// will run the UI isolate on platform thread.
   const FlutterTaskRunnerDescription* ui_task_runner;
+  /// When true and `ui_task_runner` is null, the engine runs UI tasks on the
+  /// platform task runner instead of creating a dedicated UI thread. Ignored
+  /// when `ui_task_runner` is set.
+  bool merged_platform_ui_thread;
+  /// Optional prefix used for the names of engine-managed threads (and the
+  /// task runner label). Must be null-terminated if set; the string is only
+  /// read during `FlutterEngineInitialize`. If null or empty, defaults to
+  /// "io.flutter".
+  const char* thread_name_prefix;
 } FlutterCustomTaskRunners;
 
 typedef struct {
@@ -2819,6 +2828,35 @@ typedef const FlutterLocale* (*FlutterComputePlatformResolvedLocaleCallback)(
     const FlutterLocale** /* supported_locales*/,
     size_t /* Number of locales*/);
 
+/// Same as `FlutterComputePlatformResolvedLocaleCallback`, with the `user_data`
+/// baton from `FlutterEngineInitialize` or `FlutterEngineRun`. If both
+/// callbacks are set on `FlutterProjectArgs`, this one takes precedence.
+typedef const FlutterLocale* (*FlutterComputePlatformResolvedLocaleCallback2)(
+    const FlutterLocale** /* supported_locales */,
+    size_t /* number_of_locales */,
+    void* /* user_data */);
+
+/// Callback invoked when the framework reports the application's resolved
+/// locale (via `PlatformDispatcher.setApplicationLocale`). `locale` is a
+/// null-terminated BCP-47 locale tag valid for the duration of the call.
+typedef void (*FlutterSetApplicationLocaleCallback)(const char* /* locale */,
+                                                    void* /* user_data */);
+
+/// Callback invoked when the framework requests enabling or disabling the
+/// platform's semantics tree (via
+/// `PlatformDispatcher.setSemanticsTreeEnabled`).
+typedef void (*FlutterSetSemanticsTreeEnabledCallback)(bool /* enabled */,
+                                                       void* /* user_data */);
+
+/// Callback invoked by the engine to convert an unscaled font size in logical
+/// pixels to a scaled font size in logical pixels for a given
+/// `configuration_id` (matching `FlutterEngineSendFontScaleMetricsEvent`).
+/// Return a negative value if `configuration_id` is unrecognized.
+typedef double (*FlutterGetScaledFontSizeCallback)(
+    double /* unscaled_font_size */,
+    int /* configuration_id */,
+    void* /* user_data */);
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterEngineDisplay).
   size_t struct_size;
@@ -3019,10 +3057,13 @@ typedef bool (*FlutterAssetResolverGetAsMappingCallback)(
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterCustomAssetResolver).
   size_t struct_size;
-  /// Opaque baton passed to `get_as_mapping_callback`.
+  /// Opaque baton passed to `get_as_mapping_callback` and
+  /// `destruction_callback`.
   void* user_data;
   /// Callback that resolves an asset name into a `FlutterAssetMapping`.
   FlutterAssetResolverGetAsMappingCallback get_as_mapping_callback;
+  /// Optional callback invoked when the engine destroys this resolver.
+  VoidCallback destruction_callback;
 } FlutterCustomAssetResolver;
 
 /// Callback invoked when the Dart VM requests a deferred library loading unit
@@ -3533,6 +3574,35 @@ typedef struct {
   /// Optional callback invoked on the platform thread once the Dart VM Service
   /// is listening (and never invoked after `FlutterEngineShutdown`).
   FlutterVMServiceUriCallback vm_service_uri_callback;
+
+  /// When true, `FlutterEngineRunInitialized` launches the shell without
+  /// starting the root Dart isolate. The embedder starts the root isolate
+  /// later via `FlutterEngineLaunchEngine` or `FlutterEngineLaunchShell`.
+  bool defer_root_isolate_launch;
+
+  /// Optional initial lifecycle state of `PlatformDispatcher` when the shell
+  /// is created (for example, `"AppLifecycleState.detached"`). Must be
+  /// null-terminated if set; the string is only read during shell creation.
+  /// If null or empty, the engine default is used.
+  const char* initial_lifecycle_state;
+
+  /// Same as `compute_platform_resolved_locale_callback`, with the `user_data`
+  /// baton. Takes precedence over `compute_platform_resolved_locale_callback`
+  /// when both are set.
+  FlutterComputePlatformResolvedLocaleCallback2
+      compute_platform_resolved_locale_callback2;
+
+  /// Optional callback invoked when the framework reports the application's
+  /// resolved locale.
+  FlutterSetApplicationLocaleCallback set_application_locale_callback;
+
+  /// Optional callback invoked when the framework requests enabling or
+  /// disabling the platform's semantics tree.
+  FlutterSetSemanticsTreeEnabledCallback set_semantics_tree_enabled_callback;
+
+  /// Optional callback invoked by the engine to compute non-linearly scaled
+  /// font sizes for a given `configuration_id`.
+  FlutterGetScaledFontSizeCallback get_scaled_font_size_callback;
 } FlutterProjectArgs;
 
 /// Configuration passed to `FlutterEngineSpawn` to create a lightweight child
@@ -3601,6 +3671,88 @@ typedef struct {
   /// The data length.
   size_t data_length;
 } FlutterSendSemanticsActionInfo;
+
+/// Configuration for launching a Dart isolate in a running shell via
+/// `FlutterEngineLaunchEngine`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineRunConfiguration).
+  size_t struct_size;
+  /// Path to the Dart kernel snapshot file. Ignored when
+  /// `FlutterEngineRunsAOTCompiledDartCode()` is true; required otherwise, and
+  /// `FlutterEngineLaunchEngine` returns `kInvalidArguments` if the file
+  /// cannot be mapped.
+  const char* kernel_blob_path;
+  /// Custom Dart entrypoint function name. If null or empty, "main" is used.
+  const char* custom_dart_entrypoint;
+  /// Dart library URI containing `custom_dart_entrypoint`. Ignored if
+  /// `custom_dart_entrypoint` is null or empty. If null or empty, the root
+  /// library is used.
+  const char* custom_dart_entrypoint_library;
+  /// Number of entries in `dart_entrypoint_argv`.
+  int dart_entrypoint_argc;
+  /// Arguments passed to the Dart entrypoint. Must be non-null if
+  /// `dart_entrypoint_argc` is positive.
+  const char* const* dart_entrypoint_argv;
+  /// Optional asset resolver added to the isolate's asset manager.
+  const FlutterCustomAssetResolver* custom_asset_resolver;
+  /// Opaque identifier accessible in Dart as
+  /// `PlatformDispatcher.instance.engineId`.
+  int64_t engine_id;
+} FlutterEngineRunConfiguration;
+
+/// Type of screenshot requested from `FlutterEngineScreenshot`.
+typedef enum {
+  /// A software Skia image in `kN32_SkColorType` (or Impeller RGBA8888)
+  /// format.
+  kFlutterScreenshotTypeSkiaPicture,
+  /// Uncompressed pixel buffer. `FlutterScreenshot.format` describes the
+  /// pixel layout.
+  kFlutterScreenshotTypeUncompressedImage,
+  /// PNG-encoded image bytes.
+  kFlutterScreenshotTypeCompressedImage,
+  /// JSON-serialized layer tree string.
+  kFlutterScreenshotTypeSurfaceData,
+} FlutterScreenshotType;
+
+/// Pixel format of an uncompressed screenshot in `FlutterScreenshot`.
+typedef enum {
+  kFlutterScreenshotFormatUnknown,
+  kFlutterScreenshotFormatR8G8B8A8UNormInt,
+  kFlutterScreenshotFormatB8G8R8A8UNormInt,
+  kFlutterScreenshotFormatR16G16B16A16Float,
+} FlutterScreenshotFormat;
+
+/// Request arguments for `FlutterEngineScreenshot`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterScreenshotRequest).
+  size_t struct_size;
+  /// The representation of the last layer tree to capture.
+  FlutterScreenshotType type;
+  /// If true, the returned `data` is base64-encoded.
+  bool base64_encode;
+} FlutterScreenshotRequest;
+
+/// Output of `FlutterEngineScreenshot`. Any non-null `data` or `frame_type`
+/// is owned by the struct through `user_data` and must be released by passing
+/// the struct to `FlutterEngineFreeScreenshot`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterScreenshot).
+  size_t struct_size;
+  /// Encoded or raw bytes of the screenshot, or null if no frame was captured.
+  const uint8_t* data;
+  /// Length of `data` in bytes.
+  size_t data_size;
+  /// Width of the captured frame in physical pixels.
+  int32_t frame_width;
+  /// Height of the captured frame in physical pixels.
+  int32_t frame_height;
+  /// Null-terminated description of the frame representation, or null.
+  const char* frame_type;
+  /// Pixel layout when `type` is `kFlutterScreenshotTypeUncompressedImage`.
+  FlutterScreenshotFormat format;
+  /// Engine-owned handle released by `FlutterEngineFreeScreenshot`.
+  void* user_data;
+} FlutterScreenshot;
 
 #ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
@@ -4550,6 +4702,76 @@ FlutterEngineResult FlutterEngineGetCallbackInformation(
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void);
 
+//------------------------------------------------------------------------------
+/// @brief      Launches the shell of an engine initialized with
+///             `FlutterEngineInitialize` without starting the root Dart
+///             isolate. Use `FlutterEngineLaunchEngine` to start the root
+///             isolate later.
+///
+/// @param[in]  engine  An initialized engine instance that has not previously
+///                     been launched.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLaunchShell(FLUTTER_API_SYMBOL(FlutterEngine)
+                                                 engine);
+
+//------------------------------------------------------------------------------
+/// @brief      Starts the root Dart isolate in a running shell using `config`.
+///
+/// @param[in]  engine  A running engine instance whose shell has been launched.
+/// @param[in]  config  The isolate run configuration.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLaunchEngine(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineRunConfiguration* config);
+
+//------------------------------------------------------------------------------
+/// @brief      Replaces the custom asset resolver of type
+///             `kApkAssetProvider` on a running engine instance.
+///
+/// @param[in]  engine    A running engine instance.
+/// @param[in]  resolver  The replacement custom asset resolver descriptor.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineUpdateAssetResolver(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterCustomAssetResolver* resolver);
+
+//------------------------------------------------------------------------------
+/// @brief      Captures a screenshot of the last layer tree rendered by the
+///             engine. The caller must release `screenshot_out` via
+///             `FlutterEngineFreeScreenshot` when `kSuccess` is returned.
+///
+/// @param[in]  engine          A running engine instance.
+/// @param[in]  request         The screenshot request parameters.
+/// @param[out] screenshot_out  Populated with the captured screenshot data.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineScreenshot(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterScreenshotRequest* request,
+    FlutterScreenshot* screenshot_out);
+
+//------------------------------------------------------------------------------
+/// @brief      Releases any engine-owned memory held by `screenshot`.
+///
+/// @param[in]  screenshot  A screenshot previously populated by
+///                         `FlutterEngineScreenshot`.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineFreeScreenshot(FlutterScreenshot* screenshot);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4713,6 +4935,20 @@ typedef FlutterEngineResult (*FlutterEnginePlatformMessageTakePayloadFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterPlatformMessageResponseHandle* handle,
     FlutterPlatformMessagePayload* payload_out);
+typedef FlutterEngineResult (*FlutterEngineLaunchShellFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+typedef FlutterEngineResult (*FlutterEngineLaunchEngineFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterEngineRunConfiguration* config);
+typedef FlutterEngineResult (*FlutterEngineUpdateAssetResolverFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterCustomAssetResolver* resolver);
+typedef FlutterEngineResult (*FlutterEngineScreenshotFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterScreenshotRequest* request,
+    FlutterScreenshot* screenshot_out);
+typedef FlutterEngineResult (*FlutterEngineFreeScreenshotFnPtr)(
+    FlutterScreenshot* screenshot);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -4774,6 +5010,11 @@ typedef struct {
   FlutterEngineGetCallbackInformationFnPtr GetCallbackInformation;
   FlutterEnginePrefetchDefaultFontManagerFnPtr PrefetchDefaultFontManager;
   FlutterEnginePlatformMessageTakePayloadFnPtr PlatformMessageTakePayload;
+  FlutterEngineLaunchShellFnPtr LaunchShell;
+  FlutterEngineLaunchEngineFnPtr LaunchEngine;
+  FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
+  FlutterEngineScreenshotFnPtr Screenshot;
+  FlutterEngineFreeScreenshotFnPtr FreeScreenshot;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

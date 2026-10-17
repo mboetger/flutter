@@ -28,5 +28,41 @@ TEST(APKAssetProvider, CloneAndEquals) {
   ASSERT_FALSE(*first_provider == *second_provider);
   ASSERT_TRUE(*first_provider == *third_provider);
 }
+
+TEST(APKAssetProvider, ToFlutterCustomAssetResolverDelegatesAndReleases) {
+  auto mock_impl = std::make_shared<MockAPKAssetProviderImpl>();
+  const std::string expected_content = "asset_payload";
+  EXPECT_CALL(*mock_impl, GetAsMapping(::testing::StrEq("found.txt")))
+      .WillOnce([&expected_content](const std::string&) {
+        return std::make_unique<fml::DataMapping>(expected_content);
+      });
+  EXPECT_CALL(*mock_impl, GetAsMapping(::testing::StrEq("missing.txt")))
+      .WillOnce(::testing::Return(::testing::ByMove(nullptr)));
+
+  auto provider = std::make_unique<APKAssetProvider>(mock_impl);
+  FlutterCustomAssetResolver resolver =
+      provider->ToFlutterCustomAssetResolver();
+
+  EXPECT_EQ(resolver.struct_size, sizeof(FlutterCustomAssetResolver));
+  ASSERT_NE(resolver.get_as_mapping_callback, nullptr);
+  ASSERT_NE(resolver.destruction_callback, nullptr);
+
+  FlutterAssetMapping asset = {};
+  ASSERT_TRUE(resolver.get_as_mapping_callback("found.txt", resolver.user_data,
+                                               &asset));
+  EXPECT_EQ(asset.struct_size, sizeof(FlutterAssetMapping));
+  EXPECT_EQ(asset.size, expected_content.size());
+  EXPECT_EQ(
+      std::string(reinterpret_cast<const char*>(asset.mapping), asset.size),
+      expected_content);
+  ASSERT_NE(asset.release_callback, nullptr);
+  asset.release_callback(asset.user_data);
+
+  FlutterAssetMapping missing = {};
+  EXPECT_FALSE(resolver.get_as_mapping_callback("missing.txt",
+                                                resolver.user_data, &missing));
+
+  resolver.destruction_callback(resolver.user_data);
+}
 }  // namespace testing
 }  // namespace flutter

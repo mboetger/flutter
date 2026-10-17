@@ -5,20 +5,62 @@
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 
 #include "flutter/fml/make_copyable.h"
+#include "flutter/fml/mapping.h"
+#include "flutter/runtime/dart_vm.h"
+#include "flutter/runtime/isolate_configuration.h"
+#include "flutter/shell/platform/embedder/embedder_struct_macros.h"
 #include "flutter/shell/platform/embedder/vsync_waiter_embedder.h"
 
 namespace flutter {
+
+namespace {
+
+Shell::CreateCallback<PlatformView> ToPlatformViewCreateCallback(
+    const EmbedderEngine::PlatformViewFactory& factory) {
+  if (!factory) {
+    return nullptr;
+  }
+  return [factory](Shell& shell) {
+    return factory(shell, shell.GetTaskRunners());
+  };
+}
+
+std::unique_ptr<Rasterizer> DefaultCreateRasterizer(Shell& shell) {
+  return std::make_unique<Rasterizer>(shell);
+}
+
+void DestroyCustomAssetResolverIfNeeded(
+    const FlutterEngineRunConfiguration* config) {
+  if (config == nullptr || SAFE_ACCESS(config, struct_size, 0) <
+                               sizeof(FlutterEngineRunConfiguration)) {
+    return;
+  }
+  const FlutterCustomAssetResolver* c_resolver =
+      SAFE_ACCESS(config, custom_asset_resolver, nullptr);
+  if (c_resolver != nullptr) {
+    VoidCallback destruction_callback =
+        SAFE_ACCESS(c_resolver, destruction_callback, nullptr);
+    if (destruction_callback != nullptr) {
+      destruction_callback(SAFE_ACCESS(c_resolver, user_data, nullptr));
+    }
+  }
+}
+
+}  // namespace
 
 struct ShellArgs {
   Settings settings;
   Shell::CreateCallback<PlatformView> on_create_platform_view;
   Shell::CreateCallback<Rasterizer> on_create_rasterizer;
+  PlatformData platform_data;
   ShellArgs(const Settings& p_settings,
             Shell::CreateCallback<PlatformView> p_on_create_platform_view,
-            Shell::CreateCallback<Rasterizer> p_on_create_rasterizer)
+            Shell::CreateCallback<Rasterizer> p_on_create_rasterizer,
+            const PlatformData& p_platform_data)
       : settings(p_settings),
         on_create_platform_view(std::move(p_on_create_platform_view)),
-        on_create_rasterizer(std::move(p_on_create_rasterizer)) {}
+        on_create_rasterizer(std::move(p_on_create_rasterizer)),
+        platform_data(p_platform_data) {}
 };
 
 EmbedderEngine::EmbedderEngine(
@@ -29,15 +71,36 @@ EmbedderEngine::EmbedderEngine(
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
     std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
-    bool defer_surface_creation)
+    bool defer_surface_creation,
+    const PlatformData& platform_data)
     : thread_host_(std::move(thread_host)),
       task_runners_(task_runners),
       run_configuration_(std::move(run_configuration)),
       shell_args_(std::make_unique<ShellArgs>(settings,
                                               on_create_platform_view,
-                                              on_create_rasterizer)),
+                                              on_create_rasterizer,
+                                              platform_data)),
       external_texture_resolver_(std::move(external_texture_resolver)),
       defer_surface_creation_(defer_surface_creation) {}
+
+EmbedderEngine::EmbedderEngine(
+    std::unique_ptr<EmbedderThreadHost> thread_host,
+    const flutter::TaskRunners& task_runners,
+    const flutter::Settings& settings,
+    std::optional<RunConfiguration> run_configuration,
+    const PlatformViewFactory& on_create_platform_view,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    bool defer_surface_creation,
+    const PlatformData& platform_data)
+    : EmbedderEngine(std::move(thread_host),
+                     task_runners,
+                     settings,
+                     std::move(run_configuration),
+                     ToPlatformViewCreateCallback(on_create_platform_view),
+                     &DefaultCreateRasterizer,
+                     std::move(external_texture_resolver),
+                     defer_surface_creation,
+                     platform_data) {}
 
 EmbedderEngine::EmbedderEngine(
     std::shared_ptr<EmbedderThreadHost> thread_host,
@@ -56,7 +119,12 @@ EmbedderEngine::~EmbedderEngine() {
 }
 
 bool EmbedderEngine::LaunchShell() {
-  return LaunchShell(flutter::PlatformData());
+  if (!shell_args_) {
+    FML_DLOG(ERROR) << "Invalid shell arguments.";
+    return false;
+  }
+  PlatformData platform_data = shell_args_->platform_data;
+  return LaunchShell(platform_data);
 }
 
 bool EmbedderEngine::LaunchShell(const PlatformData& platform_data) {
@@ -111,9 +179,144 @@ std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
       std::move(external_texture_resolver), defer_surface_creation));
 }
 
+std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
+    RunConfiguration run_configuration,
+    const std::string& initial_route,
+    const PlatformViewFactory& on_create_platform_view,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    bool defer_surface_creation) const {
+  return Spawn(std::move(run_configuration), initial_route,
+               ToPlatformViewCreateCallback(on_create_platform_view),
+               &DefaultCreateRasterizer, std::move(external_texture_resolver),
+               defer_surface_creation);
+}
+
+std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
+    const FlutterEngineRunConfiguration* config,
+    const std::string& initial_route,
+    const PlatformViewFactory& on_create_platform_view,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    bool defer_surface_creation) const {
+  if (!IsValid()) {
+    DestroyCustomAssetResolverIfNeeded(config);
+    return nullptr;
+  }
+  std::optional<RunConfiguration> run_configuration =
+      BuildRunConfiguration(config);
+  if (!run_configuration.has_value()) {
+    return nullptr;
+  }
+  return Spawn(std::move(run_configuration.value()), initial_route,
+               on_create_platform_view, std::move(external_texture_resolver),
+               defer_surface_creation);
+}
+
+// static
+std::optional<RunConfiguration> EmbedderEngine::BuildRunConfiguration(
+    const FlutterEngineRunConfiguration* config,
+    std::string* error_out) {
+  auto set_error = [config, error_out](const char* message) -> std::nullopt_t {
+    if (error_out != nullptr) {
+      *error_out = message;
+    }
+    DestroyCustomAssetResolverIfNeeded(config);
+    return std::nullopt;
+  };
+
+  if (config == nullptr) {
+    return set_error("Run configuration was null.");
+  }
+
+  if (SAFE_ACCESS(config, struct_size, 0) <
+      sizeof(FlutterEngineRunConfiguration)) {
+    return set_error("FlutterEngineRunConfiguration struct_size is invalid.");
+  }
+
+  const int argc = SAFE_ACCESS(config, dart_entrypoint_argc, 0);
+  const char* const* argv = SAFE_ACCESS(config, dart_entrypoint_argv, nullptr);
+  if (argc < 0 || (argc > 0 && argv == nullptr)) {
+    return set_error(
+        "Invalid Dart entrypoint arguments in FlutterEngineRunConfiguration.");
+  }
+
+  const FlutterCustomAssetResolver* custom_asset_resolver =
+      SAFE_ACCESS(config, custom_asset_resolver, nullptr);
+  if (custom_asset_resolver != nullptr) {
+    if (SAFE_ACCESS(custom_asset_resolver, struct_size, 0) <
+        sizeof(FlutterCustomAssetResolver)) {
+      return set_error("FlutterCustomAssetResolver struct_size is invalid.");
+    }
+    if (SAFE_ACCESS(custom_asset_resolver, get_as_mapping_callback, nullptr) ==
+        nullptr) {
+      return set_error(
+          "FlutterCustomAssetResolver get_as_mapping_callback is required.");
+    }
+  }
+
+  std::unique_ptr<IsolateConfiguration> isolate_configuration;
+  if (DartVM::IsRunningPrecompiledCode()) {
+    isolate_configuration = IsolateConfiguration::CreateForAppSnapshot();
+  } else {
+    const char* kernel_blob_path =
+        SAFE_ACCESS(config, kernel_blob_path, nullptr);
+    if (kernel_blob_path == nullptr || kernel_blob_path[0] == '\0') {
+      return set_error(
+          "Kernel blob path is required when not running in AOT mode.");
+    }
+    std::unique_ptr<fml::Mapping> kernel_blob =
+        fml::FileMapping::CreateReadOnly(kernel_blob_path);
+    if (!kernel_blob) {
+      FML_DLOG(ERROR) << "Unable to load the kernel blob asset.";
+      return set_error("Unable to load the kernel blob asset.");
+    }
+    isolate_configuration =
+        IsolateConfiguration::CreateForKernel(std::move(kernel_blob));
+  }
+  if (!isolate_configuration) {
+    return set_error("Could not create isolate configuration.");
+  }
+
+  RunConfiguration run_configuration(std::move(isolate_configuration));
+  if (custom_asset_resolver != nullptr) {
+    run_configuration.AddAssetResolver(
+        CreateEmbedderCustomAssetResolver(custom_asset_resolver));
+  }
+
+  const char* entrypoint = SAFE_ACCESS(config, custom_dart_entrypoint, nullptr);
+  const char* library =
+      SAFE_ACCESS(config, custom_dart_entrypoint_library, nullptr);
+  if (entrypoint != nullptr && entrypoint[0] != '\0') {
+    if (library != nullptr && library[0] != '\0') {
+      run_configuration.SetEntrypointAndLibrary(std::string{entrypoint},
+                                                std::string{library});
+    } else {
+      run_configuration.SetEntrypoint(std::string{entrypoint});
+    }
+  }
+
+  if (argc > 0) {
+    std::vector<std::string> arguments(argc);
+    for (int i = 0; i < argc; ++i) {
+      arguments[i] = argv[i] ? std::string{argv[i]} : std::string{};
+    }
+    run_configuration.SetEntrypointArgs(std::move(arguments));
+  }
+
+  run_configuration.SetEngineId(SAFE_ACCESS(config, engine_id, 0));
+
+  if (!run_configuration.IsValid()) {
+    if (error_out != nullptr) {
+      *error_out = "Could not build valid RunConfiguration.";
+    }
+    return std::nullopt;
+  }
+  return run_configuration;
+}
+
 bool EmbedderEngine::CollectShell() {
   ClearVMServiceUriCallback();
   shell_.reset();
+  is_surface_created_ = false;
   return IsValid();
 }
 
@@ -171,6 +374,29 @@ bool EmbedderEngine::RunRootIsolate() {
   return true;
 }
 
+bool EmbedderEngine::LaunchEngine(RunConfiguration run_configuration) {
+  if (!IsValid() || !run_configuration.IsValid()) {
+    return false;
+  }
+  shell_->RunEngine(std::move(run_configuration));
+  return true;
+}
+
+bool EmbedderEngine::UpdateAssetResolverByType(
+    std::unique_ptr<AssetResolver> updated_asset_resolver,
+    AssetResolver::AssetResolverType type) {
+  if (!IsValid() || !updated_asset_resolver) {
+    return false;
+  }
+  auto platform_view = shell_->GetPlatformView();
+  if (!platform_view) {
+    return false;
+  }
+  platform_view->UpdateAssetResolverByType(std::move(updated_asset_resolver),
+                                           type);
+  return true;
+}
+
 bool EmbedderEngine::IsValid() const {
   return static_cast<bool>(shell_);
 }
@@ -185,6 +411,7 @@ bool EmbedderEngine::NotifyCreated() {
   }
 
   shell_->GetPlatformView()->NotifyCreated();
+  is_surface_created_ = true;
   return true;
 }
 
@@ -193,9 +420,14 @@ bool EmbedderEngine::NotifyDestroyed() {
     return false;
   }
 
+  is_surface_created_ = false;
   shell_->GetPlatformView()->NotifyDestroyed();
 
   return true;
+}
+
+bool EmbedderEngine::IsSurfaceCreated() const {
+  return is_surface_created_;
 }
 
 bool EmbedderEngine::DeferSurfaceCreation() const {
@@ -503,6 +735,15 @@ void EmbedderEngine::ClearVMServiceUriCallback() {
 Shell& EmbedderEngine::GetShell() {
   FML_DCHECK(shell_);
   return *shell_.get();
+}
+
+Rasterizer::Screenshot EmbedderEngine::Screenshot(
+    Rasterizer::ScreenshotType type,
+    bool base64_encode) {
+  if (!IsValid()) {
+    return {nullptr, DlISize(), "", Rasterizer::ScreenshotFormat::kUnknown};
+  }
+  return shell_->Screenshot(type, base64_encode);
 }
 
 }  // namespace flutter

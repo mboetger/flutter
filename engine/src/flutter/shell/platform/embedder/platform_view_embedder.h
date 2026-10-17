@@ -77,6 +77,8 @@ class PlatformViewEmbedder final : public PlatformView {
         request_dart_deferred_library_callback;  // optional
     std::function<void(std::string)> set_application_locale_callback;
     std::function<void(bool)> set_semantics_tree_enabled_callback;
+    std::function<double(double unscaled_font_size, int configuration_id)>
+        get_scaled_font_size_callback;  // optional
     std::shared_ptr<PlatformMessageHandler> custom_platform_message_handler;
     bool enable_direct_platform_message_dispatch = false;
   };
@@ -197,6 +199,10 @@ class PlatformViewEmbedder final : public PlatformView {
   void SetSemanticsTreeEnabled(bool enabled) override;
 
   // |PlatformView|
+  double GetScaledFontSize(double unscaled_font_size,
+                           int configuration_id) const override;
+
+  // |PlatformView|
   void SendChannelUpdate(const std::string& name, bool listening) override;
 
   // |PlatformView|
@@ -204,6 +210,12 @@ class PlatformViewEmbedder final : public PlatformView {
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewEmbedder);
 };
+
+// Builds a PlatformDispatchTable from the embedder callbacks in |args|.
+// Defined in embedder.cc.
+PlatformViewEmbedder::PlatformDispatchTable
+PlatformDispatchTableFromProjectArgs(const FlutterProjectArgs* args,
+                                     void* user_data);
 
 }  // namespace flutter
 

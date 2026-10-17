@@ -24,7 +24,6 @@
 #include "flutter/fml/logging.h"
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/trace_event.h"
-#include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/platform/android/android_image_generator.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
@@ -36,37 +35,121 @@
 
 namespace flutter {
 
+// The state behind the FlutterProjectArgs callbacks of one engine. The engine
+// passes it back to them as user_data, and its holder keeps it alive until
+// the engine has shut down.
+class AndroidEngineCallbacks {
+ public:
+  explicit AndroidEngineCallbacks(
+      std::shared_ptr<PlatformViewAndroidJNI> jni_facade)
+      : jni_facade(std::move(jni_facade)) {}
+
+  // Asks Java which of the supported locales the platform would pick and
+  // returns it in storage that stays valid until the next call, as
+  // FlutterComputePlatformResolvedLocaleCallback2 allows. Java may answer
+  // with codes that differ from the supported ones (for example "iw" for
+  // "he"), so the answer is not matched back to an input locale.
+  const FlutterLocale* ComputePlatformResolvedLocale(
+      const FlutterLocale** supported_locales,
+      size_t locale_count) {
+    std::vector<std::string> supported_locale_data;
+    supported_locale_data.reserve(locale_count * kStringsPerLocale);
+    for (size_t i = 0; i < locale_count; ++i) {
+      const FlutterLocale* locale = supported_locales[i];
+      supported_locale_data.emplace_back(
+          locale->language_code ? locale->language_code : "");
+      supported_locale_data.emplace_back(
+          locale->country_code ? locale->country_code : "");
+      supported_locale_data.emplace_back(
+          locale->script_code ? locale->script_code : "");
+    }
+    std::unique_ptr<std::vector<std::string>> resolved =
+        platform_view->ComputePlatformResolvedLocales(supported_locale_data);
+    if (!resolved || resolved->empty()) {
+      return nullptr;
+    }
+    resolved->resize(kStringsPerLocale);
+    resolved_locale_codes_ = std::move(*resolved);
+    resolved_locale_ = {
+        .struct_size = sizeof(FlutterLocale),
+        .language_code = resolved_locale_codes_[0].c_str(),
+        .country_code = resolved_locale_codes_[1].c_str(),
+        .script_code = resolved_locale_codes_[2].c_str(),
+        .variant_code = nullptr,
+    };
+    return &resolved_locale_;
+  }
+
+  const std::shared_ptr<PlatformViewAndroidJNI> jni_facade;
+  PlatformViewAndroid* platform_view = nullptr;
+  std::shared_ptr<VsyncWaiterAndroid> vsync_waiter;
+  PlatformMessageHandlerAndroid* message_handler = nullptr;
+
+ private:
+  // Language, country and script code, the order Java uses for locales.
+  static constexpr size_t kStringsPerLocale = 3;
+
+  std::vector<std::string> resolved_locale_codes_;
+  FlutterLocale resolved_locale_ = {};
+
+  FML_DISALLOW_COPY_AND_ASSIGN(AndroidEngineCallbacks);
+};
+
+static FlutterProjectArgs MakeProjectArgs() {
+  FlutterProjectArgs args = {};
+  args.struct_size = sizeof(FlutterProjectArgs);
+  args.update_semantics_callback2 = [](const FlutterSemanticsUpdate2* update,
+                                       void* user_data) {
+    if (update != nullptr && user_data != nullptr) {
+      static_cast<AndroidEngineCallbacks*>(user_data)
+          ->platform_view->UpdateSemantics(*update);
+    }
+  };
+  args.platform_message_callback = [](const FlutterPlatformMessage* message,
+                                      void* user_data) {
+    if (message != nullptr && user_data != nullptr) {
+      static_cast<AndroidEngineCallbacks*>(user_data)
+          ->message_handler->HandlePlatformMessage(*message);
+    }
+  };
+  args.enable_direct_platform_message_dispatch = true;
+  args.vsync_callback = [](void* user_data, intptr_t baton) {
+    static_cast<AndroidEngineCallbacks*>(user_data)->vsync_waiter->AwaitVSync(
+        baton);
+  };
+  args.compute_platform_resolved_locale_callback2 =
+      [](const FlutterLocale** supported_locales, size_t locale_count,
+         void* user_data) -> const FlutterLocale* {
+    return static_cast<AndroidEngineCallbacks*>(user_data)
+        ->ComputePlatformResolvedLocale(supported_locales, locale_count);
+  };
+  args.on_pre_engine_restart_callback = [](void* user_data) {
+    static_cast<AndroidEngineCallbacks*>(user_data)
+        ->platform_view->OnPreEngineRestart();
+  };
+  args.request_dart_deferred_library_callback = [](intptr_t loading_unit_id,
+                                                   void* user_data) {
+    static_cast<AndroidEngineCallbacks*>(user_data)
+        ->platform_view->RequestDartDeferredLibrary(loading_unit_id);
+  };
+  args.set_application_locale_callback = [](const char* locale,
+                                            void* user_data) {
+    static_cast<AndroidEngineCallbacks*>(user_data)
+        ->platform_view->SetApplicationLocale(locale ? locale : "");
+  };
+  args.set_semantics_tree_enabled_callback = [](bool enabled, void* user_data) {
+    static_cast<AndroidEngineCallbacks*>(user_data)
+        ->platform_view->SetSemanticsTreeEnabled(enabled);
+  };
+  return args;
+}
+
 static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
     PlatformViewAndroid* platform_view,
-    const std::shared_ptr<VsyncWaiterAndroid>& vsync_waiter,
-    PlatformMessageHandlerAndroid* message_handler) {
-  PlatformViewEmbedder::PlatformDispatchTable dispatch_table;
-  dispatch_table.update_semantics_callback = MakeSemanticsUpdateCallback(
-      [](const FlutterSemanticsUpdate2* update, void* user_data) {
-        if (update != nullptr && user_data != nullptr) {
-          static_cast<PlatformViewAndroid*>(user_data)->UpdateSemantics(
-              *update);
-        }
-      },
-      platform_view);
-  dispatch_table.platform_message_response_callback =
-      MakePlatformMessageResponseCallback(
-          [](const FlutterPlatformMessage* message, void* user_data) {
-            if (message != nullptr && user_data != nullptr) {
-              static_cast<PlatformMessageHandlerAndroid*>(user_data)
-                  ->HandlePlatformMessage(*message);
-            }
-          },
-          message_handler);
-  dispatch_table.enable_direct_platform_message_dispatch = true;
-  dispatch_table.compute_platform_resolved_locale_callback =
-      [platform_view](const std::vector<std::string>& supported_locale_data) {
-        return platform_view->ComputePlatformResolvedLocales(
-            supported_locale_data);
-      };
-  dispatch_table.on_pre_engine_restart_callback = [platform_view]() {
-    platform_view->OnPreEngineRestart();
-  };
+    AndroidEngineCallbacks* callbacks) {
+  const FlutterProjectArgs args = MakeProjectArgs();
+  PlatformViewEmbedder::PlatformDispatchTable dispatch_table =
+      PlatformDispatchTableFromProjectArgs(&args, callbacks);
   dispatch_table.create_rendering_surface_callback = [platform_view]() {
     return platform_view->CreateRenderingSurface();
   };
@@ -88,21 +171,6 @@ static PlatformViewEmbedder::PlatformDispatchTable CreateDispatchTable(
   dispatch_table.setup_impeller_context_callback = [platform_view]() {
     platform_view->SetupImpellerContext();
   };
-  dispatch_table.vsync_callback = [vsync_waiter](intptr_t baton) {
-    vsync_waiter->AwaitVSync(baton);
-  };
-  dispatch_table.request_dart_deferred_library_callback =
-      [platform_view](intptr_t loading_unit_id) {
-        platform_view->RequestDartDeferredLibrary(loading_unit_id);
-      };
-  dispatch_table.set_application_locale_callback =
-      [platform_view](std::string locale) {
-        platform_view->SetApplicationLocale(std::move(locale));
-      };
-  dispatch_table.set_semantics_tree_enabled_callback =
-      [platform_view](bool enabled) {
-        platform_view->SetSemanticsTreeEnabled(enabled);
-      };
   return dispatch_table;
 }
 
@@ -158,14 +226,10 @@ static PlatformData GetDefaultPlatformData() {
 namespace {
 
 // The holder owns its engine through an embedder API handle. Where embedder.h
-// has no equivalent yet, the holder reaches past the handle with a cast or
-// GetShell(). Keep each of those visible at its use so that
-// ci/bin/android_embedder_ratchet.dart counts it; the counts must reach zero
-// before the holder switches to FlutterEngineInitialize.
-
-Shell& GetShell(FLUTTER_API_SYMBOL(FlutterEngine) engine) {
-  return reinterpret_cast<EmbedderEngine*>(engine)->GetShell();
-}
+// has no equivalent yet, the holder reaches past the handle with a cast. Keep
+// each of those visible at its use so that ci/bin/android_embedder_ratchet.dart
+// counts it; the counts must reach zero before the holder switches to
+// FlutterEngineInitialize.
 
 FlutterEngineProcTable LoadEmbedderApi() {
   FlutterEngineProcTable embedder_api = {};
@@ -253,6 +317,46 @@ std::unique_ptr<EmbedderExternalTextureResolver> MakeExternalTextureResolver(
       });
 }
 
+struct ScopedRunConfiguration {
+  std::vector<const char*> c_entrypoint_args;
+  FlutterCustomAssetResolver custom_asset_resolver = {};
+  FlutterEngineRunConfiguration config = {};
+
+  ScopedRunConfiguration(const Settings& settings,
+                         const APKAssetProvider* apk_asset_provider,
+                         const std::string& entrypoint,
+                         const std::string& library_url,
+                         const std::vector<std::string>& entrypoint_args,
+                         int64_t engine_id) {
+    c_entrypoint_args.reserve(entrypoint_args.size());
+    for (const std::string& arg : entrypoint_args) {
+      c_entrypoint_args.push_back(arg.c_str());
+    }
+
+    const FlutterCustomAssetResolver* asset_resolver_ptr = nullptr;
+    if (apk_asset_provider != nullptr) {
+      custom_asset_resolver =
+          apk_asset_provider->Clone()->ToFlutterCustomAssetResolver();
+      asset_resolver_ptr = &custom_asset_resolver;
+    }
+
+    config.struct_size = sizeof(FlutterEngineRunConfiguration);
+    config.kernel_blob_path = settings.application_kernel_asset.empty()
+                                  ? nullptr
+                                  : settings.application_kernel_asset.c_str();
+    config.custom_dart_entrypoint =
+        entrypoint.empty() ? nullptr : entrypoint.c_str();
+    config.custom_dart_entrypoint_library =
+        (!entrypoint.empty() && !library_url.empty()) ? library_url.c_str()
+                                                      : nullptr;
+    config.dart_entrypoint_argc = c_entrypoint_args.size();
+    config.dart_entrypoint_argv =
+        c_entrypoint_args.empty() ? nullptr : c_entrypoint_args.data();
+    config.custom_asset_resolver = asset_resolver_ptr;
+    config.engine_id = engine_id;
+  }
+};
+
 }  // namespace
 
 AndroidShellHolder::AndroidShellHolder(
@@ -261,34 +365,29 @@ AndroidShellHolder::AndroidShellHolder(
     AndroidRenderingAPI android_rendering_api)
     : settings_(settings),
       jni_facade_(jni_facade),
+      engine_callbacks_(std::make_unique<AndroidEngineCallbacks>(jni_facade)),
       embedder_api_(LoadEmbedderApi()),
       holder_id_(NextHolderId()),
       android_rendering_api_(android_rendering_api) {
   static size_t thread_host_count = 1;
   auto thread_label = std::to_string(thread_host_count++);
 
-  auto mask = ThreadHost::Type::kRaster | ThreadHost::Type::kIo;
+  thread_host_ = std::make_shared<ThreadHost>();
   if (settings.merged_platform_ui_thread !=
       Settings::MergedPlatformUIThread::kEnabled) {
-    mask |= ThreadHost::Type::kUi;
+    thread_host_->ui_thread = std::make_unique<fml::Thread>(
+        AndroidPlatformThreadConfigSetter,
+        fml::Thread::ThreadConfig(thread_label + ".ui",
+                                  fml::Thread::ThreadPriority::kDisplay));
   }
-
-  flutter::ThreadHost::ThreadHostConfig host_config(
-      thread_label, mask, AndroidPlatformThreadConfigSetter);
-  host_config.ui_config = fml::Thread::ThreadConfig(
-      flutter::ThreadHost::ThreadHostConfig::MakeThreadName(
-          flutter::ThreadHost::Type::kUi, thread_label),
-      fml::Thread::ThreadPriority::kDisplay);
-  host_config.raster_config = fml::Thread::ThreadConfig(
-      flutter::ThreadHost::ThreadHostConfig::MakeThreadName(
-          flutter::ThreadHost::Type::kRaster, thread_label),
-      fml::Thread::ThreadPriority::kRaster);
-  host_config.io_config = fml::Thread::ThreadConfig(
-      flutter::ThreadHost::ThreadHostConfig::MakeThreadName(
-          flutter::ThreadHost::Type::kIo, thread_label),
-      fml::Thread::ThreadPriority::kNormal);
-
-  thread_host_ = std::make_shared<ThreadHost>(host_config);
+  thread_host_->raster_thread = std::make_unique<fml::Thread>(
+      AndroidPlatformThreadConfigSetter,
+      fml::Thread::ThreadConfig(thread_label + ".raster",
+                                fml::Thread::ThreadPriority::kRaster));
+  thread_host_->io_thread = std::make_unique<fml::Thread>(
+      AndroidPlatformThreadConfigSetter,
+      fml::Thread::ThreadConfig(thread_label + ".io",
+                                fml::Thread::ThreadPriority::kNormal));
 
   fml::WeakPtr<PlatformViewAndroid> weak_platform_view;
   std::shared_ptr<VsyncWaiterAndroid> vsync_waiter;
@@ -297,32 +396,29 @@ AndroidShellHolder::AndroidShellHolder(
   PlatformMessageHandlerAndroid* message_handler_raw =
       platform_message_handler_.get();
   AndroidRenderingAPI rendering_api = android_rendering_api_;
-  Shell::CreateCallback<PlatformView> on_create_platform_view =
+  EmbedderEngine::PlatformViewFactory on_create_platform_view =
       [this, &jni_facade, &weak_platform_view, &vsync_waiter,
-       message_handler_raw, rendering_api](Shell& shell) {
-        vsync_waiter =
-            std::make_shared<VsyncWaiterAndroid>(shell.GetTaskRunners());
+       message_handler_raw, rendering_api, callbacks = engine_callbacks_.get()](
+          PlatformView::Delegate& delegate, const TaskRunners& runners) {
+        vsync_waiter = std::make_shared<VsyncWaiterAndroid>(runners);
         platform_view_android_ = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
-            shell.GetTaskRunners(),  // task runners
-            jni_facade,              // JNI interop
-            rendering_api            // rendering API
+            delegate,      // delegate
+            runners,       // task runners
+            jni_facade,    // JNI interop
+            rendering_api  // rendering API
         );
         weak_platform_view = platform_view_android_->GetWeakPtr();
+        callbacks->platform_view = platform_view_android_.get();
+        callbacks->vsync_waiter = vsync_waiter;
+        callbacks->message_handler = message_handler_raw;
         auto platform_view_embedder = std::make_unique<PlatformViewEmbedder>(
-            shell, shell.GetTaskRunners(),
-            std::unique_ptr<EmbedderSurface>(nullptr),
-            CreateDispatchTable(platform_view_android_.get(), vsync_waiter,
-                                message_handler_raw),
+            delegate, runners, std::unique_ptr<EmbedderSurface>(nullptr),
+            CreateDispatchTable(platform_view_android_.get(), callbacks),
             nullptr);
         platform_view_android_->SetPlatformView(
             platform_view_embedder->GetWeakPtr());
         return platform_view_embedder;
       };
-
-  Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
-    return std::make_unique<Rasterizer>(shell);
-  };
 
   // The current thread will be used as the platform thread. Ensure that the
   // message loop is initialized.
@@ -354,7 +450,7 @@ AndroidShellHolder::AndroidShellHolder(
   auto engine = std::make_unique<EmbedderEngine>(
       /*thread_host=*/nullptr, task_runners, settings_,
       /*run_configuration=*/std::nullopt, on_create_platform_view,
-      on_create_rasterizer, MakeExternalTextureResolver(holder_id_));
+      MakeExternalTextureResolver(holder_id_));
 
   auto* io_runner_ptr =
       new fml::RefPtr<fml::TaskRunner>(task_runners.GetIOTaskRunner());
@@ -384,14 +480,29 @@ AndroidShellHolder::AndroidShellHolder(
   }
 
   if (engine_) {
-    GetShell(engine_.get())
-        .GetDartVM()
-        ->GetConcurrentMessageLoop()
-        ->PostTaskToAllWorkers([]() {
-          if (::setpriority(PRIO_PROCESS, gettid(), 1) != 0) {
-            FML_LOG(ERROR) << "Failed to set Workers task runner priority";
-          }
-        });
+    // Concurrent worker threads are raw std::threads without an
+    // fml::MessageLoop, whereas the dedicated IO thread (also tagged
+    // kFlutterNativeThreadTypeWorker) always has an initialized
+    // fml::MessageLoop.
+    constexpr int kWorkerThreadPriority = 1;
+    FlutterEngineResult priority_result =
+        embedder_api_.PostCallbackOnAllNativeThreads(
+            engine_.get(),
+            [](FlutterNativeThreadType type, void* /*baton*/) {
+              if (type == kFlutterNativeThreadTypeWorker &&
+                  !fml::MessageLoop::IsInitializedForCurrentThread()) {
+                if (::setpriority(PRIO_PROCESS, gettid(),
+                                  kWorkerThreadPriority) != 0) {
+                  FML_LOG(ERROR)
+                      << "Failed to set Workers task runner priority";
+                }
+              }
+            },
+            nullptr);
+    if (priority_result != kSuccess) {
+      FML_LOG(ERROR) << "FlutterEnginePostCallbackOnAllNativeThreads failed: "
+                     << priority_result;
+    }
 
     FML_LOG(INFO) << "Registered Android SDK image decoder (API level 28+)";
   }
@@ -408,6 +519,7 @@ AndroidShellHolder::AndroidShellHolder(
     const Settings& settings,
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
     const std::shared_ptr<ThreadHost>& thread_host,
+    std::unique_ptr<AndroidEngineCallbacks> engine_callbacks,
     UniqueEngine engine,
     uint64_t holder_id,
     std::unique_ptr<APKAssetProvider> apk_asset_provider,
@@ -422,6 +534,7 @@ AndroidShellHolder::AndroidShellHolder(
       platform_view_(platform_view),
       platform_message_handler_(std::move(platform_message_handler)),
       thread_host_(thread_host),
+      engine_callbacks_(std::move(engine_callbacks)),
       engine_(std::move(engine)),
       embedder_api_(LoadEmbedderApi()),
       vsync_waiter_(std::move(vsync_waiter)),
@@ -448,7 +561,12 @@ AndroidShellHolder::~AndroidShellHolder() {
   if (platform_message_handler_) {
     platform_message_handler_->ReleasePendingResponses();
   }
-  engine_.reset();
+  if (engine_) {
+    FlutterEngineResult result = embedder_api_.Shutdown(engine_.release());
+    if (result != kSuccess) {
+      FML_LOG(ERROR) << "FlutterEngineShutdown failed: " << result;
+    }
+  }
   thread_host_.reset();
   platform_view_android_.reset();
   GetPendingTextureTable().RemoveForHolder(holder_id_);
@@ -456,10 +574,10 @@ AndroidShellHolder::~AndroidShellHolder() {
 
 void AndroidShellHolder::EngineDeleter::operator()(
     FLUTTER_API_SYMBOL(FlutterEngine) engine) const {
-  // Deletes the engine the way the Shell was deleted before it moved behind
-  // a handle. FlutterEngineShutdown would also call NotifyDestroyed() on the
-  // platform view first.
-  delete reinterpret_cast<EmbedderEngine*>(engine);
+  FlutterEngineResult result = FlutterEngineShutdown(engine);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineShutdown failed: " << result;
+  }
 }
 
 bool AndroidShellHolder::IsValid() const {
@@ -494,59 +612,59 @@ std::unique_ptr<AndroidShellHolder> AndroidShellHolder::Spawn(
   FML_DCHECK(android_context);
 
   // This is a synchronous call, so the captures don't have race checks.
+  auto spawned_callbacks = std::make_unique<AndroidEngineCallbacks>(jni_facade);
   std::shared_ptr<VsyncWaiterAndroid> vsync_waiter;
   auto spawned_message_handler =
       std::make_shared<PlatformMessageHandlerAndroid>(jni_facade);
   PlatformMessageHandlerAndroid* spawned_message_handler_raw =
       spawned_message_handler.get();
-  Shell::CreateCallback<PlatformView> on_create_platform_view =
+  EmbedderEngine::PlatformViewFactory on_create_platform_view =
       [&jni_facade, android_context, &spawned_platform_view_android,
-       &weak_platform_view, &vsync_waiter,
-       spawned_message_handler_raw](Shell& shell) {
-        vsync_waiter =
-            std::make_shared<VsyncWaiterAndroid>(shell.GetTaskRunners());
+       &weak_platform_view, &vsync_waiter, spawned_message_handler_raw,
+       callbacks = spawned_callbacks.get()](PlatformView::Delegate& delegate,
+                                            const TaskRunners& runners) {
+        vsync_waiter = std::make_shared<VsyncWaiterAndroid>(runners);
         spawned_platform_view_android = std::make_unique<PlatformViewAndroid>(
-            shell,                   // delegate
-            shell.GetTaskRunners(),  // task runners
-            jni_facade,              // JNI interop
-            android_context          // Android context
+            delegate,        // delegate
+            runners,         // task runners
+            jni_facade,      // JNI interop
+            android_context  // Android context
         );
         weak_platform_view = spawned_platform_view_android->GetWeakPtr();
+        callbacks->platform_view = spawned_platform_view_android.get();
+        callbacks->vsync_waiter = vsync_waiter;
+        callbacks->message_handler = spawned_message_handler_raw;
         auto platform_view_embedder = std::make_unique<PlatformViewEmbedder>(
-            shell, shell.GetTaskRunners(),
-            std::unique_ptr<EmbedderSurface>(nullptr),
-            CreateDispatchTable(spawned_platform_view_android.get(),
-                                vsync_waiter, spawned_message_handler_raw),
+            delegate, runners, std::unique_ptr<EmbedderSurface>(nullptr),
+            CreateDispatchTable(spawned_platform_view_android.get(), callbacks),
             nullptr);
         spawned_platform_view_android->SetPlatformView(
             platform_view_embedder->GetWeakPtr());
         return platform_view_embedder;
       };
 
-  Shell::CreateCallback<Rasterizer> on_create_rasterizer = [](Shell& shell) {
-    return std::make_unique<Rasterizer>(shell);
-  };
-
-  auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
-  if (!config) {
-    // If the RunConfiguration was null, the kernel blob wasn't readable.
-    // Fail the whole thing.
-    return nullptr;
-  }
-  config->SetEngineId(engine_id);
+  ScopedRunConfiguration run_config(GetSettings(), apk_asset_provider_.get(),
+                                    entrypoint, libraryUrl, entrypoint_args,
+                                    engine_id);
 
   const uint64_t spawned_holder_id = NextHolderId();
   // embedder.h has no spawn API yet.
-  auto spawned = reinterpret_cast<EmbedderEngine*>(engine_.get())
-                     ->Spawn(std::move(config.value()), initial_route,
-                             on_create_platform_view, on_create_rasterizer,
-                             MakeExternalTextureResolver(spawned_holder_id));
+  auto spawned =
+      reinterpret_cast<EmbedderEngine*>(engine_.get())
+          ->Spawn(&run_config.config, initial_route, on_create_platform_view,
+                  MakeExternalTextureResolver(spawned_holder_id));
+  if (!spawned) {
+    // If Spawn failed, the kernel blob wasn't readable or the shell failed to
+    // spawn.
+    return nullptr;
+  }
   UniqueEngine engine(
       reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(spawned.release()));
 
   return std::unique_ptr<AndroidShellHolder>(new AndroidShellHolder(
-      GetSettings(), jni_facade, thread_host_, std::move(engine),
-      spawned_holder_id, apk_asset_provider_->Clone(),
+      GetSettings(), jni_facade, thread_host_, std::move(spawned_callbacks),
+      std::move(engine), spawned_holder_id,
+      apk_asset_provider_ ? apk_asset_provider_->Clone() : nullptr,
       std::move(spawned_platform_view_android), weak_platform_view,
       std::move(spawned_message_handler), std::move(vsync_waiter),
       android_context->RenderingApi()));
@@ -563,22 +681,59 @@ void AndroidShellHolder::Launch(
   }
 
   apk_asset_provider_ = std::move(apk_asset_provider);
-  auto config = BuildRunConfiguration(entrypoint, libraryUrl, entrypoint_args);
-  if (!config) {
+  if (!embedder_api_.RunsAOTCompiledDartCode() &&
+      !fml::FileMapping::CreateReadOnly(
+          GetSettings().application_kernel_asset)) {
+    FML_DLOG(ERROR) << "Unable to load the kernel blob asset.";
     return;
   }
-  config->SetEngineId(engine_id);
+
   UpdateDisplayMetrics();
-  GetShell(engine_.get()).RunEngine(std::move(config.value()));
+
+  ScopedRunConfiguration run_config(GetSettings(), apk_asset_provider_.get(),
+                                    entrypoint, libraryUrl, entrypoint_args,
+                                    engine_id);
+
+  FlutterEngineResult result =
+      embedder_api_.LaunchEngine(engine_.get(), &run_config.config);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineLaunchEngine failed: " << result;
+  }
 }
 
-Rasterizer::Screenshot AndroidShellHolder::Screenshot(
-    Rasterizer::ScreenshotType type,
+AndroidShellHolder::ScreenshotData AndroidShellHolder::Screenshot(
+    FlutterScreenshotType type,
     bool base64_encode) {
   if (!IsValid()) {
-    return {nullptr, DlISize(), "", Rasterizer::ScreenshotFormat::kUnknown};
+    return {};
   }
-  return GetShell(engine_.get()).Screenshot(type, base64_encode);
+  FlutterScreenshotRequest request = {
+      .struct_size = sizeof(FlutterScreenshotRequest),
+      .type = type,
+      .base64_encode = base64_encode,
+  };
+  FlutterScreenshot c_screenshot = {
+      .struct_size = sizeof(FlutterScreenshot),
+  };
+  FlutterEngineResult result =
+      embedder_api_.Screenshot(engine_.get(), &request, &c_screenshot);
+  if (result != kSuccess) {
+    return {};
+  }
+  fml::MallocMapping data =
+      c_screenshot.data != nullptr
+          ? fml::MallocMapping::Copy(c_screenshot.data, c_screenshot.data_size)
+          : fml::MallocMapping();
+  ScreenshotData screenshot = {
+      .data = std::move(data),
+      .width = c_screenshot.frame_width,
+      .height = c_screenshot.frame_height,
+      .format =
+          c_screenshot.frame_type != nullptr ? c_screenshot.frame_type : "",
+      .pixel_format = c_screenshot.format,
+  };
+  embedder_api_.FreeScreenshot(&c_screenshot);
+  return screenshot;
 }
 
 fml::WeakPtr<PlatformViewAndroid> AndroidShellHolder::GetPlatformView() {
@@ -1289,11 +1444,18 @@ void AndroidShellHolder::LoadDartDeferredLibraryError(
   }
 }
 
-void AndroidShellHolder::UpdateAssetResolverByType(
-    std::unique_ptr<AssetResolver> updated_asset_resolver,
-    AssetResolver::AssetResolverType type) {
-  GetPlatformView()->UpdateAssetResolverByType(
-      std::move(updated_asset_resolver), type);
+void AndroidShellHolder::UpdateJavaAssetManager(
+    std::unique_ptr<APKAssetProvider> asset_provider) {
+  if (!asset_provider) {
+    return;
+  }
+  FlutterCustomAssetResolver resolver =
+      asset_provider->ToFlutterCustomAssetResolver();
+  FlutterEngineResult result =
+      embedder_api_.UpdateAssetResolver(engine_.get(), &resolver);
+  if (result != kSuccess) {
+    FML_LOG(ERROR) << "FlutterEngineUpdateAssetResolver failed: " << result;
+  }
 }
 
 void AndroidShellHolder::NotifyLowMemoryWarning() {
@@ -1304,47 +1466,8 @@ void AndroidShellHolder::NotifyLowMemoryWarning() {
   }
 }
 
-Shell* AndroidShellHolder::GetShellForTesting() const {
-  return engine_ ? &GetShell(engine_.get()) : nullptr;
-}
-
 FlutterEngineProcTable& AndroidShellHolder::GetEmbedderApiForTesting() {
   return embedder_api_;
-}
-
-std::optional<RunConfiguration> AndroidShellHolder::BuildRunConfiguration(
-    const std::string& entrypoint,
-    const std::string& libraryUrl,
-    const std::vector<std::string>& entrypoint_args) const {
-  std::unique_ptr<IsolateConfiguration> isolate_configuration;
-  if (embedder_api_.RunsAOTCompiledDartCode()) {
-    isolate_configuration = IsolateConfiguration::CreateForAppSnapshot();
-  } else {
-    std::unique_ptr<fml::Mapping> kernel_blob =
-        fml::FileMapping::CreateReadOnly(
-            GetSettings().application_kernel_asset);
-    if (!kernel_blob) {
-      FML_DLOG(ERROR) << "Unable to load the kernel blob asset.";
-      return std::nullopt;
-    }
-    isolate_configuration =
-        IsolateConfiguration::CreateForKernel(std::move(kernel_blob));
-  }
-
-  RunConfiguration config(std::move(isolate_configuration));
-  config.AddAssetResolver(apk_asset_provider_->Clone());
-
-  {
-    if (!entrypoint.empty() && !libraryUrl.empty()) {
-      config.SetEntrypointAndLibrary(entrypoint, libraryUrl);
-    } else if (!entrypoint.empty()) {
-      config.SetEntrypoint(entrypoint);
-    }
-    if (!entrypoint_args.empty()) {
-      config.SetEntrypointArgs(entrypoint_args);
-    }
-  }
-  return config;
 }
 
 void AndroidShellHolder::UpdateDisplayMetrics() {
