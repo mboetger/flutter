@@ -18,11 +18,11 @@
       "enforce": "ratchet"
     },
     "engine_internal_includes": {
-      "count": 129,
+      "count": 116,
       "enforce": "ratchet"
     },
     "unique_internal_headers": {
-      "count": 73,
+      "count": 70,
       "enforce": "ratchet"
     },
     "jni_platform_view_calls": {

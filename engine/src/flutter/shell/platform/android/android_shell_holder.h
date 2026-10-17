@@ -232,6 +232,7 @@ class AndroidShellHolder {
   // Answers the vsync callback of the platform view. Detached before engine_
   // is destroyed.
   std::shared_ptr<VsyncWaiterAndroid> vsync_waiter_;
+  const uint64_t holder_id_;
   bool is_valid_ = false;
   uint64_t next_pointer_flow_id_ = 0;
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
@@ -253,6 +254,7 @@ class AndroidShellHolder {
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
       const std::shared_ptr<ThreadHost>& thread_host,
       UniqueEngine engine,
+      uint64_t holder_id,
       std::unique_ptr<APKAssetProvider> apk_asset_provider,
       std::unique_ptr<PlatformViewAndroid> platform_view_android,
       const fml::WeakPtr<PlatformViewAndroid>& platform_view,

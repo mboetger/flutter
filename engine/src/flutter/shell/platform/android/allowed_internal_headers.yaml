@@ -7,7 +7,7 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 73,
+  "total_allowed_internal_headers": 70,
   "subsystems": {
     "common_graphics_and_display_list": {
       "count": 7,
@@ -43,7 +43,7 @@
       ]
     },
     "impeller": {
-      "count": 35,
+      "count": 34,
       "allowed_headers": [
         "flutter/impeller/base/flags.h",
         "flutter/impeller/base/validation.h",
@@ -72,7 +72,6 @@
         "flutter/impeller/renderer/backend/vulkan/vk.h",
         "flutter/impeller/renderer/context.h",
         "flutter/impeller/toolkit/android/hardware_buffer.h",
-        "flutter/impeller/toolkit/android/proc_table.h",
         "flutter/impeller/toolkit/android/surface_transaction.h",
         "flutter/impeller/toolkit/egl/context.h",
         "flutter/impeller/toolkit/egl/display.h",
@@ -94,12 +93,10 @@
       ]
     },
     "txt_and_skia": {
-      "count": 14,
+      "count": 12,
       "allowed_headers": [
         "flutter/third_party/abseil-cpp/absl/container/flat_hash_set.h",
-        "flutter/third_party/skia/include/core/SkAlphaType.h",
         "flutter/third_party/skia/include/core/SkColorSpace.h",
-        "flutter/third_party/skia/include/core/SkColorType.h",
         "flutter/third_party/skia/include/core/SkImage.h",
         "flutter/third_party/skia/include/core/SkM44.h",
         "flutter/third_party/skia/include/core/SkRefCnt.h",
@@ -222,24 +219,13 @@
     "flutter_main.cc": [
       "flutter/shell/common/switches.h"
     ],
-    "image_external_texture.cc": [
-      "flutter/impeller/toolkit/android/proc_table.h"
-    ],
     "image_external_texture.h": [
       "flutter/common/graphics/texture.h"
     ],
     "image_external_texture_gl.cc": [
-      "flutter/common/graphics/texture.h",
-      "flutter/impeller/core/formats.h",
-      "flutter/impeller/display_list/dl_image_impeller.h",
       "flutter/impeller/toolkit/android/hardware_buffer.h",
       "flutter/impeller/toolkit/egl/image.h",
-      "flutter/impeller/toolkit/gles/texture.h",
-      "flutter/third_party/skia/include/core/SkAlphaType.h",
-      "flutter/third_party/skia/include/core/SkColorType.h",
-      "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
-      "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h",
-      "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h"
+      "flutter/impeller/toolkit/gles/texture.h"
     ],
     "image_external_texture_gl.h": [
       "flutter/impeller/toolkit/egl/image.h",
@@ -298,11 +284,7 @@
       "flutter/shell/common/snapshot_surface_producer.h"
     ],
     "surface_texture_external_texture.cc": [
-      "flutter/display_list/effects/dl_color_source.h",
-      "flutter/third_party/skia/include/core/SkAlphaType.h",
-      "flutter/third_party/skia/include/core/SkColorSpace.h",
-      "flutter/third_party/skia/include/core/SkColorType.h",
-      "flutter/third_party/skia/include/core/SkImage.h"
+      "flutter/display_list/effects/dl_color_source.h"
     ],
     "surface_texture_external_texture.h": [
       "flutter/common/graphics/texture.h",

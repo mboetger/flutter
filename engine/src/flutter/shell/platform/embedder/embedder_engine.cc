@@ -251,8 +251,12 @@ bool EmbedderEngine::RegisterTexture(int64_t texture) {
   if (!IsValid() || !external_texture_resolver_) {
     return false;
   }
-  shell_->GetPlatformView()->RegisterTexture(
-      external_texture_resolver_->ResolveExternalTexture(texture));
+  std::unique_ptr<Texture> resolved_texture =
+      external_texture_resolver_->ResolveExternalTexture(texture);
+  if (!resolved_texture) {
+    return false;
+  }
+  shell_->GetPlatformView()->RegisterTexture(std::move(resolved_texture));
   return true;
 }
 

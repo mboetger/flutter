@@ -77,16 +77,14 @@ class PlatformViewAndroid final {
 
   void NotifyDestroyed();
 
-  void RegisterExternalTexture(
+  std::unique_ptr<Texture> CreateSurfaceTexture(
       int64_t texture_id,
       const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);
 
-  void RegisterImageTexture(
+  std::unique_ptr<Texture> CreateImageTexture(
       int64_t texture_id,
       const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
       ImageExternalTexture::ImageLifecycle lifecycle);
-
-  void RegisterTexture(std::shared_ptr<flutter::Texture> texture);
 
   void UpdateAssetResolverByType(
       std::unique_ptr<AssetResolver> updated_asset_resolver,

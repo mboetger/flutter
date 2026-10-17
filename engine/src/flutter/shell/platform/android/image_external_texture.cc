@@ -8,8 +8,8 @@
 #include <android/sensor.h>
 
 #include "flutter/fml/platform/android/jni_util.h"
-#include "flutter/impeller/toolkit/android/proc_table.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
+#include "flutter/shell/platform/android/ndk/ndk_proc_table.h"
 
 namespace flutter {
 
@@ -125,8 +125,7 @@ AHardwareBuffer* ImageExternalTexture::AHardwareBufferFor(
     const fml::jni::JavaRef<jobject>& hardware_buffer) {
   JNIEnv* env = fml::jni::AttachCurrentThread();
   FML_CHECK(env != nullptr);
-  const auto& proc =
-      impeller::android::GetProcTable().AHardwareBuffer_fromHardwareBuffer;
+  const auto& proc = GetNDKProcTable().AHardwareBuffer_fromHardwareBuffer;
   return proc ? proc(env, hardware_buffer.obj()) : nullptr;
 }
 

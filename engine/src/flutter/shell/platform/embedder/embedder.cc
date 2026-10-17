@@ -3821,10 +3821,6 @@ FlutterEngineResult FlutterEngineRegisterExternalTexture(
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
   }
 
-  if (texture_identifier == 0) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments,
-                              "Texture identifier was invalid.");
-  }
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)->RegisterTexture(
           texture_identifier)) {
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
@@ -3838,11 +3834,6 @@ FlutterEngineResult FlutterEngineUnregisterExternalTexture(
     int64_t texture_identifier) {
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
-  }
-
-  if (texture_identifier == 0) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments,
-                              "Texture identifier was invalid.");
   }
 
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)->UnregisterTexture(
@@ -3859,9 +3850,6 @@ FlutterEngineResult FlutterEngineMarkExternalTextureFrameAvailable(
     int64_t texture_identifier) {
   if (engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid engine handle.");
-  }
-  if (texture_identifier == 0) {
-    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Invalid texture identifier.");
   }
   if (!reinterpret_cast<flutter::EmbedderEngine*>(engine)
            ->MarkTextureFrameAvailable(texture_identifier)) {

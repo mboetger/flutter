@@ -6,6 +6,7 @@
 #define FLUTTER_SHELL_PLATFORM_ANDROID_NDK_NDK_PROC_TABLE_H_
 
 #include <android/choreographer.h>
+#include <android/hardware_buffer_jni.h>
 #include <android/surface_control.h>
 #include <android/trace.h>
 #include <jni.h>
@@ -65,6 +66,11 @@ struct NDKProcTable {
   ASurfaceTransaction* (*ASurfaceTransaction_fromJava)(JNIEnv* env,
                                                        jobject transaction) =
       nullptr;
+
+  // API level 26.
+  AHardwareBuffer* (*AHardwareBuffer_fromHardwareBuffer)(
+      JNIEnv* env,
+      jobject hardwareBuffer) = nullptr;
 
   // API level 23.
   bool (*ATrace_isEnabled)() = nullptr;
