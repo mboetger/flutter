@@ -122,6 +122,14 @@ class PlatformViewEmbedder final : public PlatformView {
       std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder);
 #endif
 
+  // Creates a platform view whose rendering callbacks come from
+  // `platform_dispatch_table` instead of an `EmbedderSurface`.
+  PlatformViewEmbedder(PlatformView::Delegate& delegate,
+                       const flutter::TaskRunners& task_runners,
+                       PlatformDispatchTable platform_dispatch_table,
+                       std::shared_ptr<EmbedderExternalViewEmbedder>
+                           external_view_embedder = nullptr);
+
   ~PlatformViewEmbedder() override;
 
   // |PlatformView|

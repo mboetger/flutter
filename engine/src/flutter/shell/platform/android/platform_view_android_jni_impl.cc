@@ -25,6 +25,7 @@
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
 #include "flutter/shell/platform/android/ndk/ndk_proc_table.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 #define ANDROID_SHELL_HOLDER \
   (reinterpret_cast<AndroidShellHolder*>(shell_holder))
@@ -262,7 +263,7 @@ static void SurfaceCreated(JNIEnv* env,
   // workaround for https://code.google.com/p/android/issues/detail?id=68174
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
-      ANativeWindow_fromSurface(env, jsurface));
+      jsurface ? ANativeWindow_fromSurface(env, jsurface) : nullptr);
   ANDROID_SHELL_HOLDER->NotifySurfaceCreated(std::move(window));
 }
 
@@ -275,7 +276,7 @@ static void SurfaceWindowChanged(JNIEnv* env,
   // workaround for https://code.google.com/p/android/issues/detail?id=68174
   fml::jni::ScopedJavaLocalFrame scoped_local_reference_frame(env);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
-      ANativeWindow_fromSurface(env, jsurface));
+      jsurface ? ANativeWindow_fromSurface(env, jsurface) : nullptr);
   ANDROID_SHELL_HOLDER->NotifySurfaceWindowChanged(std::move(window));
 }
 
@@ -284,7 +285,7 @@ static void SurfaceChanged(JNIEnv* env,
                            jlong shell_holder,
                            jint width,
                            jint height) {
-  ANDROID_SHELL_HOLDER->NotifySurfaceChanged(DlISize(width, height));
+  ANDROID_SHELL_HOLDER->NotifySurfaceChanged(width, height);
 }
 
 static void SurfaceDestroyed(JNIEnv* env, jobject jcaller, jlong shell_holder) {
@@ -573,14 +574,10 @@ static void RegisterImageTexture(JNIEnv* env,
                                  jlong texture_id,
                                  jobject image_texture_entry,
                                  jboolean reset_on_background) {
-  ImageExternalTexture::ImageLifecycle lifecycle =
-      reset_on_background ? ImageExternalTexture::ImageLifecycle::kReset
-                          : ImageExternalTexture::ImageLifecycle::kKeepAlive;
-
   ANDROID_SHELL_HOLDER->RegisterImageTexture(
       static_cast<int64_t>(texture_id),                                  //
       fml::jni::ScopedJavaGlobalRef<jobject>(env, image_texture_entry),  //
-      lifecycle                                                          //
+      reset_on_background == JNI_TRUE                                    //
   );
 }
 
@@ -1958,17 +1955,19 @@ PlatformViewAndroidJNIImpl::FlutterViewComputePlatformResolvedLocale(
 }
 
 double PlatformViewAndroidJNIImpl::GetDisplayRefreshRate() {
+  // Matches kUnknownDisplayRefreshRate (0) when no refresh rate is available.
+  constexpr double kUnknownRefreshRate = 0.0;
   JNIEnv* env = fml::jni::AttachCurrentThread();
 
   auto java_object = java_object_.get(env);
   if (java_object.is_null()) {
-    return kUnknownDisplayRefreshRate;
+    return kUnknownRefreshRate;
   }
 
   fml::jni::ScopedJavaLocalRef<jclass> clazz(
       env, env->GetObjectClass(java_object.obj()));
   if (clazz.is_null()) {
-    return kUnknownDisplayRefreshRate;
+    return kUnknownRefreshRate;
   }
 
   jfieldID fid = env->GetStaticFieldID(clazz.obj(), "refreshRateFPS", "F");

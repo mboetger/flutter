@@ -192,6 +192,28 @@ PlatformViewEmbedder::PlatformViewEmbedder(
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
+PlatformViewEmbedder::PlatformViewEmbedder(
+    PlatformView::Delegate& delegate,
+    const flutter::TaskRunners& task_runners,
+    PlatformDispatchTable platform_dispatch_table,
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder)
+    : PlatformView(delegate, task_runners),
+      external_view_embedder_(std::move(external_view_embedder)),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    GetWeakPtr(),
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table.platform_message_response_callback,
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : embedder_platform_message_handler_),
+      platform_dispatch_table_(std::move(platform_dispatch_table)) {}
+
 PlatformViewEmbedder::~PlatformViewEmbedder() {
   if (embedder_platform_message_handler_) {
     embedder_platform_message_handler_->Shutdown();

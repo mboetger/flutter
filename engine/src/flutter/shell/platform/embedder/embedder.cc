@@ -59,8 +59,10 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
+#include "flutter/shell/platform/embedder/embedder_ahb_texture.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
+#include "flutter/shell/platform/embedder/embedder_gl_stream_texture.h"
 #include "flutter/shell/platform/embedder/embedder_platform_message_response.h"
 #include "flutter/shell/platform/embedder/embedder_render_target.h"
 #include "flutter/shell/platform/embedder/embedder_render_target_skia.h"
@@ -113,6 +115,14 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "impeller/renderer/backend/vulkan/driver_info_vk.h"  // nogncheck
 #endif  // IMPELLER_SUPPORTS_RENDERING
 #endif  // SHELL_ENABLE_VULKAN
+
+#if FML_OS_ANDROID
+#include <android/native_window.h>
+
+#include "flutter/shell/platform/embedder/android/android_renderer.h"  // nogncheck
+#include "flutter/shell/platform/embedder/android/android_rendering_selector.h"  // nogncheck
+#include "flutter/shell/platform/embedder/android/surface/android_native_window.h"  // nogncheck
+#endif  // FML_OS_ANDROID
 
 const int32_t kFlutterSemanticsNodeIdBatchEnd = -1;
 const int32_t kFlutterSemanticsCustomActionIdBatchEnd = -1;
@@ -241,6 +251,40 @@ static bool IsVulkanRendererConfigValid(const FlutterRendererConfig* config) {
   return true;
 }
 
+static bool IsNativeWindowRendererConfigValid(
+    const FlutterRendererConfig* config) {
+  if (config->type != kNativeWindow) {
+    return false;
+  }
+
+#if FML_OS_ANDROID
+  const FlutterNativeWindowRendererConfig* native_window_config =
+      &config->native_window;
+  if (SAFE_ACCESS(native_window_config, struct_size, 0) <
+      offsetof(FlutterNativeWindowRendererConfig, backend) +
+          sizeof(FlutterNativeWindowRendererConfig::backend)) {
+    return false;
+  }
+  FlutterNativeWindowBackend backend =
+      SAFE_ACCESS(native_window_config, backend,
+                  kFlutterNativeWindowBackendImpellerAutoselect);
+  switch (backend) {
+    case kFlutterNativeWindowBackendImpellerAutoselect:
+    case kFlutterNativeWindowBackendImpellerVulkan:
+    case kFlutterNativeWindowBackendImpellerOpenGLES:
+#if !SLIMPELLER
+    case kFlutterNativeWindowBackendSkiaOpenGLES:
+    case kFlutterNativeWindowBackendSoftware:
+#endif  // !SLIMPELLER
+      return true;
+    default:
+      return false;
+  }
+#else   // FML_OS_ANDROID
+  return false;
+#endif  // FML_OS_ANDROID
+}
+
 static bool IsRendererValid(const FlutterRendererConfig* config) {
   if (config == nullptr) {
     return false;
@@ -255,6 +299,8 @@ static bool IsRendererValid(const FlutterRendererConfig* config) {
       return IsMetalRendererConfigValid(config);
     case kVulkan:
       return IsVulkanRendererConfigValid(config);
+    case kNativeWindow:
+      return IsNativeWindowRendererConfigValid(config);
     default:
       return false;
   }
@@ -829,6 +875,182 @@ InferSoftwarePlatformViewCreationCallback(
       });
 }
 
+#if FML_OS_ANDROID
+static std::optional<flutter::AndroidRenderingAPI> ToAndroidRenderingAPI(
+    FlutterNativeWindowBackend backend) {
+  switch (backend) {
+    case kFlutterNativeWindowBackendImpellerAutoselect:
+      return flutter::AndroidRenderingAPI::kImpellerAutoselect;
+    case kFlutterNativeWindowBackendImpellerVulkan:
+      return flutter::AndroidRenderingAPI::kImpellerVulkan;
+    case kFlutterNativeWindowBackendImpellerOpenGLES:
+      return flutter::AndroidRenderingAPI::kImpellerOpenGLES;
+#if !SLIMPELLER
+    case kFlutterNativeWindowBackendSkiaOpenGLES:
+      return flutter::AndroidRenderingAPI::kSkiaOpenGLES;
+    case kFlutterNativeWindowBackendSoftware:
+      return flutter::AndroidRenderingAPI::kSoftware;
+#endif  // !SLIMPELLER
+    default:
+      return std::nullopt;
+  }
+}
+
+static FlutterNativeWindowBackend FromAndroidRenderingAPI(
+    flutter::AndroidRenderingAPI api) {
+  switch (api) {
+    case flutter::AndroidRenderingAPI::kImpellerAutoselect:
+      return kFlutterNativeWindowBackendImpellerAutoselect;
+    case flutter::AndroidRenderingAPI::kImpellerVulkan:
+      return kFlutterNativeWindowBackendImpellerVulkan;
+    case flutter::AndroidRenderingAPI::kImpellerOpenGLES:
+      return kFlutterNativeWindowBackendImpellerOpenGLES;
+    case flutter::AndroidRenderingAPI::kSkiaOpenGLES:
+      return kFlutterNativeWindowBackendSkiaOpenGLES;
+    case flutter::AndroidRenderingAPI::kSoftware:
+      return kFlutterNativeWindowBackendSoftware;
+  }
+  FML_UNREACHABLE();
+}
+#endif  // FML_OS_ANDROID
+
+static flutter::Shell::CreateCallback<flutter::PlatformView>
+InferNativeWindowPlatformViewCreationCallback(
+    const FlutterRendererConfig* config,
+    void* user_data,
+    const flutter::PlatformViewEmbedder::PlatformDispatchTable&
+        platform_dispatch_table,
+    std::unique_ptr<flutter::EmbedderExternalViewEmbedder>
+        external_view_embedder
+#if FML_OS_ANDROID
+    ,
+    std::shared_ptr<std::shared_ptr<flutter::AndroidRenderer>>
+        android_renderer_slot,
+    std::shared_ptr<flutter::AndroidContext> shared_android_context = nullptr
+#endif  // FML_OS_ANDROID
+) {
+  if (config->type != kNativeWindow) {
+    return nullptr;
+  }
+
+#if FML_OS_ANDROID
+  const FlutterNativeWindowRendererConfig* native_window_config =
+      &config->native_window;
+  auto rendering_api = ToAndroidRenderingAPI(
+      SAFE_ACCESS(native_window_config, backend,
+                  kFlutterNativeWindowBackendImpellerAutoselect));
+  if (!rendering_api.has_value()) {
+    return nullptr;
+  }
+
+  FlutterNativeWindowTransactionWithPublishCallback tx_with_publish_cb =
+      SAFE_ACCESS(native_window_config, transaction_with_publish_callback,
+                  nullptr);
+  FlutterNativeWindowTransactionCallback tx_callback =
+      SAFE_ACCESS(native_window_config, transaction_callback, nullptr);
+  void* tx_user_data = SAFE_ACCESS(native_window_config, user_data, nullptr);
+  if (tx_user_data == nullptr) {
+    tx_user_data = user_data;
+  }
+
+  flutter::CreateSurfaceTransaction create_transaction;
+  if (tx_with_publish_cb != nullptr) {
+    create_transaction = [tx_with_publish_cb, tx_user_data](
+                             std::function<void()>& publish_callback) {
+      VoidCallback c_publish = nullptr;
+      VoidCallback c_destroy = nullptr;
+      void* publish_user_data = nullptr;
+      auto* tx = static_cast<ASurfaceTransaction*>(tx_with_publish_cb(
+          tx_user_data, &c_publish, &c_destroy, &publish_user_data));
+      if (c_publish != nullptr || c_destroy != nullptr) {
+        auto guard =
+            std::shared_ptr<void>(publish_user_data, [c_destroy](void* p) {
+              if (c_destroy != nullptr) {
+                c_destroy(p);
+              }
+            });
+        publish_callback = [c_publish, guard]() {
+          if (c_publish != nullptr) {
+            c_publish(guard.get());
+          }
+        };
+      }
+      return tx;
+    };
+  } else if (tx_callback != nullptr) {
+    create_transaction = [tx_callback, tx_user_data](std::function<void()>&) {
+      return static_cast<ASurfaceTransaction*>(tx_callback(tx_user_data));
+    };
+  }
+
+  std::shared_ptr<flutter::AndroidExternalViewEmbedderDelegate>
+      compositor_delegate = flutter::MakeNativeWindowCompositorDelegate(
+          SAFE_ACCESS(native_window_config, compositor, nullptr), tx_user_data);
+
+  std::shared_ptr<flutter::EmbedderExternalViewEmbedder> view_embedder =
+      std::move(external_view_embedder);
+
+  return fml::MakeCopyable(
+      [rendering_api = rendering_api.value(), create_transaction,
+       compositor_delegate = std::move(compositor_delegate),
+       platform_dispatch_table, view_embedder,
+       android_renderer_slot = std::move(android_renderer_slot),
+       shared_android_context =
+           std::move(shared_android_context)](flutter::Shell& shell) mutable {
+        flutter::PlatformView::Delegate& delegate = shell;
+        auto renderer =
+            shared_android_context
+                ? std::make_shared<flutter::AndroidRenderer>(
+                      shell.GetTaskRunners(),
+                      delegate.OnPlatformViewGetSettings(),
+                      shared_android_context, create_transaction)
+                : std::make_shared<flutter::AndroidRenderer>(
+                      shell.GetTaskRunners(),
+                      delegate.OnPlatformViewGetSettings(), rendering_api,
+                      delegate.OnPlatformViewGetShutdownSafeIOTaskRunner(),
+                      create_transaction);
+        if (compositor_delegate) {
+          renderer->SetExternalViewEmbedderDelegate(compositor_delegate);
+        }
+        if (android_renderer_slot) {
+          *android_renderer_slot = renderer;
+        }
+        flutter::AndroidRenderer* raw_renderer = renderer.get();
+        auto table = platform_dispatch_table;
+        table.create_rendering_surface_callback = [raw_renderer]() {
+          return raw_renderer->CreateRenderingSurface();
+        };
+        table.create_snapshot_surface_producer_callback = [raw_renderer]() {
+          return raw_renderer->CreateSnapshotSurfaceProducer();
+        };
+        table.make_resource_current_callback = [raw_renderer]() {
+          return raw_renderer->MakeResourceContextCurrent();
+        };
+        table.release_resource_context_callback = [raw_renderer]() {
+          raw_renderer->ReleaseResourceContext();
+        };
+        table.get_impeller_context_callback = [raw_renderer]() {
+          return raw_renderer->GetImpellerContext();
+        };
+        table.setup_impeller_context_callback = [raw_renderer]() {
+          raw_renderer->SetupImpellerContext();
+        };
+        if (!table.create_external_view_embedder_callback && !view_embedder) {
+          table.create_external_view_embedder_callback = [raw_renderer]() {
+            return raw_renderer->CreateExternalViewEmbedder();
+          };
+        }
+        return std::make_unique<flutter::PlatformViewEmbedder>(
+            shell, shell.GetTaskRunners(), std::move(table),
+            std::move(view_embedder));
+      });
+#else   // FML_OS_ANDROID
+  FML_LOG(ERROR)
+      << "This Flutter Engine does not support NativeWindow rendering.";
+  return nullptr;
+#endif  // FML_OS_ANDROID
+}
+
 static flutter::Shell::CreateCallback<flutter::PlatformView>
 InferPlatformViewCreationCallback(
     const FlutterRendererConfig* config,
@@ -838,7 +1060,14 @@ InferPlatformViewCreationCallback(
     std::unique_ptr<flutter::EmbedderExternalViewEmbedder>
         external_view_embedder,
     bool enable_impeller,
-    impeller::Flags impeller_flags) {
+    impeller::Flags impeller_flags
+#if FML_OS_ANDROID
+    ,
+    std::shared_ptr<std::shared_ptr<flutter::AndroidRenderer>>
+        android_renderer_slot = nullptr,
+    std::shared_ptr<flutter::AndroidContext> shared_android_context = nullptr
+#endif  // FML_OS_ANDROID
+) {
   if (config == nullptr) {
     return nullptr;
   }
@@ -860,6 +1089,15 @@ InferPlatformViewCreationCallback(
       return InferVulkanPlatformViewCreationCallback(
           config, user_data, platform_dispatch_table,
           std::move(external_view_embedder), enable_impeller, impeller_flags);
+    case kNativeWindow:
+      return InferNativeWindowPlatformViewCreationCallback(
+          config, user_data, platform_dispatch_table,
+          std::move(external_view_embedder)
+#if FML_OS_ANDROID
+              ,
+          std::move(android_renderer_slot), std::move(shared_android_context)
+#endif  // FML_OS_ANDROID
+      );
     default:
       return nullptr;
   }
@@ -2816,6 +3054,26 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   }
 
   flutter::Settings settings = flutter::SettingsFromCommandLine(command_line);
+  if (config->type == kNativeWindow) {
+    const FlutterNativeWindowRendererConfig* native_window_config =
+        &config->native_window;
+    FlutterNativeWindowBackend backend =
+        SAFE_ACCESS(native_window_config, backend,
+                    kFlutterNativeWindowBackendImpellerAutoselect);
+    settings.enable_impeller =
+        backend == kFlutterNativeWindowBackendImpellerAutoselect ||
+        backend == kFlutterNativeWindowBackendImpellerVulkan ||
+        backend == kFlutterNativeWindowBackendImpellerOpenGLES;
+    settings.enable_software_rendering =
+        backend == kFlutterNativeWindowBackendSoftware;
+    settings.warn_on_impeller_opt_out = true;
+    settings.enable_platform_isolates = true;
+#if FLUTTER_RELEASE
+    // On Android, enable the timeline event handler in release mode when
+    // systrace is enabled.
+    settings.enable_timeline_event_handler = settings.trace_systrace;
+#endif  // FLUTTER_RELEASE
+  }
 
   if (SAFE_ACCESS(args, aot_data, nullptr)) {
     if (SAFE_ACCESS(args, vm_snapshot_data, nullptr) ||
@@ -2967,10 +3225,20 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   impeller_flags.top_left_default_framebuffer_origin =
       settings.impeller_top_left_default_framebuffer_origin;
 
+#if FML_OS_ANDROID
+  auto android_renderer_slot =
+      std::make_shared<std::shared_ptr<flutter::AndroidRenderer>>();
+#endif  // FML_OS_ANDROID
+
   auto on_create_platform_view = InferPlatformViewCreationCallback(
       config, user_data, platform_dispatch_table,
       std::move(external_view_embedder_result.value()),
-      settings.enable_impeller, impeller_flags);
+      settings.enable_impeller, impeller_flags
+#if FML_OS_ANDROID
+      ,
+      android_renderer_slot
+#endif  // FML_OS_ANDROID
+  );
 
   if (!on_create_platform_view) {
     return LOG_EMBEDDER_ERROR(
@@ -3223,6 +3491,9 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
       defer_surface_creation,                 //
       platform_data                           //
   );
+#if FML_OS_ANDROID
+  embedder_engine->SetAndroidRendererSlot(std::move(android_renderer_slot));
+#endif  // FML_OS_ANDROID
 
   if (!ConfigureEmbedderEngineCallbacksAndDecoders(args, user_data,
                                                    *embedder_engine)) {
@@ -3977,6 +4248,47 @@ FlutterEngineResult FlutterEngineRegisterExternalTexture(
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                               "Could not register the specified texture.");
   }
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineRegisterExternalTextureWithInfo(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterExternalTextureInfo* info) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (info == nullptr ||
+      info->struct_size < sizeof(FlutterExternalTextureInfo)) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "The external texture info was invalid.");
+  }
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  // Checked before the texture takes ownership of info->user_data, so that a
+  // failed registration never runs the destruction callback.
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  std::unique_ptr<flutter::Texture> texture;
+  switch (info->type) {
+    case kFlutterExternalTextureTypeOpenGLStream:
+      texture = flutter::EmbedderGLStreamTexture::Create(
+          *info, embedder_engine->GetImpellerDeviceContextGetter());
+      break;
+    case kFlutterExternalTextureTypeAndroidHardwareBuffer:
+#if FML_OS_ANDROID
+      texture = flutter::EmbedderAHBTexture::Create(
+          *info, embedder_engine->GetImpellerDeviceContextGetter());
+#endif  // FML_OS_ANDROID
+      // Elsewhere there are no AHardwareBuffers, so the type is unsupported.
+      break;
+  }
+  if (!texture) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "The external texture source was missing a required callback, had an "
+        "unknown type, or is not supported on this platform.");
+  }
+  embedder_engine->RegisterExternalTexture(std::move(texture));
   return kSuccess;
 }
 
@@ -4960,11 +5272,203 @@ FlutterEngineResult FlutterEngineLaunchEngine(
   return kSuccess;
 }
 
+FlutterEngineResult FlutterEngineRegisterImageGenerator(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterImageGeneratorRegistration* info) {
+  if (!engine) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  if (!info) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Image generator registration info was null.");
+  }
+
+  if (SAFE_ACCESS(info, struct_size, 0) <
+      sizeof(FlutterImageGeneratorRegistration)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Image generator registration info struct_size is invalid.");
+  }
+
+  if (SAFE_ACCESS(info, create_generator, nullptr) == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Image generator create_generator callback is required.");
+  }
+
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine is not in a valid running state.");
+  }
+
+  flutter::ImageGeneratorFactory factory =
+      flutter::MakeImageGeneratorFactory(*info);
+
+  if (!embedder_engine->RegisterImageGenerator(std::move(factory),
+                                               info->priority)) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not register image generator factory.");
+  }
+
+  return kSuccess;
+}
+
+FlutterEngineResult FlutterEngineSetNativeWindow(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterNativeWindowInfo* info) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (info == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Native window info was null.");
+  }
+  if (SAFE_ACCESS(info, struct_size, 0) <
+      offsetof(FlutterNativeWindowInfo, window) +
+          sizeof(FlutterNativeWindowInfo::window)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments, "FlutterNativeWindowInfo.struct_size is too small.");
+  }
+  auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine handle was not running.");
+  }
+#if FML_OS_ANDROID
+  const auto& renderer = embedder_engine->GetAndroidRenderer();
+  if (!renderer) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Engine was not configured with a native window renderer.");
+  }
+  auto* raw_window =
+      static_cast<ANativeWindow*>(SAFE_ACCESS(info, window, nullptr));
+  bool is_fake_window = SAFE_ACCESS(info, is_fake_window, false);
+  if (raw_window != nullptr) {
+    ANativeWindow_acquire(raw_window);
+    auto native_window = fml::MakeRefCounted<flutter::AndroidNativeWindow>(
+        raw_window, /*is_fake_window=*/false);
+    renderer->SetNativeWindow(std::move(native_window));
+  } else if (is_fake_window) {
+    auto native_window = fml::MakeRefCounted<flutter::AndroidNativeWindow>(
+        nullptr, /*is_fake_window=*/true);
+    renderer->SetNativeWindow(std::move(native_window));
+  } else {
+    renderer->TeardownSurface();
+  }
+  return kSuccess;
+#else   // FML_OS_ANDROID
+  return LOG_EMBEDDER_ERROR(
+      kInvalidArguments,
+      "FlutterEngineSetNativeWindow is only supported on Android.");
+#endif  // FML_OS_ANDROID
+}
+
+FlutterEngineResult FlutterEngineResizeNativeWindow(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterNativeWindowResizeInfo* info) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (info == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Native window resize info was null.");
+  }
+  if (SAFE_ACCESS(info, struct_size, 0) <
+      sizeof(FlutterNativeWindowResizeInfo)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "FlutterNativeWindowResizeInfo.struct_size is too small.");
+  }
+  auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine handle was not running.");
+  }
+#if FML_OS_ANDROID
+  const auto& renderer = embedder_engine->GetAndroidRenderer();
+  if (!renderer) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Engine was not configured with a native window renderer.");
+  }
+  size_t width = SAFE_ACCESS(info, width, 0);
+  size_t height = SAFE_ACCESS(info, height, 0);
+  renderer->ResizeSurface(flutter::DlISize(static_cast<int32_t>(width),
+                                           static_cast<int32_t>(height)));
+  return kSuccess;
+#else   // FML_OS_ANDROID
+  return LOG_EMBEDDER_ERROR(
+      kInvalidArguments,
+      "FlutterEngineResizeNativeWindow is only supported on Android.");
+#endif  // FML_OS_ANDROID
+}
+
+FlutterEngineResult FlutterEngineGetNativeWindowRendererInfo(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterNativeWindowRendererInfo* info_out) {
+  if (engine == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  if (info_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Native window renderer info out was null.");
+  }
+  if (SAFE_ACCESS(info_out, struct_size, 0) <
+      sizeof(FlutterNativeWindowRendererInfo)) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "FlutterNativeWindowRendererInfo.struct_size is too small.");
+  }
+  auto* embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Engine handle was not running.");
+  }
+#if FML_OS_ANDROID
+  const auto& renderer = embedder_engine->GetAndroidRenderer();
+  if (!renderer || !renderer->GetAndroidContext()) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments,
+        "Engine was not configured with a native window renderer.");
+  }
+  info_out->backend =
+      FromAndroidRenderingAPI(renderer->GetAndroidContext()->RenderingApi());
+  info_out->surface_control_enabled = renderer->IsSurfaceControlEnabled();
+  return kSuccess;
+#else   // FML_OS_ANDROID
+  return LOG_EMBEDDER_ERROR(
+      kInvalidArguments,
+      "FlutterEngineGetNativeWindowRendererInfo is only supported on Android.");
+#endif  // FML_OS_ANDROID
+}
+
 FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
                                            parent_engine,
                                        const FlutterEngineSpawnInfo* config,
                                        FLUTTER_API_SYMBOL(FlutterEngine) *
                                            spawned_engine_out) {
+  const FlutterEngineRunConfiguration* explicit_run_configuration =
+      config ? SAFE_ACCESS(config, run_configuration, nullptr) : nullptr;
+  fml::ScopedCleanupClosure cleanup_asset_resolver(
+      [explicit_run_configuration]() {
+        if (explicit_run_configuration != nullptr &&
+            SAFE_ACCESS(explicit_run_configuration, struct_size, 0) >=
+                sizeof(FlutterEngineRunConfiguration)) {
+          const FlutterCustomAssetResolver* c_resolver = SAFE_ACCESS(
+              explicit_run_configuration, custom_asset_resolver, nullptr);
+          if (c_resolver != nullptr) {
+            auto destroy =
+                SAFE_ACCESS(c_resolver, destruction_callback, nullptr);
+            if (destroy != nullptr) {
+              destroy(SAFE_ACCESS(c_resolver, user_data, nullptr));
+            }
+          }
+        }
+      });
+
   if (parent_engine == nullptr) {
     return LOG_EMBEDDER_ERROR(kInvalidArguments, "Parent engine was null.");
   }
@@ -5037,10 +5541,24 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
   impeller_flags.top_left_default_framebuffer_origin =
       parent_settings.impeller_top_left_default_framebuffer_origin;
 
+#if FML_OS_ANDROID
+  auto android_renderer_slot =
+      std::make_shared<std::shared_ptr<flutter::AndroidRenderer>>();
+  std::shared_ptr<flutter::AndroidContext> shared_android_context;
+  if (parent->GetAndroidRenderer()) {
+    shared_android_context = parent->GetAndroidRenderer()->GetAndroidContext();
+  }
+#endif  // FML_OS_ANDROID
+
   auto on_create_platform_view = InferPlatformViewCreationCallback(
       renderer_config, user_data, platform_dispatch_table,
       std::move(external_view_embedder_result.value()),
-      parent_settings.enable_impeller, impeller_flags);
+      parent_settings.enable_impeller, impeller_flags
+#if FML_OS_ANDROID
+      ,
+      android_renderer_slot, std::move(shared_android_context)
+#endif  // FML_OS_ANDROID
+  );
   if (!on_create_platform_view) {
     return LOG_EMBEDDER_ERROR(
         kInternalInconsistency,
@@ -5144,6 +5662,39 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
   }
 #endif
 
+  std::string initial_route;
+  if (SAFE_ACCESS(config, initial_route, nullptr) != nullptr) {
+    initial_route = config->initial_route;
+  }
+
+  if (explicit_run_configuration != nullptr) {
+    cleanup_asset_resolver.Release();
+    std::string error;
+    bool defer_surface_creation =
+        SAFE_ACCESS(args, defer_surface_creation, false);
+    auto spawned_engine = parent->Spawn(
+        explicit_run_configuration, initial_route, on_create_platform_view,
+        on_create_rasterizer, std::move(external_texture_resolver),
+        defer_surface_creation, &error);
+    if (!spawned_engine) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          error.empty() ? "Could not spawn engine." : error.c_str());
+    }
+#if FML_OS_ANDROID
+    spawned_engine->SetAndroidRendererSlot(std::move(android_renderer_slot));
+#endif  // FML_OS_ANDROID
+    if (!ConfigureEmbedderEngineCallbacksAndDecoders(args, user_data,
+                                                     *spawned_engine)) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          "Invalid custom image generator registration in spawned engine.");
+    }
+    *spawned_engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
+        spawned_engine.release());
+    return kSuccess;
+  }
+
   auto asset_manager = std::make_shared<flutter::AssetManager>();
   if (fml::UniqueFD::traits_type::IsValid(parent_settings.assets_dir)) {
     asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
@@ -5240,11 +5791,6 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
         "Could not infer RunConfiguration for spawned engine.");
   }
 
-  std::string initial_route;
-  if (SAFE_ACCESS(config, initial_route, nullptr) != nullptr) {
-    initial_route = config->initial_route;
-  }
-
   bool defer_surface_creation =
       SAFE_ACCESS(args, defer_surface_creation, false);
 
@@ -5256,6 +5802,10 @@ FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
     return LOG_EMBEDDER_ERROR(kInternalInconsistency,
                               "Could not spawn Flutter engine.");
   }
+
+#if FML_OS_ANDROID
+  spawned_engine->SetAndroidRendererSlot(std::move(android_renderer_slot));
+#endif  // FML_OS_ANDROID
 
   if (!ConfigureEmbedderEngineCallbacksAndDecoders(args, user_data,
                                                    *spawned_engine)) {
@@ -5400,6 +5950,13 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(UpdateAssetResolver, FlutterEngineUpdateAssetResolver);
   SET_PROC(Screenshot, FlutterEngineScreenshot);
   SET_PROC(FreeScreenshot, FlutterEngineFreeScreenshot);
+  SET_PROC(RegisterImageGenerator, FlutterEngineRegisterImageGenerator);
+  SET_PROC(RegisterExternalTextureWithInfo,
+           FlutterEngineRegisterExternalTextureWithInfo);
+  SET_PROC(SetNativeWindow, FlutterEngineSetNativeWindow);
+  SET_PROC(ResizeNativeWindow, FlutterEngineResizeNativeWindow);
+  SET_PROC(GetNativeWindowRendererInfo,
+           FlutterEngineGetNativeWindowRendererInfo);
 #undef SET_PROC
 
   return kSuccess;

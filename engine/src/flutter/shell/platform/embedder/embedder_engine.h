@@ -20,11 +20,13 @@
 #include "flutter/shell/common/thread_host.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
+#include "flutter/shell/platform/embedder/embedder_impeller_device_context.h"
 #include "flutter/shell/platform/embedder/embedder_thread_host.h"
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 namespace flutter {
 
 struct ShellArgs;
+class AndroidRenderer;
 
 // The object that is returned to the embedder as an opaque pointer to the
 // instance of the Flutter engine.
@@ -120,6 +122,16 @@ class EmbedderEngine {
   std::unique_ptr<EmbedderEngine> Spawn(
       const FlutterEngineRunConfiguration* config,
       const std::string& initial_route,
+      const Shell::CreateCallback<PlatformView>& on_create_platform_view,
+      const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+      std::unique_ptr<EmbedderExternalTextureResolver>
+          external_texture_resolver = nullptr,
+      bool defer_surface_creation = false,
+      std::string* error_out = nullptr) const;
+
+  std::unique_ptr<EmbedderEngine> Spawn(
+      const FlutterEngineRunConfiguration* config,
+      const std::string& initial_route,
       const PlatformViewFactory& on_create_platform_view,
       std::unique_ptr<EmbedderExternalTextureResolver>
           external_texture_resolver = nullptr,
@@ -165,6 +177,10 @@ class EmbedderEngine {
 
   bool RegisterTexture(int64_t texture);
 
+  void RegisterExternalTexture(std::shared_ptr<Texture> texture);
+
+  EmbedderImpellerDeviceContextGetter GetImpellerDeviceContextGetter() const;
+
   bool UnregisterTexture(int64_t texture);
 
   bool MarkTextureFrameAvailable(int64_t texture);
@@ -204,6 +220,8 @@ class EmbedderEngine {
 
   void AddImageDecoder(ImageGeneratorFactory factory, int32_t priority);
 
+  bool RegisterImageGenerator(ImageGeneratorFactory factory, int32_t priority);
+
   void SetVMServiceUriCallback(
       std::function<void(const std::string&)> callback);
 
@@ -211,6 +229,22 @@ class EmbedderEngine {
                                     bool base64_encode);
 
   Shell& GetShell();
+
+#if FML_OS_ANDROID
+  void SetAndroidRenderer(std::shared_ptr<AndroidRenderer> renderer);
+
+  const std::shared_ptr<AndroidRenderer>& GetAndroidRenderer() const;
+
+  const std::shared_ptr<std::shared_ptr<AndroidRenderer>>&
+  GetAndroidRendererSlot() const {
+    return android_renderer_slot_;
+  }
+
+  void SetAndroidRendererSlot(
+      std::shared_ptr<std::shared_ptr<AndroidRenderer>> slot) {
+    android_renderer_slot_ = std::move(slot);
+  }
+#endif  // FML_OS_ANDROID
 
  private:
   // Adopts |spawned_shell|, a running shell returned by Shell::Spawn.
@@ -230,6 +264,10 @@ class EmbedderEngine {
   std::unique_ptr<ShellArgs> shell_args_;
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
+#if FML_OS_ANDROID
+  std::shared_ptr<std::shared_ptr<AndroidRenderer>> android_renderer_slot_ =
+      std::make_shared<std::shared_ptr<AndroidRenderer>>();
+#endif  // FML_OS_ANDROID
   bool defer_surface_creation_ = false;
   bool is_surface_created_ = false;
   std::vector<std::pair<ImageGeneratorFactory, int32_t>>

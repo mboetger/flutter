@@ -10,7 +10,7 @@
 
 #include "flutter/common/settings.h"
 #include "flutter/fml/macros.h"
-#include "flutter/shell/platform/android/android_rendering_selector.h"
+#include "flutter/shell/platform/embedder/embedder.h"
 
 namespace flutter {
 
@@ -23,9 +23,9 @@ class FlutterMain {
   static FlutterMain& Get();
 
   const flutter::Settings& GetSettings() const;
-  flutter::AndroidRenderingAPI GetAndroidRenderingAPI();
+  FlutterNativeWindowBackend GetAndroidRenderingAPI();
 
-  static AndroidRenderingAPI SelectedRenderingAPI(
+  static FlutterNativeWindowBackend SelectedRenderingAPI(
       const flutter::Settings& settings,
       int api_level);
 
@@ -33,10 +33,10 @@ class FlutterMain {
 
  private:
   const flutter::Settings settings_;
-  const flutter::AndroidRenderingAPI android_rendering_api_;
+  const FlutterNativeWindowBackend android_rendering_api_;
 
   explicit FlutterMain(const flutter::Settings& settings,
-                       flutter::AndroidRenderingAPI android_rendering_api);
+                       FlutterNativeWindowBackend android_rendering_api);
 
   static void Init(JNIEnv* env,
                    jclass clazz,

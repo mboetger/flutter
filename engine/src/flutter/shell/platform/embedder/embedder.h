@@ -86,6 +86,8 @@ typedef enum {
   /// macOS version >= 10.14
   kMetal,
   kVulkan,
+  /// Native window rendering is only supported on Android (`ANativeWindow*`).
+  kNativeWindow,
 } FlutterRendererType;
 
 /// Additional accessibility features that may be enabled by the platform.
@@ -1177,6 +1179,65 @@ typedef struct {
   SoftwareSurfacePresentCallback surface_present_callback;
 } FlutterSoftwareRendererConfig;
 
+/// An opaque handle to a platform native window (`ANativeWindow*` on Android).
+typedef void* FlutterNativeWindowHandle;
+
+/// The graphics backend used by the native window renderer (`kNativeWindow`).
+typedef enum {
+  /// Impeller with automatic backend selection (Vulkan with OpenGL ES
+  /// fallback).
+  kFlutterNativeWindowBackendImpellerAutoselect = 0,
+  /// Impeller with the Vulkan backend.
+  kFlutterNativeWindowBackendImpellerVulkan = 1,
+  /// Impeller with the OpenGL ES backend.
+  kFlutterNativeWindowBackendImpellerOpenGLES = 2,
+  /// Skia with the OpenGL ES backend.
+  kFlutterNativeWindowBackendSkiaOpenGLES = 3,
+  /// CPU software rendering into the native window buffer.
+  kFlutterNativeWindowBackendSoftware = 4,
+} FlutterNativeWindowBackend;
+
+/// Callback invoked on the raster thread when the native window swapchain
+/// needs a platform surface transaction (`ASurfaceTransaction*` on Android)
+/// whose lifetime and application are coordinated with the embedder's view
+/// hierarchy. Return null if the engine should create and apply its own
+/// transaction.
+typedef void* (*FlutterNativeWindowTransactionCallback)(void* /* user data */);
+
+/// Callback invoked on the raster thread when the native window swapchain
+/// needs a platform surface transaction (`ASurfaceTransaction*` on Android)
+/// and an optional publish/destroy callback pair for applying it when the
+/// embedder does not synchronously apply it during the frame.
+typedef void* (*FlutterNativeWindowTransactionWithPublishCallback)(
+    void* /* user data */,
+    VoidCallback* /* publish_callback_out */,
+    VoidCallback* /* destroy_callback_out */,
+    void** /* publish_user_data_out */);
+
+struct FlutterNativeWindowCompositor;
+
+typedef struct {
+  /// The size of this struct.
+  /// Must be sizeof(FlutterNativeWindowRendererConfig).
+  size_t struct_size;
+  /// The graphics backend to use for rendering into the native window.
+  FlutterNativeWindowBackend backend;
+  /// Optional callback returning a borrowed `ASurfaceTransaction*` for the
+  /// current frame, or null.
+  FlutterNativeWindowTransactionCallback transaction_callback;
+  /// Optional user data passed to `transaction_callback`. If null, the
+  /// `user_data` passed to `FlutterEngineInitialize` is used.
+  void* user_data;
+  /// Optional platform-view and overlay-surface callbacks for hybrid
+  /// composition and HCPP.
+  const struct FlutterNativeWindowCompositor* compositor;
+  /// Optional callback returning a borrowed `ASurfaceTransaction*` and a
+  /// fallback publish callback for the current frame. If set, takes precedence
+  /// over `transaction_callback`.
+  FlutterNativeWindowTransactionWithPublishCallback
+      transaction_with_publish_callback;
+} FlutterNativeWindowRendererConfig;
+
 typedef struct {
   FlutterRendererType type;
   union {
@@ -1184,6 +1245,7 @@ typedef struct {
     FlutterSoftwareRendererConfig software;
     FlutterMetalRendererConfig metal;
     FlutterVulkanRendererConfig vulkan;
+    FlutterNativeWindowRendererConfig native_window;
   };
 } FlutterRendererConfig;
 
@@ -2492,9 +2554,6 @@ typedef struct {
   FlutterRect transformed_bounds;
 } FlutterPlatformView;
 
-/// An opaque handle to a platform native window (`ANativeWindow*` on Android).
-typedef void* FlutterNativeWindowHandle;
-
 /// An overlay surface created by the embedder for hybrid composition in a
 /// native-window renderer (`kNativeWindow`).
 typedef struct {
@@ -3629,6 +3688,10 @@ typedef struct {
   const FlutterProjectArgs* project_args;
   /// Renderer configuration for the spawned engine.
   const FlutterRendererConfig* renderer_config;
+  /// Optional Dart isolate run configuration for the spawned engine. When
+  /// non-null, takes precedence over `entrypoint`, `library_uri`, and
+  /// `entrypoint_argv`.
+  const struct _FlutterEngineRunConfiguration* run_configuration;
 } FlutterEngineSpawnInfo;
 
 /// Properties of a Vulkan physical device driver queried against Impeller's
@@ -3674,7 +3737,7 @@ typedef struct {
 
 /// Configuration for launching a Dart isolate in a running shell via
 /// `FlutterEngineLaunchEngine`.
-typedef struct {
+typedef struct _FlutterEngineRunConfiguration {
   /// The size of this struct. Must be sizeof(FlutterEngineRunConfiguration).
   size_t struct_size;
   /// Path to the Dart kernel snapshot file. Ignored when
@@ -3699,6 +3762,67 @@ typedef struct {
   /// `PlatformDispatcher.instance.engineId`.
   int64_t engine_id;
 } FlutterEngineRunConfiguration;
+
+/// The kind of source behind a texture that
+/// `FlutterEngineRegisterExternalTextureWithInfo` registers.
+typedef enum {
+  kFlutterExternalTextureTypeOpenGLStream,
+  kFlutterExternalTextureTypeAndroidHardwareBuffer,
+} FlutterExternalTextureType;
+
+typedef struct {
+  size_t struct_size;
+  void (*attach_callback)(void* /* user data */, uint32_t texture_name);
+  void (*update_callback)(void* /* user data */, float transformation_out[16]);
+  void (*detach_callback)(void* /* user data */);
+  bool (*has_pending_frame_callback)(void* /* user data */);
+} FlutterOpenGLTextureStreamSource;
+
+typedef void* FlutterAndroidHardwareBufferHandle;
+
+typedef struct {
+  size_t struct_size;
+  FlutterAndroidHardwareBufferHandle hardware_buffer;
+  void* release_user_data;
+  VoidCallback release_callback;
+} FlutterAndroidHardwareBufferFrame;
+
+typedef struct {
+  size_t struct_size;
+  bool (*acquire_frame_callback)(void* /* user data */,
+                                 FlutterAndroidHardwareBufferFrame* frame_out);
+  bool drop_frames_on_context_destroyed;
+} FlutterAndroidHardwareBufferSource;
+
+typedef struct {
+  size_t struct_size;
+  int64_t texture_id;
+  FlutterExternalTextureType type;
+  void* user_data;
+  const FlutterOpenGLTextureStreamSource* open_gl_stream;
+  VoidCallback destruction_callback;
+  const FlutterAndroidHardwareBufferSource* android_hardware_buffer;
+} FlutterExternalTextureInfo;
+
+typedef struct {
+  size_t struct_size;
+  FlutterViewId view_id;
+  FlutterNativeWindowHandle window;
+  bool is_fake_window;
+} FlutterNativeWindowInfo;
+
+typedef struct {
+  size_t struct_size;
+  FlutterViewId view_id;
+  size_t width;
+  size_t height;
+} FlutterNativeWindowResizeInfo;
+
+typedef struct {
+  size_t struct_size;
+  FlutterNativeWindowBackend backend;
+  bool surface_control_enabled;
+} FlutterNativeWindowRendererInfo;
 
 /// Type of screenshot requested from `FlutterEngineScreenshot`.
 typedef enum {
@@ -4772,6 +4896,31 @@ FlutterEngineResult FlutterEngineScreenshot(
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineFreeScreenshot(FlutterScreenshot* screenshot);
 
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineRegisterImageGenerator(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterImageGeneratorRegistration* info);
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineRegisterExternalTextureWithInfo(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterExternalTextureInfo* info);
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSetNativeWindow(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterNativeWindowInfo* info);
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineResizeNativeWindow(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterNativeWindowResizeInfo* info);
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineGetNativeWindowRendererInfo(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterNativeWindowRendererInfo* info_out);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4949,6 +5098,22 @@ typedef FlutterEngineResult (*FlutterEngineScreenshotFnPtr)(
     FlutterScreenshot* screenshot_out);
 typedef FlutterEngineResult (*FlutterEngineFreeScreenshotFnPtr)(
     FlutterScreenshot* screenshot);
+typedef FlutterEngineResult (*FlutterEngineRegisterImageGeneratorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterImageGeneratorRegistration* info);
+typedef FlutterEngineResult (
+    *FlutterEngineRegisterExternalTextureWithInfoFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterExternalTextureInfo* info);
+typedef FlutterEngineResult (*FlutterEngineSetNativeWindowFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterNativeWindowInfo* info);
+typedef FlutterEngineResult (*FlutterEngineResizeNativeWindowFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterNativeWindowResizeInfo* info);
+typedef FlutterEngineResult (*FlutterEngineGetNativeWindowRendererInfoFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    FlutterNativeWindowRendererInfo* info_out);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -5015,6 +5180,12 @@ typedef struct {
   FlutterEngineUpdateAssetResolverFnPtr UpdateAssetResolver;
   FlutterEngineScreenshotFnPtr Screenshot;
   FlutterEngineFreeScreenshotFnPtr FreeScreenshot;
+  FlutterEngineRegisterImageGeneratorFnPtr RegisterImageGenerator;
+  FlutterEngineRegisterExternalTextureWithInfoFnPtr
+      RegisterExternalTextureWithInfo;
+  FlutterEngineSetNativeWindowFnPtr SetNativeWindow;
+  FlutterEngineResizeNativeWindowFnPtr ResizeNativeWindow;
+  FlutterEngineGetNativeWindowRendererInfoFnPtr GetNativeWindowRendererInfo;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

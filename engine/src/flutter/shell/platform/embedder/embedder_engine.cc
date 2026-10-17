@@ -11,6 +11,10 @@
 #include "flutter/shell/platform/embedder/embedder_struct_macros.h"
 #include "flutter/shell/platform/embedder/vsync_waiter_embedder.h"
 
+#if FML_OS_ANDROID
+#include "flutter/shell/platform/embedder/android/android_renderer.h"  // nogncheck
+#endif  // FML_OS_ANDROID
+
 namespace flutter {
 
 namespace {
@@ -194,20 +198,42 @@ std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
 std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
     const FlutterEngineRunConfiguration* config,
     const std::string& initial_route,
-    const PlatformViewFactory& on_create_platform_view,
+    const Shell::CreateCallback<PlatformView>& on_create_platform_view,
+    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
     std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
-    bool defer_surface_creation) const {
+    bool defer_surface_creation,
+    std::string* error_out) const {
   if (!IsValid()) {
     DestroyCustomAssetResolverIfNeeded(config);
+    if (error_out != nullptr) {
+      *error_out = "Parent engine is not in a valid running state.";
+    }
     return nullptr;
   }
   std::optional<RunConfiguration> run_configuration =
-      BuildRunConfiguration(config);
+      BuildRunConfiguration(config, error_out);
   if (!run_configuration.has_value()) {
     return nullptr;
   }
-  return Spawn(std::move(run_configuration.value()), initial_route,
-               on_create_platform_view, std::move(external_texture_resolver),
+  auto spawned =
+      Spawn(std::move(run_configuration.value()), initial_route,
+            on_create_platform_view, on_create_rasterizer,
+            std::move(external_texture_resolver), defer_surface_creation);
+  if (!spawned && error_out != nullptr && error_out->empty()) {
+    *error_out = "Could not spawn engine shell.";
+  }
+  return spawned;
+}
+
+std::unique_ptr<EmbedderEngine> EmbedderEngine::Spawn(
+    const FlutterEngineRunConfiguration* config,
+    const std::string& initial_route,
+    const PlatformViewFactory& on_create_platform_view,
+    std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver,
+    bool defer_surface_creation) const {
+  return Spawn(config, initial_route,
+               ToPlatformViewCreateCallback(on_create_platform_view),
+               &DefaultCreateRasterizer, std::move(external_texture_resolver),
                defer_surface_creation);
 }
 
@@ -316,6 +342,14 @@ std::optional<RunConfiguration> EmbedderEngine::BuildRunConfiguration(
 bool EmbedderEngine::CollectShell() {
   ClearVMServiceUriCallback();
   shell_.reset();
+#if FML_OS_ANDROID
+  // Destroy the AndroidRenderer after the shell (and its platform view and
+  // rasterizer) has been collected, but before CollectThreadHost() stops the
+  // raster thread (which ~AndroidContextGLSkia posts TeardownContext onto).
+  if (android_renderer_slot_) {
+    android_renderer_slot_->reset();
+  }
+#endif  // FML_OS_ANDROID
   is_surface_created_ = false;
   return IsValid();
 }
@@ -490,6 +524,19 @@ bool EmbedderEngine::RegisterTexture(int64_t texture) {
   }
   shell_->GetPlatformView()->RegisterTexture(std::move(resolved_texture));
   return true;
+}
+
+void EmbedderEngine::RegisterExternalTexture(std::shared_ptr<Texture> texture) {
+  FML_DCHECK(IsValid());
+  FML_DCHECK(texture);
+  shell_->GetPlatformView()->RegisterTexture(std::move(texture));
+}
+
+EmbedderImpellerDeviceContextGetter
+EmbedderEngine::GetImpellerDeviceContextGetter() const {
+  FML_DCHECK(IsValid());
+  PlatformView* platform_view = shell_->GetPlatformView().get();
+  return [platform_view]() { return platform_view->GetImpellerContext(); };
 }
 
 bool EmbedderEngine::UnregisterTexture(int64_t texture) {
@@ -689,6 +736,26 @@ void EmbedderEngine::AddImageDecoder(ImageGeneratorFactory factory,
   }
 }
 
+bool EmbedderEngine::RegisterImageGenerator(ImageGeneratorFactory factory,
+                                            int32_t priority) {
+  if (!IsValid() || !shell_) {
+    return false;
+  }
+
+  fml::AutoResetWaitableEvent latch;
+  fml::TaskRunner::RunNowOrPostTask(
+      task_runners_.GetPlatformTaskRunner(),
+      fml::MakeCopyable(
+          [this, &latch, factory = std::move(factory), priority]() mutable {
+            if (IsValid()) {
+              shell_->RegisterImageDecoder(std::move(factory), priority);
+            }
+            latch.Signal();
+          }));
+  latch.Wait();
+  return true;
+}
+
 void EmbedderEngine::SetVMServiceUriCallback(
     std::function<void(const std::string&)> callback) {
   ClearVMServiceUriCallback();
@@ -745,5 +812,22 @@ Rasterizer::Screenshot EmbedderEngine::Screenshot(
   }
   return shell_->Screenshot(type, base64_encode);
 }
+
+#if FML_OS_ANDROID
+void EmbedderEngine::SetAndroidRenderer(
+    std::shared_ptr<AndroidRenderer> renderer) {
+  if (!android_renderer_slot_) {
+    android_renderer_slot_ =
+        std::make_shared<std::shared_ptr<AndroidRenderer>>();
+  }
+  *android_renderer_slot_ = std::move(renderer);
+}
+
+const std::shared_ptr<AndroidRenderer>& EmbedderEngine::GetAndroidRenderer()
+    const {
+  static const std::shared_ptr<AndroidRenderer> kNullRenderer;
+  return android_renderer_slot_ ? *android_renderer_slot_ : kNullRenderer;
+}
+#endif  // FML_OS_ANDROID
 
 }  // namespace flutter

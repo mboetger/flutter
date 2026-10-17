@@ -19,7 +19,6 @@
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/paths_android.h"
-#include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/flutter_main.h"
 #include "flutter/shell/platform/android/ndk/ndk_proc_table.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -61,7 +60,7 @@ bool IsVivante() {
 }  // anonymous namespace
 
 FlutterMain::FlutterMain(const flutter::Settings& settings,
-                         flutter::AndroidRenderingAPI android_rendering_api)
+                         FlutterNativeWindowBackend android_rendering_api)
     : settings_(settings), android_rendering_api_(android_rendering_api) {}
 
 FlutterMain::~FlutterMain() = default;
@@ -78,7 +77,7 @@ const flutter::Settings& FlutterMain::GetSettings() const {
   return settings_;
 }
 
-flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() {
+FlutterNativeWindowBackend FlutterMain::GetAndroidRenderingAPI() {
   return android_rendering_api_;
 }
 
@@ -116,19 +115,19 @@ void FlutterMain::Init(JNIEnv* env,
   // android_get_device_api_level() is only available on API 24 and greater, and
   // Flutter still supports 21, 22, and 23.
 
-  AndroidRenderingAPI android_rendering_api =
+  FlutterNativeWindowBackend android_rendering_api =
       SelectedRenderingAPI(settings, api_level);
 
   settings.warn_on_impeller_opt_out = true;
 #if !SLIMPELLER
   switch (android_rendering_api) {
-    case AndroidRenderingAPI::kSoftware:
-    case AndroidRenderingAPI::kSkiaOpenGLES:
+    case kFlutterNativeWindowBackendSoftware:
+    case kFlutterNativeWindowBackendSkiaOpenGLES:
       settings.enable_impeller = false;
       break;
-    case AndroidRenderingAPI::kImpellerOpenGLES:
-    case AndroidRenderingAPI::kImpellerVulkan:
-    case AndroidRenderingAPI::kImpellerAutoselect:
+    case kFlutterNativeWindowBackendImpellerOpenGLES:
+    case kFlutterNativeWindowBackendImpellerVulkan:
+    case kFlutterNativeWindowBackendImpellerAutoselect:
       settings.enable_impeller = true;
       break;
   }
@@ -255,7 +254,7 @@ bool FlutterMain::Register(JNIEnv* env) {
 }
 
 // static
-AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
+FlutterNativeWindowBackend FlutterMain::SelectedRenderingAPI(
     const flutter::Settings& settings,
     int api_level) {
 #if !SLIMPELLER
@@ -265,7 +264,7 @@ AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
           << "Impeller does not support software rendering. Either disable "
              "software rendering or disable impeller.";
     }
-    return AndroidRenderingAPI::kSoftware;
+    return kFlutterNativeWindowBackendSoftware;
   }
 
   // Debug/Profile only functionality for testing a specific
@@ -273,22 +272,22 @@ AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
 #ifndef FLUTTER_RELEASE
   if (settings.requested_rendering_backend == "opengles" &&
       settings.enable_impeller) {
-    return AndroidRenderingAPI::kImpellerOpenGLES;
+    return kFlutterNativeWindowBackendImpellerOpenGLES;
   }
   if (settings.requested_rendering_backend == "vulkan" &&
       settings.enable_impeller) {
-    return AndroidRenderingAPI::kImpellerVulkan;
+    return kFlutterNativeWindowBackendImpellerVulkan;
   }
 #endif
 
   if (settings.enable_impeller &&
       api_level >= kMinimumAndroidApiLevelForImpeller && !IsVivante()) {
-    return AndroidRenderingAPI::kImpellerAutoselect;
+    return kFlutterNativeWindowBackendImpellerAutoselect;
   }
 
-  return AndroidRenderingAPI::kSkiaOpenGLES;
+  return kFlutterNativeWindowBackendSkiaOpenGLES;
 #else
-  return AndroidRenderingAPI::kImpellerAutoselect;
+  return kFlutterNativeWindowBackendImpellerAutoselect;
 #endif  // !SLIMPELLER
 }
 

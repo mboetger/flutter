@@ -5,16 +5,19 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_SHELL_HOLDER_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_ANDROID_SHELL_HOLDER_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <type_traits>
+#include <vector>
 
+#include "flutter/common/settings.h"
 #include "flutter/fml/macros.h"
-#include "flutter/fml/thread.h"
-#include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
-#include "flutter/shell/platform/android/platform_message_handler_android.h"
 #include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/shell/platform/android/surface/android_native_window.h"
 #include "flutter/shell/platform/android/vsync_waiter_android.h"
 #include "flutter/shell/platform/embedder/embedder.h"
 
@@ -28,24 +31,24 @@ class AndroidEngineCallbacks;
 /// and call `FlutterEngineProcTable::SendWindowMetricsEvent`.
 struct AndroidViewportMetrics {
   double device_pixel_ratio = 1.0;
-  double physical_width = 0;
-  double physical_height = 0;
-  double physical_min_width_constraint = 0;
-  double physical_max_width_constraint = 0;
-  double physical_min_height_constraint = 0;
-  double physical_max_height_constraint = 0;
-  double physical_padding_top = 0;
-  double physical_padding_right = 0;
-  double physical_padding_bottom = 0;
-  double physical_padding_left = 0;
-  double physical_view_inset_top = 0;
-  double physical_view_inset_right = 0;
-  double physical_view_inset_bottom = 0;
-  double physical_view_inset_left = 0;
-  double physical_system_gesture_inset_top = 0;
-  double physical_system_gesture_inset_right = 0;
-  double physical_system_gesture_inset_bottom = 0;
-  double physical_system_gesture_inset_left = 0;
+  double physical_width = 0.0;
+  double physical_height = 0.0;
+  double physical_min_width_constraint = 0.0;
+  double physical_max_width_constraint = 0.0;
+  double physical_min_height_constraint = 0.0;
+  double physical_max_height_constraint = 0.0;
+  double physical_padding_top = 0.0;
+  double physical_padding_right = 0.0;
+  double physical_padding_bottom = 0.0;
+  double physical_padding_left = 0.0;
+  double physical_view_inset_top = 0.0;
+  double physical_view_inset_right = 0.0;
+  double physical_view_inset_bottom = 0.0;
+  double physical_view_inset_left = 0.0;
+  double physical_system_gesture_inset_top = 0.0;
+  double physical_system_gesture_inset_right = 0.0;
+  double physical_system_gesture_inset_bottom = 0.0;
+  double physical_system_gesture_inset_left = 0.0;
   double physical_touch_slop = -1.0;
   std::vector<double> physical_display_features_bounds;
   std::vector<int> physical_display_features_type;
@@ -86,7 +89,7 @@ class AndroidShellHolder {
 
   AndroidShellHolder(const flutter::Settings& settings,
                      std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
-                     AndroidRenderingAPI android_rendering_api);
+                     FlutterNativeWindowBackend android_rendering_api);
 
   ~AndroidShellHolder();
 
@@ -137,77 +140,170 @@ class AndroidShellHolder {
 
   const flutter::Settings& GetSettings() const;
 
-  fml::WeakPtr<PlatformViewAndroid> GetPlatformView();
-
-  void NotifySurfaceCreated(fml::RefPtr<AndroidNativeWindow> native_window);
-
-  void NotifySurfaceWindowChanged(
-      fml::RefPtr<AndroidNativeWindow> native_window);
-
-  void NotifySurfaceChanged(const DlISize& size);
-
-  void NotifySurfaceDestroyed();
-
-  void SetViewportMetrics(int64_t view_id,
-                          const AndroidViewportMetrics& metrics);
-
-  void DispatchPlatformMessage(const std::string& name,
-                               const void* message_data,
-                               int message_position,
-                               int response_id);
-
-  void DispatchEmptyPlatformMessage(const std::string& name, int response_id);
-
-  void DispatchPointerDataPacket(const uint8_t* buffer, int size_bytes);
-
-  void InvokePlatformMessageResponseCallback(int response_id,
-                                             const uint8_t* data,
-                                             size_t size);
-
-  void InvokePlatformMessageEmptyResponseCallback(int response_id);
-
-  void DispatchSemanticsAction(int32_t node_id,
-                               int32_t action,
-                               const uint8_t* args_data,
-                               int32_t args_length);
-
-  void SetSemanticsEnabled(bool enabled);
-
-  void SetAccessibilityFeatures(int32_t flags);
-
-  void RegisterExternalTexture(
-      int64_t texture_id,
-      const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);
-
-  void RegisterImageTexture(
-      int64_t texture_id,
-      const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
-      ImageExternalTexture::ImageLifecycle lifecycle);
-
-  void UnregisterTexture(int64_t texture_id);
-
-  void MarkTextureFrameAvailable(int64_t texture_id);
-
-  void ScheduleFrame();
-
-  void LoadDartDeferredLibrary(
-      intptr_t loading_unit_id,
-      std::unique_ptr<const fml::Mapping> snapshot_data,
-      std::unique_ptr<const fml::Mapping> snapshot_instructions);
-
-  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
-                                    const std::string& error_message,
-                                    bool transient);
-
-  void UpdateJavaAssetManager(std::unique_ptr<APKAssetProvider> asset_provider);
-
   bool IsSurfaceControlEnabled();
 
   ScreenshotData Screenshot(FlutterScreenshotType type, bool base64_encode);
 
   void NotifyLowMemoryWarning();
 
+  //----------------------------------------------------------------------------
+  /// @brief      Sends Java's reply to the platform message from Dart with
+  ///             `response_id`. Called from any thread.
+  ///
+  void InvokePlatformMessageResponseCallback(int response_id,
+                                             const uint8_t* data,
+                                             size_t size);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Sends a null reply to the platform message from Dart with
+  ///             `response_id`. Called from any thread.
+  ///
+  void InvokePlatformMessageEmptyResponseCallback(int response_id);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Reads display metrics from the JNI facade and sends them to
+  ///             the engine through the embedder API.
+  ///
   void UpdateDisplayMetrics();
+
+  //----------------------------------------------------------------------------
+  /// @brief      Tells the engine whether the platform's accessibility
+  ///             services want semantics, through the embedder API.
+  ///
+  void SetSemanticsEnabled(bool enabled);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Sends the platform's accessibility features through the
+  ///             embedder API.
+  ///
+  /// @param[in]  flags  A bitmask of AccessibilityFeatureFlag values, which
+  ///             FlutterAccessibilityFeature shares.
+  ///
+  void SetAccessibilityFeatures(int32_t flags);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Sends a semantics action for a node on the implicit view
+  ///             through the embedder API.
+  ///
+  void DispatchSemanticsAction(int32_t node_id,
+                               int32_t action,
+                               const uint8_t* args_data,
+                               int32_t args_length);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Asks the engine for a frame through the embedder API.
+  ///
+  void ScheduleFrame();
+
+  //----------------------------------------------------------------------------
+  /// @brief      Sends viewport metrics for a view through the embedder API.
+  ///
+  void SetViewportMetrics(int64_t view_id,
+                          const AndroidViewportMetrics& metrics);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Sends a binary platform message to the engine through the
+  ///             embedder API.
+  ///
+  void DispatchPlatformMessage(const std::string& name,
+                               const void* message_data,
+                               int message_position,
+                               int response_id);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Sends an empty (null payload) platform message to the engine
+  ///             through the embedder API.
+  ///
+  void DispatchEmptyPlatformMessage(const std::string& name, int response_id);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Unpacks a binary pointer data packet buffer from
+  ///             AndroidTouchProcessor and dispatches the events to the engine
+  ///             through the embedder API.
+  ///
+  void DispatchPointerDataPacket(const uint8_t* buffer, int size_bytes);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Delivers a resolved deferred Dart loading unit's data and
+  ///             instructions mappings to the engine through the embedder API.
+  ///
+  void LoadDartDeferredLibrary(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Notifies the engine that a deferred Dart loading unit failed
+  ///             to load or install, through the embedder API.
+  ///
+  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
+                                    const std::string& error_message,
+                                    bool transient);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Replaces the engine's APK asset resolver through the embedder
+  ///             API.
+  ///
+  void UpdateJavaAssetManager(std::unique_ptr<APKAssetProvider> asset_provider);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Registers an Android SurfaceTexture-backed external texture
+  ///             with the engine through the embedder API.
+  ///
+  void RegisterExternalTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Registers an Android ImageTextureEntry-backed external
+  ///             texture with the engine through the embedder API.
+  ///
+  /// @param[in]  drop_frames_on_context_destroyed  Whether the texture drops
+  ///             its frame when the engine's graphics context goes away, for
+  ///             producers that reset when the app is backgrounded.
+  ///
+  void RegisterImageTexture(
+      int64_t texture_id,
+      const fml::jni::ScopedJavaGlobalRef<jobject>& image_texture_entry,
+      bool drop_frames_on_context_destroyed);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Unregisters an external texture from the engine through the
+  ///             embedder API.
+  ///
+  void UnregisterTexture(int64_t texture_id);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Notifies the engine that the frame is available on an
+  ///             external texture through the embedder API.
+  ///
+  void MarkTextureFrameAvailable(int64_t texture_id);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Attaches a native window to the Android surface, installs the
+  ///             first-frame callback, and notifies the engine that its
+  ///             rendering surface was created through the embedder API.
+  ///
+  void NotifySurfaceCreated(fml::RefPtr<AndroidNativeWindow> native_window);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Replaces the native window on the Android surface and
+  ///             schedules a frame through the embedder API.
+  ///
+  void NotifySurfaceWindowChanged(
+      fml::RefPtr<AndroidNativeWindow> native_window);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Resizes the on-screen Android surface.
+  ///
+  void NotifySurfaceChanged(int width, int height);
+
+  //----------------------------------------------------------------------------
+  /// @brief      Notifies the engine that its rendering surface is being
+  ///             destroyed through the embedder API, then tears down the
+  ///             Android surface context.
+  ///
+  void NotifySurfaceDestroyed();
 
   // Visible for testing.
   FLUTTER_API_SYMBOL(FlutterEngine) GetEngineForTesting() const {
@@ -227,20 +323,8 @@ class AndroidShellHolder {
       std::unique_ptr<std::remove_pointer_t<FLUTTER_API_SYMBOL(FlutterEngine)>,
                       EngineDeleter>;
 
-  // Owns the Android shell's dedicated UI, raster, and IO threads, shared
-  // across shells spawned via Spawn().
-  struct ThreadHost {
-    std::unique_ptr<fml::Thread> ui_thread;
-    std::unique_ptr<fml::Thread> raster_thread;
-    std::unique_ptr<fml::Thread> io_thread;
-  };
-
   const flutter::Settings settings_;
   const std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;
-  std::unique_ptr<PlatformViewAndroid> platform_view_android_;
-  fml::WeakPtr<PlatformViewAndroid> platform_view_;
-  std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
-  std::shared_ptr<ThreadHost> thread_host_;
   // The state behind the engine's FlutterProjectArgs callbacks. The engine
   // passes it back to them as user_data, so it must outlive the engine.
   std::unique_ptr<AndroidEngineCallbacks> engine_callbacks_;
@@ -250,11 +334,16 @@ class AndroidShellHolder {
   // Answers the vsync callback of the platform view. Detached before engine_
   // is destroyed.
   std::shared_ptr<VsyncWaiterAndroid> vsync_waiter_;
-  const uint64_t holder_id_;
   bool is_valid_ = false;
   uint64_t next_pointer_flow_id_ = 0;
+  const uint64_t holder_id_;
   std::unique_ptr<APKAssetProvider> apk_asset_provider_;
-  const AndroidRenderingAPI android_rendering_api_;
+  const FlutterNativeWindowBackend android_rendering_api_;
+
+  void SendPlatformMessage(const std::string& name,
+                           const uint8_t* message_data,
+                           size_t message_size,
+                           int response_id);
 
   //----------------------------------------------------------------------------
   /// @brief      Constructor with its components injected.
@@ -267,19 +356,14 @@ class AndroidShellHolder {
   ///             Used when constructing the Shell from the inside out when
   ///             spawning from an existing Shell.
   ///
-  AndroidShellHolder(
-      const flutter::Settings& settings,
-      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
-      const std::shared_ptr<ThreadHost>& thread_host,
-      std::unique_ptr<AndroidEngineCallbacks> engine_callbacks,
-      UniqueEngine engine,
-      uint64_t holder_id,
-      std::unique_ptr<APKAssetProvider> apk_asset_provider,
-      std::unique_ptr<PlatformViewAndroid> platform_view_android,
-      const fml::WeakPtr<PlatformViewAndroid>& platform_view,
-      std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler,
-      std::shared_ptr<VsyncWaiterAndroid> vsync_waiter,
-      AndroidRenderingAPI rendering_api);
+  AndroidShellHolder(const flutter::Settings& settings,
+                     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+                     std::unique_ptr<AndroidEngineCallbacks> engine_callbacks,
+                     UniqueEngine engine,
+                     uint64_t holder_id,
+                     std::unique_ptr<APKAssetProvider> apk_asset_provider,
+                     std::shared_ptr<VsyncWaiterAndroid> vsync_waiter,
+                     FlutterNativeWindowBackend rendering_api);
   static void ThreadDestructCallback(void* value);
 
   bool IsNDKImageDecoderAvailable();

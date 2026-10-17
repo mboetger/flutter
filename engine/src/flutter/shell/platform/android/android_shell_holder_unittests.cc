@@ -18,6 +18,8 @@
 #include "flutter/shell/common/shell.h"
 #include "flutter/shell/common/vsync_waiter.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
+#include "flutter/shell/platform/android/platform_message_handler_android.h"
+#include "flutter/shell/platform/android/platform_view_android_delegate/platform_view_android_delegate.h"
 #include "flutter/shell/platform/embedder/embedder_engine.h"
 #include "flutter/shell/platform/embedder/test_utils/proc_table_replacement.h"
 #include "gmock/gmock.h"
@@ -188,7 +190,7 @@ std::unique_ptr<AndroidShellHolder> CreateHolderWithoutSurface(
   settings.enable_software_rendering = false;
   settings.merged_platform_ui_thread = merged_platform_ui_thread;
   return std::make_unique<AndroidShellHolder>(
-      settings, std::move(jni), AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, std::move(jni), kFlutterNativeWindowBackendImpellerOpenGLES);
 }
 
 // Dispatches the ALooper of the current thread, which runs both fml tasks and
@@ -297,10 +299,9 @@ TEST(AndroidShellHolder, Create) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   EXPECT_NE(holder.get(), nullptr);
   EXPECT_TRUE(holder->IsValid());
-  EXPECT_NE(holder->GetPlatformView().get(), nullptr);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   holder->NotifySurfaceCreated(window);
@@ -311,10 +312,9 @@ TEST(AndroidShellHolder, HandlePlatformMessage) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   EXPECT_NE(holder.get(), nullptr);
   EXPECT_TRUE(holder->IsValid());
-  EXPECT_NE(holder->GetPlatformView().get(), nullptr);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   holder->NotifySurfaceCreated(window);
@@ -437,7 +437,7 @@ TEST(AndroidShellHolder, CreateWithMergedPlatformAndUIThread) {
   Settings settings;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   holder->NotifySurfaceCreated(window);
@@ -453,7 +453,7 @@ TEST(AndroidShellHolder, CreateWithUnMergedPlatformAndUIThread) {
       Settings::MergedPlatformUIThread::kDisabled;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   auto window = fml::MakeRefCounted<AndroidNativeWindow>(
       nullptr, /*is_fake_window=*/true);
   holder->NotifySurfaceCreated(window);
@@ -472,7 +472,7 @@ TEST(AndroidShellHolder, StartsWithDetachedLifecycleState) {
             Settings::MergedPlatformUIThread::kEnabled);
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   // Frames stay off until Java reports a lifecycle state over
@@ -490,7 +490,7 @@ TEST(AndroidShellHolder, SurfaceLifecycleRoutesThroughEmbedderApi) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   static int notify_created_calls;
@@ -552,7 +552,7 @@ TEST(AndroidShellHolder, TextureLifecycleRoutesThroughEmbedderApi) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   static int mark_frame_available_calls;
@@ -691,7 +691,7 @@ TEST(AndroidShellHolder, SemanticsUpdateRoutesThroughCallbackToDelegate) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   flutter::SemanticsNodeUpdates nodes;
@@ -754,7 +754,7 @@ TEST(AndroidShellHolder, ComputePlatformResolvedLocalesKeepsJavaCodes) {
             std::initializer_list<std::string>{"iw", "IL", ""});
       });
 
-  PlatformViewAndroid& platform_view = *holder->GetPlatformView();
+  PlatformView& platform_view = *GetShellForTesting(*holder)->GetPlatformView();
   std::unique_ptr<std::vector<std::string>> resolved =
       platform_view.ComputePlatformResolvedLocales(supported);
   ASSERT_NE(resolved, nullptr);
@@ -772,7 +772,7 @@ TEST(AndroidShellHolder, ComputePlatformResolvedLocalesWithoutAnswerIsEmpty) {
         return std::make_unique<std::vector<std::string>>();
       });
 
-  PlatformViewAndroid& platform_view = *holder->GetPlatformView();
+  PlatformView& platform_view = *GetShellForTesting(*holder)->GetPlatformView();
   std::unique_ptr<std::vector<std::string>> resolved =
       platform_view.ComputePlatformResolvedLocales(supported);
   ASSERT_NE(resolved, nullptr);
@@ -801,7 +801,7 @@ TEST(AndroidShellHolder,
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   bool load_called = false;
@@ -888,7 +888,7 @@ TEST(AndroidShellHolder, NotifyLowMemoryWarningCallsEmbedderApi) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   int calls = 0;

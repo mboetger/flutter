@@ -320,7 +320,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<JNIMock>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
 
   jobject jcaller = reinterpret_cast<jobject>(123);
   jintArray bounds = reinterpret_cast<jintArray>(456);
@@ -456,7 +456,7 @@ std::unique_ptr<AndroidShellHolder> CreateHolderWithMergedThreads() {
             Settings::MergedPlatformUIThread::kEnabled);
   return std::make_unique<AndroidShellHolder>(
       settings, std::make_shared<JNIMock>(),
-      AndroidRenderingAPI::kImpellerOpenGLES);
+      kFlutterNativeWindowBackendImpellerOpenGLES);
 }
 
 }  // namespace
@@ -618,7 +618,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, UpdateDisplayMetricsCallsEmbedderApi) {
   EXPECT_CALL(*jni, GetDisplayDensity()).WillOnce(Return(kExpectedDensity));
 
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   std::vector<FlutterEngineDisplay> displays;
@@ -821,7 +821,7 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   Settings settings;
   settings.enable_software_rendering = false;
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   struct SentMessage {
@@ -1181,14 +1181,32 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   ASSERT_TRUE(holder->IsValid());
 
   std::vector<int64_t> registered_ids;
-  holder->GetEmbedderApiForTesting().RegisterExternalTexture = MOCK_ENGINE_PROC(
-      RegisterExternalTexture,
-      ([&registered_ids](FLUTTER_API_SYMBOL(FlutterEngine) engine,
-                         int64_t texture_identifier) {
-        EXPECT_NE(engine, nullptr);
-        registered_ids.push_back(texture_identifier);
-        return kSuccess;
-      }));
+  holder->GetEmbedderApiForTesting().RegisterExternalTextureWithInfo =
+      MOCK_ENGINE_PROC(
+          RegisterExternalTextureWithInfo,
+          ([&registered_ids](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                             const FlutterExternalTextureInfo* info) {
+            EXPECT_NE(engine, nullptr);
+            EXPECT_EQ(info->struct_size, sizeof(FlutterExternalTextureInfo));
+            EXPECT_EQ(info->type, kFlutterExternalTextureTypeOpenGLStream);
+            const FlutterOpenGLTextureStreamSource* source =
+                info->open_gl_stream;
+            EXPECT_NE(source, nullptr);
+            if (source != nullptr) {
+              EXPECT_EQ(source->struct_size,
+                        sizeof(FlutterOpenGLTextureStreamSource));
+              EXPECT_NE(source->attach_callback, nullptr);
+              EXPECT_NE(source->update_callback, nullptr);
+              EXPECT_NE(source->detach_callback, nullptr);
+              EXPECT_NE(source->has_pending_frame_callback, nullptr);
+            }
+            registered_ids.push_back(info->texture_id);
+            // Stands in for the engine, which destroys the source once the
+            // texture is unregistered.
+            EXPECT_NE(info->destruction_callback, nullptr);
+            info->destruction_callback(info->user_data);
+            return kSuccess;
+          }));
 
   const jlong shell_holder = reinterpret_cast<jlong>(holder.get());
   jobject jcaller = reinterpret_cast<jobject>(123);
@@ -1214,15 +1232,36 @@ TEST_F(PlatformViewAndroidJNIImplTest, RegisterImageTextureCallsEmbedderApi) {
   std::unique_ptr<AndroidShellHolder> holder = CreateHolderWithMergedThreads();
   ASSERT_TRUE(holder->IsValid());
 
-  std::vector<int64_t> registered_ids;
-  holder->GetEmbedderApiForTesting().RegisterExternalTexture = MOCK_ENGINE_PROC(
-      RegisterExternalTexture,
-      ([&registered_ids](FLUTTER_API_SYMBOL(FlutterEngine) engine,
-                         int64_t texture_identifier) {
-        EXPECT_NE(engine, nullptr);
-        registered_ids.push_back(texture_identifier);
-        return kSuccess;
-      }));
+  struct Registration {
+    int64_t texture_id;
+    bool drop_frames_on_context_destroyed;
+  };
+  std::vector<Registration> registrations;
+  holder->GetEmbedderApiForTesting().RegisterExternalTextureWithInfo =
+      MOCK_ENGINE_PROC(
+          RegisterExternalTextureWithInfo,
+          ([&registrations](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                            const FlutterExternalTextureInfo* info) {
+            EXPECT_NE(engine, nullptr);
+            EXPECT_EQ(info->struct_size, sizeof(FlutterExternalTextureInfo));
+            EXPECT_EQ(info->type,
+                      kFlutterExternalTextureTypeAndroidHardwareBuffer);
+            const FlutterAndroidHardwareBufferSource* source =
+                info->android_hardware_buffer;
+            EXPECT_NE(source, nullptr);
+            if (source != nullptr) {
+              EXPECT_EQ(source->struct_size,
+                        sizeof(FlutterAndroidHardwareBufferSource));
+              EXPECT_NE(source->acquire_frame_callback, nullptr);
+              registrations.push_back(
+                  {info->texture_id, source->drop_frames_on_context_destroyed});
+            }
+            // Stands in for the engine, which destroys the source once the
+            // texture is unregistered.
+            EXPECT_NE(info->destruction_callback, nullptr);
+            info->destruction_callback(info->user_data);
+            return kSuccess;
+          }));
 
   const jlong shell_holder = reinterpret_cast<jlong>(holder.get());
   jobject jcaller = reinterpret_cast<jobject>(123);
@@ -1235,8 +1274,11 @@ TEST_F(PlatformViewAndroidJNIImplTest, RegisterImageTextureCallsEmbedderApi) {
   register_image_texture(&mock_env, jcaller, shell_holder, kResetTextureId,
                          jimage_entry, JNI_TRUE);
 
-  EXPECT_THAT(registered_ids,
-              ElementsAre(kKeepAliveTextureId, kResetTextureId));
+  ASSERT_EQ(registrations.size(), 2u);
+  EXPECT_EQ(registrations[0].texture_id, kKeepAliveTextureId);
+  EXPECT_FALSE(registrations[0].drop_frames_on_context_destroyed);
+  EXPECT_EQ(registrations[1].texture_id, kResetTextureId);
+  EXPECT_TRUE(registrations[1].drop_frames_on_context_destroyed);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest,
@@ -1418,7 +1460,7 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<JNIMock>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   // Fake RGBA pixel buffer (4 bytes = 1 pixel) returned by the mocked C-API.
@@ -1484,7 +1526,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, LaunchCallsLaunchEngineEmbedderApi) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<JNIMock>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   // Simulate AOT mode so Launch proceeds without needing a kernel file on disk.
@@ -1545,7 +1587,7 @@ TEST_F(PlatformViewAndroidJNIImplTest, DestroyCallsShutdownEmbedderApi) {
   settings.enable_software_rendering = false;
   auto jni = std::make_shared<JNIMock>();
   auto holder = std::make_unique<AndroidShellHolder>(
-      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+      settings, jni, kFlutterNativeWindowBackendImpellerOpenGLES);
   ASSERT_TRUE(holder->IsValid());
 
   FLUTTER_API_SYMBOL(FlutterEngine)

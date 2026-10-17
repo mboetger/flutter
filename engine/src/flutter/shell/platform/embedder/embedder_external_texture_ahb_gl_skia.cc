@@ -1,0 +1,68 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "flutter/shell/platform/embedder/embedder_external_texture_ahb_gl_skia.h"
+
+#include "flutter/display_list/image/dl_image_skia.h"
+#include "flutter/third_party/skia/include/core/SkColorSpace.h"
+#include "flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h"
+#include "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h"
+#include "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h"
+#include "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
+
+namespace flutter {
+
+EmbedderExternalTextureAHBGLSkia::EmbedderExternalTextureAHBGLSkia(
+    int64_t id,
+    EmbedderAndroidHardwareBufferSource source)
+    : EmbedderExternalTextureAHBGL(id, source) {}
+
+void EmbedderExternalTextureAHBGLSkia::Attach(PaintContext& context) {
+  if (state_ == AttachmentState::kUninitialized) {
+    // After this call state_ will be AttachmentState::kAttached and egl_image_
+    // will have been created if we still have an Image associated with us.
+    EmbedderExternalTextureAHBGL::Attach(context);
+  }
+}
+
+void EmbedderExternalTextureAHBGLSkia::Detach() {
+  EmbedderExternalTextureAHBGL::Detach();
+}
+
+void EmbedderExternalTextureAHBGLSkia::BindImageToTexture(
+    const impeller::UniqueEGLImageKHR& image,
+    GLuint tex) {
+  if (!image.is_valid() || tex == 0) {
+    return;
+  }
+  glBindTexture(GL_TEXTURE_EXTERNAL_OES, tex);
+  glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES,
+                               static_cast<GLeglImageOES>(image.get().image));
+}
+
+sk_sp<flutter::DlImage> EmbedderExternalTextureAHBGLSkia::CreateDlImage(
+    PaintContext& context,
+    const SkRect& bounds,
+    std::optional<HardwareBufferKey> id,
+    impeller::UniqueEGLImageKHR&& egl_image) {
+  GLuint texture_name;
+  glGenTextures(1, &texture_name);
+  auto gl_texture = impeller::GLTexture{texture_name};
+  impeller::UniqueGLTexture unique_texture;
+  unique_texture.reset(gl_texture);
+
+  BindImageToTexture(egl_image, unique_texture.get().texture_name);
+  GrGLTextureInfo textureInfo = {
+      GL_TEXTURE_EXTERNAL_OES, unique_texture.get().texture_name, GL_RGBA8_OES};
+  auto backendTexture =
+      GrBackendTextures::MakeGL(1, 1, skgpu::Mipmapped::kNo, textureInfo);
+
+  gl_entries_[id.value_or(0)] = GlEntry{.egl_image = std::move(egl_image),
+                                        .texture = std::move(unique_texture)};
+  return DlImageSkia::Make(SkImages::BorrowTextureFrom(
+      context.gr_context, backendTexture, kTopLeft_GrSurfaceOrigin,
+      kRGBA_8888_SkColorType, kPremul_SkAlphaType, nullptr));
+}
+
+}  // namespace flutter
