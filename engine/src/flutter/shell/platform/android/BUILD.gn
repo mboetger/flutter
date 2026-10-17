@@ -138,16 +138,13 @@ source_set("flutter_shell_native_src") {
     ":flutter_embedder_native_src",
     "//flutter/assets",
     "//flutter/common",
-    "//flutter/common/graphics",
     "//flutter/fml",
-    "//flutter/impeller/toolkit/android",
     "//flutter/shell/common",
     "//flutter/shell/platform/android/jni",
     "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface:native_window",
     "//flutter/shell/platform/embedder:embedder_as_internal_library",
     "//flutter/shell/platform/embedder:embedder_headers",
-    "//flutter/skia",
   ]
 
   public_configs = [ "//flutter:config" ]

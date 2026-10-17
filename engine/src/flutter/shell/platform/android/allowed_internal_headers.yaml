@@ -7,121 +7,20 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 22,
+  "total_allowed_internal_headers": 2,
   "subsystems": {
-    "common_graphics_and_display_list": {
-      "count": 4,
-      "allowed_headers": [
-        "flutter/common/graphics/texture.h",
-        "flutter/display_list/effects/dl_color_source.h",
-        "flutter/display_list/image/dl_image.h",
-        "flutter/display_list/image/dl_image_skia.h"
-      ]
-    },
     "engine_core": {
       "count": 2,
       "allowed_headers": [
         "flutter/shell/common/platform_view.h",
         "flutter/shell/common/snapshot_surface_producer.h"
       ]
-    },
-    "impeller": {
-      "count": 11,
-      "allowed_headers": [
-        "flutter/impeller/display_list/dl_image_impeller.h",
-        "flutter/impeller/renderer/backend/gles/context_gles.h",
-        "flutter/impeller/renderer/backend/gles/texture_gles.h",
-        "flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
-        "flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h",
-        "flutter/impeller/renderer/backend/vulkan/context_vk.h",
-        "flutter/impeller/renderer/backend/vulkan/texture_vk.h",
-        "flutter/impeller/toolkit/android/hardware_buffer.h",
-        "flutter/impeller/toolkit/egl/image.h",
-        "flutter/impeller/toolkit/gles/texture.h",
-        "flutter/impeller/toolkit/glvk/trampoline.h"
-      ]
-    },
-    "txt_and_skia": {
-      "count": 5,
-      "allowed_headers": [
-        "flutter/third_party/skia/include/core/SkM44.h",
-        "flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h",
-        "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h",
-        "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
-        "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
-      ]
     }
   },
   "allowed_legacy_files": {
-    "image_external_texture.h": [
-      "flutter/common/graphics/texture.h"
-    ],
-    "image_external_texture_gl.cc": [
-      "flutter/impeller/toolkit/android/hardware_buffer.h"
-    ],
-    "image_external_texture_gl.h": [
-      "flutter/impeller/toolkit/egl/image.h",
-      "flutter/impeller/toolkit/gles/texture.h"
-    ],
-    "image_external_texture_gl_impeller.cc": [
-      "flutter/impeller/display_list/dl_image_impeller.h",
-      "flutter/impeller/renderer/backend/gles/texture_gles.h"
-    ],
-    "image_external_texture_gl_impeller.h": [
-      "flutter/impeller/renderer/backend/gles/context_gles.h"
-    ],
-    "image_external_texture_gl_skia.cc": [
-      "flutter/display_list/image/dl_image_skia.h",
-      "flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h",
-      "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
-      "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
-    ],
-    "image_external_texture_vk_impeller.cc": [
-      "flutter/impeller/display_list/dl_image_impeller.h",
-      "flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/texture_vk.h"
-    ],
-    "image_external_texture_vk_impeller.h": [
-      "flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/context_vk.h"
-    ],
-    "image_lru.h": [
-      "flutter/display_list/image/dl_image.h"
-    ],
     "platform_view_android.h": [
       "flutter/shell/common/platform_view.h",
       "flutter/shell/common/snapshot_surface_producer.h"
-    ],
-    "surface_texture_external_texture.cc": [
-      "flutter/display_list/effects/dl_color_source.h"
-    ],
-    "surface_texture_external_texture.h": [
-      "flutter/common/graphics/texture.h",
-      "flutter/third_party/skia/include/core/SkM44.h"
-    ],
-    "surface_texture_external_texture_gl_impeller.cc": [
-      "flutter/impeller/display_list/dl_image_impeller.h"
-    ],
-    "surface_texture_external_texture_gl_impeller.h": [
-      "flutter/impeller/renderer/backend/gles/context_gles.h",
-      "flutter/impeller/renderer/backend/gles/texture_gles.h"
-    ],
-    "surface_texture_external_texture_gl_skia.cc": [
-      "flutter/display_list/image/dl_image_skia.h",
-      "flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h",
-      "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h",
-      "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
-      "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
-    ],
-    "surface_texture_external_texture_vk_impeller.cc": [
-      "flutter/impeller/display_list/dl_image_impeller.h",
-      "flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/texture_vk.h"
-    ],
-    "surface_texture_external_texture_vk_impeller.h": [
-      "flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/context_vk.h",
-      "flutter/impeller/toolkit/glvk/trampoline.h"
     ]
   }
 }
