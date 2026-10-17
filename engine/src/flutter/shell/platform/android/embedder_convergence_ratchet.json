@@ -14,15 +14,15 @@
       "enforce": "ratchet"
     },
     "embedder_internal_includes": {
-      "count": 1,
+      "count": 0,
       "enforce": "ratchet"
     },
     "engine_internal_includes": {
-      "count": 65,
+      "count": 36,
       "enforce": "ratchet"
     },
     "unique_internal_headers": {
-      "count": 45,
+      "count": 22,
       "enforce": "ratchet"
     },
     "jni_platform_view_calls": {
@@ -34,7 +34,7 @@
       "enforce": "zero"
     },
     "gn_internal_deps": {
-      "count": 9,
+      "count": 4,
       "enforce": "ratchet"
     },
     "nogncheck_count": {

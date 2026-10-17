@@ -7,14 +7,13 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 45,
+  "total_allowed_internal_headers": 22,
   "subsystems": {
     "common_graphics_and_display_list": {
-      "count": 5,
+      "count": 4,
       "allowed_headers": [
         "flutter/common/graphics/texture.h",
         "flutter/display_list/effects/dl_color_source.h",
-        "flutter/display_list/geometry/dl_geometry_types.h",
         "flutter/display_list/image/dl_image.h",
         "flutter/display_list/image/dl_image_skia.h"
       ]
@@ -27,52 +26,25 @@
       ]
     },
     "impeller": {
-      "count": 26,
+      "count": 11,
       "allowed_headers": [
-        "flutter/impeller/base/flags.h",
-        "flutter/impeller/base/validation.h",
         "flutter/impeller/display_list/dl_image_impeller.h",
-        "flutter/impeller/entity/gles/entity_shaders_gles.h",
-        "flutter/impeller/entity/gles/framebuffer_blend_shaders_gles.h",
-        "flutter/impeller/entity/gles3/entity_shaders_gles.h",
-        "flutter/impeller/entity/gles3/framebuffer_blend_shaders_gles.h",
-        "flutter/impeller/entity/vk/entity_shaders_vk.h",
-        "flutter/impeller/entity/vk/framebuffer_blend_shaders_vk.h",
-        "flutter/impeller/entity/vk/modern_shaders_vk.h",
         "flutter/impeller/renderer/backend/gles/context_gles.h",
         "flutter/impeller/renderer/backend/gles/texture_gles.h",
         "flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
         "flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h",
         "flutter/impeller/renderer/backend/vulkan/context_vk.h",
-        "flutter/impeller/renderer/backend/vulkan/surface_context_vk.h",
-        "flutter/impeller/renderer/backend/vulkan/swapchain/swapchain_vk.h",
         "flutter/impeller/renderer/backend/vulkan/texture_vk.h",
-        "flutter/impeller/renderer/context.h",
         "flutter/impeller/toolkit/android/hardware_buffer.h",
-        "flutter/impeller/toolkit/egl/context.h",
-        "flutter/impeller/toolkit/egl/display.h",
         "flutter/impeller/toolkit/egl/image.h",
-        "flutter/impeller/toolkit/egl/surface.h",
         "flutter/impeller/toolkit/gles/texture.h",
         "flutter/impeller/toolkit/glvk/trampoline.h"
       ]
     },
-    "shell_gpu_and_vulkan": {
+    "txt_and_skia": {
       "count": 5,
       "allowed_headers": [
-        "flutter/shell/gpu/gpu_surface_gl_delegate.h",
-        "flutter/shell/gpu/gpu_surface_gl_impeller.h",
-        "flutter/shell/gpu/gpu_surface_gl_skia.h",
-        "flutter/shell/gpu/gpu_surface_software.h",
-        "flutter/shell/gpu/gpu_surface_vulkan_impeller.h"
-      ]
-    },
-    "txt_and_skia": {
-      "count": 7,
-      "allowed_headers": [
-        "flutter/third_party/skia/include/core/SkImage.h",
         "flutter/third_party/skia/include/core/SkM44.h",
-        "flutter/third_party/skia/include/core/SkRefCnt.h",
         "flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h",
         "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h",
         "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
@@ -81,60 +53,6 @@
     }
   },
   "allowed_legacy_files": {
-    "android_context_dynamic_impeller.cc": [
-      "flutter/impeller/base/validation.h"
-    ],
-    "android_context_gl_impeller.cc": [
-      "flutter/impeller/entity/gles/entity_shaders_gles.h",
-      "flutter/impeller/entity/gles/framebuffer_blend_shaders_gles.h",
-      "flutter/impeller/entity/gles3/entity_shaders_gles.h",
-      "flutter/impeller/entity/gles3/framebuffer_blend_shaders_gles.h",
-      "flutter/impeller/renderer/backend/gles/context_gles.h",
-      "flutter/impeller/toolkit/egl/context.h",
-      "flutter/impeller/toolkit/egl/surface.h"
-    ],
-    "android_context_gl_impeller.h": [
-      "flutter/impeller/toolkit/egl/display.h"
-    ],
-    "android_context_vk_impeller.cc": [
-      "flutter/impeller/entity/vk/entity_shaders_vk.h",
-      "flutter/impeller/entity/vk/framebuffer_blend_shaders_vk.h",
-      "flutter/impeller/entity/vk/modern_shaders_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/context_vk.h"
-    ],
-    "android_egl_surface.h": [
-      "flutter/display_list/geometry/dl_geometry_types.h"
-    ],
-    "android_surface_gl_impeller.cc": [
-      "flutter/impeller/toolkit/egl/surface.h",
-      "flutter/shell/gpu/gpu_surface_gl_impeller.h"
-    ],
-    "android_surface_gl_impeller.h": [
-      "flutter/shell/gpu/gpu_surface_gl_delegate.h"
-    ],
-    "android_surface_gl_skia.h": [
-      "flutter/shell/gpu/gpu_surface_gl_skia.h"
-    ],
-    "android_surface_software.cc": [
-      "flutter/third_party/skia/include/core/SkImage.h"
-    ],
-    "android_surface_software.h": [
-      "flutter/shell/gpu/gpu_surface_software.h"
-    ],
-    "android_surface_vk_impeller.cc": [
-      "flutter/impeller/renderer/backend/vulkan/context_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/swapchain/swapchain_vk.h",
-      "flutter/shell/gpu/gpu_surface_vulkan_impeller.h"
-    ],
-    "android_surface_vk_impeller.h": [
-      "flutter/impeller/renderer/backend/vulkan/surface_context_vk.h"
-    ],
-    "context/android_context.h": [
-      "flutter/impeller/base/flags.h",
-      "flutter/impeller/renderer/context.h",
-      "flutter/third_party/skia/include/core/SkRefCnt.h",
-      "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h"
-    ],
     "image_external_texture.h": [
       "flutter/common/graphics/texture.h"
     ],
@@ -172,9 +90,6 @@
     ],
     "platform_view_android.h": [
       "flutter/shell/common/platform_view.h",
-      "flutter/shell/common/snapshot_surface_producer.h"
-    ],
-    "surface/snapshot_surface_producer.h": [
       "flutter/shell/common/snapshot_surface_producer.h"
     ],
     "surface_texture_external_texture.cc": [
