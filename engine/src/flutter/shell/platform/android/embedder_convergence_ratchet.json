@@ -18,11 +18,11 @@
       "enforce": "ratchet"
     },
     "engine_internal_includes": {
-      "count": 69,
+      "count": 65,
       "enforce": "ratchet"
     },
     "unique_internal_headers": {
-      "count": 47,
+      "count": 45,
       "enforce": "ratchet"
     },
     "jni_platform_view_calls": {
@@ -34,7 +34,7 @@
       "enforce": "zero"
     },
     "gn_internal_deps": {
-      "count": 10,
+      "count": 9,
       "enforce": "ratchet"
     },
     "nogncheck_count": {

@@ -7,7 +7,7 @@
 # command instead of editing by hand.
 {
   "version": 1,
-  "total_allowed_internal_headers": 47,
+  "total_allowed_internal_headers": 45,
   "subsystems": {
     "common_graphics_and_display_list": {
       "count": 5,
@@ -24,13 +24,6 @@
       "allowed_headers": [
         "flutter/shell/common/platform_view.h",
         "flutter/shell/common/snapshot_surface_producer.h"
-      ]
-    },
-    "flow": {
-      "count": 2,
-      "allowed_headers": [
-        "flutter/flow/embedded_views.h",
-        "flutter/flow/view_slicer.h"
       ]
     },
     "impeller": {
@@ -141,18 +134,6 @@
       "flutter/impeller/renderer/context.h",
       "flutter/third_party/skia/include/core/SkRefCnt.h",
       "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h"
-    ],
-    "external_view_embedder/external_view_embedder.cc": [
-      "flutter/flow/view_slicer.h"
-    ],
-    "external_view_embedder/external_view_embedder.h": [
-      "flutter/flow/embedded_views.h"
-    ],
-    "external_view_embedder/external_view_embedder_2.cc": [
-      "flutter/flow/view_slicer.h"
-    ],
-    "external_view_embedder/external_view_embedder_wrapper.cc": [
-      "flutter/impeller/renderer/backend/vulkan/context_vk.h"
     ],
     "image_external_texture.h": [
       "flutter/common/graphics/texture.h"

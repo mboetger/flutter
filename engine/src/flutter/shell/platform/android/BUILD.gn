@@ -139,7 +139,6 @@ source_set("flutter_shell_native_src") {
     "//flutter/assets",
     "//flutter/common",
     "//flutter/common/graphics",
-    "//flutter/flow",
     "//flutter/fml",
     "//flutter/impeller",
     "//flutter/impeller/toolkit/android",
