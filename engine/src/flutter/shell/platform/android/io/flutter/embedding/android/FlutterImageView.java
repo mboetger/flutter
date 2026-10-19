@@ -177,7 +177,10 @@ public class FlutterImageView extends View implements RenderSurface {
     // attached to the renderer again.
     acquireLatestImage();
     // Clear drawings.
-    currentBitmap = null;
+    if (currentBitmap != null) {
+      currentBitmap.recycle();
+      currentBitmap = null;
+    }
 
     // Close and clear the current image if any.
     closeCurrentImage();
@@ -266,8 +269,12 @@ public class FlutterImageView extends View implements RenderSurface {
   private void updateCurrentBitmap() {
     if (android.os.Build.VERSION.SDK_INT >= API_LEVELS.API_29) {
       final HardwareBuffer buffer = currentImage.getHardwareBuffer();
-      currentBitmap = Bitmap.wrapHardwareBuffer(buffer, ColorSpace.get(ColorSpace.Named.SRGB));
+      final Bitmap newBitmap = Bitmap.wrapHardwareBuffer(buffer, ColorSpace.get(ColorSpace.Named.SRGB));
       buffer.close();
+      if (currentBitmap != null) {
+        currentBitmap.recycle();
+      }
+      currentBitmap = newBitmap;
     } else {
       final Image.Plane[] imagePlanes = currentImage.getPlanes();
       if (imagePlanes.length != 1) {
