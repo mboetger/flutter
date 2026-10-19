@@ -269,7 +269,8 @@ public class FlutterImageView extends View implements RenderSurface {
   private void updateCurrentBitmap() {
     if (android.os.Build.VERSION.SDK_INT >= API_LEVELS.API_29) {
       final HardwareBuffer buffer = currentImage.getHardwareBuffer();
-      final Bitmap newBitmap = Bitmap.wrapHardwareBuffer(buffer, ColorSpace.get(ColorSpace.Named.SRGB));
+      final Bitmap newBitmap =
+          Bitmap.wrapHardwareBuffer(buffer, ColorSpace.get(ColorSpace.Named.SRGB));
       buffer.close();
       if (currentBitmap != null) {
         currentBitmap.recycle();

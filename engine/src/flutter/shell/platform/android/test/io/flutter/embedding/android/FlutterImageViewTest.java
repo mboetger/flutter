@@ -1,16 +1,13 @@
 package io.flutter.embedding.android;
 
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import android.annotation.TargetApi;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.ColorSpace;
 import android.hardware.HardwareBuffer;
 import android.media.Image;
 import android.media.ImageReader;
