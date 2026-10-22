@@ -1146,7 +1146,7 @@ class TextField extends StatefulWidget {
 
 class _TextFieldState extends State<TextField>
     with RestorationMixin
-    implements TextSelectionGestureDetectorBuilderDelegate, AutofillClient {
+    implements TextSelectionGestureDetectorBuilderDelegate {
   RestorableTextEditingController? _controller;
   TextEditingController get _effectiveController => widget.controller ?? _controller!.value;
 
@@ -1490,31 +1490,6 @@ class _TextFieldState extends State<TextField>
     _statesController.addListener(_handleStatesControllerChange);
   }
 
-  // AutofillClient implementation start.
-  @override
-  String get autofillId => _editableText!.autofillId;
-
-  @override
-  void autofill(TextEditingValue newEditingValue) => _editableText!.autofill(newEditingValue);
-
-  @override
-  TextInputConfiguration get textInputConfiguration {
-    final List<String>? autofillHints = widget.autofillHints?.toList(growable: false);
-    final AutofillConfiguration autofillConfiguration = autofillHints != null
-        ? AutofillConfiguration(
-            uniqueIdentifier: autofillId,
-            autofillHints: autofillHints,
-            currentEditingValue: _effectiveController.value,
-            hintText: (widget.decoration ?? const InputDecoration()).hintText,
-          )
-        : AutofillConfiguration.disabled;
-
-    return _editableText!.textInputConfiguration.copyWith(
-      autofillConfiguration: autofillConfiguration,
-    );
-  }
-  // AutofillClient implementation end.
-
   TextStyle _getInputStyleForState(TextStyle style) {
     final ThemeData theme = Theme.of(context);
     final TextStyle stateStyle = WidgetStateProperty.resolveAs(
@@ -1742,7 +1717,7 @@ class _TextFieldState extends State<TextField>
           scrollController: widget.scrollController,
           scrollPhysics: widget.scrollPhysics,
           autofillHints: widget.autofillHints,
-          autofillClient: this,
+          hintText: (widget.decoration ?? const InputDecoration()).hintText,
           autocorrectionTextRectColor: autocorrectionTextRectColor,
           clipBehavior: widget.clipBehavior,
           restorationId: 'editable',

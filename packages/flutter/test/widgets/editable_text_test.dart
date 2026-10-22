@@ -19066,6 +19066,41 @@ void main() {
     // [intended] only applies to platforms where we supply the context menu.
     skip: kIsWeb,
   );
+
+  testWidgets('Bare EditableText forwards hintText to autofill configuration (Issue 194470)', (
+    WidgetTester tester,
+  ) async {
+    final TextEditingController controller = TextEditingController();
+    final FocusNode focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: EditableText(
+          controller: controller,
+          focusNode: focusNode,
+          style: const TextStyle(),
+          cursorColor: const Color(0xFF000000),
+          backgroundCursorColor: const Color(0xFF000000),
+          autofillHints: const <String>[AutofillHints.email],
+          hintText: 'Email address',
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(EditableText));
+    await tester.showKeyboard(find.byType(EditableText));
+    await tester.idle();
+
+    final Map<String, dynamic> clientArgs = tester.testTextInput.setClientArgs!;
+
+    final Map<String, dynamic>? autofill = clientArgs['autofill'] as Map<String, dynamic>?;
+    expect(autofill, isNotNull);
+    expect(autofill!['hints'], contains('email'));
+    expect(autofill['hintText'], 'Email address');
+  });
 }
 
 class UnsettableController extends TextEditingController {

@@ -1089,7 +1089,7 @@ class CupertinoTextField extends StatefulWidget {
 
 class _CupertinoTextFieldState extends State<CupertinoTextField>
     with RestorationMixin, AutomaticKeepAliveClientMixin<CupertinoTextField>
-    implements TextSelectionGestureDetectorBuilderDelegate, AutofillClient {
+    implements TextSelectionGestureDetectorBuilderDelegate {
   final GlobalKey _clearGlobalKey = GlobalKey();
 
   RestorableTextEditingController? _controller;
@@ -1416,31 +1416,6 @@ class _CupertinoTextFieldState extends State<CupertinoTextField>
     );
   }
 
-  // AutofillClient implementation start.
-  @override
-  String get autofillId => _editableText.autofillId;
-
-  @override
-  void autofill(TextEditingValue newEditingValue) => _editableText.autofill(newEditingValue);
-
-  @override
-  TextInputConfiguration get textInputConfiguration {
-    final List<String>? autofillHints = widget.autofillHints?.toList(growable: false);
-    final AutofillConfiguration autofillConfiguration = autofillHints != null
-        ? AutofillConfiguration(
-            uniqueIdentifier: autofillId,
-            autofillHints: autofillHints,
-            currentEditingValue: _effectiveController.value,
-            hintText: widget.placeholder,
-          )
-        : AutofillConfiguration.disabled;
-
-    return _editableText.textInputConfiguration.copyWith(
-      autofillConfiguration: autofillConfiguration,
-    );
-  }
-  // AutofillClient implementation end.
-
   @override
   Widget build(BuildContext context) {
     super.build(context); // See AutomaticKeepAliveClientMixin.
@@ -1625,7 +1600,7 @@ class _CupertinoTextFieldState extends State<CupertinoTextField>
             scrollPhysics: widget.scrollPhysics,
             enableInteractiveSelection: widget.enableInteractiveSelection,
             selectAllOnFocus: widget.selectAllOnFocus,
-            autofillClient: this,
+            hintText: widget.placeholder,
             clipBehavior: widget.clipBehavior,
             restorationId: 'editable',
             scribbleEnabled: widget.scribbleEnabled,

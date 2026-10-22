@@ -882,6 +882,7 @@ class EditableText extends StatefulWidget {
     this.textHeightBehavior,
     this.textWidthBasis = TextWidthBasis.parent,
     this.autofocus = false,
+    this.hintText,
     bool? showCursor,
     this.showSelectionHandles = false,
     this.selectionColor,
@@ -1070,6 +1071,9 @@ class EditableText extends StatefulWidget {
   ///
   ///  * [showCursor], which controls the visibility of the cursor.
   final bool showSelectionHandles;
+
+  /// The hint text that should be announced to autofill services.
+  final String? hintText;
 
   /// {@template flutter.widgets.editableText.showCursor}
   /// Whether to show cursor.
@@ -5410,6 +5414,7 @@ class EditableTextState extends State<EditableText>
             uniqueIdentifier: autofillId,
             autofillHints: autofillHints,
             currentEditingValue: currentTextEditingValue,
+            hintText: widget.hintText,
           )
         : AutofillConfiguration.disabled;
 
