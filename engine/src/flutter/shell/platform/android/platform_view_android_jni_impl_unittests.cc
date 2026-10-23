@@ -8,6 +8,7 @@
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
+#include "flutter/runtime/runtime_controller.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/jni/jni_mock.h"
 #include "flutter/shell/platform/android/jni/mock_jni_env.h"
@@ -22,6 +23,34 @@ using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::Return;
 using ::testing::ReturnArg;
+
+class ShellTest {
+ public:
+  static Engine& GetEngine(Shell* shell) { return *shell->engine_; }
+
+  static void SetRuntimeController(
+      Shell* shell,
+      std::unique_ptr<RuntimeController> runtime_controller) {
+    shell->engine_->runtime_controller_ = std::move(runtime_controller);
+  }
+};
+
+namespace {
+
+class MockRuntimeController : public RuntimeController {
+ public:
+  MockRuntimeController(RuntimeDelegate& client,
+                        const TaskRunners& p_task_runners)
+      : RuntimeController(client, p_task_runners) {}
+
+  MOCK_METHOD(bool, IsRootIsolateRunning, (), (override, const));
+  MOCK_METHOD(void,
+              LoadDartDeferredLibraryError,
+              (intptr_t, const std::string, bool),
+              (override));
+};
+
+}  // namespace
 
 class PlatformViewAndroidJNIImplTest : public ::testing::Test {
  public:
@@ -38,6 +67,45 @@ class PlatformViewAndroidJNIImplTest : public ::testing::Test {
 
 MockJavaVM PlatformViewAndroidJNIImplTest::jvm_;
 
+class TestMockJNIEnv : public MockJNIEnv {
+ public:
+  TestMockJNIEnv() : ext_jni_(*functions) {
+    functions = &ext_jni_;
+    ext_jni_.GetObjectArrayElement = WrapGetObjectArrayElement;
+    ext_jni_.GetStringChars = WrapGetStringChars;
+    ext_jni_.GetStringLength = WrapGetStringLength;
+    ext_jni_.ReleaseStringChars = WrapReleaseStringChars;
+  }
+
+  MOCK_METHOD(jobject, GetObjectArrayElement, (jobjectArray, jsize));
+  MOCK_METHOD(const jchar*, GetStringChars, (jstring, jboolean*));
+  MOCK_METHOD(jsize, GetStringLength, (jstring));
+  MOCK_METHOD(void, ReleaseStringChars, (jstring, const jchar*));
+
+ private:
+  static jobject WrapGetObjectArrayElement(JNIEnv* env,
+                                           jobjectArray array,
+                                           jsize index) {
+    return static_cast<TestMockJNIEnv*>(env)->GetObjectArrayElement(array,
+                                                                    index);
+  }
+  static const jchar* WrapGetStringChars(JNIEnv* env,
+                                         jstring string,
+                                         jboolean* isCopy) {
+    return static_cast<TestMockJNIEnv*>(env)->GetStringChars(string, isCopy);
+  }
+  static jsize WrapGetStringLength(JNIEnv* env, jstring string) {
+    return static_cast<TestMockJNIEnv*>(env)->GetStringLength(string);
+  }
+  static void WrapReleaseStringChars(JNIEnv* env,
+                                     jstring string,
+                                     const jchar* chars) {
+    static_cast<TestMockJNIEnv*>(env)->ReleaseStringChars(string, chars);
+  }
+
+  JNINativeInterface ext_jni_;
+};
+
 class MockJNIEnvProvider {
  public:
   MockJNIEnvProvider() {
@@ -46,10 +114,10 @@ class MockJNIEnvProvider {
   ~MockJNIEnvProvider() {
     PlatformViewAndroidJNIImplTest::jvm_.SetJNIEnv(nullptr);
   }
-  MockJNIEnv& env() { return env_; }
+  TestMockJNIEnv& env() { return env_; }
 
  private:
-  MockJNIEnv env_;
+  TestMockJNIEnv env_;
 };
 
 void PlatformViewAndroidJNIImplTest::SetUpJVM() {
@@ -323,6 +391,190 @@ TEST_F(PlatformViewAndroidJNIImplTest, SetViewportMetricsEmptyArrays) {
                        reinterpret_cast<jlong>(holder.get()), 1.0f, 100, 100, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bounds, type, state,
                        0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       LoadDartDeferredLibraryReportsFailureWhenDlopenFails) {
+  MockJNIEnvProvider env_provider;
+  TestMockJNIEnv& mock_env = env_provider.env();
+
+  using LoadDartDeferredLibraryFn =
+      void (*)(JNIEnv*, jobject, jlong, jint, jobjectArray);
+  LoadDartDeferredLibraryFn load_dart_deferred_library = nullptr;
+
+  const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
+  const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
+  const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
+
+  EXPECT_CALL(mock_env, GetObjectRefType(_))
+      .WillRepeatedly(Return(JNILocalRefType));
+  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
+  EXPECT_CALL(mock_env, GetFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
+
+  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
+      .WillRepeatedly([&](jclass clazz, const JNINativeMethod* methods,
+                          jint nMethods) {
+        for (jint i = 0; i < nMethods; ++i) {
+          if (strcmp(methods[i].name, "nativeLoadDartDeferredLibrary") == 0) {
+            load_dart_deferred_library =
+                reinterpret_cast<LoadDartDeferredLibraryFn>(methods[i].fnPtr);
+          }
+        }
+        return 0;
+      });
+
+  PlatformViewAndroid::Register(&mock_env);
+  ASSERT_NE(load_dart_deferred_library, nullptr);
+
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<JNIMock>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  Shell* shell = holder->GetShellForTesting().get();
+  ASSERT_NE(shell, nullptr);
+  auto mock_runtime_controller = std::make_unique<MockRuntimeController>(
+      ShellTest::GetEngine(shell), shell->GetTaskRunners());
+  MockRuntimeController* mock_runtime_controller_ptr =
+      mock_runtime_controller.get();
+
+  constexpr jint kLoadingUnitId = 2;
+  EXPECT_CALL(*mock_runtime_controller_ptr, IsRootIsolateRunning())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(*mock_runtime_controller_ptr,
+              LoadDartDeferredLibraryError(
+                  static_cast<intptr_t>(kLoadingUnitId),
+                  "No lib .so found for provided search paths.", true))
+      .Times(1);
+
+  ShellTest::SetRuntimeController(shell, std::move(mock_runtime_controller));
+
+  const jobject jcaller = reinterpret_cast<jobject>(0x1001);
+  const jobjectArray search_paths = reinterpret_cast<jobjectArray>(0x2002);
+  const jstring kFakePathJString = reinterpret_cast<jstring>(0x3003);
+  const std::u16string kNonexistentPathU16 =
+      u"/nonexistent/libapp.so-2.part.so";
+  const jchar* kNonexistentPathChars =
+      reinterpret_cast<const jchar*>(kNonexistentPathU16.data());
+
+  EXPECT_CALL(mock_env, GetArrayLength(search_paths)).WillOnce(Return(1));
+  EXPECT_CALL(mock_env, GetObjectArrayElement(search_paths, 0))
+      .WillOnce(Return(kFakePathJString));
+  EXPECT_CALL(mock_env, GetStringChars(kFakePathJString, _))
+      .WillOnce(Return(kNonexistentPathChars));
+  EXPECT_CALL(mock_env, GetStringLength(kFakePathJString))
+      .WillOnce(Return(static_cast<jsize>(kNonexistentPathU16.length())));
+  EXPECT_CALL(mock_env,
+              ReleaseStringChars(kFakePathJString, kNonexistentPathChars))
+      .WillOnce(Return());
+
+  load_dart_deferred_library(&mock_env, jcaller,
+                             reinterpret_cast<jlong>(holder.get()),
+                             kLoadingUnitId, search_paths);
+}
+
+TEST_F(PlatformViewAndroidJNIImplTest,
+       DeferredComponentInstallFailureReportsErrorToRuntime) {
+  MockJNIEnvProvider env_provider;
+  TestMockJNIEnv& mock_env = env_provider.env();
+
+  using DeferredComponentInstallFailureFn =
+      void (*)(JNIEnv*, jobject, jlong, jint, jstring, jboolean);
+  DeferredComponentInstallFailureFn deferred_component_install_failure =
+      nullptr;
+
+  const jclass kPlaceholderClass = reinterpret_cast<jclass>(100);
+  const jfieldID kPlaceholderFieldID = reinterpret_cast<jfieldID>(200);
+  const jmethodID kPlaceholderMethodID = reinterpret_cast<jmethodID>(300);
+
+  EXPECT_CALL(mock_env, GetObjectRefType(_))
+      .WillRepeatedly(Return(JNILocalRefType));
+  EXPECT_CALL(mock_env, NewLocalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteLocalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, NewGlobalRef(_)).WillRepeatedly(ReturnArg<0>());
+  EXPECT_CALL(mock_env, DeleteGlobalRef(_)).WillRepeatedly(Return());
+  EXPECT_CALL(mock_env, FindClass(_)).WillRepeatedly(Return(kPlaceholderClass));
+  EXPECT_CALL(mock_env, GetFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, GetStaticFieldID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderFieldID));
+  EXPECT_CALL(mock_env, GetStaticMethodID(_, _, _))
+      .WillRepeatedly(Return(kPlaceholderMethodID));
+  EXPECT_CALL(mock_env, ExceptionCheck()).WillRepeatedly(Return(JNI_FALSE));
+
+  EXPECT_CALL(mock_env, RegisterNatives(_, _, _))
+      .WillRepeatedly(
+          [&](jclass clazz, const JNINativeMethod* methods, jint nMethods) {
+            for (jint i = 0; i < nMethods; ++i) {
+              if (strcmp(methods[i].name,
+                         "nativeDeferredComponentInstallFailure") == 0) {
+                EXPECT_STREQ(methods[i].signature, "(JILjava/lang/String;Z)V");
+                deferred_component_install_failure =
+                    reinterpret_cast<DeferredComponentInstallFailureFn>(
+                        methods[i].fnPtr);
+              }
+            }
+            return 0;
+          });
+
+  PlatformViewAndroid::Register(&mock_env);
+  ASSERT_NE(deferred_component_install_failure, nullptr);
+
+  Settings settings;
+  settings.enable_software_rendering = false;
+  auto jni = std::make_shared<JNIMock>();
+  auto holder = std::make_unique<AndroidShellHolder>(
+      settings, jni, AndroidRenderingAPI::kImpellerOpenGLES);
+
+  Shell* shell = holder->GetShellForTesting().get();
+  ASSERT_NE(shell, nullptr);
+  auto mock_runtime_controller = std::make_unique<MockRuntimeController>(
+      ShellTest::GetEngine(shell), shell->GetTaskRunners());
+  MockRuntimeController* mock_runtime_controller_ptr =
+      mock_runtime_controller.get();
+
+  constexpr jint kLoadingUnitId = 2;
+  const char* kErrorMessage = "Module install failed";
+  const std::u16string kErrorMessageU16 = u"Module install failed";
+  const jchar* kErrorMessageChars =
+      reinterpret_cast<const jchar*>(kErrorMessageU16.data());
+  EXPECT_CALL(*mock_runtime_controller_ptr, IsRootIsolateRunning())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(*mock_runtime_controller_ptr,
+              LoadDartDeferredLibraryError(
+                  static_cast<intptr_t>(kLoadingUnitId), kErrorMessage, true))
+      .Times(1);
+
+  ShellTest::SetRuntimeController(shell, std::move(mock_runtime_controller));
+
+  const jobject jcaller = reinterpret_cast<jobject>(0x1001);
+  const jstring kErrorJString = reinterpret_cast<jstring>(0x5005);
+
+  EXPECT_CALL(mock_env, GetStringChars(kErrorJString, _))
+      .WillOnce(Return(kErrorMessageChars));
+  EXPECT_CALL(mock_env, GetStringLength(kErrorJString))
+      .WillOnce(Return(static_cast<jsize>(kErrorMessageU16.length())));
+  EXPECT_CALL(mock_env, ReleaseStringChars(kErrorJString, kErrorMessageChars))
+      .WillOnce(Return());
+
+  deferred_component_install_failure(&mock_env, jcaller,
+                                     reinterpret_cast<jlong>(holder.get()),
+                                     kLoadingUnitId, kErrorJString, JNI_TRUE);
 }
 
 // The load order is exercised with an injected loader rather than real

@@ -387,6 +387,12 @@ public class FlutterJNITest {
     }
   }
 
+  @Test(expected = RuntimeException.class)
+  public void deferredComponentInstallFailure_throwsIfNotAttached() {
+    FlutterJNI flutterJNI = new FlutterJNI();
+    flutterJNI.deferredComponentInstallFailure(2, "Module install failed", true);
+  }
+
   static class FlutterJNITester extends FlutterJNI {
     FlutterJNITester(boolean attached) {
       this.isAttached = attached;
