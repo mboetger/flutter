@@ -759,23 +759,31 @@ class ScaleGestureRecognizer extends OneSequenceGestureRecognizer {
     }
 
     if (_state == _ScaleState.started) {
-      _scaleVelocityTracker?.addPosition(event.timeStamp, Offset(_scaleFactor, 0));
+      if (_scaleFactor.isFinite) {
+        _scaleVelocityTracker?.addPosition(event.timeStamp, Offset(_scaleFactor, 0));
+      }
       if (onUpdate != null) {
-        invokeCallback<void>('onUpdate', () {
-          onUpdate!(
-            ScaleUpdateDetails(
-              scale: _scaleFactor,
-              horizontalScale: _horizontalScaleFactor,
-              verticalScale: _verticalScaleFactor,
-              focalPoint: _currentFocalPoint!,
-              localFocalPoint: _localFocalPoint,
-              rotation: _computeRotationFactor(),
-              pointerCount: pointerCount,
-              focalPointDelta: _delta,
-              sourceTimeStamp: event.timeStamp,
-            ),
-          );
-        });
+        if (_scaleFactor.isFinite &&
+            _horizontalScaleFactor.isFinite &&
+            _verticalScaleFactor.isFinite &&
+            _currentFocalPoint!.dx.isFinite &&
+            _currentFocalPoint!.dy.isFinite) {
+          invokeCallback<void>('onUpdate', () {
+            onUpdate!(
+              ScaleUpdateDetails(
+                scale: _scaleFactor,
+                horizontalScale: _horizontalScaleFactor,
+                verticalScale: _verticalScaleFactor,
+                focalPoint: _currentFocalPoint!,
+                localFocalPoint: _localFocalPoint,
+                rotation: _computeRotationFactor(),
+                pointerCount: pointerCount,
+                focalPointDelta: _delta,
+                sourceTimeStamp: event.timeStamp,
+              ),
+            );
+          });
+        }
       }
     }
   }

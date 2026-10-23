@@ -320,4 +320,34 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(tester.state<ScrollableState>(find.byType(Scrollable)).position.pixels, 0.0);
   });
+
+  testWidgets('ScrollPosition.setPixels ignores NaN and non-finite values', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(
+          child: ListView.builder(
+            itemBuilder: (BuildContext context, int index) {
+              return Text('$index', textDirection: TextDirection.ltr);
+            },
+          ),
+        ),
+      ),
+    );
+
+    final ScrollPosition position = tester.state<ScrollableState>(find.byType(Scrollable)).position;
+    position.jumpTo(100);
+    expect(position.pixels, 100);
+
+    position.jumpTo(double.nan);
+    expect(position.pixels, 100);
+
+    position.jumpTo(double.infinity);
+    expect(position.pixels, 100);
+
+    position.jumpTo(double.negativeInfinity);
+    expect(position.pixels, 100);
+  });
 }

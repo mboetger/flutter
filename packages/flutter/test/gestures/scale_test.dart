@@ -1915,4 +1915,36 @@ void main() {
 
     scale.dispose();
   });
+
+  testGesture('ScaleGestureRecognizer ignores NaN pointer coordinates', (GestureTester tester) {
+    final ScaleGestureRecognizer scale = ScaleGestureRecognizer();
+    bool didUpdateScale = false;
+    scale.onUpdate = (ScaleUpdateDetails details) {
+      didUpdateScale = true;
+    };
+
+    final TestPointer pointer1 = TestPointer(1);
+    final TestPointer pointer2 = TestPointer(2);
+
+    final PointerDownEvent down1 = pointer1.down(const Offset(10.0, 10.0));
+    scale.addPointer(down1);
+    tester.closeArena(1);
+    tester.route(down1);
+
+    final PointerDownEvent down2 = pointer2.down(const Offset(20.0, 20.0));
+    scale.addPointer(down2);
+    tester.closeArena(2);
+    tester.route(down2);
+
+    tester.route(pointer1.move(const Offset(10.0, 10.0)));
+    expect(didUpdateScale, isFalse);
+
+    tester.route(pointer2.move(const Offset(double.nan, double.nan)));
+    // Should not throw, and should not update because of NaN.
+    expect(didUpdateScale, isFalse);
+
+    tester.route(pointer1.up());
+    tester.route(pointer2.up());
+    scale.dispose();
+  });
 }

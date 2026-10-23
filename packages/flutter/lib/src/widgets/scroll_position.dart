@@ -369,6 +369,9 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
       SchedulerBinding.instance.schedulerPhase != SchedulerPhase.persistentCallbacks,
       "A scrollable's position should not change during the build, layout, and paint phases, otherwise the rendering will be confused.",
     );
+    if (!newPixels.isFinite) {
+      return 0.0;
+    }
     if (newPixels != pixels) {
       final double overscroll = applyBoundaryConditions(newPixels);
       assert(() {
@@ -436,6 +439,9 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
   ///    destination offset.
   // ignore: use_setters_to_change_properties, (API is intended to discourage setting value)
   void correctPixels(double value) {
+    if (!value.isFinite) {
+      return;
+    }
     _pixels = value;
   }
 
@@ -460,6 +466,9 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
       hasPixels,
       'An initial pixels value must exist by calling correctPixels on the ScrollPosition',
     );
+    if (!correction.isFinite) {
+      return;
+    }
     _pixels = _pixels! + correction;
     _didChangeViewportDimensionOrReceiveCorrection = true;
   }
@@ -489,6 +498,9 @@ abstract class ScrollPosition extends ViewportOffset with ScrollMetrics {
   @protected
   void forcePixels(double value) {
     assert(hasPixels);
+    if (!value.isFinite) {
+      return;
+    }
     _impliedVelocity = value - pixels;
     _pixels = value;
     notifyListeners();
