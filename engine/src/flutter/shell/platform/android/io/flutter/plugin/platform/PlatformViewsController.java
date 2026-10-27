@@ -750,12 +750,21 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
             .toArray(new PointerProperties[touch.pointerCount]);
 
     if (!usingVirtualDisplay && trackedEvent != null) {
-      // We have the original event. Check if pointer counts and actions match.
+      // We have the original event. Check if pointer counts, actions and pointer IDs match.
       if (trackedEvent.getPointerCount() == touch.pointerCount
           && trackedEvent.getAction() == touch.action) {
-        // This preserves the verifiable input flag.
-        translateMotionEvent(trackedEvent, pointerCoords);
-        return trackedEvent;
+        boolean pointerIdsMatch = true;
+        for (int i = 0; i < touch.pointerCount; i++) {
+          if (trackedEvent.getPointerId(i) != pointerProperties[i].id) {
+            pointerIdsMatch = false;
+            break;
+          }
+        }
+        if (pointerIdsMatch) {
+          // This preserves the verifiable input flag.
+          translateMotionEvent(trackedEvent, pointerCoords);
+          return trackedEvent;
+        }
       }
 
       // Pointer count or action mismatch detected

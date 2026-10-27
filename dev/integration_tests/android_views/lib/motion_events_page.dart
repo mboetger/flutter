@@ -131,6 +131,66 @@ class MotionEventsBodyState extends State<MotionEventsBody> {
     );
   }
 
+    Map<String, dynamic> createEvent({
+    required int action,
+    required int pointerCount,
+    required List<int> ids,
+    int downTime = 100,
+    required int eventTime,
+  }) {
+    return <String, dynamic>{
+      'downTime': downTime,
+      'eventTime': eventTime,
+      'action': action,
+      'pointerCount': pointerCount,
+      'pointerProperties': ids.map((id) => <String, dynamic>{
+        'id': id,
+        'toolType': 1,
+      }).toList(),
+      'pointerCoords': ids.map((id) => <String, dynamic>{
+        'orientation': 0.0,
+        'pressure': 1.0,
+        'size': 1.0,
+        'toolMajor': 1.0,
+        'toolMinor': 1.0,
+        'touchMajor': 1.0,
+        'touchMinor': 1.0,
+        'x': 100.0 * id,
+        'y': 100.0 * id,
+      }).toList(),
+      'metaState': 0,
+      'buttonState': 0,
+      'xPrecision': 1.0,
+      'yPrecision': 1.0,
+      'deviceId': 0,
+      'edgeFlags': 0,
+      'source': 4098,
+      'flags': 0,
+    };
+  }
+
+  Future<String> playBuggySequence() async {
+    final recordedEvents = [
+      createEvent(action: 0, pointerCount: 1, ids: [0], eventTime: 100),
+      createEvent(action: (1 << 8) | 5, pointerCount: 2, ids: [0, 1], eventTime: 200),
+      createEvent(action: (1 << 8) | 6, pointerCount: 2, ids: [0, 1], eventTime: 300),
+      createEvent(action: (1 << 8) | 5, pointerCount: 2, ids: [0, 2], eventTime: 300),
+      createEvent(action: 2, pointerCount: 2, ids: [0, 2], eventTime: 400),
+      createEvent(action: (1 << 8) | 5, pointerCount: 3, ids: [0, 1, 2], eventTime: 500),
+    ];
+    
+    await channel.invokeMethod<void>('pipeFlutterViewEvents');
+    await viewChannel?.invokeMethod<void>('pipeTouchEvents');
+    
+    for (final Map<String, dynamic> event in recordedEvents) {
+      await channel.invokeMethod<void>('synthesizeEvent', event);
+    }
+    
+    await channel.invokeMethod<void>('stopFlutterViewEvents');
+    await viewChannel?.invokeMethod<void>('stopTouchEvents');
+    return '';
+  }
+
   Future<String> playEventsFile() async {
     const codec = StandardMessageCodec();
     try {
@@ -227,6 +287,8 @@ class MotionEventsBodyState extends State<MotionEventsBody> {
     switch (message) {
       case 'run test':
         return playEventsFile();
+      case 'run bug test':
+        return playBuggySequence();
     }
     return 'unknown message: "$message"';
   }

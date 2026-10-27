@@ -9,6 +9,8 @@ environment:
 resolution: workspace
 
 dependencies:
+  integration_test:
+    sdk: flutter
   flutter:
     sdk: flutter
   flutter_driver:
@@ -34,3 +36,4 @@ flutter:
   uses-material-design: true
 
 # PUBSPEC CHECKSUM: re4vps
+

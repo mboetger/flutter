@@ -583,9 +583,12 @@ class _AndroidMotionEventConverter {
     if (pointerProperties.isEmpty) {
       downTimeMillis = event.timeStamp.inMilliseconds;
     }
-    var androidPointerId = 0;
-    while (usedAndroidPointerIds.contains(androidPointerId)) {
-      androidPointerId++;
+    var androidPointerId = event.device;
+    if (usedAndroidPointerIds.contains(androidPointerId)) {
+      androidPointerId = 0;
+      while (usedAndroidPointerIds.contains(androidPointerId)) {
+        androidPointerId++;
+      }
     }
     usedAndroidPointerIds.add(androidPointerId);
     pointerProperties[event.pointer] = propertiesFor(event, androidPointerId);

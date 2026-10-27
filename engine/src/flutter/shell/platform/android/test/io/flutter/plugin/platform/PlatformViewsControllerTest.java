@@ -752,6 +752,89 @@ public class PlatformViewsControllerTest {
   }
 
   @Test
+  public void toMotionEvent_reconstructsEventWhenPointerIdsMismatch() {
+    // This test demonstrates the fix where toMotionEvent reconstructs the event
+    // when pointer IDs have diverged.
+    MotionEventTracker motionEventTracker = MotionEventTracker.getInstance();
+    PlatformViewsController platformViewsController = new PlatformViewsController();
+
+    // Original event with IDs 0 and 2 (Pointer count 2, Action MOVE)
+    MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[2];
+    properties[0] = new MotionEvent.PointerProperties();
+    properties[0].id = 0;
+    properties[0].toolType = MotionEvent.TOOL_TYPE_FINGER;
+    properties[1] = new MotionEvent.PointerProperties();
+    properties[1].id = 2; // Android assigned ID 2
+    properties[1].toolType = MotionEvent.TOOL_TYPE_FINGER;
+
+    MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[2];
+    coords[0] = new MotionEvent.PointerCoords();
+    coords[1] = new MotionEvent.PointerCoords();
+
+    MotionEvent original =
+        MotionEvent.obtain(
+            10, // downTime
+            10, // eventTime
+            MotionEvent.ACTION_MOVE,
+            2, // pointerCount
+            properties,
+            coords,
+            0,
+            0,
+            1.0f,
+            1.0f,
+            0,
+            0,
+            0,
+            0);
+
+    MotionEventTracker.MotionEventId motionEventId = motionEventTracker.track(original);
+
+    // Framework event with IDs 0 and 1 (Dart assigned ID 1 because it freed it)
+    List<List<Integer>> frameworkPointerProperties = new java.util.ArrayList<>();
+    frameworkPointerProperties.add(java.util.Arrays.asList(0, MotionEvent.TOOL_TYPE_FINGER));
+    frameworkPointerProperties.add(
+        java.util.Arrays.asList(1, MotionEvent.TOOL_TYPE_FINGER)); // Dart's ID 1
+
+    List<List<Double>> frameworkPointerCoords = new java.util.ArrayList<>();
+    frameworkPointerCoords.add(
+        java.util.Arrays.asList(0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0));
+    frameworkPointerCoords.add(
+        java.util.Arrays.asList(0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0));
+
+    PlatformViewTouch touch =
+        new PlatformViewTouch(
+            0, // viewId
+            10, // downTime
+            10, // eventTime
+            MotionEvent.ACTION_MOVE,
+            2, // pointerCount
+            frameworkPointerProperties,
+            frameworkPointerCoords,
+            0, // metaState
+            0, // buttonState
+            1.0f, // xPrecision
+            1.0f, // yPrecision
+            0, // deviceId
+            0, // edgeFlags
+            0, // source
+            0, // flags
+            motionEventId.getId());
+
+    MotionEvent resolvedEvent =
+        platformViewsController.toMotionEvent(
+            1, // density
+            touch,
+            false // usingVirtualDisplays
+            );
+
+    // Verify that the resolved event uses the Dart IDs (0 and 1)
+    // because toMotionEvent fell through and reconstructed the event!
+    assertEquals(0, resolvedEvent.getPointerId(0));
+    assertEquals(1, resolvedEvent.getPointerId(1));
+  }
+
+  @Test
   public void toMotionEvent_handlesActionMismatch() {
     // This test verifies the fix for action mismatch after PR #178015.
     // When framework sends different action than original (e.g., ACTION_MOVE instead of
@@ -2502,3 +2585,4 @@ public class PlatformViewsControllerTest {
     }
   }
 }
+// ADDED EOF later

@@ -18,6 +18,18 @@ Future<void> main() async {
 
   // Each test below must return back to the home page after finishing.
 
+    test('MotionEvent pointer ID disagreement bug', () async {
+    final SerializableFinder motionEventsListTile = find.byValueKey('MotionEventsListTile');
+    await driver?.tap(motionEventsListTile);
+    await driver?.runUnsynchronized(() async {
+      await driver?.waitFor(find.byValueKey('PlatformView'));
+    });
+    final String errorMessage = (await driver?.requestData('run bug test'))!;
+    expect(errorMessage, 'BUG REPRODUCED: POINTER_DOWN for id 2, which is already down! prevIds={0, 2}');
+    final SerializableFinder backButton = find.byValueKey('back');
+    await driver?.tap(backButton);
+  }, timeout: Timeout.none);
+
   test('MotionEvent recomposition', () async {
     final SerializableFinder motionEventsListTile = find.byValueKey('MotionEventsListTile');
     await driver?.tap(motionEventsListTile);

@@ -498,6 +498,42 @@ void main() {
     });
 
     // Regression test for https://github.com/flutter/flutter/issues/191105.
+    testWidgets('motion event converter prefers event.device for android pointer id', (
+      WidgetTester tester,
+    ) async {
+      final log = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          return null;
+        },
+      );
+
+      final AndroidViewController viewController = PlatformViewsService.initSurfaceAndroidView(
+        id: 7,
+        viewType: 'web',
+        layoutDirection: TextDirection.ltr,
+      );
+      viewController.pointTransformer = (Offset offset) => offset;
+
+      const int kIndexPointerProperties = 5;
+
+      List<int> idsOf(MethodCall call) {
+        final args = call.arguments as List<dynamic>;
+        return (args[kIndexPointerProperties] as List<dynamic>)
+            .map<int>((dynamic props) => (props as List<dynamic>)[0] as int)
+            .toList();
+      }
+
+      await viewController.dispatchPointerEvent(
+        const PointerDownEvent(pointer: 1, position: Offset(10, 10), device: 42),
+      );
+
+      expect(log, hasLength(1));
+      expect(idsOf(log.single), <int>[42]);
+    });
+
     testWidgets('motion event converter orders pointers by Android pointer id', (
       WidgetTester tester,
     ) async {
