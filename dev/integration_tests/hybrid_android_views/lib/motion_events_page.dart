@@ -46,66 +46,68 @@ class MotionEventsBodyState extends State<MotionEventsBody> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: <Widget>[
-        SizedBox(
-          height: 300.0,
+        Positioned.fill(
           child: AndroidPlatformView(
             key: const ValueKey<String>('PlatformView'),
             viewType: 'simple_view',
             onPlatformViewCreated: onPlatformViewCreated,
           ),
         ),
-        Expanded(
-          child: ListView.builder(itemBuilder: buildEventTile, itemCount: flutterViewEvents.length),
-        ),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: ElevatedButton(
-                onPressed: listenToFlutterViewEvents,
-                child: const Text('RECORD'),
-              ),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: 100.0,
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: listenToFlutterViewEvents,
+                    child: const Text('RECORD'),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    child: const Text('CLEAR'),
+                    onPressed: () {
+                      setState(() {
+                        flutterViewEvents.clear();
+                        embeddedViewEvents.clear();
+                      });
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    child: const Text('SAVE'),
+                    onPressed: () {
+                      const codec = StandardMessageCodec();
+                      saveRecordedEvents(codec.encodeMessage(flutterViewEvents)!, context);
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    key: const ValueKey<String>('play'),
+                    child: const Text('PLAY FILE'),
+                    onPressed: () {
+                      playEventsFile();
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    key: const ValueKey<String>('back'),
+                    child: const Text('BACK'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ],
             ),
-            Expanded(
-              child: ElevatedButton(
-                child: const Text('CLEAR'),
-                onPressed: () {
-                  setState(() {
-                    flutterViewEvents.clear();
-                    embeddedViewEvents.clear();
-                  });
-                },
-              ),
-            ),
-            Expanded(
-              child: ElevatedButton(
-                child: const Text('SAVE'),
-                onPressed: () {
-                  const codec = StandardMessageCodec();
-                  saveRecordedEvents(codec.encodeMessage(flutterViewEvents)!, context);
-                },
-              ),
-            ),
-            Expanded(
-              child: ElevatedButton(
-                key: const ValueKey<String>('play'),
-                child: const Text('PLAY FILE'),
-                onPressed: () {
-                  playEventsFile();
-                },
-              ),
-            ),
-            Expanded(
-              child: ElevatedButton(
-                key: const ValueKey<String>('back'),
-                child: const Text('BACK'),
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );
@@ -126,12 +128,24 @@ class MotionEventsBodyState extends State<MotionEventsBody> {
       await viewChannel!.invokeMethod<void>('pipeTouchEvents');
       print('replaying ${recordedEvents.length} motion events');
       for (final Map<String, dynamic> event in recordedEvents.reversed) {
+        final List<dynamic> coords = event['pointerCoords'] as List<dynamic>;
+        for (var i = 0; i < coords.length; i++) {
+          final Map<dynamic, dynamic> map = coords[i] as Map<dynamic, dynamic>;
+          map['x'] = (map['x'] as double) * 0.33;
+          map['y'] = (map['y'] as double) * 0.33;
+        }
         await channel.invokeMethod<void>('synthesizeEvent', event);
       }
 
       await viewChannel!.invokeMethod<void>('stopTouchEvents');
 
+      for (var e in embeddedViewEvents) {
+        print('embedded event: action=${e['action']} count=${e['pointerCount']}');
+      }
       if (flutterViewEvents.length != embeddedViewEvents.length) {
+        print(
+          'flutterViewEvents: ${flutterViewEvents.length}, embeddedViewEvents: ${embeddedViewEvents.length}',
+        );
         return 'Synthesized ${flutterViewEvents.length} events but the embedded view received ${embeddedViewEvents.length} events';
       }
 

@@ -583,6 +583,47 @@ void main() {
       expect(moveArgs[kIndexAction], AndroidViewController.kActionMove);
       expect(xOf(moveCall), <double>[31, 21]);
     });
+
+    testWidgets('motion event converter synthesizes move when some pointers did not hit the view', (
+      WidgetTester tester,
+    ) async {
+      final log = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          return null;
+        },
+      );
+
+      final AndroidViewController viewController = PlatformViewsService.initSurfaceAndroidView(
+        id: 8,
+        viewType: 'web',
+        layoutDirection: TextDirection.ltr,
+      );
+      viewController.pointTransformer = (Offset offset) => offset;
+
+      await viewController.dispatchPointerEvent(
+        const PointerDownEvent(pointer: 1, position: Offset(10, 10)),
+      );
+
+      log.clear();
+
+      // Simulate a multi-touch ACTION_MOVE event where originalPointerCount = 2,
+      // but only one pointer (pointer: 1) hit the view (so it's the only one tracked).
+      const kPointerDataFlagMultiple = 2;
+      const int platformData = kPointerDataFlagMultiple | (2 << 8);
+      await viewController.dispatchPointerEvent(
+        const PointerMoveEvent(pointer: 1, position: Offset(11, 11), platformData: platformData),
+      );
+
+      // The converter should synthesize the event with the 1 tracked pointer,
+      // and not wait for the second pointer since it wasn't tracked.
+      expect(log, hasLength(1));
+      expect(log.single.method, 'touch');
+      final args = log.single.arguments as List<dynamic>;
+      expect(args[3], AndroidViewController.kActionMove);
+    });
   });
 
   group('iOS', () {
