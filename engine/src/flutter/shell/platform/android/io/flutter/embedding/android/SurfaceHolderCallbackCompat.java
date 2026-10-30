@@ -4,6 +4,8 @@
 
 package io.flutter.embedding.android;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.view.SurfaceHolder;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -13,13 +15,74 @@ import io.flutter.Build;
 import io.flutter.Log;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class SurfaceHolderCallbackCompat implements SurfaceHolder.Callback2 {
 
   private static final String TAG = "SurfaceHolderCallbackCompat";
+  @VisibleForTesting static final long FINISH_DRAWING_TIMEOUT_MS = 1000L;
+
   private final FlutterSurfaceView flutterSurfaceView;
   @Nullable private FlutterRenderer flutterRenderer;
   private final SurfaceHolder.Callback innerCallback;
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
+  private final Set<SurfaceRedrawCallback> pendingRedrawCallbacks = new LinkedHashSet<>();
+
+  private final class SurfaceRedrawCallback implements FlutterUiDisplayListener, Runnable {
+    @NonNull private final FlutterRenderer renderer;
+    @NonNull private final Runnable finishDrawing;
+    private boolean completed = false;
+
+    SurfaceRedrawCallback(@NonNull FlutterRenderer renderer, @NonNull Runnable finishDrawing) {
+      this.renderer = renderer;
+      this.finishDrawing = finishDrawing;
+    }
+
+    void start() {
+      pendingRedrawCallbacks.add(this);
+      renderer.addIsDisplayingFlutterUiListener(this);
+      if (!completed) {
+        mainHandler.postDelayed(this, FINISH_DRAWING_TIMEOUT_MS);
+      }
+    }
+
+    void complete() {
+      if (completed) {
+        return;
+      }
+      completed = true;
+      pendingRedrawCallbacks.remove(this);
+      mainHandler.removeCallbacks(this);
+      renderer.removeIsDisplayingFlutterUiListener(this);
+      finishDrawing.run();
+    }
+
+    @Override
+    public void onFlutterUiDisplayed() {
+      complete();
+    }
+
+    @Override
+    public void onFlutterUiNoLongerDisplayed() {
+      // no-op
+    }
+
+    @Override
+    public void run() {
+      complete();
+    }
+  }
+
+  private void completePendingRedraws() {
+    if (pendingRedrawCallbacks.isEmpty()) {
+      return;
+    }
+    for (SurfaceRedrawCallback callback : new ArrayList<>(pendingRedrawCallbacks)) {
+      callback.complete();
+    }
+  }
 
   interface FlutterRendererLifecycleCallback {
     void onAttachToRenderer(FlutterRenderer flutterRenderer);
@@ -30,10 +93,12 @@ public class SurfaceHolderCallbackCompat implements SurfaceHolder.Callback2 {
   }
 
   public void onAttachToRenderer(FlutterRenderer flutterRenderer) {
+    completePendingRedraws();
     lifecycleCallback.onAttachToRenderer(flutterRenderer);
   }
 
   public void onDetachFromRenderer() {
+    completePendingRedraws();
     lifecycleCallback.onDetachFromRenderer();
   }
 
@@ -122,6 +187,7 @@ public class SurfaceHolderCallbackCompat implements SurfaceHolder.Callback2 {
 
   @Override
   public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+    completePendingRedraws();
     if (innerCallback != null) {
       innerCallback.surfaceDestroyed(holder);
     }
@@ -144,24 +210,13 @@ public class SurfaceHolderCallbackCompat implements SurfaceHolder.Callback2 {
       @NonNull SurfaceHolder holder, @NonNull Runnable finishDrawing) {
     Log.v(TAG, "SurfaceHolder.Callback2.surfaceRedrawNeededAsync()");
     if (flutterRenderer == null) {
+      finishDrawing.run();
       return;
     }
-    // Run `finishDrawing` when the Flutter UI is ready to display.
-    flutterRenderer.addIsDisplayingFlutterUiListener(
-        new FlutterUiDisplayListener() {
-          @Override
-          public void onFlutterUiDisplayed() {
-            finishDrawing.run();
-            if (flutterRenderer != null) {
-              flutterRenderer.removeIsDisplayingFlutterUiListener(this);
-            }
-          }
-
-          @Override
-          public void onFlutterUiNoLongerDisplayed() {
-            // no-op
-          }
-        });
+    // Run `finishDrawing` when the Flutter UI is ready to display, or after a timeout so
+    // WindowManager does not keep the window in DRAW_PENDING indefinitely on API levels where
+    // SurfaceSyncer has no built-in timeout.
+    new SurfaceRedrawCallback(flutterRenderer, finishDrawing).start();
   }
 
   /**
