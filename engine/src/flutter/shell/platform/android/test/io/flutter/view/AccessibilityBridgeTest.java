@@ -3735,4 +3735,40 @@ public class AccessibilityBridgeTest {
       }
     }
   }
+
+  @Test
+  public void testCollectionItemInfoRowIndex_withHiddenChildren() {
+    AccessibilityBridge bridge = setUpBridge();
+
+    TestSemanticsNode listNode = new TestSemanticsNode();
+    listNode.id = 0;
+    listNode.addFlag(AccessibilityBridge.Flag.HAS_IMPLICIT_SCROLLING);
+    listNode.scrollChildren = 11;
+    listNode.scrollIndex = 9;
+
+    TestSemanticsNode hiddenChild1 = new TestSemanticsNode();
+    hiddenChild1.id = 1;
+    hiddenChild1.addFlag(AccessibilityBridge.Flag.IS_HIDDEN);
+
+    TestSemanticsNode hiddenChild2 = new TestSemanticsNode();
+    hiddenChild2.id = 2;
+    hiddenChild2.addFlag(AccessibilityBridge.Flag.IS_HIDDEN);
+
+    TestSemanticsNode visibleChild = new TestSemanticsNode();
+    visibleChild.id = 3;
+    visibleChild.label = "Visible Child";
+
+    listNode.addChild(hiddenChild1);
+    listNode.addChild(hiddenChild2);
+    listNode.addChild(visibleChild);
+
+    TestSemanticsUpdate update = listNode.toUpdate();
+    update.sendUpdateToBridge(bridge);
+
+    AccessibilityNodeInfo info = bridge.createAccessibilityNodeInfo(3);
+    AccessibilityNodeInfo.CollectionItemInfo itemInfo = info.getCollectionItemInfo();
+    assertNotNull(itemInfo);
+
+    assertEquals(9, itemInfo.getRowIndex());
+  }
 }

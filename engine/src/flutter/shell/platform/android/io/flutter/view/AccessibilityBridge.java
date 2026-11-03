@@ -2244,7 +2244,7 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
     int textSelectionExtent;
     private int platformViewId;
     int scrollChildren;
-    private int scrollIndex;
+    int scrollIndex;
     private int traversalParent;
     private float scrollPosition;
     private float scrollExtentMax;

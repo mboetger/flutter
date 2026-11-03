@@ -305,12 +305,21 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
       boolean verticalScroll =
           !(parent.hasAction(AccessibilityBridge.Action.SCROLL_LEFT)
               || parent.hasAction(AccessibilityBridge.Action.SCROLL_RIGHT));
-      int nodeIndex = scrollChildren.indexOf(node);
+      int localIndex = scrollChildren.indexOf(node);
+      int unhiddenIndex = 0;
+      if (localIndex >= 0) {
+        for (int i = 0; i < localIndex; i++) {
+          if (!scrollChildren.get(i).hasFlag(AccessibilityBridge.Flag.IS_HIDDEN)) {
+            unhiddenIndex++;
+          }
+        }
+      }
+      int absoluteIndex = parent.scrollIndex + unhiddenIndex;
       if (verticalScroll) {
         if (Build.VERSION.SDK_INT < 33) {
           result.setCollectionItemInfo(
               AccessibilityNodeInfo.CollectionItemInfo.obtain(
-                  nodeIndex, // row index
+                  absoluteIndex, // row index
                   1, // row span
                   0, // column index
                   1, // column span
@@ -319,7 +328,7 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
         } else {
           result.setCollectionItemInfo(
               new AccessibilityNodeInfo.CollectionItemInfo(
-                  nodeIndex, // row index
+                  absoluteIndex, // row index
                   1, // row span
                   0, // column index
                   1, // column span
@@ -332,7 +341,7 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
               AccessibilityNodeInfo.CollectionItemInfo.obtain(
                   0, // row index
                   1, // row span
-                  nodeIndex, // column index
+                  absoluteIndex, // column index
                   1, // column span
                   node.hasFlag(AccessibilityBridge.Flag.IS_HEADER) // is heading
                   ));
@@ -341,7 +350,7 @@ public class BaseRoleConfigurator implements AccessibilityNodeConfigurator {
               new AccessibilityNodeInfo.CollectionItemInfo(
                   0, // row index
                   1, // row span
-                  nodeIndex, // column index
+                  absoluteIndex, // column index
                   1, // column span
                   node.hasFlag(AccessibilityBridge.Flag.IS_HEADER) // is heading
                   ));
