@@ -93,6 +93,8 @@ config("jni_headers_config") {
 
 source_set("flutter_embedder_native_src") {
   sources = [
+    "flutter_embedder_native.cc",
+    "flutter_embedder_native.h",
     "jni_delegate.h",
     "jni_router.cc",
     "jni_router.h",
@@ -164,6 +166,8 @@ source_set("flutter_shell_native_src") {
     "android_egl_surface.h",
     "android_environment_gl.cc",
     "android_environment_gl.h",
+    "android_proc_table_router.cc",
+    "android_proc_table_router.h",
     "android_shell_holder.cc",
     "android_shell_holder.h",
     "android_surface_dynamic_impeller.cc",
