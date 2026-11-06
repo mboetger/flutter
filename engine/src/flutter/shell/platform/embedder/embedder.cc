@@ -2418,6 +2418,25 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
                               "Compositor arguments were invalid.");
   }
 
+  flutter::PlatformViewEmbedder::GetScaledFontSizeCallback
+      get_scaled_font_size_callback = nullptr;
+  if (SAFE_ACCESS(args, scale_font_size_callback, nullptr) != nullptr) {
+    get_scaled_font_size_callback =
+        [ptr = args->scale_font_size_callback, user_data](
+            double unscaled_font_size, int configuration_id) -> double {
+      FlutterScaleFontSizeInfo info = {
+          .struct_size = sizeof(FlutterScaleFontSizeInfo),
+          .font_size = unscaled_font_size,
+          .text_scale_factor = static_cast<double>(configuration_id),
+      };
+      double scaled_out = -1.0;
+      if (ptr(&info, &scaled_out, user_data)) {
+        return scaled_out;
+      }
+      return -1.0;
+    };
+  }
+
   flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
       {
           update_semantics_callback,                  //
@@ -2427,6 +2446,7 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
           on_pre_engine_restart_callback,             //
           channel_update_callback,                    //
           view_focus_change_request_callback,         //
+          get_scaled_font_size_callback,              //
   };
 
   impeller::Flags impeller_flags;

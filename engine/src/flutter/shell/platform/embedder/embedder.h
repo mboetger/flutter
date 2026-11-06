@@ -2648,6 +2648,35 @@ typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
 
 typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterScaleFontSizeInfo).
+  size_t struct_size;
+  /// Unscaled font size in logical pixels.
+  double font_size;
+  /// Current `text_scale_factor` / configuration identifier passed by the
+  /// framework.
+  double text_scale_factor;
+} FlutterScaleFontSizeInfo;
+
+/// Synchronous callback invoked on the UI thread to compute the scaled font
+/// size in logical pixels for non-linear system font scaling (for example,
+/// Android API 34+ `FontScaleConverter`).
+///
+/// @param[in]  info                  The unscaled font size and configuration
+/// ID.
+/// @param[out] scaled_font_size_out  Populated with the scaled font size in
+///                                   logical pixels when returning `true`.
+/// @param[in]  user_data             The `user_data` passed to
+///                                   `FlutterEngineInitialize` or
+///                                   `FlutterEngineRun`.
+/// @return     `true` if `scaled_font_size_out` was populated, or `false` if
+///             `info->text_scale_factor` did not match a valid configuration.
+typedef bool (*FlutterScaleFontSizeCallback)(
+    const FlutterScaleFontSizeInfo* /* info */,
+    double* /* scaled_font_size_out */,
+    void* /* user_data */);
+
+// NOLINTBEGIN(clang-analyzer-optin.performance.Padding)
+typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
   size_t struct_size;
   /// The path to the Flutter assets directory containing project assets. The
@@ -2961,7 +2990,12 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// Optional callback invoked on the UI thread to apply non-linear system
+  /// font scaling (e.g., Android API 34+ `FontScaleConverter`).
+  FlutterScaleFontSizeCallback scale_font_size_callback;
 } FlutterProjectArgs;
+// NOLINTEND(clang-analyzer-optin.performance.Padding)
 
 typedef struct {
   /// The size of this struct. Must be

@@ -48,6 +48,8 @@ class PlatformViewEmbedder final : public PlatformView {
   using ChanneUpdateCallback = std::function<void(const std::string&, bool)>;
   using ViewFocusChangeRequestCallback =
       std::function<void(const ViewFocusChangeRequest&)>;
+  using GetScaledFontSizeCallback =
+      std::function<double(double unscaled_font_size, int configuration_id)>;
 
   struct PlatformDispatchTable {
     UpdateSemanticsCallback update_semantics_callback;  // optional
@@ -59,7 +61,8 @@ class PlatformViewEmbedder final : public PlatformView {
     OnPreEngineRestartCallback on_pre_engine_restart_callback;  // optional
     ChanneUpdateCallback on_channel_update;                     // optional
     ViewFocusChangeRequestCallback
-        view_focus_change_request_callback;  // optional
+        view_focus_change_request_callback;                   // optional
+    GetScaledFontSizeCallback get_scaled_font_size_callback;  // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -153,6 +156,10 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   void RequestViewFocusChange(const ViewFocusChangeRequest& request) override;
+
+  // |PlatformView|
+  double GetScaledFontSize(double unscaled_font_size,
+                           int configuration_id) const override;
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewEmbedder);
 };
