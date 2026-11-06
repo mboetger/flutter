@@ -2857,6 +2857,17 @@ typedef struct {
 } FlutterImageDecoderRegistration;
 
 typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterVMServiceUriInfo).
+  size_t struct_size;
+  /// Null-terminated HTTP URI string of the Dart VM Service.
+  const char* uri;
+} FlutterVMServiceUriInfo;
+
+typedef void (*FlutterVMServiceUriCallback)(
+    const FlutterVMServiceUriInfo* /* info */,
+    void* /* user_data */);
+
+typedef struct {
   /// The size of this struct. Must be sizeof(FlutterScaleFontSizeInfo).
   size_t struct_size;
   /// Unscaled font size in logical pixels.
@@ -3218,6 +3229,11 @@ typedef struct {
   /// Array of pointers to `FlutterImageDecoderRegistration` structs registered
   /// with the engine's `ImageGeneratorRegistry`.
   const FlutterImageDecoderRegistration** image_decoders;
+
+  /// Optional callback invoked when the Dart VM Service HTTP server URI
+  /// becomes available or changes (in debug and profile modes). May be invoked
+  /// on an internal engine thread.
+  FlutterVMServiceUriCallback vm_service_uri_callback;
 
   /// If true, `FlutterProjectArgs.platform_message_callback` is invoked
   /// directly on the UI thread (instead of posting a task to the platform
@@ -4060,6 +4076,15 @@ FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibraryLoadError* error);
 
+//------------------------------------------------------------------------------
+/// @brief      Warms up the process-wide default font manager on a background
+///             thread before the first frame is rendered.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4202,6 +4227,8 @@ typedef FlutterEngineResult (
     *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibraryLoadError* error);
+typedef FlutterEngineResult (*FlutterEnginePrefetchDefaultFontManagerFnPtr)(
+    void);
 /// Function-pointer-based versions of the APIs above.
 typedef struct _FlutterEngineProcTable {
   /// The size of this struct. Must be sizeof(FlutterEngineProcs).
@@ -4254,6 +4281,7 @@ typedef struct _FlutterEngineProcTable {
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
       NotifyDartDeferredLibraryLoadError;
+  FlutterEnginePrefetchDefaultFontManagerFnPtr PrefetchDefaultFontManager;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------

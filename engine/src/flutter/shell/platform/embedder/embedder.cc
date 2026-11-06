@@ -71,6 +71,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 #include "rapidjson/rapidjson.h"
 #include "rapidjson/writer.h"
+#include "txt/platform.h"
 
 // Note: the IMPELLER_SUPPORTS_RENDERING may be defined even when the
 // embedder/BUILD.gn variable impeller_supports_rendering is disabled.
@@ -2999,6 +3000,20 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   }
 
+
+  if (SAFE_ACCESS(args, vm_service_uri_callback, nullptr) != nullptr) {
+    FlutterVMServiceUriCallback cb =
+        SAFE_ACCESS(args, vm_service_uri_callback, nullptr);
+    embedder_engine->SetVMServiceUriCallback(
+        [cb, user_data](const std::string& uri) {
+          FlutterVMServiceUriInfo info = {
+              .struct_size = sizeof(FlutterVMServiceUriInfo),
+              .uri = uri.c_str(),
+          };
+          cb(&info, user_data);
+        });
+  }
+
   // Release the ownership of the embedder engine to the caller.
   *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
       embedder_engine.release());
@@ -4354,6 +4369,12 @@ FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
   return kSuccess;
 }
 
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEnginePrefetchDefaultFontManager(void) {
+  txt::GetDefaultFontManager();
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4413,6 +4434,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
   SET_PROC(NotifyDartDeferredLibraryLoadError,
            FlutterEngineNotifyDartDeferredLibraryLoadError);
+  SET_PROC(PrefetchDefaultFontManager, FlutterEnginePrefetchDefaultFontManager);
 #undef SET_PROC
 
   return kSuccess;

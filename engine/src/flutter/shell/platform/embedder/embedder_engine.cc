@@ -39,7 +39,12 @@ EmbedderEngine::EmbedderEngine(
       external_texture_resolver_(std::move(external_texture_resolver)),
       image_generators_(std::move(image_generators)) {}
 
-EmbedderEngine::~EmbedderEngine() = default;
+EmbedderEngine::~EmbedderEngine() {
+  if (vm_service_uri_callback_ != 0) {
+    DartServiceIsolate::RemoveServerStatusCallback(vm_service_uri_callback_);
+    vm_service_uri_callback_ = 0;
+  }
+}
 
 bool EmbedderEngine::LaunchShell() {
   if (!shell_args_) {
@@ -67,6 +72,10 @@ bool EmbedderEngine::LaunchShell() {
 }
 
 bool EmbedderEngine::CollectShell() {
+  if (vm_service_uri_callback_ != 0) {
+    DartServiceIsolate::RemoveServerStatusCallback(vm_service_uri_callback_);
+    vm_service_uri_callback_ = 0;
+  }
   shell_.reset();
   return IsValid();
 }
@@ -427,6 +436,18 @@ bool EmbedderEngine::RegisterImageGenerator(ImageGeneratorFactory factory,
           }));
   latch.Wait();
   return true;
+}
+
+void EmbedderEngine::SetVMServiceUriCallback(
+    const DartServiceIsolate::DartVMServiceServerStateCallback& callback) {
+  if (vm_service_uri_callback_ != 0) {
+    DartServiceIsolate::RemoveServerStatusCallback(vm_service_uri_callback_);
+    vm_service_uri_callback_ = 0;
+  }
+  if (callback) {
+    vm_service_uri_callback_ =
+        DartServiceIsolate::AddServerStatusCallback(callback);
+  }
 }
 
 }  // namespace flutter

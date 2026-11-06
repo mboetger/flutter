@@ -18,7 +18,7 @@ namespace testing {
 // the test, or remove it.
 #if !SLIMPELLER
 TEST(AndroidPlatformView, DISABLED_SelectsVulkanBasedOnApiLevel) {
-  Settings settings;
+  AndroidVMArgs settings;
   settings.enable_software_rendering = false;
   settings.enable_impeller = true;
 

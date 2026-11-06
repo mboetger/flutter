@@ -148,8 +148,7 @@
       "flutter/common/settings.h"
     ],
     "flutter_main.h": [
-      "flutter/common/settings.h",
-      "flutter/runtime/dart_service_isolate.h"
+      "flutter/common/settings.h"
     ],
     "image_external_texture.cc": [
       "flutter/impeller/toolkit/android/proc_table.h"
@@ -327,7 +326,6 @@
     "flutter/impeller/toolkit/gles/texture.h",
     "flutter/impeller/toolkit/glvk/trampoline.h",
     "flutter/lib/ui/window/platform_message.h",
-    "flutter/runtime/dart_service_isolate.h",
     "flutter/shell/common/display.h",
     "flutter/shell/common/platform_view.h",
     "flutter/shell/common/rasterizer.h",
@@ -381,5 +379,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 161
+  "total_allowed_internal_headers": 160
 }

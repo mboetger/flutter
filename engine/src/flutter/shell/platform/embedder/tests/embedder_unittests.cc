@@ -4543,6 +4543,52 @@ TEST_F(EmbedderTest, EmbedderLoadDartDeferredLibraryLifecycle) {
   EXPECT_TRUE(destruction_called);
 }
 
+TEST_F(EmbedderTest,
+       EmbedderPlatformDispatchTableAndImageDecoderInProjectArgs) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  FlutterImageDecoderRegistration decoder_reg = {};
+  decoder_reg.struct_size = sizeof(FlutterImageDecoderRegistration);
+  decoder_reg.priority = 1;
+  decoder_reg.create_decoder =
+      [](void* user_data, const uint8_t* data, size_t data_size,
+         FlutterImageDecoder* decoder_out) -> bool { return false; };
+  const FlutterImageDecoderRegistration* decoders[] = {&decoder_reg};
+
+  builder.GetProjectArgs().image_decoders = decoders;
+  builder.GetProjectArgs().image_decoders_count = 1;
+  builder.GetProjectArgs().scale_font_size_callback =
+      [](const FlutterScaleFontSizeInfo* info, double* scaled_font_size_out,
+         void* user_data) -> bool {
+    *scaled_font_size_out = info->font_size;
+    return true;
+  };
+  builder.GetProjectArgs().vm_service_uri_callback =
+      [](const FlutterVMServiceUriInfo* info, void* user_data) {};
+  builder.GetProjectArgs().request_dart_deferred_library_callback =
+      [](intptr_t loading_unit_id, void* user_data) {};
+  builder.GetProjectArgs().enable_direct_platform_message_dispatch = true;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
+TEST_F(EmbedderTest, EmbedderPrefetchDefaultFontManagerAndProcTable) {
+  EXPECT_EQ(FlutterEnginePrefetchDefaultFontManager(), kSuccess);
+
+  FlutterEngineProcTable table = {};
+  table.struct_size = sizeof(FlutterEngineProcTable);
+  ASSERT_EQ(FlutterEngineGetProcAddresses(&table), kSuccess);
+  EXPECT_EQ(table.LoadDartDeferredLibrary,
+            &FlutterEngineLoadDartDeferredLibrary);
+  EXPECT_EQ(table.NotifyDartDeferredLibraryLoadError,
+            &FlutterEngineNotifyDartDeferredLibraryLoadError);
+  EXPECT_EQ(table.PrefetchDefaultFontManager,
+            &FlutterEnginePrefetchDefaultFontManager);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

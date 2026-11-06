@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "flutter/fml/macros.h"
+#include "flutter/runtime/dart_service_isolate.h"
 #include "flutter/shell/common/shell.h"
 #include "flutter/shell/common/thread_host.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -122,6 +123,9 @@ class EmbedderEngine {
     return image_generators_;
   }
 
+  void SetVMServiceUriCallback(
+      const DartServiceIsolate::DartVMServiceServerStateCallback& callback);
+
  private:
   std::unique_ptr<EmbedderThreadHost> thread_host_;
   TaskRunners task_runners_;
@@ -130,6 +134,8 @@ class EmbedderEngine {
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
   std::vector<ImageGeneratorFactoryRegistration> image_generators_;
+
+  DartServiceIsolate::CallbackHandle vm_service_uri_callback_ = 0;
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderEngine);
 };
