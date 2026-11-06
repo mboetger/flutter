@@ -2283,6 +2283,12 @@ InferExternalViewEmbedderFromArgs(const FlutterCompositor* compositor,
       SAFE_ACCESS(compositor, present_view_callback, nullptr);
   bool avoid_backing_store_cache =
       SAFE_ACCESS(compositor, avoid_backing_store_cache, false);
+  bool merge_raster_thread_on_platform_views =
+      SAFE_ACCESS(compositor, merge_raster_thread_on_platform_views, false);
+  bool coalesce_overlay_layers =
+      SAFE_ACCESS(compositor, coalesce_overlay_layers, false);
+  uint64_t platform_view_mutation_capabilities =
+      SAFE_ACCESS(compositor, platform_view_mutation_capabilities, 0);
 
   // Make sure the required callbacks are present
   if (!c_create_callback || !c_collect_callback) {
@@ -2339,7 +2345,8 @@ InferExternalViewEmbedderFromArgs(const FlutterCompositor* compositor,
 
   return std::make_unique<flutter::EmbedderExternalViewEmbedder>(
       avoid_backing_store_cache, create_render_target_callback,
-      present_callback);
+      present_callback, merge_raster_thread_on_platform_views,
+      coalesce_overlay_layers, platform_view_mutation_capabilities);
 }
 
 // Translates embedder metrics to engine metrics, or returns a string on error.

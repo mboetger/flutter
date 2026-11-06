@@ -2382,6 +2382,64 @@ typedef struct {
   VoidCallback destruction_callback;
 } FlutterVulkanBackingStore;
 
+/// Fill rule for a `FlutterPath`.
+typedef enum {
+  /// Non-zero winding fill rule (`SkPathFillType::kWinding` /
+  /// `Path.FillType.WINDING`).
+  kFlutterPathFillTypeNonZero,
+  /// Even-odd fill rule (`SkPathFillType::kEvenOdd` /
+  /// `Path.FillType.EVEN_ODD`).
+  kFlutterPathFillTypeEvenOdd,
+} FlutterPathFillType;
+
+/// Verb commands in a `FlutterPath`.
+typedef enum {
+  /// Consumes 1 point: `(x, y)`.
+  kFlutterPathVerbMove,
+  /// Consumes 1 point: `(x, y)`.
+  kFlutterPathVerbLine,
+  /// Consumes 2 points: control `(cx, cy)`, end `(x, y)`.
+  kFlutterPathVerbQuad,
+  /// Consumes 2 points: control `(cx, cy)`, end `(x, y)`, and 1 weight from
+  /// `FlutterPath.conic_weights` (`w`). Only emitted when the embedder sets
+  /// `kFlutterPlatformViewMutationCapabilityPathConics` in
+  /// `FlutterCompositor.platform_view_mutation_capabilities`; otherwise the
+  /// engine approximates conics with quadratic Beziers before populating
+  /// `FlutterPath`.
+  kFlutterPathVerbConic,
+  /// Consumes 3 points: control1 `(c1x, c1y)`, control2 `(c2x, c2y)`, end
+  /// `(x, y)`.
+  kFlutterPathVerbCubic,
+  /// Consumes 0 points; closes the current contour.
+  kFlutterPathVerbClose,
+} FlutterPathVerb;
+
+/// A flattened vector path used for `kFlutterPlatformViewMutationTypeClipPath`.
+///
+/// All arrays in this struct are owned by the engine and remain valid only for
+/// the duration of `present_layers_callback` or `present_view_callback`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterPath).
+  size_t struct_size;
+  /// The fill rule of the path.
+  FlutterPathFillType fill_type;
+  /// Number of elements in `verbs`.
+  size_t verbs_count;
+  /// Ordered sequence of path verbs.
+  const FlutterPathVerb* verbs;
+  /// Number of `FlutterPoint` elements in `points`.
+  size_t points_count;
+  /// Points consumed sequentially by `verbs`.
+  const FlutterPoint* points;
+  /// Number of conic weights in `conic_weights` (one per
+  /// `kFlutterPathVerbConic` in `verbs`).
+  size_t conic_weights_count;
+  /// Conic weights consumed sequentially by `kFlutterPathVerbConic` verbs.
+  const double* conic_weights;
+  /// Conservative bounding box of the path.
+  FlutterRect bounds;
+} FlutterPath;
+
 typedef enum {
   /// Indicates that the Flutter application requested that an opacity be
   /// applied to the platform view.
@@ -2395,6 +2453,9 @@ typedef enum {
   /// Indicates that the Flutter application requested that the platform view be
   /// transformed before composition.
   kFlutterPlatformViewMutationTypeTransformation,
+  /// Indicates that the Flutter application requested that the platform view be
+  /// clipped using an arbitrary path.
+  kFlutterPlatformViewMutationTypeClipPath,
 } FlutterPlatformViewMutationType;
 
 typedef struct {
@@ -2405,6 +2466,7 @@ typedef struct {
     FlutterRect clip_rect;
     FlutterRoundedRect clip_rounded_rect;
     FlutterTransformation transformation;
+    FlutterPath clip_path;
   };
 } FlutterPlatformViewMutation;
 
@@ -2482,6 +2544,20 @@ typedef struct {
   /// The identifier for the view that the engine will use this backing store to
   /// render into.
   FlutterViewId view_id;
+  /// True when this backing store is for the bottom-most layer of the frame
+  /// for `view_id`, with no platform view composited beneath it, and false
+  /// otherwise. The engine requests at most one such backing store per view
+  /// per frame, and none when all Flutter contents are composited above
+  /// platform views. Read this field only if `struct_size` covers it, and
+  /// treat it as false otherwise.
+  ///
+  /// An embedder that returns an uncacheable on-screen render target (for
+  /// example, the next swapchain image or default framebuffer) when this is
+  /// true must set `FlutterCompositor.avoid_backing_store_cache` to `true` and
+  /// resize that target to `size` inside `create_backing_store_callback`
+  /// before returning it (or in `present_view_callback` on frames that have no
+  /// root backing store).
+  bool is_root_layer;
 } FlutterBackingStoreConfig;
 
 typedef enum {
@@ -2580,6 +2656,17 @@ typedef bool (*FlutterLayersPresentCallback)(const FlutterLayer** layers,
 typedef bool (*FlutterPresentViewCallback)(
     const FlutterPresentViewInfo* /* present info */);
 
+/// Bitmask flags for `FlutterCompositor.platform_view_mutation_capabilities`.
+typedef enum {
+  /// Default capabilities: `kFlutterPathVerbConic` segments in clip paths are
+  /// converted to quadratic Beziers by the engine before `FlutterPath` is
+  /// populated.
+  kFlutterPlatformViewMutationCapabilityDefault = 0,
+  /// The embedder natively supports `kFlutterPathVerbConic` and
+  /// `FlutterPath.conic_weights` (for example, Android API 34+ `Path.conicTo`).
+  kFlutterPlatformViewMutationCapabilityPathConics = 1 << 0,
+} FlutterPlatformViewMutationCapability;
+
 typedef struct {
   /// This size of this struct. Must be sizeof(FlutterCompositor).
   size_t struct_size;
@@ -2636,6 +2723,19 @@ typedef struct {
   ///
   /// The callback should return true if the operation was successful.
   FlutterPresentViewCallback present_view_callback;
+  /// If true, the engine dynamically merges the raster task runner onto the
+  /// platform thread on frames that contain platform views, and unmerges it
+  /// once platform views are no longer present in the scene.
+  bool merge_raster_thread_on_platform_views;
+  /// If true, the engine coalesces all Flutter overlay slices above platform
+  /// views into a single top-most overlay backing store (clipping out the
+  /// bounding rects of higher-Z platform views with `DlClipOp::kDifference`),
+  /// so each frame produces at most one root backing store and one overlay
+  /// backing store. Used by Android Hybrid Composition++ (HCPP).
+  bool coalesce_overlay_layers;
+  /// Bitmask of `FlutterPlatformViewMutationCapability` flags advertising
+  /// which optional mutation representations the embedder supports.
+  uint64_t platform_view_mutation_capabilities;
 } FlutterCompositor;
 
 typedef struct {

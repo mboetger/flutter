@@ -2580,6 +2580,8 @@ TEST_P(EmbedderTestMultiBackend, PlatformViewMutatorsAreValid) {
                 FML_CHECK(false)
                     << "There should be no transformation in the test.";
                 break;
+              case kFlutterPlatformViewMutationTypeClipPath:
+                break;
             }
 
             ASSERT_EQ(*platform_view.mutations[i], mutation);
@@ -2690,6 +2692,8 @@ TEST_F(EmbedderTest, PlatformViewMutatorsAreValidWithPixelRatio) {
                 mutation.type = kFlutterPlatformViewMutationTypeTransformation;
                 mutation.transformation = FlutterTransformationMake(
                     DlMatrix::MakeScale({2.0, 2.0, 1}));
+                break;
+              case kFlutterPlatformViewMutationTypeClipPath:
                 break;
             }
 
@@ -2809,6 +2813,8 @@ TEST_F(EmbedderTest,
                 mutation.transformation =
                     FlutterTransformationMake(root_surface_transformation);
 
+                break;
+              case kFlutterPlatformViewMutationTypeClipPath:
                 break;
             }
 
