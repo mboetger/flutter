@@ -87,6 +87,67 @@ bin_to_assembly("icudtl_asm") {
   executable = false
 }
 
+config("jni_headers_config") {
+  include_dirs = [ "jni" ]
+}
+
+source_set("flutter_embedder_native_src") {
+  sources = [
+    "jni_delegate.h",
+    "jni_router.cc",
+    "jni_router.h",
+    "jvm_invoker.cc",
+    "jvm_invoker.h",
+  ]
+
+  check_includes = true
+
+  defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
+
+  public_configs = [
+    "//flutter:config",
+    ":jni_headers_config",
+  ]
+
+  deps = [
+    "//flutter/common",
+    "//flutter/fml",
+    "//flutter/shell/platform/embedder:embedder_headers",
+  ]
+
+  libs = [
+    "android",
+    "EGL",
+    "GLESv2",
+  ]
+}
+
+executable("flutter_embedder_native_unittests") {
+  testonly = true
+
+  sources = [
+    "flutter_embedder_native_unittests.cc",
+  ]
+
+  defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
+
+  public_configs = [
+    "//flutter:config",
+    ":jni_headers_config",
+  ]
+
+  deps = [
+    ":flutter_embedder_native_src",
+    "//flutter/common",
+    "//flutter/fml",
+    "//flutter/shell/platform/android/jni:mock_jni_env",
+    "//flutter/shell/platform/embedder:embedder_headers",
+    "//flutter/testing:testing_lib",
+    "//third_party/googletest:gmock",
+    "//third_party/googletest:gtest",
+  ]
+}
+
 source_set("flutter_shell_native_src") {
   visibility = [ ":*" ]
 
@@ -163,6 +224,7 @@ source_set("flutter_shell_native_src") {
 
   public_deps = [
     ":android_gpu_configuration",
+    ":flutter_embedder_native_src",
     ":icudtl_asm",
     ":image_generator",
     "//flutter/assets",
