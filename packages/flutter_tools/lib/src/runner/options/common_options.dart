@@ -854,7 +854,6 @@ abstract final class DebuggingOptionDescriptors {
   static const adbLogFiltering = FlagOptionDescriptor(
     name: 'adb-log-filtering',
     defaultsTo: true,
-    verboseOnly: true,
     help:
         'Filter adb logs so that logs not emitted by the current flutter application are not '
         'displayed.',

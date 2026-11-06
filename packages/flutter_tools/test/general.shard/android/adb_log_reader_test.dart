@@ -266,6 +266,41 @@ void main() {
     await onDone.future;
   });
 
+  testWithoutContext('AdbLogReader filters logs from other PIDs when appPid is known (issue 196055)', () async {
+    const int appPid = 12345;
+    const int otherPid = 54321;
+    const int sysPid = 1000;
+    final processManager = FakeProcessManager.list(<FakeCommand>[
+      FakeCommand(
+        command: const <String>['adb', '-s', '1234', 'shell', '-x', 'logcat', '-v', 'time'],
+        stdout:
+            '05-11 12:54:46.665 W/flutter($appPid): Hello there!\n'
+            '05-11 12:54:46.666 W/flutter($otherPid): I am another app!\n'
+            '05-11 12:54:46.667 E/DartVM($otherPid): Another app DartVM!\n'
+            '05-11 12:54:46.668 E/AndroidRuntime($otherPid): Another app crashed!\n'
+            '05-11 12:54:46.669 W/ActivityManager($sysPid): Force stopping com.example.app for flutter app\n',
+      ),
+    ]);
+    final AdbLogReader logReader = await AdbLogReader.createLogReader(
+      createFakeDevice(null),
+      processManager,
+      BufferLogger.test(),
+    );
+    await logReader.provideVmService(_FakeFlutterVmService(appPid));
+    final onDone = Completer<void>.sync();
+    final emittedLines = <String>[];
+    logReader.logLines.listen((String line) {
+      emittedLines.add(line);
+    }, onDone: onDone.complete);
+    await null;
+    await logReader.dispose();
+    await onDone.future;
+    expect(emittedLines, const <String>[
+      'W/flutter($appPid): Hello there!',
+      'W/ActivityManager($sysPid): Force stopping com.example.app for flutter app',
+    ]);
+  });
+
   testWithoutContext('AdbLogReader does not filter output from AndroidRuntime crashes', () async {
     final processManager = FakeProcessManager.list(<FakeCommand>[
       FakeCommand(

@@ -1095,10 +1095,12 @@ class AdbLogReader extends DeviceLogReader {
     RegExp(r'^[IE]\/DartVM[^:]*:\s+'),
     RegExp(r'^[WEF]\/AndroidRuntime:\s+'),
     RegExp(r'^[WEF]\/AndroidRuntime\([0-9]+\):\s+'),
-    RegExp(r'^[WEF]\/ActivityManager:\s+.*(\bflutter\b|\bdomokit\b|\bsky\b)'),
+    RegExp(r'^[WEF]\/ActivityManager(?:\(\s*\d+\))?:\s+.*(\bflutter\b|\bdomokit\b|\bsky\b)'),
     RegExp(r'^[WEF]\/System\.err:\s+'),
     RegExp(r'^[F]\/[\S^:]+:\s+'),
   ];
+
+  static final _activityManagerTag = RegExp(r'^[VDIWEF]\/ActivityManager');
 
   static final _filteredMessagees = <RegExp>[
     // E/SurfaceSyncer(22636): Failed to find sync for id=9
@@ -1183,6 +1185,17 @@ class AdbLogReader extends DeviceLogReader {
       } else {
         // Filter on approved names and levels.
         acceptLine = _allowedTags.any((RegExp re) => re.hasMatch(line));
+
+        // If the line matches an allowed tag, but we know the app PID, we should
+        // filter out logs that are definitely from another app's process.
+        if (acceptLine && _appPid != null) {
+          final int? logPid = int.tryParse(logMatch.group(1)!);
+          // ActivityManager logs are from the system process, so their PID won't match _appPid.
+          // But flutter, DartVM, AndroidRuntime, etc. should match _appPid.
+          if (logPid != null && logPid != _appPid && !_activityManagerTag.hasMatch(line)) {
+            acceptLine = false;
+          }
+        }
       }
 
       if (acceptLine) {
