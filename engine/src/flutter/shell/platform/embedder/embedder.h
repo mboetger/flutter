@@ -2991,6 +2991,13 @@ typedef struct {
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
 
+  /// If true, `FlutterProjectArgs.platform_message_callback` is invoked
+  /// directly on the UI thread (instead of posting a task to the platform
+  /// thread), and `FlutterEngineSendPlatformMessageResponse` may be called
+  /// from any thread. Embedders that enable this flag are responsible for
+  /// routing each channel to its target thread or background task queue.
+  bool enable_direct_platform_message_dispatch;
+
   /// Optional callback invoked on the UI thread to apply non-linear system
   /// font scaling (e.g., Android API 34+ `FontScaleConverter`).
   FlutterScaleFontSizeCallback scale_font_size_callback;

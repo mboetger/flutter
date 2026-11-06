@@ -4,6 +4,7 @@
 
 #include "flutter/shell/platform/embedder/platform_view_embedder.h"
 
+#include <mutex>
 #include <utility>
 
 #include "flutter/fml/make_copyable.h"
@@ -11,38 +12,120 @@
 namespace flutter {
 
 class PlatformViewEmbedder::EmbedderPlatformMessageHandler
-    : public PlatformMessageHandler {
+    : public PlatformMessageHandler,
+      public std::enable_shared_from_this<EmbedderPlatformMessageHandler> {
  public:
   EmbedderPlatformMessageHandler(
-      fml::WeakPtr<PlatformView> parent,
-      fml::RefPtr<fml::TaskRunner> platform_task_runner)
-      : parent_(std::move(parent)),
-        platform_task_runner_(std::move(platform_task_runner)) {}
+      PlatformViewEmbedder* parent,
+      fml::RefPtr<fml::TaskRunner> platform_task_runner,
+      bool enable_direct_dispatch)
+      : parent_(parent),
+        platform_task_runner_(std::move(platform_task_runner)),
+        enable_direct_dispatch_(enable_direct_dispatch) {}
+
+  void Shutdown() {
+    std::scoped_lock lock(mutex_);
+    parent_ = nullptr;
+    platform_task_runner_ = nullptr;
+  }
 
   virtual void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) {
-    platform_task_runner_->PostTask(fml::MakeCopyable(
-        [parent = parent_, message = std::move(message)]() mutable {
-          if (parent) {
-            parent->HandlePlatformMessage(std::move(message));
-          } else {
+    auto self = shared_from_this();
+    fml::RefPtr<fml::TaskRunner> task_runner;
+    {
+      std::scoped_lock lock(mutex_);
+      if (enable_direct_dispatch_ || !platform_task_runner_) {
+        if (parent_) {
+          parent_->HandlePlatformMessage(std::move(message));
+        } else if (message) {
+          FML_DLOG(WARNING) << "Deleted engine dropping message on channel "
+                            << message->channel();
+          if (message->response()) {
+            message->response()->CompleteEmpty();
+          }
+        }
+        return;
+      }
+      task_runner = platform_task_runner_;
+    }
+    task_runner->PostTask(fml::MakeCopyable(
+        [self = std::move(self), message = std::move(message)]() mutable {
+          auto* handler =
+              static_cast<EmbedderPlatformMessageHandler*>(self.get());
+          std::scoped_lock lock(handler->mutex_);
+          if (handler->parent_) {
+            handler->parent_->HandlePlatformMessage(std::move(message));
+          } else if (message) {
             FML_DLOG(WARNING) << "Deleted engine dropping message on channel "
                               << message->channel();
+            if (message->response()) {
+              message->response()->CompleteEmpty();
+            }
           }
         }));
   }
 
   virtual bool DoesHandlePlatformMessageOnPlatformThread() const {
-    return true;
+    return !enable_direct_dispatch_;
   }
 
   virtual void InvokePlatformMessageResponseCallback(
       int response_id,
-      std::unique_ptr<fml::Mapping> mapping) {}
-  virtual void InvokePlatformMessageEmptyResponseCallback(int response_id) {}
+      std::unique_ptr<fml::Mapping> mapping) {
+    auto self = shared_from_this();
+    fml::RefPtr<fml::TaskRunner> task_runner;
+    {
+      std::scoped_lock lock(mutex_);
+      if (enable_direct_dispatch_ || !platform_task_runner_) {
+        if (parent_) {
+          parent_->InvokePlatformMessageResponseCallback(response_id,
+                                                         std::move(mapping));
+        }
+        return;
+      }
+      task_runner = platform_task_runner_;
+    }
+    task_runner->PostTask(
+        fml::MakeCopyable([self = std::move(self), response_id,
+                           mapping = std::move(mapping)]() mutable {
+          auto* handler =
+              static_cast<EmbedderPlatformMessageHandler*>(self.get());
+          std::scoped_lock lock(handler->mutex_);
+          if (handler->parent_) {
+            handler->parent_->InvokePlatformMessageResponseCallback(
+                response_id, std::move(mapping));
+          }
+        }));
+  }
+
+  virtual void InvokePlatformMessageEmptyResponseCallback(int response_id) {
+    auto self = shared_from_this();
+    fml::RefPtr<fml::TaskRunner> task_runner;
+    {
+      std::scoped_lock lock(mutex_);
+      if (enable_direct_dispatch_ || !platform_task_runner_) {
+        if (parent_) {
+          parent_->InvokePlatformMessageEmptyResponseCallback(response_id);
+        }
+        return;
+      }
+      task_runner = platform_task_runner_;
+    }
+    task_runner->PostTask([self = std::move(self), response_id]() {
+      auto* handler = static_cast<EmbedderPlatformMessageHandler*>(self.get());
+      std::scoped_lock lock(handler->mutex_);
+      if (handler->parent_) {
+        handler->parent_->InvokePlatformMessageEmptyResponseCallback(
+            response_id);
+      }
+    });
+  }
 
  private:
-  fml::WeakPtr<PlatformView> parent_;
+  std::recursive_mutex mutex_;
+  PlatformViewEmbedder* parent_ = nullptr;
   fml::RefPtr<fml::TaskRunner> platform_task_runner_;
+  const bool enable_direct_dispatch_ = false;
 };
 
 PlatformViewEmbedder::PlatformViewEmbedder(
@@ -57,9 +140,18 @@ PlatformViewEmbedder::PlatformViewEmbedder(
       embedder_surface_(
           std::make_unique<EmbedderSurfaceSoftware>(software_dispatch_table,
                                                     external_view_embedder_)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    this,
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 
 #ifdef SHELL_ENABLE_GL
@@ -72,9 +164,18 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    this,
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -88,9 +189,18 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    this,
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
@@ -104,13 +214,26 @@ PlatformViewEmbedder::PlatformViewEmbedder(
     : PlatformView(delegate, task_runners),
       external_view_embedder_(std::move(external_view_embedder)),
       embedder_surface_(std::move(embedder_surface)),
-      platform_message_handler_(new EmbedderPlatformMessageHandler(
-          GetWeakPtr(),
-          task_runners.GetPlatformTaskRunner())),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    this,
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 #endif
 
-PlatformViewEmbedder::~PlatformViewEmbedder() = default;
+PlatformViewEmbedder::~PlatformViewEmbedder() {
+  if (embedder_platform_message_handler_) {
+    embedder_platform_message_handler_->Shutdown();
+  }
+}
 
 void PlatformViewEmbedder::UpdateSemantics(
     int64_t view_id,
@@ -135,8 +258,8 @@ void PlatformViewEmbedder::HandlePlatformMessage(
     return;
   }
 
-  platform_dispatch_table_.platform_message_response_callback(
-      std::move(message));
+  auto callback = platform_dispatch_table_.platform_message_response_callback;
+  callback(std::move(message));
 }
 
 // |PlatformView|
@@ -232,6 +355,27 @@ double PlatformViewEmbedder::GetScaledFontSize(double unscaled_font_size,
         unscaled_font_size, configuration_id);
   }
   return -1.0;
+}
+
+void PlatformViewEmbedder::InvokePlatformMessageResponseCallback(
+    int response_id,
+    std::unique_ptr<fml::Mapping> mapping) {
+  if (platform_dispatch_table_.platform_message_response_completion_callback !=
+      nullptr) {
+    auto callback =
+        platform_dispatch_table_.platform_message_response_completion_callback;
+    callback(response_id, std::move(mapping));
+  }
+}
+
+void PlatformViewEmbedder::InvokePlatformMessageEmptyResponseCallback(
+    int response_id) {
+  if (platform_dispatch_table_
+          .platform_message_empty_response_completion_callback != nullptr) {
+    auto callback = platform_dispatch_table_
+                        .platform_message_empty_response_completion_callback;
+    callback(response_id);
+  }
 }
 
 std::shared_ptr<PlatformMessageHandler>

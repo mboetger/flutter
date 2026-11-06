@@ -24,6 +24,7 @@
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
 #include "flutter/runtime/dart_vm.h"
+#include "flutter/shell/platform/embedder/embedder_platform_message_response.h"
 #include "flutter/shell/platform/embedder/embedder_thread_host.h"
 #include "flutter/shell/platform/embedder/tests/embedder_assertions.h"
 #include "flutter/shell/platform/embedder/tests/embedder_config_builder.h"
@@ -4373,6 +4374,104 @@ TEST_F(EmbedderTest, EmbedderExtendedWindowMetricsAndCornerRadii) {
 
   EXPECT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
             kSuccess);
+}
+
+TEST_F(EmbedderTest,
+       PlatformMessageCallbackCanShutdownEngineAndRespondWithoutDeadlock) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  auto task_runner = CreateNewThread("test_platform_and_ui_thread");
+  UniqueEngine engine;
+
+  EmbedderTestTaskRunner test_task_runner(task_runner, [&](FlutterTask task) {
+    if (!engine.is_valid()) {
+      return;
+    }
+    FlutterEngineRunTask(engine.get(), &task);
+  });
+
+  fml::AutoResetWaitableEvent signal_latch_ui;
+  fml::AutoResetWaitableEvent signal_latch_platform;
+
+  context.AddFfiNativeCallback(
+      "SignalNativeTest", CREATE_FFI_LAMBDA([&]() {
+        ASSERT_TRUE(task_runner->RunsTasksOnCurrentThread());
+        signal_latch_ui.Signal();
+      }));
+
+  task_runner->PostTask([&]() {
+    EmbedderConfigBuilder builder(context);
+    const auto task_runner_description =
+        test_task_runner.GetFlutterTaskRunnerDescription();
+    builder.SetSurface(DlISize(1, 1));
+    builder.SetUITaskRunner(&task_runner_description);
+    builder.SetPlatformTaskRunner(&task_runner_description);
+    builder.SetDartEntrypoint("mergedPlatformUIThread");
+    builder.SetPlatformMessageCallback(
+        [&](const FlutterPlatformMessage* message) {
+          ASSERT_TRUE(task_runner->RunsTasksOnCurrentThread());
+          engine.reset();
+          if (message->response_handle != nullptr) {
+            EXPECT_EQ(FlutterEngineSendPlatformMessageResponse(
+                          engine.get(), message->response_handle, nullptr, 0),
+                      kSuccess);
+          }
+          signal_latch_platform.Signal();
+        });
+    engine = builder.LaunchEngine();
+    ASSERT_TRUE(engine.is_valid());
+  });
+  signal_latch_ui.Wait();
+  signal_latch_platform.Wait();
+
+  fml::AutoResetWaitableEvent kill_latch;
+  task_runner->PostTask(
+      [&] { task_runner->PostTask([&kill_latch] { kill_latch.Signal(); }); });
+  kill_latch.Wait();
+}
+
+TEST(EmbedderTestNoFixture,
+     EmbedderPlatformMessageResponsePreservesZeroByteNonNullPointer) {
+  fml::Thread thread("response_test_thread");
+  auto runner = thread.GetTaskRunner();
+  constexpr size_t kInitialUnsetSize = 999u;
+  constexpr uintptr_t kInitialNonNullSentinel = 0x1;
+
+  {
+    fml::AutoResetWaitableEvent latch;
+    const uint8_t* received_data = nullptr;
+    size_t received_size = kInitialUnsetSize;
+    fml::RefPtr<PlatformMessageResponse> response =
+        fml::MakeRefCounted<EmbedderPlatformMessageResponse>(
+            runner, [&](const uint8_t* data, size_t size) {
+              received_data = data;
+              received_size = size;
+              latch.Signal();
+            });
+    auto empty_vector_mapping =
+        std::make_unique<fml::DataMapping>(std::vector<uint8_t>{});
+    response->Complete(std::move(empty_vector_mapping));
+    latch.Wait();
+    EXPECT_NE(received_data, nullptr);
+    EXPECT_EQ(received_size, 0u);
+  }
+
+  {
+    fml::AutoResetWaitableEvent latch;
+    const uint8_t* received_data =
+        reinterpret_cast<const uint8_t*>(kInitialNonNullSentinel);
+    size_t received_size = kInitialUnsetSize;
+    fml::RefPtr<PlatformMessageResponse> response =
+        fml::MakeRefCounted<EmbedderPlatformMessageResponse>(
+            runner, [&](const uint8_t* data, size_t size) {
+              received_data = data;
+              received_size = size;
+              latch.Signal();
+            });
+    response->CompleteEmpty();
+    latch.Wait();
+    EXPECT_EQ(received_data, nullptr);
+    EXPECT_EQ(received_size, 0u);
+  }
 }
 
 }  // namespace testing

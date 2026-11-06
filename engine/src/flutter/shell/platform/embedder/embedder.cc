@@ -1763,10 +1763,6 @@ MakeViewportMetricsFromWindowMetrics(
   return metrics;
 }
 
-struct _FlutterPlatformMessageResponseHandle {
-  std::unique_ptr<flutter::PlatformMessage> message;
-};
-
 struct LoadedElfDeleter {
   void operator()(Dart_LoadedElf* elf) {
     if (elf) {
@@ -2437,17 +2433,26 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     };
   }
 
+  bool enable_direct_platform_message_dispatch =
+      SAFE_ACCESS(args, enable_direct_platform_message_dispatch, false);
+
   flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
-      {
-          update_semantics_callback,                  //
-          platform_message_response_callback,         //
-          vsync_callback,                             //
-          compute_platform_resolved_locale_callback,  //
-          on_pre_engine_restart_callback,             //
-          channel_update_callback,                    //
-          view_focus_change_request_callback,         //
-          get_scaled_font_size_callback,              //
-  };
+      {};
+  platform_dispatch_table.update_semantics_callback = update_semantics_callback;
+  platform_dispatch_table.platform_message_response_callback =
+      platform_message_response_callback;
+  platform_dispatch_table.vsync_callback = vsync_callback;
+  platform_dispatch_table.compute_platform_resolved_locale_callback =
+      compute_platform_resolved_locale_callback;
+  platform_dispatch_table.on_pre_engine_restart_callback =
+      on_pre_engine_restart_callback;
+  platform_dispatch_table.on_channel_update = channel_update_callback;
+  platform_dispatch_table.view_focus_change_request_callback =
+      view_focus_change_request_callback;
+  platform_dispatch_table.get_scaled_font_size_callback =
+      get_scaled_font_size_callback;
+  platform_dispatch_table.enable_direct_platform_message_dispatch =
+      enable_direct_platform_message_dispatch;
 
   impeller::Flags impeller_flags;
   impeller_flags.use_sdfs = settings.impeller_use_sdfs;
@@ -3232,8 +3237,15 @@ FlutterEngineResult FlutterEngineSendPlatformMessage(
 
   std::unique_ptr<flutter::PlatformMessage> message;
   if (message_size == 0) {
-    message = std::make_unique<flutter::PlatformMessage>(
-        flutter_message->channel, response);
+    if (message_data != nullptr) {
+      message = std::make_unique<flutter::PlatformMessage>(
+          flutter_message->channel,
+          fml::MallocMapping(reinterpret_cast<uint8_t*>(malloc(1)), 0),
+          response);
+    } else {
+      message = std::make_unique<flutter::PlatformMessage>(
+          flutter_message->channel, response);
+    }
   } else {
     message = std::make_unique<flutter::PlatformMessage>(
         flutter_message->channel,
@@ -3312,7 +3324,7 @@ FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
   auto response = handle->message->response();
 
   if (response) {
-    if (data_length == 0) {
+    if (data == nullptr) {
       response->CompleteEmpty();
     } else {
       response->Complete(std::make_unique<fml::DataMapping>(

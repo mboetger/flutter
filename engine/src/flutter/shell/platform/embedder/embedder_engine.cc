@@ -177,6 +177,17 @@ bool EmbedderEngine::SendPlatformMessage(
   }
 
   auto platform_view = shell_->GetPlatformView();
+  auto platform_task_runner = GetTaskRunners().GetPlatformTaskRunner();
+  if (platform_task_runner &&
+      !platform_task_runner->RunsTasksOnCurrentThread()) {
+    platform_task_runner->PostTask(fml::MakeCopyable(
+        [platform_view, message = std::move(message)]() mutable {
+          if (platform_view) {
+            platform_view->DispatchPlatformMessage(std::move(message));
+          }
+        }));
+    return true;
+  }
   if (!platform_view) {
     return false;
   }
@@ -283,8 +294,14 @@ bool EmbedderEngine::RunTask(const FlutterTask* task) {
   // The shell doesn't need to be running or valid for access to the thread
   // host. This is why there is no `IsValid` check here. This allows embedders
   // to perform custom task runner interop before the shell is running.
-  if (task == nullptr) {
+  if (task == nullptr || !thread_host_) {
     return false;
+  }
+  fml::TaskRunnerAffineWeakPtr<Engine> weak_engine;
+  if (shell_ && task_runners_.GetUITaskRunner() &&
+      task_runners_.GetUITaskRunner()->RunsTasksOnCurrentThread() &&
+      !task_runners_.GetUITaskRunner()->GetTaskQueueId().is_valid()) {
+    weak_engine = shell_->GetEngine();
   }
   auto result = thread_host_->PostTask(reinterpret_cast<intptr_t>(task->runner),
                                        task->task);
@@ -293,10 +310,10 @@ bool EmbedderEngine::RunTask(const FlutterTask* task) {
   // If the UI and platform threads are merged, the UI task runner has no
   // associated task queue, and microtasks need to be flushed manually
   // after running the task.
-  if (result && shell_ && task_runners_.GetUITaskRunner() &&
-      task_runners_.GetUITaskRunner()->RunsTasksOnCurrentThread() &&
-      !task_runners_.GetUITaskRunner()->GetTaskQueueId().is_valid()) {
-    shell_->FlushMicrotaskQueue();
+  // Use `weak_engine` rather than `this->shell_` because the task itself may
+  // synchronously shut down and delete this `EmbedderEngine`.
+  if (result && weak_engine) {
+    weak_engine->FlushMicrotaskQueue();
   }
 
   return result;

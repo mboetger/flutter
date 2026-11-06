@@ -6,6 +6,7 @@
 #define FLUTTER_SHELL_PLATFORM_EMBEDDER_PLATFORM_VIEW_EMBEDDER_H_
 
 #include <functional>
+#include <mutex>
 
 #include "flow/embedded_views.h"
 #include "flutter/fml/macros.h"
@@ -41,6 +42,11 @@ class PlatformViewEmbedder final : public PlatformView {
                          flutter::CustomAccessibilityActionUpdates actions)>;
   using PlatformMessageResponseCallback =
       std::function<void(std::unique_ptr<PlatformMessage>)>;
+  using PlatformMessageResponseCompletionCallback =
+      std::function<void(int response_id,
+                         std::unique_ptr<fml::Mapping> mapping)>;
+  using PlatformMessageEmptyResponseCompletionCallback =
+      std::function<void(int response_id)>;
   using ComputePlatformResolvedLocaleCallback =
       std::function<std::unique_ptr<std::vector<std::string>>(
           const std::vector<std::string>& supported_locale_data)>;
@@ -63,6 +69,13 @@ class PlatformViewEmbedder final : public PlatformView {
     ViewFocusChangeRequestCallback
         view_focus_change_request_callback;                   // optional
     GetScaledFontSizeCallback get_scaled_font_size_callback;  // optional
+    PlatformMessageResponseCompletionCallback
+        platform_message_response_completion_callback;  // optional
+    PlatformMessageEmptyResponseCompletionCallback
+        platform_message_empty_response_completion_callback;  // optional
+    std::shared_ptr<PlatformMessageHandler>
+        custom_platform_message_handler;  // optional
+    bool enable_direct_platform_message_dispatch = false;
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -123,8 +136,15 @@ class PlatformViewEmbedder final : public PlatformView {
   class EmbedderPlatformMessageHandler;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
   std::unique_ptr<EmbedderSurface> embedder_surface_;
-  std::shared_ptr<EmbedderPlatformMessageHandler> platform_message_handler_;
+  std::shared_ptr<EmbedderPlatformMessageHandler>
+      embedder_platform_message_handler_;
+  std::shared_ptr<PlatformMessageHandler> platform_message_handler_;
   PlatformDispatchTable platform_dispatch_table_;
+
+  void InvokePlatformMessageResponseCallback(
+      int response_id,
+      std::unique_ptr<fml::Mapping> mapping);
+  void InvokePlatformMessageEmptyResponseCallback(int response_id);
 
   // |PlatformView|
   std::unique_ptr<Surface> CreateRenderingSurface() override;

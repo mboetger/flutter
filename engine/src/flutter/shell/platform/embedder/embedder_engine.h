@@ -14,6 +14,11 @@
 #include "flutter/shell/platform/embedder/embedder.h"
 #include "flutter/shell/platform/embedder/embedder_external_texture_resolver.h"
 #include "flutter/shell/platform/embedder/embedder_thread_host.h"
+
+struct _FlutterPlatformMessageResponseHandle {
+  std::unique_ptr<flutter::PlatformMessage> message;
+};
+
 namespace flutter {
 
 struct ShellArgs;
