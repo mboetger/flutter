@@ -1501,6 +1501,31 @@ typedef struct {
   /// The maximum bound of the pressure of the current pointer, where 0.0 is the
   /// default maximum bound.
   double pressure_max;
+  /// The distance of the pointer from the surface (hover / stylus distance).
+  double distance;
+  /// The maximum bound of `distance`.
+  double distance_max;
+  /// The normalized area of the pointer contact in the range [0.0, 1.0].
+  double size;
+  /// The length of the major axis of the touch contact ellipse in physical
+  /// pixels.
+  double radius_major;
+  /// The length of the minor axis of the touch contact ellipse in physical
+  /// pixels.
+  double radius_minor;
+  /// The minimum bound of `radius_major` and `radius_minor`.
+  double radius_min;
+  /// The maximum bound of `radius_major` and `radius_minor`.
+  double radius_max;
+  /// The angle of the pointer or stylus in radians.
+  double orientation;
+  /// The tilt angle of the stylus in radians in the range [0, pi/2].
+  double tilt;
+  /// Opaque platform-specific data associated with the pointer event.
+  int64_t platform_data;
+  /// Optional embedder-assigned identifier for the native input event, echoed
+  /// into `PointerData::embedder_id`.
+  int64_t embedder_id;
 } FlutterPointerEvent;
 
 typedef enum {
