@@ -1786,6 +1786,46 @@ typedef struct {
   int32_t heading_level;
 } FlutterSemanticsNode;
 
+/// Must match the `SemanticsRole` enum in `semantics.dart`.
+typedef enum {
+  kFlutterSemanticsRoleNone = 0,
+  kFlutterSemanticsRoleTab = 1,
+  kFlutterSemanticsRoleTabBar = 2,
+  kFlutterSemanticsRoleTabPanel = 3,
+  kFlutterSemanticsRoleDialog = 4,
+  kFlutterSemanticsRoleAlertDialog = 5,
+  kFlutterSemanticsRoleTable = 6,
+  kFlutterSemanticsRoleCell = 7,
+  kFlutterSemanticsRoleRow = 8,
+  kFlutterSemanticsRoleColumnHeader = 9,
+  kFlutterSemanticsRoleDragHandle = 10,
+  kFlutterSemanticsRoleSpinButton = 11,
+  kFlutterSemanticsRoleComboBox = 12,
+  kFlutterSemanticsRoleMenuBar = 13,
+  kFlutterSemanticsRoleMenu = 14,
+  kFlutterSemanticsRoleMenuItem = 15,
+  kFlutterSemanticsRoleMenuItemCheckbox = 16,
+  kFlutterSemanticsRoleMenuItemRadio = 17,
+  kFlutterSemanticsRoleList = 18,
+  kFlutterSemanticsRoleListItem = 19,
+  kFlutterSemanticsRoleForm = 20,
+  kFlutterSemanticsRoleTooltip = 21,
+  kFlutterSemanticsRoleLoadingSpinner = 22,
+  kFlutterSemanticsRoleProgressBar = 23,
+  kFlutterSemanticsRoleHotKey = 24,
+  kFlutterSemanticsRoleRadioGroup = 25,
+  kFlutterSemanticsRoleStatus = 26,
+  kFlutterSemanticsRoleAlert = 27,
+  kFlutterSemanticsRoleComplementary = 28,
+  kFlutterSemanticsRoleContentInfo = 29,
+  kFlutterSemanticsRoleMain = 30,
+  kFlutterSemanticsRoleNavigation = 31,
+  kFlutterSemanticsRoleRegion = 32,
+  kFlutterSemanticsRoleSlider = 33,
+  kFlutterSemanticsRoleListBox = 34,
+  kFlutterSemanticsRoleOption = 35,
+} FlutterSemanticsRole;
+
 /// A node in the Flutter semantics tree.
 ///
 /// The semantics tree is maintained during the semantics phase of the pipeline
@@ -1900,6 +1940,26 @@ typedef struct {
   /// This is usually used for UI testing with tools that work by querying the
   /// native accessibility, like UI Automator, XCUITest, or Appium.
   const char* identifier;
+  /// Maximum character length of an editable text field, or -1 if none.
+  int32_t max_value_length;
+  /// Current character length of an editable text field, or -1 if none.
+  int32_t current_value_length;
+  /// Target URL for a link semantics node, or null if none.
+  const char* link_url;
+  /// BCP 47 locale tag for this node, or null if none.
+  const char* locale;
+  /// Minimum value for range-based semantics nodes (e.g. sliders), or null.
+  const char* min_value;
+  /// Maximum value for range-based semantics nodes (e.g. sliders), or null.
+  const char* max_value;
+  /// Transform from this node's coordinate system to its parent's for hit
+  /// testing.
+  FlutterTransformation hit_test_transform;
+  /// Semantic role of this node.
+  FlutterSemanticsRole role;
+  /// Number of entries in `children_in_hit_test_order` (which may differ from
+  /// `child_count` when hit-test order filters or reorders children).
+  size_t hit_test_child_count;
 } FlutterSemanticsNode2;
 
 /// `FlutterSemanticsCustomAction` ID used as a sentinel to signal the end of a

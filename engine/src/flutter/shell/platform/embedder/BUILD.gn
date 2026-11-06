@@ -389,6 +389,7 @@ if (enable_unittests) {
 
     sources = [
       "tests/embedder_frozen_unittests.cc",
+    "tests/embedder_semantics_unittests.cc",
       "tests/embedder_unittests.cc",
     ]
 
