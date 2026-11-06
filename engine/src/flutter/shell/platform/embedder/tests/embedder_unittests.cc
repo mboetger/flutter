@@ -4494,6 +4494,55 @@ TEST_F(EmbedderTest, EmbedderCustomAssetResolversInProjectArgs) {
   ASSERT_TRUE(engine.is_valid());
 }
 
+TEST_F(EmbedderTest, EmbedderLoadDartDeferredLibraryLifecycle) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(nullptr, nullptr),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), nullptr),
+            kInvalidArguments);
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(nullptr, nullptr),
+            kInvalidArguments);
+  EXPECT_EQ(
+      FlutterEngineNotifyDartDeferredLibraryLoadError(engine.get(), nullptr),
+      kInvalidArguments);
+
+  bool destruction_called = false;
+  const uint8_t dummy_data[] = {0x00, 0x01, 0x02, 0x03};
+  const uint8_t dummy_instructions[] = {0x10, 0x11, 0x12, 0x13};
+
+  FlutterDartDeferredLibrary library = {};
+  library.struct_size = sizeof(FlutterDartDeferredLibrary);
+  library.loading_unit_id = 42;
+  library.snapshot_data = dummy_data;
+  library.snapshot_data_size = sizeof(dummy_data);
+  library.snapshot_instructions = dummy_instructions;
+  library.snapshot_instructions_size = sizeof(dummy_instructions);
+  library.user_data = &destruction_called;
+  library.destruction_callback = [](void* user_data) {
+    *reinterpret_cast<bool*>(user_data) = true;
+  };
+
+  FlutterDartDeferredLibraryLoadError load_error = {};
+  load_error.struct_size = sizeof(FlutterDartDeferredLibraryLoadError);
+  load_error.loading_unit_id = 99;
+  load_error.error_message = "Network error";
+  load_error.transient = true;
+
+  EXPECT_EQ(FlutterEngineLoadDartDeferredLibrary(engine.get(), &library),
+            kSuccess);
+  EXPECT_EQ(FlutterEngineNotifyDartDeferredLibraryLoadError(engine.get(),
+                                                            &load_error),
+            kSuccess);
+
+  engine.reset();
+  EXPECT_TRUE(destruction_called);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

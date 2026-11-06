@@ -348,6 +348,38 @@ void PlatformViewEmbedder::RequestViewFocusChange(
 }
 
 // |PlatformView|
+void PlatformViewEmbedder::RequestDartDeferredLibrary(
+    intptr_t loading_unit_id) {
+  if (platform_dispatch_table_.request_dart_deferred_library_callback !=
+      nullptr) {
+    platform_dispatch_table_.request_dart_deferred_library_callback(
+        loading_unit_id);
+  } else {
+    delegate_.LoadDartDeferredLibraryError(
+        loading_unit_id, "Deferred loading is not configured in the embedder.",
+        /*transient=*/false);
+  }
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::LoadDartDeferredLibrary(
+    intptr_t loading_unit_id,
+    std::unique_ptr<const fml::Mapping> snapshot_data,
+    std::unique_ptr<const fml::Mapping> snapshot_instructions) {
+  delegate_.LoadDartDeferredLibrary(loading_unit_id, std::move(snapshot_data),
+                                    std::move(snapshot_instructions));
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::LoadDartDeferredLibraryError(
+    intptr_t loading_unit_id,
+    const std::string error_message,
+    bool transient) {
+  delegate_.LoadDartDeferredLibraryError(loading_unit_id, error_message,
+                                         transient);
+}
+
+// |PlatformView|
 double PlatformViewEmbedder::GetScaledFontSize(double unscaled_font_size,
                                                int configuration_id) const {
   if (platform_dispatch_table_.get_scaled_font_size_callback != nullptr) {

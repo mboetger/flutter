@@ -2576,8 +2576,19 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   platform_dispatch_table.on_channel_update = channel_update_callback;
   platform_dispatch_table.view_focus_change_request_callback =
       view_focus_change_request_callback;
+  flutter::PlatformViewEmbedder::RequestDartDeferredLibraryCallback
+      request_dart_deferred_library_callback = nullptr;
+  if (SAFE_ACCESS(args, request_dart_deferred_library_callback, nullptr) !=
+      nullptr) {
+    request_dart_deferred_library_callback =
+        [ptr = args->request_dart_deferred_library_callback, user_data](
+            intptr_t loading_unit_id) { ptr(loading_unit_id, user_data); };
+  }
+
   platform_dispatch_table.get_scaled_font_size_callback =
       get_scaled_font_size_callback;
+  platform_dispatch_table.request_dart_deferred_library_callback =
+      request_dart_deferred_library_callback;
   platform_dispatch_table.enable_direct_platform_message_dispatch =
       enable_direct_platform_message_dispatch;
 
@@ -4056,6 +4067,99 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
   return kSuccess;
 }
 
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* library) {
+  if (engine == nullptr || library == nullptr) {
+    return LOG_EMBEDDER_ERROR(
+        kInvalidArguments, "Invalid engine or library for deferred library.");
+  }
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+
+  intptr_t loading_unit_id = SAFE_ACCESS(library, loading_unit_id, 0);
+  const uint8_t* snapshot_data = SAFE_ACCESS(library, snapshot_data, nullptr);
+  size_t snapshot_data_size = SAFE_ACCESS(library, snapshot_data_size, 0);
+  const uint8_t* snapshot_instructions =
+      SAFE_ACCESS(library, snapshot_instructions, nullptr);
+  size_t snapshot_instructions_size =
+      SAFE_ACCESS(library, snapshot_instructions_size, 0);
+  void* user_data = SAFE_ACCESS(library, user_data, nullptr);
+  VoidCallback destruction_callback =
+      SAFE_ACCESS(library, destruction_callback, nullptr);
+
+  struct DeferredLibraryReleaseTracker {
+    VoidCallback callback = nullptr;
+    void* user_data = nullptr;
+    ~DeferredLibraryReleaseTracker() {
+      if (callback != nullptr) {
+        callback(user_data);
+      }
+    }
+  };
+  std::shared_ptr<DeferredLibraryReleaseTracker> tracker;
+  if (destruction_callback != nullptr) {
+    tracker = std::make_shared<DeferredLibraryReleaseTracker>();
+    tracker->callback = destruction_callback;
+    tracker->user_data = user_data;
+  }
+
+  std::unique_ptr<const fml::Mapping> data_mapping;
+  if (snapshot_data != nullptr) {
+    fml::NonOwnedMapping::ReleaseProc release_func = nullptr;
+    if (tracker) {
+      release_func = [tracker](const uint8_t* data, size_t size) {};
+    }
+    data_mapping = std::make_unique<fml::NonOwnedMapping>(
+        snapshot_data, snapshot_data_size, release_func, false);
+  }
+
+  std::unique_ptr<const fml::Mapping> instr_mapping;
+  if (snapshot_instructions != nullptr) {
+    fml::NonOwnedMapping::ReleaseProc release_func = nullptr;
+    if (tracker) {
+      release_func = [tracker](const uint8_t* data, size_t size) {};
+    }
+    instr_mapping = std::make_unique<fml::NonOwnedMapping>(
+        snapshot_instructions, snapshot_instructions_size, release_func, false);
+  }
+
+  if (!embedder_engine->LoadDartDeferredLibrary(
+          loading_unit_id, std::move(data_mapping), std::move(instr_mapping))) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Could not load Dart deferred library.");
+  }
+  return kSuccess;
+}
+
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error) {
+  if (engine == nullptr || error == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid engine handle or error struct.");
+  }
+  auto embedder_engine = reinterpret_cast<flutter::EmbedderEngine*>(engine);
+  if (!embedder_engine->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments, "Engine handle was invalid.");
+  }
+  intptr_t loading_unit_id = SAFE_ACCESS(error, loading_unit_id, 0);
+  const char* error_message = SAFE_ACCESS(error, error_message, nullptr);
+  bool transient = SAFE_ACCESS(error, transient, false);
+  std::string message = error_message ? error_message : "";
+  if (!embedder_engine->LoadDartDeferredLibraryError(loading_unit_id, message,
+                                                     transient)) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not notify Dart deferred library load error.");
+  }
+  return kSuccess;
+}
+
 FlutterEngineResult FlutterEngineGetProcAddresses(
     FlutterEngineProcTable* table) {
   if (!table) {
@@ -4112,6 +4216,9 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(AddView, FlutterEngineAddView);
   SET_PROC(RemoveView, FlutterEngineRemoveView);
   SET_PROC(SendViewFocusEvent, FlutterEngineSendViewFocusEvent);
+  SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
+  SET_PROC(NotifyDartDeferredLibraryLoadError,
+           FlutterEngineNotifyDartDeferredLibraryLoadError);
 #undef SET_PROC
 
   return kSuccess;

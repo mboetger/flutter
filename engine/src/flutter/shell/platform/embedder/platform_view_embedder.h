@@ -54,6 +54,8 @@ class PlatformViewEmbedder final : public PlatformView {
   using ChanneUpdateCallback = std::function<void(const std::string&, bool)>;
   using ViewFocusChangeRequestCallback =
       std::function<void(const ViewFocusChangeRequest&)>;
+  using RequestDartDeferredLibraryCallback =
+      std::function<void(intptr_t loading_unit_id)>;
   using GetScaledFontSizeCallback =
       std::function<double(double unscaled_font_size, int configuration_id)>;
 
@@ -73,6 +75,8 @@ class PlatformViewEmbedder final : public PlatformView {
         platform_message_response_completion_callback;  // optional
     PlatformMessageEmptyResponseCompletionCallback
         platform_message_empty_response_completion_callback;  // optional
+    RequestDartDeferredLibraryCallback
+        request_dart_deferred_library_callback;              // optional
     std::shared_ptr<PlatformMessageHandler>
         custom_platform_message_handler;  // optional
     bool enable_direct_platform_message_dispatch = false;
@@ -132,6 +136,17 @@ class PlatformViewEmbedder final : public PlatformView {
   std::shared_ptr<PlatformMessageHandler> GetPlatformMessageHandler()
       const override;
 
+  // |PlatformView|
+  void LoadDartDeferredLibrary(
+      intptr_t loading_unit_id,
+      std::unique_ptr<const fml::Mapping> snapshot_data,
+      std::unique_ptr<const fml::Mapping> snapshot_instructions) override;
+
+  // |PlatformView|
+  void LoadDartDeferredLibraryError(intptr_t loading_unit_id,
+                                    const std::string error_message,
+                                    bool transient) override;
+
  private:
   class EmbedderPlatformMessageHandler;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
@@ -176,6 +191,9 @@ class PlatformViewEmbedder final : public PlatformView {
 
   // |PlatformView|
   void RequestViewFocusChange(const ViewFocusChangeRequest& request) override;
+
+  // |PlatformView|
+  void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
 
   // |PlatformView|
   double GetScaledFontSize(double unscaled_font_size,

@@ -2707,6 +2707,51 @@ typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
 /// FlutterEngine instance in AOT mode.
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
 
+/// Callback invoked on the platform thread when Dart code calls `loadLibrary()`
+/// on a deferred import for `loading_unit_id`.
+typedef void (*FlutterRequestDartDeferredLibraryCallback)(
+    intptr_t /* loading_unit_id */,
+    void* /* user_data */);
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDartDeferredLibrary).
+  size_t struct_size;
+  /// The loading unit identifier passed to
+  /// `FlutterRequestDartDeferredLibraryCallback`.
+  intptr_t loading_unit_id;
+  /// Mapped read-only buffer containing the loading unit's
+  /// `_kDartIsolateSnapshotData`.
+  const uint8_t* snapshot_data;
+  /// Size of `snapshot_data` in bytes, or 0 if resolved via `dlsym`.
+  size_t snapshot_data_size;
+  /// Mapped read-execute buffer containing the loading unit's
+  /// `_kDartIsolateSnapshotInstructions`.
+  const uint8_t* snapshot_instructions;
+  /// Size of `snapshot_instructions` in bytes, or 0 if resolved via `dlsym`.
+  size_t snapshot_instructions_size;
+  /// Opaque baton passed to `destruction_callback`.
+  void* user_data;
+  /// Invoked by the engine when both snapshot mappings are no longer referenced
+  /// by the Dart VM (either on isolate group shutdown or immediately if loading
+  /// fails). The embedder must keep `snapshot_data` and `snapshot_instructions`
+  /// mapped and valid until this callback runs.
+  VoidCallback destruction_callback;
+} FlutterDartDeferredLibrary;
+
+typedef struct {
+  /// The size of this struct. Must be
+  /// sizeof(FlutterDartDeferredLibraryLoadError).
+  size_t struct_size;
+  /// The loading unit identifier that failed to load.
+  intptr_t loading_unit_id;
+  /// Null-terminated error message surfaced to the Dart `Future`.
+  const char* error_message;
+  /// If true, the failure is temporary (e.g., network unavailable) and
+  /// subsquent `loadLibrary()` calls in Dart will re-invoke
+  /// `request_dart_deferred_library_callback`.
+  bool transient;
+} FlutterDartDeferredLibraryLoadError;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterAssetMapping).
   size_t struct_size;
@@ -3088,6 +3133,11 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// Optional callback invoked on the platform thread when the Dart VM
+  /// requests a deferred loading unit.
+  FlutterRequestDartDeferredLibraryCallback
+      request_dart_deferred_library_callback;
 
   /// Number of custom asset resolvers in `custom_asset_resolvers`.
   size_t custom_asset_resolvers_count;
@@ -3909,6 +3959,34 @@ FlutterEngineResult FlutterEngineSetNextFrameCallback(
     VoidCallback callback,
     void* user_data);
 
+//------------------------------------------------------------------------------
+/// @brief      Loads a resolved Dart deferred library (loading unit) into the
+///             running engine's Dart VM.
+///
+/// @param[in]  engine   A running engine instance.
+/// @param[in]  library  The deferred library snapshot buffers and metadata.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineLoadDartDeferredLibrary(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* library);
+
+//------------------------------------------------------------------------------
+/// @brief      Notifies the Dart VM that loading a requested deferred library
+///             failed, completing the awaiting Dart `Future` with an error.
+///
+/// @param[in]  engine  A running engine instance.
+/// @param[in]  error   The error details.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error);
+
 #endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
@@ -4044,6 +4122,13 @@ typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterViewFocusEvent* event);
 
+typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibrary* library);
+typedef FlutterEngineResult (
+    *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const FlutterDartDeferredLibraryLoadError* error);
 /// Function-pointer-based versions of the APIs above.
 typedef struct _FlutterEngineProcTable {
   /// The size of this struct. Must be sizeof(FlutterEngineProcs).
@@ -4093,6 +4178,9 @@ typedef struct _FlutterEngineProcTable {
   FlutterEngineRemoveViewFnPtr RemoveView;
   FlutterEngineSendViewFocusEventFnPtr SendViewFocusEvent;
   FlutterEngineSendSemanticsActionFnPtr SendSemanticsAction;
+  FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
+  FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
+      NotifyDartDeferredLibraryLoadError;
 } FlutterEngineProcTable;
 
 //------------------------------------------------------------------------------
