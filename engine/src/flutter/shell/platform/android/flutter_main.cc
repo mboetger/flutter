@@ -11,7 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "flutter/common/settings.h"
 #include "flutter/fml/logging.h"
 #include "flutter/fml/platform/android/jni_util.h"
 #include "flutter/fml/trace_event.h"
@@ -21,9 +20,9 @@
 
 namespace flutter {
 
-FlutterMain::FlutterMain(const flutter::Settings& settings,
+FlutterMain::FlutterMain(const android::AndroidVMArgs& vm_args,
                          flutter::AndroidRenderingAPI android_rendering_api)
-    : settings_(settings), android_rendering_api_(android_rendering_api) {}
+    : vm_args_(vm_args), android_rendering_api_(android_rendering_api) {}
 
 FlutterMain::~FlutterMain() = default;
 
@@ -35,8 +34,8 @@ FlutterMain& FlutterMain::Get() {
   return *g_flutter_main;
 }
 
-const flutter::Settings& FlutterMain::GetSettings() const {
-  return settings_;
+const android::AndroidVMArgs& FlutterMain::GetVMArgs() const {
+  return vm_args_;
 }
 
 flutter::AndroidRenderingAPI FlutterMain::GetAndroidRenderingAPI() const {
@@ -67,23 +66,12 @@ void FlutterMain::Init(JNIEnv* env,
                                static_cast<int64_t>(initTimeMillis),
                                static_cast<int>(api_level));
 
-  Settings settings;
   auto vm_args = android::AndroidVMInit::GetGlobalVMArgs().value_or(
       android::AndroidVMArgs{});
-  settings.enable_impeller = vm_args.enable_impeller;
-  settings.enable_software_rendering = vm_args.enable_software_rendering;
-  if (!vm_args.requested_rendering_backend.empty()) {
-    settings.requested_rendering_backend = vm_args.requested_rendering_backend;
-  }
-  settings.trace_systrace = vm_args.trace_systrace;
-  settings.enable_surface_control = vm_args.enable_surface_control;
-  settings.enable_wide_gamut = vm_args.enable_wide_gamut;
-  settings.old_gen_heap_size = vm_args.dart_old_gen_heap_size;
-  settings.log_tag = vm_args.log_tag;
+  vm_args.api_level = static_cast<int>(api_level);
 
-  AndroidRenderingAPI android_rendering_api =
-      SelectedRenderingAPI(settings, api_level);
-  g_flutter_main.reset(new FlutterMain(settings, android_rendering_api));
+  AndroidRenderingAPI android_rendering_api = SelectedRenderingAPI(vm_args);
+  g_flutter_main.reset(new FlutterMain(vm_args, android_rendering_api));
 }
 
 bool FlutterMain::Register(JNIEnv* env) {
@@ -92,16 +80,9 @@ bool FlutterMain::Register(JNIEnv* env) {
 }
 
 AndroidRenderingAPI FlutterMain::SelectedRenderingAPI(
-    const flutter::Settings& settings,
-    int api_level) {
+    const android::AndroidVMArgs& vm_args) {
   TRACE_EVENT0("flutter", "FlutterMain::SelectedRenderingAPI");
-  android::AndroidVMArgs args;
-  args.enable_impeller = settings.enable_impeller;
-  args.enable_software_rendering = settings.enable_software_rendering;
-  args.requested_rendering_backend =
-      settings.requested_rendering_backend.value_or("");
-  args.api_level = api_level;
-  return android::SelectRenderingAPI(args);
+  return android::SelectRenderingAPI(vm_args);
 }
 
 }  // namespace flutter

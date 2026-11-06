@@ -7,7 +7,6 @@
 
 #include <jni.h>
 
-#include "flutter/common/settings.h"
 #include "flutter/fml/macros.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/android_vm_init.h"
@@ -22,18 +21,17 @@ class FlutterMain {
 
   static FlutterMain& Get();
 
-  const flutter::Settings& GetSettings() const;
+  const android::AndroidVMArgs& GetVMArgs() const;
   flutter::AndroidRenderingAPI GetAndroidRenderingAPI() const;
 
   static AndroidRenderingAPI SelectedRenderingAPI(
-      const flutter::Settings& settings,
-      int api_level);
+      const android::AndroidVMArgs& vm_args);
 
  private:
-  const flutter::Settings settings_;
+  const android::AndroidVMArgs vm_args_;
   const flutter::AndroidRenderingAPI android_rendering_api_;
 
-  explicit FlutterMain(const flutter::Settings& settings,
+  explicit FlutterMain(const android::AndroidVMArgs& vm_args,
                        flutter::AndroidRenderingAPI android_rendering_api);
 
   static void Init(JNIEnv* env,

@@ -17,17 +17,7 @@
 #include <string_view>
 #include <vector>
 
-#if __has_include("flutter/common/vulkan_driver_info.h")
 #include "flutter/common/vulkan_driver_info.h"
-#else
-namespace flutter {
-struct VulkanDriverInfo {
-  bool IsKnownBadDriver() const { return false; }
-  bool IsEmulator() const { return false; }
-  std::string GetDriverName() const { return ""; }
-};
-}  // namespace flutter
-#endif
 #include "flutter/fml/macros.h"
 #include "flutter/shell/platform/android/android_rendering_selector.h"
 #include "flutter/shell/platform/android/jvm_invoker.h"
