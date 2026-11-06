@@ -20,7 +20,7 @@
 #include "flutter/fml/platform/android/jni_weak_ref.h"
 #include "flutter/fml/platform/android/scoped_java_ref.h"
 #include "flutter/impeller/toolkit/android/proc_table.h"
-#include "flutter/lib/ui/plugins/callback_cache.h"
+#include "flutter/fml/callback_cache.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/flutter_main.h"
@@ -321,7 +321,7 @@ static void RunBundleAndSnapshotFromLibrary(JNIEnv* env,
 static jobject LookupCallbackInformation(JNIEnv* env,
                                          /* unused */ jobject,
                                          jlong handle) {
-  auto cbInfo = flutter::DartCallbackCache::GetCallbackInformation(handle);
+  auto cbInfo = flutter::fml::CallbackCache::GetCallbackInformation(handle);
   if (cbInfo == nullptr) {
     return nullptr;
   }

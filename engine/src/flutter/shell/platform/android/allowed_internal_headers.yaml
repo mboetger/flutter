@@ -158,12 +158,7 @@
       "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
     ],
     "flutter_main.cc": [
-      "common/settings.h",
-      "flutter/lib/ui/plugins/callback_cache.h",
-      "flutter/runtime/dart_vm.h",
-      "flutter/shell/common/switches.h",
-      "impeller/base/validation.h",
-      "impeller/toolkit/android/proc_table.h"
+      "flutter/common/settings.h"
     ],
     "flutter_main.h": [
       "flutter/common/settings.h",
@@ -248,8 +243,7 @@
     ],
     "platform_view_android_jni_impl.cc": [
       "flutter/flow/embedded_views.h",
-      "flutter/impeller/toolkit/android/proc_table.h",
-      "flutter/lib/ui/plugins/callback_cache.h"
+      "flutter/impeller/toolkit/android/proc_table.h"
     ],
     "platform_view_android_jni_impl_unittests.cc": [
       "impeller/toolkit/android/proc_table.h"
@@ -360,11 +354,9 @@
     "flutter/impeller/toolkit/glvk/trampoline.h",
     "flutter/lib/ui/painting/image_generator.h",
     "flutter/lib/ui/painting/image_generator_registry.h",
-    "flutter/lib/ui/plugins/callback_cache.h",
     "flutter/lib/ui/window/platform_message.h",
     "flutter/lib/ui/window/platform_message_response.h",
     "flutter/runtime/dart_service_isolate.h",
-    "flutter/runtime/dart_vm.h",
     "flutter/shell/common/display.h",
     "flutter/shell/common/platform_message_handler.h",
     "flutter/shell/common/platform_view.h",
@@ -373,7 +365,6 @@
     "flutter/shell/common/shell.h",
     "flutter/shell/common/shell_io_manager.h",
     "flutter/shell/common/snapshot_surface_producer.h",
-    "flutter/shell/common/switches.h",
     "flutter/shell/common/thread_host.h",
     "flutter/shell/gpu/gpu_surface_gl_delegate.h",
     "flutter/shell/gpu/gpu_surface_gl_impeller.h",
@@ -390,7 +381,6 @@
     "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h",
     "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h",
     "flutter/vulkan/vulkan_native_surface_android.h",
-    "impeller/base/validation.h",
     "impeller/core/runtime_types.h",
     "impeller/entity/gles/entity_shaders_gles.h",
     "impeller/entity/gles/framebuffer_blend_shaders_gles.h",
@@ -423,5 +413,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 178
+  "total_allowed_internal_headers": 172
 }
