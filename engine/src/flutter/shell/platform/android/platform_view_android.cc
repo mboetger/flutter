@@ -19,15 +19,12 @@
 #include "flutter/shell/platform/android/android_surface_dynamic_impeller.h"
 #include "flutter/shell/platform/android/android_surface_gl_impeller.h"
 #include "flutter/shell/platform/android/image_external_texture_gl_impeller.h"
-#include "flutter/shell/platform/android/surface_texture_external_texture_gl_impeller.h"
-#include "flutter/shell/platform/android/surface_texture_external_texture_vk_impeller.h"
 
 #if !SLIMPELLER
 #include "flutter/shell/platform/android/android_context_gl_skia.h"
 #include "flutter/shell/platform/android/android_surface_gl_skia.h"
 #include "flutter/shell/platform/android/android_surface_software.h"
 #include "flutter/shell/platform/android/image_external_texture_gl_skia.h"
-#include "flutter/shell/platform/android/surface_texture_external_texture_gl_skia.h"
 #endif  // !SLIMPELLER
 
 #include "fml/logging.h"
@@ -326,51 +323,7 @@ void PlatformViewAndroid::SetSemanticsTreeEnabled(bool enabled) {
 
 void PlatformViewAndroid::RegisterExternalTexture(
     int64_t texture_id,
-    const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {
-  switch (android_context_->RenderingApi()) {
-    case AndroidRenderingAPI::kImpellerOpenGLES:
-      // Impeller GLES.
-      RegisterTexture(std::make_shared<SurfaceTextureExternalTextureGLImpeller>(
-          std::static_pointer_cast<impeller::ContextGLES>(
-              android_context_->GetImpellerContext()),  //
-          texture_id,                                   //
-          surface_texture,                              //
-          jni_facade_                                   //
-          ));
-      break;
-#if !SLIMPELLER
-    case AndroidRenderingAPI::kSkiaOpenGLES:
-      // Legacy GL.
-      RegisterTexture(std::make_shared<SurfaceTextureExternalTextureGLSkia>(
-          texture_id,       //
-          surface_texture,  //
-          jni_facade_       //
-          ));
-      break;
-    case AndroidRenderingAPI::kSoftware:
-      FML_LOG(INFO) << "Software rendering does not support external textures.";
-      break;
-#endif  // !SLIMPELLER
-    case AndroidRenderingAPI::kImpellerVulkan:
-      FML_LOG(IMPORTANT)
-          << "Flutter recommends migrating plugins that create and "
-             "register surface textures to the new surface producer "
-             "API. See https://docs.flutter.dev/release/breaking-changes/"
-             "android-surface-plugins";
-      RegisterTexture(std::make_shared<SurfaceTextureExternalTextureVKImpeller>(
-          std::static_pointer_cast<impeller::ContextVK>(
-              android_context_->GetImpellerContext()),  //
-          texture_id,                                   //
-          surface_texture,                              //
-          jni_facade_                                   //
-          ));
-      break;
-    case AndroidRenderingAPI::kImpellerAutoselect:
-    default:
-      FML_CHECK(false);
-      break;
-  }
-}
+    const fml::jni::ScopedJavaGlobalRef<jobject>& surface_texture) {}
 
 void PlatformViewAndroid::RegisterImageTexture(
     int64_t texture_id,

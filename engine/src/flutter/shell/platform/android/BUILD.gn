@@ -89,7 +89,9 @@ source_set("flutter_embedder_native_src") {
     "jni_router.h",
     "jvm_invoker.cc",
     "jvm_invoker.h",
-  ]
+      "android_hardware_buffer.cc",
+    "android_hardware_buffer.h",
+]
 
   check_includes = true
 
@@ -120,7 +122,8 @@ executable("flutter_embedder_native_unittests") {
     "android_window_metrics_mapper_unittests.cc",
     "android_semantics_mapper_unittests.cc",
     "flutter_embedder_native_unittests.cc",
-  ]
+      "android_external_texture_unittests.cc",
+]
 
   defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
 
@@ -186,12 +189,6 @@ source_set("flutter_shell_native_src") {
     "platform_view_android.h",
     "platform_view_android_jni_impl.cc",
     "platform_view_android_jni_impl.h",
-    "surface_texture_external_texture.cc",
-    "surface_texture_external_texture.h",
-    "surface_texture_external_texture_gl_impeller.cc",
-    "surface_texture_external_texture_gl_impeller.h",
-    "surface_texture_external_texture_vk_impeller.cc",
-    "surface_texture_external_texture_vk_impeller.h",
   ]
 
   if (!slimpeller) {
@@ -204,8 +201,6 @@ source_set("flutter_shell_native_src") {
       "android_surface_software.h",
       "image_external_texture_gl_skia.cc",
       "image_external_texture_gl_skia.h",
-      "surface_texture_external_texture_gl_skia.cc",
-      "surface_texture_external_texture_gl_skia.h",
     ]
   }
 

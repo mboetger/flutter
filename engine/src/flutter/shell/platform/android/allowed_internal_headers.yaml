@@ -238,48 +238,6 @@
     "surface/snapshot_surface_producer.h": [
       "flutter/flow/surface.h",
       "flutter/shell/common/snapshot_surface_producer.h"
-    ],
-    "surface_texture_external_texture.cc": [
-      "flutter/display_list/effects/dl_color_source.h",
-      "third_party/skia/include/core/SkAlphaType.h",
-      "third_party/skia/include/core/SkColorSpace.h",
-      "third_party/skia/include/core/SkColorType.h",
-      "third_party/skia/include/core/SkImage.h"
-    ],
-    "surface_texture_external_texture.h": [
-      "flutter/common/graphics/texture.h",
-      "flutter/third_party/skia/include/core/SkM44.h"
-    ],
-    "surface_texture_external_texture_gl_impeller.cc": [
-      "flutter/impeller/display_list/dl_image_impeller.h"
-    ],
-    "surface_texture_external_texture_gl_impeller.h": [
-      "flutter/impeller/renderer/backend/gles/context_gles.h",
-      "flutter/impeller/renderer/backend/gles/texture_gles.h"
-    ],
-    "surface_texture_external_texture_gl_skia.cc": [
-      "flutter/display_list/image/dl_image_skia.h",
-      "flutter/third_party/skia/include/core/SkColorSpace.h",
-      "flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h",
-      "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h",
-      "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
-      "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h",
-      "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h"
-    ],
-    "surface_texture_external_texture_vk_impeller.cc": [
-      "flutter/impeller/display_list/dl_image_impeller.h",
-      "flutter/impeller/renderer/backend/vulkan/command_buffer_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/surface_context_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/texture_vk.h",
-      "flutter/impeller/toolkit/android/hardware_buffer.h"
-    ],
-    "surface_texture_external_texture_vk_impeller.h": [
-      "flutter/impeller/renderer/backend/vulkan/android/ahb_texture_source_vk.h",
-      "flutter/impeller/renderer/backend/vulkan/context_vk.h",
-      "flutter/impeller/toolkit/egl/context.h",
-      "flutter/impeller/toolkit/egl/display.h",
-      "flutter/impeller/toolkit/egl/surface.h",
-      "flutter/impeller/toolkit/glvk/trampoline.h"
     ]
   },
   "allowed_unique_headers": [
@@ -291,7 +249,6 @@
     "flutter/common/macros.h",
     "flutter/common/settings.h",
     "flutter/common/task_runners.h",
-    "flutter/display_list/effects/dl_color_source.h",
     "flutter/display_list/geometry/dl_geometry_types.h",
     "flutter/display_list/image/dl_image_skia.h",
     "flutter/flow/embedded_views.h",
@@ -324,7 +281,6 @@
     "flutter/impeller/toolkit/egl/image.h",
     "flutter/impeller/toolkit/egl/surface.h",
     "flutter/impeller/toolkit/gles/texture.h",
-    "flutter/impeller/toolkit/glvk/trampoline.h",
     "flutter/lib/ui/window/platform_message.h",
     "flutter/shell/common/display.h",
     "flutter/shell/common/platform_view.h",
@@ -340,13 +296,8 @@
     "flutter/shell/gpu/gpu_surface_vulkan_impeller.h",
     "flutter/testing/post_task_sync.h",
     "flutter/testing/testing.h",
-    "flutter/third_party/skia/include/core/SkColorSpace.h",
-    "flutter/third_party/skia/include/core/SkM44.h",
-    "flutter/third_party/skia/include/gpu/ganesh/GrBackendSurface.h",
-    "flutter/third_party/skia/include/gpu/ganesh/GrDirectContext.h",
     "flutter/third_party/skia/include/gpu/ganesh/SkImageGanesh.h",
     "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h",
-    "flutter/third_party/skia/include/gpu/ganesh/gl/GrGLTypes.h",
     "flutter/vulkan/vulkan_native_surface_android.h",
     "impeller/core/runtime_types.h",
     "impeller/entity/gles/entity_shaders_gles.h",
@@ -365,7 +316,6 @@
     "shell/platform/android/image_external_texture.h",
     "shell/platform/android/jni/platform_view_android_jni.h",
     "third_party/skia/include/core/SkAlphaType.h",
-    "third_party/skia/include/core/SkColorSpace.h",
     "third_party/skia/include/core/SkColorType.h",
     "third_party/skia/include/core/SkImage.h",
     "third_party/skia/include/core/SkRefCnt.h",
@@ -379,5 +329,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 160
+  "total_allowed_internal_headers": 132
 }

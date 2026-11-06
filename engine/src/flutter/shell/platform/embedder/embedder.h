@@ -732,6 +732,40 @@ typedef bool (*BoolPresentInfoCallback)(
     const FlutterPresentInfo* /* present info */);
 
 typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterOpenGLExternalTexture).
+  size_t struct_size;
+  /// Target texture of the active texture unit (for example `GL_TEXTURE_2D`,
+  /// `GL_TEXTURE_RECTANGLE`, or `GL_TEXTURE_EXTERNAL_OES`).
+  uint32_t target;
+  /// The name of the texture.
+  uint32_t name;
+  /// The texture format (for example `GL_RGBA8`).
+  uint32_t format;
+  /// User data to be returned on the invocation of `destruction_callback`.
+  void* user_data;
+  /// Callback invoked (on an engine-managed thread) that asks the embedder to
+  /// collect the texture. Optional; may be null.
+  VoidCallback destruction_callback;
+  /// Optional width and height of the texture in pixels. Default is 0.
+  size_t width;
+  size_t height;
+  /// Whether `uv_transform` contains a valid 4x4 column-major UV matrix.
+  bool has_uv_transform;
+  /// 4x4 column-major UV transformation matrix applied when sampling the
+  /// external texture (for example, the matrix returned by Android's
+  /// `SurfaceTexture.getTransformMatrix`). Ignored when `has_uv_transform` is
+  /// false.
+  float uv_transform[16];
+} FlutterOpenGLExternalTexture;
+
+typedef bool (*FlutterOpenGLTextureFrameCallback)(
+    void* /* user data */,
+    int64_t /* texture identifier */,
+    size_t /* width */,
+    size_t /* height */,
+    FlutterOpenGLExternalTexture* /* texture out */);
+
+typedef struct {
   /// The size of this struct. Must be sizeof(FlutterOpenGLRendererConfig).
   size_t struct_size;
   BoolCallback make_current;
@@ -777,6 +811,8 @@ typedef struct {
   /// engine will call this method (on an internal engine managed thread) so
   /// that external texture details can be supplied to the engine for subsequent
   /// composition.
+  ///
+  /// @deprecated Use `external_texture_frame_callback` instead.
   TextureFrameCallback gl_external_texture_frame_callback;
   /// Specifying one (and only one) of the `fbo_callback` or
   /// `fbo_with_frame_info_callback` is required. Specifying both is an error
@@ -811,6 +847,11 @@ typedef struct {
   /// ID. Not specifying populate_existing_damage will result in full
   /// repaint (i.e. rendering all the pixels on the screen at every frame).
   FlutterFrameBufferWithDamageCallback populate_existing_damage;
+  /// Versioned external texture frame callback that populates a
+  /// `FlutterOpenGLExternalTexture`. Only one of
+  /// `gl_external_texture_frame_callback` and `external_texture_frame_callback`
+  /// may be provided.
+  FlutterOpenGLTextureFrameCallback external_texture_frame_callback;
 } FlutterOpenGLRendererConfig;
 
 /// Alias for id<MTLDevice>.
@@ -3269,9 +3310,9 @@ typedef struct {
   size_t data_length;
 } FlutterSendSemanticsActionInfo;
 
-#ifndef FLUTTER_ENGINE_NO_PROTOTYPES
-
 // NOLINTBEGIN(google-objc-function-naming)
+
+#ifndef FLUTTER_ENGINE_NO_PROTOTYPES
 
 //------------------------------------------------------------------------------
 /// @brief      Creates the necessary data structures to launch a Flutter Dart
@@ -4219,7 +4260,6 @@ typedef FlutterEngineResult (*FlutterEngineRemoveViewFnPtr)(
 typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterViewFocusEvent* event);
-
 typedef FlutterEngineResult (*FlutterEngineLoadDartDeferredLibraryFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibrary* library);
@@ -4229,6 +4269,7 @@ typedef FlutterEngineResult (
     const FlutterDartDeferredLibraryLoadError* error);
 typedef FlutterEngineResult (*FlutterEnginePrefetchDefaultFontManagerFnPtr)(
     void);
+
 /// Function-pointer-based versions of the APIs above.
 typedef struct _FlutterEngineProcTable {
   /// The size of this struct. Must be sizeof(FlutterEngineProcs).
