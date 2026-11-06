@@ -2708,6 +2708,44 @@ typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
 typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
 
 typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterAssetMapping).
+  size_t struct_size;
+  /// Pointer to the read-only bytes of the resolved asset.
+  const uint8_t* mapping;
+  /// Number of bytes in `mapping`.
+  size_t mapping_size;
+  /// Opaque baton passed to `destruction_callback`.
+  void* user_data;
+  /// Invoked by the engine when it no longer needs `mapping`.
+  VoidCallback destruction_callback;
+} FlutterAssetMapping;
+
+/// Callback invoked by the engine (on any thread) to resolve a relative asset
+/// path into a read-only memory mapping.
+///
+/// @param[in]  asset_name   Null-terminated relative asset path (for example,
+///                          `"AssetManifest.bin"` or `"kernel_blob.bin"`).
+/// @param[in]  user_data    The `user_data` from `FlutterCustomAssetResolver`.
+/// @param[out] mapping_out  Populated by the embedder when the asset is found.
+/// @return     `true` if the asset was found and `mapping_out` was populated.
+typedef bool (*FlutterAssetResolverGetAsMappingCallback)(
+    const char* /* asset_name */,
+    void* /* user_data */,
+    FlutterAssetMapping* /* mapping_out */);
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterCustomAssetResolver).
+  size_t struct_size;
+  /// Opaque baton passed to `get_as_mapping_callback` and
+  /// `destruction_callback`.
+  void* user_data;
+  /// Thread-safe callback invoked by the engine to look up an asset.
+  FlutterAssetResolverGetAsMappingCallback get_as_mapping_callback;
+  /// Invoked when the engine destroys this asset resolver.
+  VoidCallback destruction_callback;
+} FlutterCustomAssetResolver;
+
+typedef struct {
   /// The size of this struct. Must be sizeof(FlutterScaleFontSizeInfo).
   size_t struct_size;
   /// Unscaled font size in logical pixels.
@@ -3050,6 +3088,13 @@ typedef struct {
   /// If true, the engine will decode images in wide gamut color spaces
   /// (Display P3) when supported. If false, images are decoded to sRGB.
   bool enable_wide_gamut;
+
+  /// Number of custom asset resolvers in `custom_asset_resolvers`.
+  size_t custom_asset_resolvers_count;
+
+  /// Array of pointers to `FlutterCustomAssetResolver` structs registered with
+  /// the engine's `AssetManager`.
+  const FlutterCustomAssetResolver** custom_asset_resolvers;
 
   /// If true, `FlutterProjectArgs.platform_message_callback` is invoked
   /// directly on the UI thread (instead of posting a task to the platform

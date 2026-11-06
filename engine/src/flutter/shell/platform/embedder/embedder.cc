@@ -43,6 +43,8 @@ extern const intptr_t kPlatformStrongDillSize;
 #endif  // FLUTTER_RUNTIME_MODE == FLUTTER_RUNTIME_MODE_DEBUG
 }
 
+#include "flutter/assets/asset_manager.h"
+#include "flutter/assets/asset_resolver.h"
 #include "flutter/assets/directory_asset_bundle.h"
 #include "flutter/common/graphics/persistent_cache.h"
 #include "flutter/common/task_runners.h"
@@ -2112,6 +2114,92 @@ CreateEmbedderSemanticsUpdateCallback(const FlutterProjectArgs* args,
   return nullptr;
 }
 
+namespace {
+
+// A custom AssetResolver backed by embedder-provided C callbacks.
+class EmbedderCustomAssetResolver : public flutter::AssetResolver {
+ public:
+  explicit EmbedderCustomAssetResolver(
+      const FlutterCustomAssetResolver& resolver)
+      : resolver_(resolver) {}
+
+  ~EmbedderCustomAssetResolver() override {
+    if (resolver_.destruction_callback != nullptr) {
+      resolver_.destruction_callback(resolver_.user_data);
+    }
+  }
+
+  // |flutter::AssetResolver|
+  bool IsValid() const override {
+    return resolver_.get_as_mapping_callback != nullptr;
+  }
+
+  // |flutter::AssetResolver|
+  bool IsValidAfterAssetManagerChange() const override { return true; }
+
+  // |flutter::AssetResolver|
+  flutter::AssetResolver::AssetResolverType GetType() const override {
+    return flutter::AssetResolver::AssetResolverType::kApkAssetProvider;
+  }
+
+  // |flutter::AssetResolver|
+  std::unique_ptr<fml::Mapping> GetAsMapping(
+      const std::string& asset_name) const override {
+    if (resolver_.get_as_mapping_callback == nullptr) {
+      return nullptr;
+    }
+    FlutterAssetMapping c_mapping = {};
+    c_mapping.struct_size = sizeof(FlutterAssetMapping);
+    if (!resolver_.get_as_mapping_callback(asset_name.c_str(),
+                                           resolver_.user_data, &c_mapping)) {
+      return nullptr;
+    }
+    const FlutterAssetMapping* mapping_ptr = &c_mapping;
+    const uint8_t* mapping_data = SAFE_ACCESS(mapping_ptr, mapping, nullptr);
+    size_t mapping_size = SAFE_ACCESS(mapping_ptr, mapping_size, 0);
+    VoidCallback destruction_cb =
+        SAFE_ACCESS(mapping_ptr, destruction_callback, nullptr);
+    void* destruction_user_data = SAFE_ACCESS(mapping_ptr, user_data, nullptr);
+
+    if (mapping_data == nullptr && mapping_size > 0) {
+      if (destruction_cb != nullptr) {
+        destruction_cb(destruction_user_data);
+      }
+      return nullptr;
+    }
+    fml::NonOwnedMapping::ReleaseProc release_func = nullptr;
+    if (destruction_cb != nullptr) {
+      release_func = [destruction_cb, destruction_user_data](
+                         const uint8_t* data, size_t size) {
+        destruction_cb(destruction_user_data);
+      };
+    }
+    return std::make_unique<fml::NonOwnedMapping>(mapping_data, mapping_size,
+                                                  release_func, false);
+  }
+
+  // |flutter::AssetResolver|
+  bool operator==(const flutter::AssetResolver& other) const override {
+    if (other.GetType() != GetType()) {
+      return false;
+    }
+    const auto* other_resolver =
+        static_cast<const EmbedderCustomAssetResolver*>(&other);
+    return resolver_.user_data == other_resolver->resolver_.user_data &&
+           resolver_.get_as_mapping_callback ==
+               other_resolver->resolver_.get_as_mapping_callback &&
+           resolver_.destruction_callback ==
+               other_resolver->resolver_.destruction_callback;
+  }
+
+ private:
+  FlutterCustomAssetResolver resolver_;
+
+  FML_DISALLOW_COPY_AND_ASSIGN(EmbedderCustomAssetResolver);
+};
+
+}  // namespace
+
 FlutterEngineResult FlutterEngineRun(size_t version,
                                      const FlutterRendererConfig* config,
                                      const FlutterProjectArgs* args,
@@ -2152,7 +2240,15 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
                               "The Flutter project arguments were missing.");
   }
 
-  if (SAFE_ACCESS(args, assets_path, nullptr) == nullptr) {
+  size_t custom_resolvers_count =
+      SAFE_ACCESS(args, custom_asset_resolvers_count, 0);
+  const FlutterCustomAssetResolver** custom_resolvers =
+      SAFE_ACCESS(args, custom_asset_resolvers, nullptr);
+  bool has_custom_resolvers =
+      custom_resolvers_count > 0 && custom_resolvers != nullptr;
+
+  if (SAFE_ACCESS(args, assets_path, nullptr) == nullptr &&
+      !has_custom_resolvers) {
     return LOG_EMBEDDER_ERROR(
         kInvalidArguments,
         "The assets path in the Flutter project arguments was missing.");
@@ -2219,17 +2315,48 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
   }
 
   settings.icu_data_path = icu_data_path;
-  settings.assets_path = args->assets_path;
+  if (SAFE_ACCESS(args, assets_path, nullptr) != nullptr) {
+    settings.assets_path = args->assets_path;
+  }
   settings.leak_vm = !SAFE_ACCESS(args, shutdown_dart_vm_when_done, false);
   settings.old_gen_heap_size = SAFE_ACCESS(args, dart_old_gen_heap_size, -1);
   settings.enable_wide_gamut = SAFE_ACCESS(args, enable_wide_gamut, false);
 
+  auto asset_manager = std::make_shared<flutter::AssetManager>();
+  if (fml::UniqueFD::traits_type::IsValid(settings.assets_dir)) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::Duplicate(settings.assets_dir), true));
+  }
+  if (!settings.assets_path.empty()) {
+    asset_manager->PushBack(std::make_unique<flutter::DirectoryAssetBundle>(
+        fml::OpenDirectory(settings.assets_path.c_str(), false,
+                           fml::FilePermission::kRead),
+        true));
+  }
+  if (has_custom_resolvers) {
+    for (size_t i = 0; i < custom_resolvers_count; ++i) {
+      const FlutterCustomAssetResolver* resolver = custom_resolvers[i];
+      if (resolver != nullptr &&
+          SAFE_ACCESS(resolver, get_as_mapping_callback, nullptr) != nullptr) {
+        asset_manager->PushBack(
+            std::make_unique<EmbedderCustomAssetResolver>(*resolver));
+      }
+    }
+  }
+
   if (!flutter::DartVM::IsRunningPrecompiledCode()) {
-    // Verify the assets path contains Dart 2 kernel assets.
+    // Verify the assets contain Dart 2 kernel assets.
     const std::string kApplicationKernelSnapshotFileName = "kernel_blob.bin";
     std::string application_kernel_path = fml::paths::JoinPaths(
         {settings.assets_path, kApplicationKernelSnapshotFileName});
-    if (!fml::IsFile(application_kernel_path)) {
+    bool kernel_exists =
+        (!settings.assets_path.empty() && fml::IsFile(application_kernel_path));
+    if (!kernel_exists && has_custom_resolvers) {
+      auto kernel_mapping =
+          asset_manager->GetAsMapping(kApplicationKernelSnapshotFileName);
+      kernel_exists = (kernel_mapping != nullptr);
+    }
+    if (!kernel_exists) {
       return LOG_EMBEDDER_ERROR(
           kInvalidArguments,
           "Not running in AOT mode but could not resolve the kernel binary.");
@@ -2621,8 +2748,9 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
     }
   };
 
-  auto run_configuration =
-      flutter::RunConfiguration::InferFromSettings(settings);
+  flutter::RunConfiguration run_configuration(
+      flutter::IsolateConfiguration::InferFromSettings(settings, asset_manager),
+      asset_manager);
 
   if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr) {
     auto dart_entrypoint = std::string{args->custom_dart_entrypoint};

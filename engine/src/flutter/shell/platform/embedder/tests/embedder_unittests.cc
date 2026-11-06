@@ -4474,6 +4474,26 @@ TEST(EmbedderTestNoFixture,
   }
 }
 
+TEST_F(EmbedderTest, EmbedderCustomAssetResolversInProjectArgs) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+
+  FlutterCustomAssetResolver resolver = {};
+  resolver.struct_size = sizeof(FlutterCustomAssetResolver);
+  resolver.user_data = nullptr;
+  resolver.get_as_mapping_callback =
+      [](const char* asset_name, void* user_data,
+         FlutterAssetMapping* mapping_out) -> bool { return false; };
+  const FlutterCustomAssetResolver* resolvers[] = {&resolver};
+
+  builder.GetProjectArgs().custom_asset_resolvers = resolvers;
+  builder.GetProjectArgs().custom_asset_resolvers_count = 1;
+
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+}
+
 }  // namespace testing
 }  // namespace flutter
 
