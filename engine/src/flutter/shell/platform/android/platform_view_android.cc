@@ -39,7 +39,6 @@
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_wrapper.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
-#include "flutter/shell/platform/android/platform_message_response_android.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
 #include "flutter/shell/platform/android/surface/snapshot_surface_producer.h"
 
@@ -255,10 +254,6 @@ void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,
       fml::MallocMapping::Copy(message_data, java_message_position);
 
   fml::RefPtr<flutter::PlatformMessageResponse> response;
-  if (response_id) {
-    response = fml::MakeRefCounted<PlatformMessageResponseAndroid>(
-        response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
-  }
 
   PlatformView::DispatchPlatformMessage(
       std::make_unique<flutter::PlatformMessage>(
@@ -269,10 +264,6 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
                                                        std::string name,
                                                        jint response_id) {
   fml::RefPtr<flutter::PlatformMessageResponse> response;
-  if (response_id) {
-    response = fml::MakeRefCounted<PlatformMessageResponseAndroid>(
-        response_id, jni_facade_, task_runners_.GetPlatformTaskRunner());
-  }
 
   PlatformView::DispatchPlatformMessage(
       std::make_unique<flutter::PlatformMessage>(std::move(name),
@@ -283,7 +274,9 @@ void PlatformViewAndroid::DispatchEmptyPlatformMessage(JNIEnv* env,
 void PlatformViewAndroid::HandlePlatformMessage(
     std::unique_ptr<flutter::PlatformMessage> message) {
   // Called from the ui thread.
-  platform_message_handler_->HandlePlatformMessage(std::move(message));
+  if (message && message->response()) {
+    message->response()->CompleteEmpty();
+  }
 }
 
 // |PlatformView|
