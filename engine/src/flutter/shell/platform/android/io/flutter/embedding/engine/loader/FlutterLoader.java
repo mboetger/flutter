@@ -60,8 +60,6 @@ public class FlutterLoader {
   // The command line flags set there are later loaded by ensureInitializationComplete.
   private static final String ANDROID_ENGINE_SHELL_ARGS_KEY =
       "io.flutter.app.androidEngineShellArgs";
-  private static final String ENABLE_EMBEDDER_API_METADATA_KEY =
-      "io.flutter.embedding.android.EnableEmbedderAPI";
 
   /**
    * Reads the {@code io.flutter.app.androidEngineShellArgs} metadata from the application manifest
@@ -357,13 +355,6 @@ public class FlutterLoader {
       boolean isLeakVMSet = false;
 
       if (applicationMetaData != null) {
-        if (applicationMetaData.containsKey(ENABLE_EMBEDDER_API_METADATA_KEY)) {
-          if (applicationMetaData.getBoolean(ENABLE_EMBEDDER_API_METADATA_KEY, true)) {
-            shellArgs.add("--enable-embedder-api=true");
-          } else {
-            shellArgs.add("--enable-embedder-api=false");
-          }
-        }
         for (FlutterEngineFlags.Flag flag : FlutterEngineFlags.ALL_FLAGS) {
           String metadataKey = flag.metadataKey;
           if (!applicationMetaData.containsKey(metadataKey)) {

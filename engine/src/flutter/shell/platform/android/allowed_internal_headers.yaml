@@ -8,5 +8,5 @@
   "allowed_unique_headers": [],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 1
+  "total_allowed_internal_headers": 0
 }

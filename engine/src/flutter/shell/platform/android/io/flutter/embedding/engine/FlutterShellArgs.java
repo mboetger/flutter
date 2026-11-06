@@ -82,9 +82,6 @@ public class FlutterShellArgs {
   public static final String ARG_PURGE_PERSISTENT_CACHE = "--purge-persistent-cache";
   public static final String ARG_KEY_VERBOSE_LOGGING = "verbose-logging";
   public static final String ARG_VERBOSE_LOGGING = "--verbose-logging";
-  public static final String ARG_KEY_ENABLE_EMBEDDER_API = "enable-embedder-api";
-  public static final String ARG_ENABLE_EMBEDDER_API = "--enable-embedder-api=true";
-  public static final String ARG_DISABLE_EMBEDDER_API = "--enable-embedder-api=false";
   public static final String ARG_KEY_VM_SERVICE_PORT = "vm-service-port";
   public static final String ARG_VM_SERVICE_PORT = "--vm-service-port=";
   public static final String ARG_KEY_DART_FLAGS = "dart-flags";
@@ -178,13 +175,6 @@ public class FlutterShellArgs {
     }
     if (intent.getBooleanExtra(ARG_KEY_VERBOSE_LOGGING, false)) {
       args.add(ARG_VERBOSE_LOGGING);
-    }
-    if (intent.hasExtra(ARG_KEY_ENABLE_EMBEDDER_API)) {
-      if (intent.getBooleanExtra(ARG_KEY_ENABLE_EMBEDDER_API, true)) {
-        args.add(ARG_ENABLE_EMBEDDER_API);
-      } else {
-        args.add(ARG_DISABLE_EMBEDDER_API);
-      }
     }
     if (intent.getBooleanExtra(ARG_KEY_TEST_FLAG, false)) {
       args.add(ARG_TEST_FLAG);
