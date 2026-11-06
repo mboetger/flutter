@@ -1438,7 +1438,11 @@ bool FlutterEmbedderNative::RunBundleAndSnapshotFromLibrary(
   } else
 #endif
   {
-    ResolveRendererConfig(&renderer_config);
+    renderer_config.type = kDeferred;
+    renderer_config.deferred.struct_size =
+        sizeof(FlutterDeferredRendererConfig);
+    renderer_config.deferred.resolve_callback =
+        &FlutterEmbedderNative::OnResolveRendererConfigCallback;
   }
 
   const FlutterCustomAssetResolver* custom_resolvers[1] = {

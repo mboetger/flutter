@@ -92,6 +92,8 @@ source_set("flutter_embedder_native_src") {
     "android_hardware_buffer.h",
     "android_vulkan_external_texture.cc",
     "android_vulkan_external_texture.h",
+    "android_surface_control.cc",
+    "android_surface_control.h",
 ]
 
   check_includes = true
@@ -124,6 +126,7 @@ executable("flutter_embedder_native_unittests") {
     "android_semantics_mapper_unittests.cc",
     "flutter_embedder_native_unittests.cc",
       "android_external_texture_unittests.cc",
+    "android_surface_control_unittests.cc",
 ]
 
   defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
