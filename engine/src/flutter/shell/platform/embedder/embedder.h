@@ -3817,7 +3817,7 @@ typedef FlutterEngineResult (*FlutterEngineSendViewFocusEventFnPtr)(
     const FlutterViewFocusEvent* event);
 
 /// Function-pointer-based versions of the APIs above.
-typedef struct {
+typedef struct _FlutterEngineProcTable {
   /// The size of this struct. Must be sizeof(FlutterEngineProcs).
   size_t struct_size;
 

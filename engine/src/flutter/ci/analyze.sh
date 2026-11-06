@@ -80,3 +80,9 @@ do
   echo "Running $testFile"
   (cd "$FLUTTER_DIR"; FLUTTER_DIR="$FLUTTER_DIR" "$DART" --enable-asserts $testFile)
 done
+
+echo "Checking Android embedder C-API dependencies (ADR-0010 ratchet)..."
+(cd "$SCRIPT_DIR" && "$DART" run bin/check_android_embedder_deps.dart \
+  --allowed-file="$FLUTTER_DIR/shell/platform/android/allowed_internal_headers.yaml" \
+  --android-dir="$FLUTTER_DIR/shell/platform/android" \
+  --build-gn="$FLUTTER_DIR/shell/platform/android/BUILD.gn")
