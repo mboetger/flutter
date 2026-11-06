@@ -107,12 +107,6 @@
       "flutter/impeller/display_list/aiks_context.h",
       "flutter/impeller/renderer/backend/vulkan/surface_context_vk.h"
     ],
-    "apk_asset_provider.cc": [
-      "flutter/assets/asset_resolver.h"
-    ],
-    "apk_asset_provider.h": [
-      "flutter/assets/asset_resolver.h"
-    ],
     "context/android_context.h": [
       "flutter/common/macros.h",
       "flutter/impeller/base/flags.h",
@@ -300,7 +294,6 @@
   "allowed_unique_headers": [
     "common/settings.h",
     "flow/view_slicer.h",
-    "flutter/assets/asset_resolver.h",
     "flutter/common/constants.h",
     "flutter/common/graphics/gl_context_switch.h",
     "flutter/common/graphics/texture.h",
@@ -400,5 +393,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 167
+  "total_allowed_internal_headers": 165
 }

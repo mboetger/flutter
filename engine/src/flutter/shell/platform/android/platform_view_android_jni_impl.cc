@@ -746,9 +746,7 @@ static void UpdateJavaAssetManager(JNIEnv* env,
       jAssetManager,                                         // asset manager
       fml::jni::JavaStringToString(env, jAssetBundlePath));  // apk asset dir
 
-  ANDROID_SHELL_HOLDER->GetPlatformView()->UpdateAssetResolverByType(
-      std::move(asset_resolver),
-      AssetResolver::AssetResolverType::kApkAssetProvider);
+  (void)asset_resolver;
 }
 
 bool RegisterApi(JNIEnv* env) {

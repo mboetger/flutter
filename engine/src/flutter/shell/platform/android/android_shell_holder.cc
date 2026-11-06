@@ -343,7 +343,6 @@ std::optional<RunConfiguration> AndroidShellHolder::BuildRunConfiguration(
   }
 
   RunConfiguration config(std::move(isolate_configuration));
-  config.AddAssetResolver(apk_asset_provider_->Clone());
 
   {
     if (!entrypoint.empty() && !libraryUrl.empty()) {
