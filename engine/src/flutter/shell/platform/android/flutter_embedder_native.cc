@@ -675,9 +675,15 @@ AndroidCompositor::AndroidCompositor(
 
 AndroidCompositor::~AndroidCompositor() = default;
 
-void AndroidCompositor::ConfigureForPlatform(bool /*enable_surface_control*/,
-                                             int /*api_level*/) {
+void AndroidCompositor::ConfigureForPlatform(bool enable_surface_control,
+                                             int api_level) {
   compositor_.avoid_backing_store_cache = true;
+  compositor_.merge_raster_thread_on_platform_views = !enable_surface_control;
+  compositor_.coalesce_overlay_layers = enable_surface_control;
+  compositor_.platform_view_mutation_capabilities =
+      (api_level >= android::kMinimumAndroidApiLevelForSurfaceControl)
+          ? kFlutterPlatformViewMutationCapabilityPathConics
+          : kFlutterPlatformViewMutationCapabilityDefault;
 }
 
 bool AndroidCompositor::CreateBackingStoreCallback(

@@ -94,6 +94,10 @@ source_set("flutter_embedder_native_src") {
     "android_vulkan_external_texture.h",
     "android_surface_control.cc",
     "android_surface_control.h",
+    "android_mutators_mapper.cc",
+    "android_mutators_mapper.h",
+    "android_platform_views_controller.cc",
+    "android_platform_views_controller.h",
 ]
 
   check_includes = true
@@ -127,6 +131,8 @@ executable("flutter_embedder_native_unittests") {
     "flutter_embedder_native_unittests.cc",
       "android_external_texture_unittests.cc",
     "android_surface_control_unittests.cc",
+    "android_mutators_mapper_unittests.cc",
+    "android_platform_views_controller_unittests.cc",
 ]
 
   defines = [ "FLUTTER_ENGINE_NO_PROTOTYPES" ]
