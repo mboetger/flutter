@@ -1669,6 +1669,64 @@ MakeViewportMetricsFromWindowMetrics(
       SAFE_ACCESS(flutter_metrics, physical_view_inset_left, 0.0);
   metrics.display_id = SAFE_ACCESS(flutter_metrics, display_id, 0);
 
+  if (STRUCT_HAS_MEMBER(flutter_metrics, physical_padding)) {
+    metrics.physical_padding_top = flutter_metrics->physical_padding.top;
+    metrics.physical_padding_right = flutter_metrics->physical_padding.right;
+    metrics.physical_padding_bottom = flutter_metrics->physical_padding.bottom;
+    metrics.physical_padding_left = flutter_metrics->physical_padding.left;
+  }
+
+  if (STRUCT_HAS_MEMBER(flutter_metrics, physical_system_gesture_insets)) {
+    metrics.physical_system_gesture_inset_top =
+        flutter_metrics->physical_system_gesture_insets.top;
+    metrics.physical_system_gesture_inset_right =
+        flutter_metrics->physical_system_gesture_insets.right;
+    metrics.physical_system_gesture_inset_bottom =
+        flutter_metrics->physical_system_gesture_insets.bottom;
+    metrics.physical_system_gesture_inset_left =
+        flutter_metrics->physical_system_gesture_insets.left;
+  }
+
+  metrics.physical_touch_slop =
+      SAFE_ACCESS(flutter_metrics, physical_touch_slop, -1.0);
+
+  const FlutterDisplayCornerRadii* corner_radii =
+      SAFE_ACCESS(flutter_metrics, display_corner_radii, nullptr);
+  if (corner_radii != nullptr) {
+    metrics.physical_display_corner_radius_top_left =
+        SAFE_ACCESS(corner_radii, top_left, -1.0);
+    metrics.physical_display_corner_radius_top_right =
+        SAFE_ACCESS(corner_radii, top_right, -1.0);
+    metrics.physical_display_corner_radius_bottom_right =
+        SAFE_ACCESS(corner_radii, bottom_right, -1.0);
+    metrics.physical_display_corner_radius_bottom_left =
+        SAFE_ACCESS(corner_radii, bottom_left, -1.0);
+  }
+
+  size_t display_features_count =
+      SAFE_ACCESS(flutter_metrics, display_features_count, 0);
+  const FlutterDisplayFeature** display_features =
+      SAFE_ACCESS(flutter_metrics, display_features, nullptr);
+  if (display_features_count > 0 && display_features == nullptr) {
+    return "Display features count was non-zero, but display_features was "
+           "null.";
+  }
+  for (size_t i = 0; i < display_features_count; ++i) {
+    const FlutterDisplayFeature* feature = display_features[i];
+    if (feature == nullptr) {
+      return "Display feature at index was null.";
+    }
+    FlutterRect bounds = SAFE_ACCESS(feature, bounds, FlutterRect{});
+    metrics.physical_display_features_bounds.push_back(bounds.left);
+    metrics.physical_display_features_bounds.push_back(bounds.top);
+    metrics.physical_display_features_bounds.push_back(bounds.right);
+    metrics.physical_display_features_bounds.push_back(bounds.bottom);
+    metrics.physical_display_features_type.push_back(static_cast<int>(
+        SAFE_ACCESS(feature, type, kFlutterDisplayFeatureTypeUnknown)));
+    metrics.physical_display_features_state.push_back(static_cast<int>(
+        SAFE_ACCESS(feature, state, kFlutterDisplayFeatureStateUnknown)));
+  }
+
   if (metrics.device_pixel_ratio <= 0.0) {
     return "Device pixel ratio was invalid. It must be greater than zero.";
   }
@@ -1686,6 +1744,20 @@ MakeViewportMetricsFromWindowMetrics(
       metrics.physical_view_inset_left > metrics.physical_width) {
     return "Physical view insets are invalid. They cannot be greater than "
            "physical height or width.";
+  }
+
+  if (metrics.physical_padding_top < 0 || metrics.physical_padding_right < 0 ||
+      metrics.physical_padding_bottom < 0 ||
+      metrics.physical_padding_left < 0) {
+    return "Physical padding values are invalid. They must be non-negative.";
+  }
+
+  if (metrics.physical_system_gesture_inset_top < 0 ||
+      metrics.physical_system_gesture_inset_right < 0 ||
+      metrics.physical_system_gesture_inset_bottom < 0 ||
+      metrics.physical_system_gesture_inset_left < 0) {
+    return "Physical system gesture insets are invalid. They must be "
+           "non-negative.";
   }
 
   return metrics;

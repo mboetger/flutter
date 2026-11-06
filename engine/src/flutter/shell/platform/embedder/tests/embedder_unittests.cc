@@ -4338,6 +4338,43 @@ TEST(EmbedderTestNoFixture,
             merged_host->GetTaskRunners().GetUITaskRunner());
 }
 
+TEST_F(EmbedderTest, EmbedderExtendedWindowMetricsAndCornerRadii) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(context);
+  builder.SetSurface(DlISize(1, 1));
+  auto engine = builder.LaunchEngine();
+  ASSERT_TRUE(engine.is_valid());
+
+  FlutterDisplayCornerRadii radii = {};
+  radii.struct_size = sizeof(FlutterDisplayCornerRadii);
+  radii.top_left = 12.0;
+  radii.top_right = 12.0;
+  radii.bottom_right = 8.0;
+  radii.bottom_left = 8.0;
+
+  FlutterDisplayFeature hinge = {};
+  hinge.struct_size = sizeof(FlutterDisplayFeature);
+  hinge.bounds = {0.0, 0.0, 10.0, 600.0};
+  hinge.type = kFlutterDisplayFeatureTypeHinge;
+  hinge.state = kFlutterDisplayFeatureStatePostureFlat;
+  const FlutterDisplayFeature* features[] = {&hinge};
+
+  FlutterWindowMetricsEvent event = {};
+  event.struct_size = sizeof(FlutterWindowMetricsEvent);
+  event.width = 800;
+  event.height = 600;
+  event.pixel_ratio = 2.0;
+  event.physical_padding = {24.0, 0.0, 16.0, 0.0};
+  event.physical_system_gesture_insets = {0.0, 12.0, 0.0, 12.0};
+  event.physical_touch_slop = 16.0;
+  event.display_corner_radii = &radii;
+  event.display_features_count = 1;
+  event.display_features = features;
+
+  EXPECT_EQ(FlutterEngineSendWindowMetricsEvent(engine.get(), &event),
+            kSuccess);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

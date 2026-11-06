@@ -1097,6 +1097,48 @@ typedef struct {
 /// stable until the Flutter application restarts.
 typedef uint64_t FlutterEngineDisplayId;
 
+/// Physical edge insets (padding, view insets, or system gesture insets) in
+/// physical pixels.
+typedef struct {
+  double left;
+  double top;
+  double right;
+  double bottom;
+} FlutterEdgeInsets;
+
+/// Radii of the display's four rounded corners in physical pixels.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDisplayCornerRadii).
+  size_t struct_size;
+  double top_left;
+  double top_right;
+  double bottom_right;
+  double bottom_left;
+} FlutterDisplayCornerRadii;
+
+/// Must match `DisplayFeatureType` in `window.dart`.
+typedef enum {
+  kFlutterDisplayFeatureTypeUnknown = 0,
+  kFlutterDisplayFeatureTypeFold = 1,
+  kFlutterDisplayFeatureTypeHinge = 2,
+  kFlutterDisplayFeatureTypeCutout = 3,
+} FlutterDisplayFeatureType;
+
+/// Must match `DisplayFeatureState` in `window.dart`.
+typedef enum {
+  kFlutterDisplayFeatureStateUnknown = 0,
+  kFlutterDisplayFeatureStatePostureFlat = 1,
+  kFlutterDisplayFeatureStatePostureHalfOpened = 2,
+} FlutterDisplayFeatureState;
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDisplayFeature).
+  size_t struct_size;
+  FlutterRect bounds;
+  FlutterDisplayFeatureType type;
+  FlutterDisplayFeatureState state;
+} FlutterDisplayFeature;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterWindowMetricsEvent).
   size_t struct_size;
@@ -1145,6 +1187,21 @@ typedef struct {
   /// If |has_constraints| is `true`, this must be greater than or equal to
   /// |min_height_constraint| and |height|.
   size_t max_height_constraint;
+  /// Safe-area padding (status bar, navigation bar) in physical pixels.
+  FlutterEdgeInsets physical_padding;
+  /// System gesture exclusion insets in physical pixels.
+  FlutterEdgeInsets physical_system_gesture_insets;
+  /// Distance in physical pixels a touch can wander before the platform
+  /// considers it a scroll, or -1.0 to use the framework default.
+  double physical_touch_slop;
+  /// Optional pointer to the display's rounded corner radii. May be null if
+  /// the display has square corners or corner radii are unknown.
+  const FlutterDisplayCornerRadii* display_corner_radii;
+  /// Number of elements in `display_features`.
+  size_t display_features_count;
+  /// Array of pointers to `FlutterDisplayFeature` structs of length
+  /// `display_features_count`.
+  const FlutterDisplayFeature** display_features;
 } FlutterWindowMetricsEvent;
 
 typedef struct {
