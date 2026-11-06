@@ -236,8 +236,7 @@
       "common/settings.h",
       "flutter/common/graphics/texture.h",
       "flutter/shell/common/shell_io_manager.h",
-      "flutter/shell/gpu/gpu_surface_gl_delegate.h",
-      "impeller/display_list/aiks_context.h"
+      "flutter/shell/gpu/gpu_surface_gl_delegate.h"
     ],
     "platform_view_android.h": [
       "flutter/lib/ui/window/platform_message.h",
@@ -394,7 +393,6 @@
     "flutter/vulkan/vulkan_native_surface_android.h",
     "impeller/base/validation.h",
     "impeller/core/runtime_types.h",
-    "impeller/display_list/aiks_context.h",
     "impeller/entity/gles/entity_shaders_gles.h",
     "impeller/entity/gles/framebuffer_blend_shaders_gles.h",
     "impeller/entity/gles3/entity_shaders_gles.h",
@@ -426,5 +424,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 180
+  "total_allowed_internal_headers": 179
 }

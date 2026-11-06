@@ -190,6 +190,39 @@ class AndroidWindowMetricsMapper {
   static std::vector<AndroidDisplayFeature> ExtractDisplayFeatures(
       const AndroidViewportMetrics& metrics);
 
+  static FlutterPointerPhase MapAndroidActionToPointerPhase(
+      int32_t masked_action,
+      bool is_hover = false,
+      bool is_FirstDown = false,
+      bool is_LastUp = false);
+
+  static FlutterPointerDeviceKind MapAndroidToolTypeToDeviceKind(
+      int32_t tool_type);
+
+  static FlutterPointerSignalKind MapPointerSignalKind(int64_t signal_kind);
+
+  static FlutterPointerPhase MapPointerDataChangeToPhase(int64_t change);
+
+  static FlutterPointerDeviceKind MapPointerDataDeviceKind(int64_t kind);
+
+  static FlutterPointerEvent ToFlutterPointerEvent(
+      const AndroidPointerEvent& input);
+
+  static bool MapPointerDataPacket(
+      const uint8_t* packet_data,
+      size_t packet_size,
+      std::vector<FlutterPointerEvent>* out_events);
+
+  static std::vector<FlutterPointerEvent> FromPointerDataPacket(
+      const uint8_t* packet_data,
+      size_t packet_size);
+
+  static FlutterEngineResult DispatchPointerDataPacket(
+      const FlutterEngineProcTable& proc_table,
+      FLUTTER_API_SYMBOL(FlutterEngine) engine,
+      const uint8_t* packet_data,
+      size_t packet_size);
+
  private:
   FML_DISALLOW_IMPLICIT_CONSTRUCTORS(AndroidWindowMetricsMapper);
 };

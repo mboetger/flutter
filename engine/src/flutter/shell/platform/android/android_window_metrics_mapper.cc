@@ -561,4 +561,249 @@ FlutterEngineDisplay AndroidWindowMetricsMapper::ToFlutterEngineDisplay(
   return display;
 }
 
+FlutterPointerPhase AndroidWindowMetricsMapper::MapAndroidActionToPointerPhase(
+    int32_t masked_action,
+    bool is_hover,
+    bool is_FirstDown,
+    bool is_LastUp) {
+  (void)is_hover;
+  (void)is_FirstDown;
+  (void)is_LastUp;
+  switch (masked_action) {
+    case kMotionActionDown:
+    case kMotionActionPointerDown:
+      return kDown;
+    case kMotionActionUp:
+    case kMotionActionPointerUp:
+      return kUp;
+    case kMotionActionMove:
+      return kMove;
+    case kMotionActionCancel:
+      return kCancel;
+    case kMotionActionHoverMove:
+      return kHover;
+    case kMotionActionHoverEnter:
+      return kAdd;
+    case kMotionActionHoverExit:
+      return kRemove;
+    default:
+      return kCancel;
+  }
+}
+
+FlutterPointerDeviceKind
+AndroidWindowMetricsMapper::MapAndroidToolTypeToDeviceKind(int32_t tool_type) {
+  switch (tool_type) {
+    case kMotionToolTypeFinger:
+      return kFlutterPointerDeviceKindTouch;
+    case kMotionToolTypeStylus:
+      return kFlutterPointerDeviceKindStylus;
+    case kMotionToolTypeMouse:
+      return kFlutterPointerDeviceKindMouse;
+    case kMotionToolTypeEraser:
+      return kFlutterPointerDeviceKindInvertedStylus;
+    case kMotionToolTypeUnknown:
+    default:
+      return kFlutterPointerDeviceKindTouch;
+  }
+}
+
+FlutterPointerSignalKind AndroidWindowMetricsMapper::MapPointerSignalKind(
+    int64_t signal_kind) {
+  switch (signal_kind) {
+    case kPointerSignalKindNone:
+      return kFlutterPointerSignalKindNone;
+    case kPointerSignalKindScroll:
+      return kFlutterPointerSignalKindScroll;
+    case kPointerSignalKindScrollInertiaCancel:
+      return kFlutterPointerSignalKindScrollInertiaCancel;
+    case kPointerSignalKindScale:
+      return kFlutterPointerSignalKindScale;
+    default:
+      return kFlutterPointerSignalKindNone;
+  }
+}
+
+FlutterPointerPhase AndroidWindowMetricsMapper::MapPointerDataChangeToPhase(
+    int64_t change) {
+  switch (change) {
+    case kPointerChangeCancel:
+      return kCancel;
+    case kPointerChangeAdd:
+      return kAdd;
+    case kPointerChangeRemove:
+      return kRemove;
+    case kPointerChangeHover:
+      return kHover;
+    case kPointerChangeDown:
+      return kDown;
+    case kPointerChangeMove:
+      return kMove;
+    case kPointerChangeUp:
+      return kUp;
+    case kPointerChangePanZoomStart:
+      return kPanZoomStart;
+    case kPointerChangePanZoomUpdate:
+      return kPanZoomUpdate;
+    case kPointerChangePanZoomEnd:
+      return kPanZoomEnd;
+    default:
+      return kCancel;
+  }
+}
+
+FlutterPointerDeviceKind AndroidWindowMetricsMapper::MapPointerDataDeviceKind(
+    int64_t kind) {
+  switch (kind) {
+    case kPointerDeviceKindTouch:
+      return kFlutterPointerDeviceKindTouch;
+    case kPointerDeviceKindMouse:
+      return kFlutterPointerDeviceKindMouse;
+    case kPointerDeviceKindStylus:
+      return kFlutterPointerDeviceKindStylus;
+    case kPointerDeviceKindInvertedStylus:
+      return kFlutterPointerDeviceKindInvertedStylus;
+    case kPointerDeviceKindTrackpad:
+      return kFlutterPointerDeviceKindTrackpad;
+    default:
+      return kFlutterPointerDeviceKindTouch;
+  }
+}
+
+FlutterPointerEvent AndroidWindowMetricsMapper::ToFlutterPointerEvent(
+    const AndroidPointerEvent& input) {
+  TRACE_EVENT0("flutter", "AndroidWindowMetricsMapper::ToFlutterPointerEvent");
+  FlutterPointerEvent event = {};
+  event.struct_size = sizeof(FlutterPointerEvent);
+  event.phase = input.phase;
+  event.timestamp = input.timestamp;
+  event.x = SanitizeFiniteDouble(input.x, 0.0);
+  event.y = SanitizeFiniteDouble(input.y, 0.0);
+  event.device = input.device;
+  event.signal_kind = input.signal_kind;
+  event.scroll_delta_x = SanitizeFiniteDouble(input.scroll_delta_x, 0.0);
+  event.scroll_delta_y = SanitizeFiniteDouble(input.scroll_delta_y, 0.0);
+  event.device_kind = input.device_kind;
+  event.buttons = input.buttons;
+  event.pan_x = SanitizeFiniteDouble(input.pan_x, 0.0);
+  event.pan_y = SanitizeFiniteDouble(input.pan_y, 0.0);
+  event.scale =
+      SanitizeFiniteDouble(input.scale, AndroidPointerEvent::kDefaultScale);
+  event.rotation = SanitizeFiniteDouble(input.rotation, 0.0);
+  event.pressure = SanitizeFiniteDouble(input.pressure, 0.0);
+  event.pressure_min = SanitizeFiniteDouble(input.pressure_min, 0.0);
+  event.pressure_max = SanitizeFiniteDouble(
+      input.pressure_max, AndroidPointerEvent::kDefaultPressureMax);
+  event.view_id = input.view_id;
+
+  // Populate all 11 extended FlutterPointerEvent fields (RFC 410.0000).
+  event.distance = SanitizeFiniteDouble(input.distance, 0.0);
+  event.distance_max = SanitizeFiniteDouble(input.distance_max, 0.0);
+  event.size = SanitizeFiniteDouble(input.size, 0.0);
+  event.radius_major = SanitizeFiniteDouble(input.radius_major, 0.0);
+  event.radius_minor = SanitizeFiniteDouble(input.radius_minor, 0.0);
+  event.radius_min = SanitizeFiniteDouble(input.radius_min, 0.0);
+  event.radius_max = SanitizeFiniteDouble(input.radius_max, 0.0);
+  event.orientation = SanitizeFiniteDouble(input.orientation, 0.0);
+  event.tilt = SanitizeFiniteDouble(input.tilt, 0.0);
+  event.platform_data = input.platform_data;
+  event.embedder_id = input.embedder_id;
+
+  return event;
+}
+
+bool AndroidWindowMetricsMapper::MapPointerDataPacket(
+    const uint8_t* packet_data,
+    size_t packet_size,
+    std::vector<FlutterPointerEvent>* out_events) {
+  TRACE_EVENT0("flutter", "AndroidWindowMetricsMapper::MapPointerDataPacket");
+  if (out_events == nullptr) {
+    return false;
+  }
+  out_events->clear();
+  if (packet_data == nullptr || packet_size == 0 ||
+      (packet_size % kPointerDataByteSize) != 0) {
+    return false;
+  }
+
+  size_t event_count = packet_size / kPointerDataByteSize;
+  out_events->reserve(event_count);
+
+  for (size_t i = 0; i < event_count; ++i) {
+    const uint8_t* entry = packet_data + (i * kPointerDataByteSize);
+    std::array<int64_t, kPointerDataFieldCount> int_fields{};
+    std::array<double, kPointerDataFieldCount> double_fields{};
+    std::memcpy(int_fields.data(), entry, kPointerDataByteSize);
+    std::memcpy(double_fields.data(), entry, kPointerDataByteSize);
+
+    AndroidPointerEvent input;
+    input.embedder_id = int_fields[kPointerFieldEmbedderId];
+    input.timestamp =
+        int_fields[kPointerFieldTimeStamp] < 0
+            ? 0u
+            : static_cast<size_t>(int_fields[kPointerFieldTimeStamp]);
+    input.phase = MapPointerDataChangeToPhase(int_fields[kPointerFieldChange]);
+    input.device_kind = MapPointerDataDeviceKind(int_fields[kPointerFieldKind]);
+    input.signal_kind =
+        MapPointerSignalKind(int_fields[kPointerFieldSignalKind]);
+    input.device = static_cast<int32_t>(int_fields[kPointerFieldDevice]);
+    input.x = double_fields[kPointerFieldPhysicalX];
+    input.y = double_fields[kPointerFieldPhysicalY];
+    input.buttons = int_fields[kPointerFieldButtons];
+    input.pressure = double_fields[kPointerFieldPressure];
+    input.pressure_min = double_fields[kPointerFieldPressureMin];
+    input.pressure_max = double_fields[kPointerFieldPressureMax];
+    input.distance = double_fields[kPointerFieldDistance];
+    input.distance_max = double_fields[kPointerFieldDistanceMax];
+    input.size = double_fields[kPointerFieldSize];
+    input.radius_major = double_fields[kPointerFieldRadiusMajor];
+    input.radius_minor = double_fields[kPointerFieldRadiusMinor];
+    input.radius_min = double_fields[kPointerFieldRadiusMin];
+    input.radius_max = double_fields[kPointerFieldRadiusMax];
+    input.orientation = double_fields[kPointerFieldOrientation];
+    input.tilt = double_fields[kPointerFieldTilt];
+    input.platform_data = int_fields[kPointerFieldPlatformData];
+    input.scroll_delta_x = double_fields[kPointerFieldScrollDeltaX];
+    input.scroll_delta_y = double_fields[kPointerFieldScrollDeltaY];
+    input.pan_x = double_fields[kPointerFieldPanX];
+    input.pan_y = double_fields[kPointerFieldPanY];
+    input.scale = double_fields[kPointerFieldScale];
+    input.rotation = double_fields[kPointerFieldRotation];
+    input.view_id = static_cast<FlutterViewId>(int_fields[kPointerFieldViewId]);
+
+    out_events->push_back(ToFlutterPointerEvent(input));
+  }
+
+  return true;
+}
+
+std::vector<FlutterPointerEvent>
+AndroidWindowMetricsMapper::FromPointerDataPacket(const uint8_t* packet_data,
+                                                  size_t packet_size) {
+  std::vector<FlutterPointerEvent> events;
+  MapPointerDataPacket(packet_data, packet_size, &events);
+  return events;
+}
+
+FlutterEngineResult AndroidWindowMetricsMapper::DispatchPointerDataPacket(
+    const FlutterEngineProcTable& proc_table,
+    FLUTTER_API_SYMBOL(FlutterEngine) engine,
+    const uint8_t* packet_data,
+    size_t packet_size) {
+  TRACE_EVENT0("flutter",
+               "AndroidWindowMetricsMapper::DispatchPointerDataPacket");
+  if (engine == nullptr) {
+    return kInvalidArguments;
+  }
+  std::vector<FlutterPointerEvent> events;
+  if (!MapPointerDataPacket(packet_data, packet_size, &events) ||
+      events.empty()) {
+    return kInvalidArguments;
+  }
+  if (proc_table.SendPointerEvent == nullptr) {
+    return kInternalInconsistency;
+  }
+  return proc_table.SendPointerEvent(engine, events.data(), events.size());
+}
+
 }  // namespace flutter::android

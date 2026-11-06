@@ -146,4 +146,151 @@ TEST(AndroidWindowMetricsMapperTest,
             kFlutterDisplayFeatureTypeFold);
 }
 
+TEST(AndroidWindowMetricsMapperTest,
+     ToFlutterPointerEventPopulatesAll11ExtendedFields) {
+  AndroidPointerEvent input;
+  input.timestamp = 123456;
+  input.phase = kMove;
+  input.x = 150.5;
+  input.y = 320.25;
+  input.device = 4;
+  input.signal_kind = kFlutterPointerSignalKindNone;
+  input.device_kind = kFlutterPointerDeviceKindStylus;
+  input.buttons = 2;
+  input.pressure = 0.65;
+  input.pressure_min = 0.0;
+  input.pressure_max = 1.0;
+  input.distance = 3.5;
+  input.distance_max = 10.0;
+  input.size = 0.4;
+  input.radius_major = 8.5;
+  input.radius_minor = 6.25;
+  input.radius_min = 1.0;
+  input.radius_max = 20.0;
+  input.orientation = 0.785;
+  input.tilt = 0.523;
+  input.platform_data = 99;
+  input.embedder_id = 777;
+  input.view_id = 3;
+
+  FlutterPointerEvent out =
+      AndroidWindowMetricsMapper::ToFlutterPointerEvent(input);
+
+  EXPECT_EQ(out.struct_size, sizeof(FlutterPointerEvent));
+  EXPECT_EQ(out.phase, kMove);
+  EXPECT_EQ(out.timestamp, 123456u);
+  EXPECT_DOUBLE_EQ(out.x, 150.5);
+  EXPECT_DOUBLE_EQ(out.y, 320.25);
+  EXPECT_EQ(out.device, 4);
+  EXPECT_EQ(out.device_kind, kFlutterPointerDeviceKindStylus);
+  EXPECT_EQ(out.buttons, 2);
+  EXPECT_DOUBLE_EQ(out.pressure, 0.65);
+  EXPECT_DOUBLE_EQ(out.pressure_min, 0.0);
+  EXPECT_DOUBLE_EQ(out.pressure_max, 1.0);
+  EXPECT_DOUBLE_EQ(out.distance, 3.5);
+  EXPECT_DOUBLE_EQ(out.distance_max, 10.0);
+  EXPECT_DOUBLE_EQ(out.size, 0.4);
+  EXPECT_DOUBLE_EQ(out.radius_major, 8.5);
+  EXPECT_DOUBLE_EQ(out.radius_minor, 6.25);
+  EXPECT_DOUBLE_EQ(out.radius_min, 1.0);
+  EXPECT_DOUBLE_EQ(out.radius_max, 20.0);
+  EXPECT_DOUBLE_EQ(out.orientation, 0.785);
+  EXPECT_DOUBLE_EQ(out.tilt, 0.523);
+  EXPECT_EQ(out.platform_data, 99);
+  EXPECT_EQ(out.embedder_id, 777);
+  EXPECT_EQ(out.view_id, 3);
+}
+
+TEST(AndroidWindowMetricsMapperTest,
+     MapPointerDataPacketUnpacks36FieldBinaryBufferAndDispatches) {
+  std::array<int64_t, AndroidWindowMetricsMapper::kPointerDataFieldCount>
+      raw_int{};
+  auto write_double = [&raw_int](size_t idx, double val) {
+    std::memcpy(&raw_int[idx], &val, sizeof(double));
+  };
+
+  raw_int[0] = 4242;       // embedder_id
+  raw_int[1] = 98765;      // time_stamp
+  raw_int[2] = 4;          // change = kDown (4)
+  raw_int[3] = 2;          // kind = kStylus (2)
+  raw_int[4] = 0;          // signal_kind = kNone (0)
+  raw_int[5] = 9;          // device
+  raw_int[6] = 1;          // pointer_identifier
+  write_double(7, 210.0);  // physical_x
+  write_double(8, 420.0);  // physical_y
+  write_double(9, 0.0);    // physical_delta_x
+  write_double(10, 0.0);   // physical_delta_y
+  raw_int[11] = 1;         // buttons
+  raw_int[12] = 0;         // obscured
+  raw_int[13] = 0;         // synthesized
+  write_double(14, 0.8);   // pressure
+  write_double(15, 0.0);   // pressure_min
+  write_double(16, 1.0);   // pressure_max
+  write_double(17, 2.25);  // distance
+  write_double(18, 12.0);  // distance_max
+  write_double(19, 0.35);  // size
+  write_double(20, 9.5);   // radius_major
+  write_double(21, 7.5);   // radius_minor
+  write_double(22, 0.5);   // radius_min
+  write_double(23, 18.0);  // radius_max
+  write_double(24, 1.25);  // orientation
+  write_double(25, 0.45);  // tilt
+  raw_int[26] = 123;       // platformData
+  write_double(27, 0.0);   // scroll_delta_x
+  write_double(28, 0.0);   // scroll_delta_y
+  write_double(29, 10.0);  // pan_x
+  write_double(30, 20.0);  // pan_y
+  write_double(31, 0.0);   // pan_delta_x
+  write_double(32, 0.0);   // pan_delta_y
+  write_double(33, 1.5);   // scale
+  write_double(34, 0.25);  // rotation
+  raw_int[35] = 5;         // view_id
+
+  static std::vector<FlutterPointerEvent> captured_events;
+  captured_events.clear();
+
+  FlutterEngineProcTable procs = {};
+  procs.struct_size = sizeof(FlutterEngineProcTable);
+  procs.SendPointerEvent = [](FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                              const FlutterPointerEvent* events,
+                              size_t events_count) {
+    if (events != nullptr && events_count > 0) {
+      captured_events.assign(events, events + events_count);
+    }
+    return kSuccess;
+  };
+
+  auto fake_engine =
+      reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(0x5678);
+  FlutterEngineResult res =
+      AndroidWindowMetricsMapper::DispatchPointerDataPacket(
+          procs, fake_engine, reinterpret_cast<const uint8_t*>(raw_int.data()),
+          sizeof(raw_int));
+
+  EXPECT_EQ(res, kSuccess);
+  ASSERT_EQ(captured_events.size(), 1u);
+  const FlutterPointerEvent& ev = captured_events[0];
+  EXPECT_EQ(ev.embedder_id, 4242);
+  EXPECT_EQ(ev.timestamp, 98765u);
+  EXPECT_EQ(ev.phase, kDown);
+  EXPECT_EQ(ev.device_kind, kFlutterPointerDeviceKindStylus);
+  EXPECT_EQ(ev.device, 9);
+  EXPECT_DOUBLE_EQ(ev.x, 210.0);
+  EXPECT_DOUBLE_EQ(ev.y, 420.0);
+  EXPECT_DOUBLE_EQ(ev.pressure, 0.8);
+  EXPECT_DOUBLE_EQ(ev.distance, 2.25);
+  EXPECT_DOUBLE_EQ(ev.distance_max, 12.0);
+  EXPECT_DOUBLE_EQ(ev.size, 0.35);
+  EXPECT_DOUBLE_EQ(ev.radius_major, 9.5);
+  EXPECT_DOUBLE_EQ(ev.radius_minor, 7.5);
+  EXPECT_DOUBLE_EQ(ev.radius_min, 0.5);
+  EXPECT_DOUBLE_EQ(ev.radius_max, 18.0);
+  EXPECT_DOUBLE_EQ(ev.orientation, 1.25);
+  EXPECT_DOUBLE_EQ(ev.tilt, 0.45);
+  EXPECT_EQ(ev.platform_data, 123);
+  EXPECT_DOUBLE_EQ(ev.scale, 1.5);
+  EXPECT_DOUBLE_EQ(ev.rotation, 0.25);
+  EXPECT_EQ(ev.view_id, 5);
+}
+
 }  // namespace flutter::android::testing
