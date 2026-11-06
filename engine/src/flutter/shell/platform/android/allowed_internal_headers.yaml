@@ -315,13 +315,6 @@
       "flutter/impeller/toolkit/egl/display.h",
       "flutter/impeller/toolkit/egl/surface.h",
       "flutter/impeller/toolkit/glvk/trampoline.h"
-    ],
-    "vsync_waiter_android.cc": [
-      "flutter/common/task_runners.h",
-      "impeller/toolkit/android/choreographer.h"
-    ],
-    "vsync_waiter_android.h": [
-      "flutter/shell/common/vsync_waiter.h"
     ]
   },
   "allowed_unique_headers": [
@@ -385,7 +378,6 @@
     "flutter/shell/common/snapshot_surface_producer.h",
     "flutter/shell/common/switches.h",
     "flutter/shell/common/thread_host.h",
-    "flutter/shell/common/vsync_waiter.h",
     "flutter/shell/gpu/gpu_surface_gl_delegate.h",
     "flutter/shell/gpu/gpu_surface_gl_impeller.h",
     "flutter/shell/gpu/gpu_surface_gl_skia.h",
@@ -409,7 +401,6 @@
     "impeller/entity/gles3/entity_shaders_gles.h",
     "impeller/entity/gles3/framebuffer_blend_shaders_gles.h",
     "impeller/renderer/backend/vulkan/swapchain/ahb/ahb_swapchain_vk.h",
-    "impeller/toolkit/android/choreographer.h",
     "impeller/toolkit/android/proc_table.h",
     "impeller/toolkit/android/surface_transaction.h",
     "shell/platform/android/android_context_dynamic_impeller.h",
@@ -436,5 +427,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 184
+  "total_allowed_internal_headers": 181
 }

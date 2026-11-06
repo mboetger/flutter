@@ -93,6 +93,8 @@ config("jni_headers_config") {
 
 source_set("flutter_embedder_native_src") {
   sources = [
+    "android_vsync_waiter.cc",
+    "android_vsync_waiter.h",
     "flutter_embedder_native.cc",
     "flutter_embedder_native.h",
     "jni_delegate.h",
@@ -205,8 +207,6 @@ source_set("flutter_shell_native_src") {
     "surface_texture_external_texture_gl_impeller.h",
     "surface_texture_external_texture_vk_impeller.cc",
     "surface_texture_external_texture_vk_impeller.h",
-    "vsync_waiter_android.cc",
-    "vsync_waiter_android.h",
   ]
 
   if (!slimpeller) {
