@@ -3,25 +3,22 @@
 // found in the LICENSE file.
 
 #include "flutter/fml/platform/android/jni_util.h"
-#include "flutter/shell/platform/android/flutter_main.h"
-#include "flutter/shell/platform/android/platform_view_android.h"
+#include "flutter/fml/trace_event.h"
+#include "flutter/shell/platform/android/flutter_embedder_native.h"
 
 // This is called by the VM when the shared library is first loaded.
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+  TRACE_EVENT0("flutter", "JNI_OnLoad");
   // Initialize the Java VM.
   fml::jni::InitJavaVM(vm);
 
   JNIEnv* env = fml::jni::AttachCurrentThread();
   bool result = false;
 
-  // Register FlutterMain.
-  result = flutter::FlutterMain::Register(env);
+  // Register FlutterEmbedderNative as the exclusive native entrypoint registrar
+  // for io.flutter.embedding.engine.FlutterJNI (RFC 410.0000).
+  result = flutter::FlutterEmbedderNative::RegisterJni(env);
   FML_CHECK(result);
-
-  // Register PlatformView
-  result = flutter::PlatformViewAndroid::Register(env);
-  FML_CHECK(result);
-
 
   return JNI_VERSION_1_4;
 }

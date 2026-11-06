@@ -45,7 +45,7 @@ class AndroidProcTableRouter {
       AndroidSurfaceLifecycleHooks* out_hooks = nullptr);
 
   static bool DefaultEnableEmbedderApi() {
-    const bool enable_embedder_api = false;
+    const bool enable_embedder_api = true;
     return enable_embedder_api;
   }
 

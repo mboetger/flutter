@@ -180,7 +180,7 @@ public class FlutterShellArgs {
       args.add(ARG_VERBOSE_LOGGING);
     }
     if (intent.hasExtra(ARG_KEY_ENABLE_EMBEDDER_API)) {
-      if (intent.getBooleanExtra(ARG_KEY_ENABLE_EMBEDDER_API, false)) {
+      if (intent.getBooleanExtra(ARG_KEY_ENABLE_EMBEDDER_API, true)) {
         args.add(ARG_ENABLE_EMBEDDER_API);
       } else {
         args.add(ARG_DISABLE_EMBEDDER_API);

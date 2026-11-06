@@ -113,7 +113,11 @@ TEST(SwitchesTest, EnableEmbedderAPI) {
     fml::CommandLine command_line =
         fml::CommandLineFromInitializerList({"command"});
     Settings settings = SettingsFromCommandLine(command_line);
+#if FML_OS_ANDROID
+    EXPECT_EQ(settings.enable_embedder_api, true);
+#else
     EXPECT_EQ(settings.enable_embedder_api, false);
+#endif
   }
 }
 

@@ -358,7 +358,7 @@ public class FlutterLoader {
 
       if (applicationMetaData != null) {
         if (applicationMetaData.containsKey(ENABLE_EMBEDDER_API_METADATA_KEY)) {
-          if (applicationMetaData.getBoolean(ENABLE_EMBEDDER_API_METADATA_KEY, false)) {
+          if (applicationMetaData.getBoolean(ENABLE_EMBEDDER_API_METADATA_KEY, true)) {
             shellArgs.add("--enable-embedder-api=true");
           } else {
             shellArgs.add("--enable-embedder-api=false");
