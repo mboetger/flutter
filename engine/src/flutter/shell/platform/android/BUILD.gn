@@ -22,31 +22,12 @@ shell_gpu_configuration("android_gpu_configuration") {
   enable_metal = false
 }
 
-source_set("image_generator") {
-  sources = [
-    "android_image_generator.cc",
-    "android_image_generator.h",
-  ]
-
-  deps = [
-    "//flutter/fml",
-    "//flutter/lib/ui",
-    "//flutter/skia",
-  ]
-
-  libs = [
-    "android",
-    "jnigraphics",
-  ]
-}
-
 executable("flutter_shell_native_unittests") {
   visibility = [ "*" ]
   testonly = true
   sources = [
     "android_context_dynamic_impeller_unittests.cc",
     "android_context_gl_impeller_unittests.cc",
-    "android_image_generator_unittests.cc",
     "android_shell_holder_unittests.cc",
     "apk_asset_provider_unittests.cc",
     "flutter_shell_native_unittests.cc",
@@ -232,7 +213,6 @@ source_set("flutter_shell_native_src") {
     ":android_gpu_configuration",
     ":flutter_embedder_native_src",
     ":icudtl_asm",
-    ":image_generator",
     "//flutter/common",
     "//flutter/common/graphics",
     "//flutter/flow",
