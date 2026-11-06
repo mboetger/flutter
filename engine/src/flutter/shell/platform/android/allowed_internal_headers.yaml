@@ -234,7 +234,6 @@
     ],
     "platform_view_android.cc": [
       "common/settings.h",
-      "flutter/common/graphics/texture.h",
       "flutter/shell/common/shell_io_manager.h",
       "flutter/shell/gpu/gpu_surface_gl_delegate.h"
     ],
@@ -424,5 +423,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 179
+  "total_allowed_internal_headers": 178
 }

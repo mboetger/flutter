@@ -806,4 +806,64 @@ FlutterEngineResult AndroidWindowMetricsMapper::DispatchPointerDataPacket(
   return proc_table.SendPointerEvent(engine, events.data(), events.size());
 }
 
+bool AndroidWindowMetricsMapper::ScaleFontSizeWithFn(
+    const FlutterScaleFontSizeInfo* info,
+    double* scaled_font_size_out,
+    const FontScaleFn& scale_fn) {
+  TRACE_EVENT0("flutter", "AndroidWindowMetricsMapper::ScaleFontSizeWithFn");
+  if (scaled_font_size_out != nullptr) {
+    *scaled_font_size_out = kInvalidScaledFontSize;
+  }
+  if (info == nullptr || scaled_font_size_out == nullptr || !scale_fn) {
+    return false;
+  }
+  if (info->struct_size == 0 ||
+      info->struct_size > sizeof(FlutterScaleFontSizeInfo)) {
+    return false;
+  }
+
+  double font_size = info->font_size;
+  double text_scale_factor =
+      info->text_scale_factor;
+  if (!std::isfinite(font_size) || font_size < 0.0 ||
+      !std::isfinite(text_scale_factor)) {
+    return false;
+  }
+
+  int32_t configuration_id = static_cast<int32_t>(text_scale_factor);
+  double scaled = scale_fn(font_size, configuration_id);
+  if (!std::isfinite(scaled) || scaled < kMinValidScaledFontSize) {
+    return false;
+  }
+
+  *scaled_font_size_out = scaled;
+  return true;
+}
+
+bool AndroidWindowMetricsMapper::ScaleFontSize(
+    const FlutterScaleFontSizeInfo* info,
+    double* scaled_font_size_out,
+    flutter::JvmInvoker* jvm_invoker) {
+  TRACE_EVENT0("flutter", "AndroidWindowMetricsMapper::ScaleFontSize");
+  if (jvm_invoker == nullptr || !jvm_invoker->IsAttached()) {
+    if (scaled_font_size_out != nullptr) {
+      *scaled_font_size_out = kInvalidScaledFontSize;
+    }
+    return false;
+  }
+  return ScaleFontSizeWithFn(
+      info, scaled_font_size_out,
+      [jvm_invoker](double font_size, int32_t configuration_id) {
+        return jvm_invoker->GetScaledFontSize(font_size, configuration_id);
+      });
+}
+
+bool AndroidWindowMetricsMapper::ScaleFontSizeCallback(
+    const FlutterScaleFontSizeInfo* info,
+    double* scaled_font_size_out,
+    void* user_data) {
+  auto* jvm_invoker = static_cast<flutter::JvmInvoker*>(user_data);
+  return ScaleFontSize(info, scaled_font_size_out, jvm_invoker);
+}
+
 }  // namespace flutter::android

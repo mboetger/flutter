@@ -293,4 +293,52 @@ TEST(AndroidWindowMetricsMapperTest,
   EXPECT_EQ(ev.view_id, 5);
 }
 
+TEST(AndroidWindowMetricsMapperTest,
+     ScaleFontSizeCallbackDelegatesToScaleFnAndJvmInvoker) {
+  double captured_font_size = 0.0;
+  int32_t captured_config_id = -1;
+  int call_count = 0;
+  double mock_scaled_result = 21.5;
+
+  FlutterScaleFontSizeInfo info = {};
+  info.struct_size = sizeof(FlutterScaleFontSizeInfo);
+  info.font_size = 14.0;
+  info.text_scale_factor = 3.0;
+
+  double scaled_out = 0.0;
+  bool ok = AndroidWindowMetricsMapper::ScaleFontSizeWithFn(
+      &info, &scaled_out, [&](double font_size, int32_t config_id) {
+        ++call_count;
+        captured_font_size = font_size;
+        captured_config_id = config_id;
+        return mock_scaled_result;
+      });
+
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(call_count, 1);
+  EXPECT_DOUBLE_EQ(captured_font_size, 14.0);
+  EXPECT_EQ(captured_config_id, 3);
+  EXPECT_NEAR(scaled_out, 21.5, 1e-5);
+
+  // Verify negative return returns false and -1.0.
+  mock_scaled_result = -1.0;
+  EXPECT_FALSE(AndroidWindowMetricsMapper::ScaleFontSizeWithFn(
+      &info, &scaled_out,
+      [&](double font_size, int32_t config_id) { return mock_scaled_result; }));
+  EXPECT_DOUBLE_EQ(scaled_out, -1.0);
+
+  // Verify detached JvmInvoker (returns -1.0) causes ScaleFontSizeCallback to
+  // return false.
+  flutter::JvmInvoker detached_invoker;
+  EXPECT_FALSE(AndroidWindowMetricsMapper::ScaleFontSizeCallback(
+      &info, &scaled_out, &detached_invoker));
+  EXPECT_DOUBLE_EQ(scaled_out, -1.0);
+
+  // Verify null info or user_data returns false.
+  EXPECT_FALSE(AndroidWindowMetricsMapper::ScaleFontSizeCallback(
+      nullptr, &scaled_out, &detached_invoker));
+  EXPECT_FALSE(AndroidWindowMetricsMapper::ScaleFontSizeCallback(
+      &info, &scaled_out, nullptr));
+}
+
 }  // namespace flutter::android::testing

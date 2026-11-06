@@ -223,6 +223,21 @@ class AndroidWindowMetricsMapper {
       const uint8_t* packet_data,
       size_t packet_size);
 
+  using FontScaleFn =
+      std::function<double(double font_size, int32_t configuration_id)>;
+
+  static bool ScaleFontSizeWithFn(const FlutterScaleFontSizeInfo* info,
+                                  double* scaled_font_size_out,
+                                  const FontScaleFn& scale_fn);
+
+  static bool ScaleFontSize(const FlutterScaleFontSizeInfo* info,
+                            double* scaled_font_size_out,
+                            flutter::JvmInvoker* jvm_invoker);
+
+  static bool ScaleFontSizeCallback(const FlutterScaleFontSizeInfo* info,
+                                    double* scaled_font_size_out,
+                                    void* user_data);
+
  private:
   FML_DISALLOW_IMPLICIT_CONSTRUCTORS(AndroidWindowMetricsMapper);
 };
