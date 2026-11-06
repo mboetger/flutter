@@ -54,6 +54,7 @@ extern const intptr_t kPlatformStrongDillSize;
 #include "flutter/fml/message_loop.h"
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
+#include "flutter/lib/ui/painting/image_generator.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/platform/embedder/embedder.h"
@@ -2198,6 +2199,184 @@ class EmbedderCustomAssetResolver : public flutter::AssetResolver {
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderCustomAssetResolver);
 };
 
+// A custom ImageGenerator backed by embedder-provided C callbacks.
+class EmbedderImageDecoder : public flutter::ImageGenerator {
+ public:
+  explicit EmbedderImageDecoder(std::unique_ptr<FlutterImageDecoder> decoder)
+      : decoder_(std::move(decoder)) {}
+
+  ~EmbedderImageDecoder() override {
+    const FlutterImageDecoder* decoder_ptr = decoder_.get();
+    if (decoder_ptr != nullptr &&
+        SAFE_ACCESS(decoder_ptr, destruction_callback, nullptr) != nullptr) {
+      decoder_ptr->destruction_callback(decoder_ptr->user_data);
+    }
+  }
+
+  // |flutter::ImageGenerator|
+  const SkImageInfo& GetInfo() override {
+    if (!info_initialized_) {
+      info_initialized_ = true;
+      info_ = FetchInfo();
+    }
+    return info_;
+  }
+
+  // |flutter::ImageGenerator|
+  unsigned int GetFrameCount() const override { return 1; }
+
+  // |flutter::ImageGenerator|
+  unsigned int GetPlayCount() const override { return 1; }
+
+  // |flutter::ImageGenerator|
+  const flutter::ImageGenerator::FrameInfo GetFrameInfo(
+      unsigned int frame_index) override {
+    return {std::nullopt, 0, SkCodecAnimation::DisposalMethod::kKeep,
+            std::nullopt, SkCodecAnimation::Blend::kSrcOver};
+  }
+
+  // |flutter::ImageGenerator|
+  SkISize GetScaledDimensions(float desired_scale) override {
+    return GetInfo().dimensions();
+  }
+
+  // |flutter::ImageGenerator|
+  bool GetPixels(const SkImageInfo& info,
+                 void* pixels,
+                 size_t row_bytes,
+                 unsigned int frame_index,
+                 std::optional<unsigned int> prior_frame) override {
+    const FlutterImageDecoder* decoder_ptr = decoder_.get();
+    if (decoder_ptr == nullptr ||
+        SAFE_ACCESS(decoder_ptr, get_pixels, nullptr) == nullptr) {
+      return false;
+    }
+    FlutterImageDecoderInfo c_info = {};
+    c_info.struct_size = sizeof(FlutterImageDecoderInfo);
+    c_info.width = static_cast<size_t>(info.width());
+    c_info.height = static_cast<size_t>(info.height());
+    switch (info.colorType()) {
+      case kBGRA_8888_SkColorType:
+        c_info.color_type = kFlutterImageDecoderColorTypeBGRA8888;
+        break;
+      case kRGBA_8888_SkColorType:
+      default:
+        c_info.color_type = kFlutterImageDecoderColorTypeRGBA8888;
+        break;
+    }
+    switch (info.alphaType()) {
+      case kOpaque_SkAlphaType:
+        c_info.alpha_type = kFlutterImageDecoderAlphaTypeOpaque;
+        break;
+      case kUnpremul_SkAlphaType:
+        c_info.alpha_type = kFlutterImageDecoderAlphaTypeUnpremul;
+        break;
+      case kPremul_SkAlphaType:
+      default:
+        c_info.alpha_type = kFlutterImageDecoderAlphaTypePremul;
+        break;
+    }
+    c_info.color_space = kFlutterImageDecoderColorSpaceSRGB;
+    return decoder_ptr->get_pixels(decoder_ptr->user_data, &c_info, pixels,
+                                   row_bytes);
+  }
+
+  bool IsValidImageData() {
+    return GetInfo().width() > 0 && GetInfo().height() > 0;
+  }
+
+ private:
+  SkImageInfo FetchInfo() {
+    const FlutterImageDecoder* decoder_ptr = decoder_.get();
+    if (decoder_ptr == nullptr ||
+        SAFE_ACCESS(decoder_ptr, get_info, nullptr) == nullptr) {
+      return SkImageInfo::MakeUnknown();
+    }
+    FlutterImageDecoderInfo c_info = {};
+    c_info.struct_size = sizeof(FlutterImageDecoderInfo);
+    if (!decoder_ptr->get_info(decoder_ptr->user_data, &c_info)) {
+      return SkImageInfo::MakeUnknown();
+    }
+    const FlutterImageDecoderInfo* c_info_ptr = &c_info;
+    SkColorType color_type = kRGBA_8888_SkColorType;
+    switch (SAFE_ACCESS(c_info_ptr, color_type,
+                        kFlutterImageDecoderColorTypeRGBA8888)) {
+      case kFlutterImageDecoderColorTypeBGRA8888:
+        color_type = kBGRA_8888_SkColorType;
+        break;
+      case kFlutterImageDecoderColorTypeRGBA8888:
+      default:
+        color_type = kRGBA_8888_SkColorType;
+        break;
+    }
+    SkAlphaType alpha_type = kPremul_SkAlphaType;
+    switch (SAFE_ACCESS(c_info_ptr, alpha_type,
+                        kFlutterImageDecoderAlphaTypePremul)) {
+      case kFlutterImageDecoderAlphaTypeOpaque:
+        alpha_type = kOpaque_SkAlphaType;
+        break;
+      case kFlutterImageDecoderAlphaTypeUnpremul:
+        alpha_type = kUnpremul_SkAlphaType;
+        break;
+      case kFlutterImageDecoderAlphaTypePremul:
+      default:
+        alpha_type = kPremul_SkAlphaType;
+        break;
+    }
+    return SkImageInfo::Make(
+        static_cast<int>(SAFE_ACCESS(c_info_ptr, width, 0)),
+        static_cast<int>(SAFE_ACCESS(c_info_ptr, height, 0)), color_type,
+        alpha_type, SkColorSpace::MakeSRGB());
+  }
+
+  std::unique_ptr<FlutterImageDecoder> decoder_;
+  SkImageInfo info_;
+  bool info_initialized_ = false;
+
+  FML_DISALLOW_COPY_AND_ASSIGN(EmbedderImageDecoder);
+};
+
+struct EmbedderImageDecoderRegistrationHolder {
+  FlutterImageDecoderRegistration registration;
+  explicit EmbedderImageDecoderRegistrationHolder(
+      const FlutterImageDecoderRegistration& reg)
+      : registration(reg) {}
+  ~EmbedderImageDecoderRegistrationHolder() {
+    const FlutterImageDecoderRegistration* reg_ptr = &registration;
+    if (SAFE_ACCESS(reg_ptr, destruction_callback, nullptr) != nullptr) {
+      registration.destruction_callback(registration.user_data);
+    }
+  }
+};
+
+flutter::ImageGeneratorFactory CreateEmbedderImageDecoderFactory(
+    const FlutterImageDecoderRegistration& registration) {
+  auto holder =
+      std::make_shared<EmbedderImageDecoderRegistrationHolder>(registration);
+  return [holder](const sk_sp<SkData>& buffer)
+             -> std::shared_ptr<flutter::ImageGenerator> {
+    const FlutterImageDecoderRegistration* reg_ptr = &holder->registration;
+    if (SAFE_ACCESS(reg_ptr, create_decoder, nullptr) == nullptr ||
+        buffer == nullptr) {
+      return nullptr;
+    }
+    auto c_decoder = std::make_unique<FlutterImageDecoder>();
+    c_decoder->struct_size = sizeof(FlutterImageDecoder);
+    if (!holder->registration.create_decoder(holder->registration.user_data,
+                                             buffer->bytes(), buffer->size(),
+                                             c_decoder.get())) {
+      return nullptr;
+    }
+    auto generator =
+        std::make_shared<EmbedderImageDecoder>(std::move(c_decoder));
+    if (!generator->IsValidImageData()) {
+      return nullptr;
+    }
+    return generator;
+  };
+}
+
+
 }  // namespace
 
 FlutterEngineResult FlutterEngineRun(size_t version,
@@ -2804,6 +2983,21 @@ FlutterEngineResult FlutterEngineInitialize(size_t version,
       on_create_rasterizer,                 //
       std::move(external_texture_resolver)  //
   );
+
+  size_t image_decoders_count = SAFE_ACCESS(args, image_decoders_count, 0);
+  const FlutterImageDecoderRegistration** image_decoders =
+      SAFE_ACCESS(args, image_decoders, nullptr);
+  if (image_decoders_count > 0 && image_decoders != nullptr) {
+    for (size_t i = 0; i < image_decoders_count; ++i) {
+      const FlutterImageDecoderRegistration* reg = image_decoders[i];
+      if (reg != nullptr &&
+          SAFE_ACCESS(reg, create_decoder, nullptr) != nullptr) {
+        int32_t priority = SAFE_ACCESS(reg, priority, 0);
+        auto factory = CreateEmbedderImageDecoderFactory(*reg);
+        embedder_engine->AddImageGenerator(factory, priority);
+      }
+    }
+  }
 
   // Release the ownership of the embedder engine to the caller.
   *engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(

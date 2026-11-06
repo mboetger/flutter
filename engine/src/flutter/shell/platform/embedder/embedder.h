@@ -2790,6 +2790,72 @@ typedef struct {
   VoidCallback destruction_callback;
 } FlutterCustomAssetResolver;
 
+typedef enum {
+  kFlutterImageDecoderColorTypeRGBA8888,
+  kFlutterImageDecoderColorTypeBGRA8888,
+} FlutterImageDecoderColorType;
+
+typedef enum {
+  kFlutterImageDecoderAlphaTypeOpaque,
+  kFlutterImageDecoderAlphaTypePremul,
+  kFlutterImageDecoderAlphaTypeUnpremul,
+} FlutterImageDecoderAlphaType;
+
+/// Color space of decoded pixels returned by a `FlutterImageDecoder`.
+typedef enum {
+  /// Standard sRGB color space (`SkColorSpace::MakeSRGB()`).
+  kFlutterImageDecoderColorSpaceSRGB = 0,
+} FlutterImageDecoderColorSpace;
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageDecoderInfo).
+  size_t struct_size;
+  uint32_t width;
+  uint32_t height;
+  FlutterImageDecoderColorType color_type;
+  FlutterImageDecoderAlphaType alpha_type;
+  FlutterImageDecoderColorSpace color_space;
+} FlutterImageDecoderInfo;
+
+typedef bool (*FlutterImageDecoderGetInfoCallback)(
+    void* /* decoder_user_data */,
+    FlutterImageDecoderInfo* /* info_out */);
+
+typedef bool (*FlutterImageDecoderGetPixelsCallback)(
+    void* /* decoder_user_data */,
+    const FlutterImageDecoderInfo* /* requested_info */,
+    void* /* pixels_out */,
+    size_t /* row_bytes */);
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageDecoder).
+  size_t struct_size;
+  void* user_data;
+  FlutterImageDecoderGetInfoCallback get_info;
+  FlutterImageDecoderGetPixelsCallback get_pixels;
+  VoidCallback destruction_callback;
+} FlutterImageDecoder;
+
+typedef bool (*FlutterImageDecoderFactoryCallback)(
+    void* /* user_data */,
+    const uint8_t* /* data */,
+    size_t /* data_size */,
+    FlutterImageDecoder* /* decoder_out */);
+
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterImageDecoderRegistration).
+  size_t struct_size;
+  /// Factory callback invoked on an engine worker thread when decoding image
+  /// bytes. Returns `true` and populates `decoder_out` if the format is
+  /// supported, or `false` to fall back to the next registered decoder.
+  FlutterImageDecoderFactoryCallback create_decoder;
+  /// Priority relative to built-in decoders (higher values run first; built-in
+  /// decoders have priority 0).
+  int32_t priority;
+  void* user_data;
+  VoidCallback destruction_callback;
+} FlutterImageDecoderRegistration;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterScaleFontSizeInfo).
   size_t struct_size;
@@ -3145,6 +3211,13 @@ typedef struct {
   /// Array of pointers to `FlutterCustomAssetResolver` structs registered with
   /// the engine's `AssetManager`.
   const FlutterCustomAssetResolver** custom_asset_resolvers;
+
+  /// Number of custom image decoder registrations in `image_decoders`.
+  size_t image_decoders_count;
+
+  /// Array of pointers to `FlutterImageDecoderRegistration` structs registered
+  /// with the engine's `ImageGeneratorRegistry`.
+  const FlutterImageDecoderRegistration** image_decoders;
 
   /// If true, `FlutterProjectArgs.platform_message_callback` is invoked
   /// directly on the UI thread (instead of posting a task to the platform

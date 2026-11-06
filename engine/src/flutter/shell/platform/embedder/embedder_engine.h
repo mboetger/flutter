@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "flutter/fml/macros.h"
 #include "flutter/shell/common/shell.h"
@@ -23,6 +24,11 @@ namespace flutter {
 
 struct ShellArgs;
 
+struct ImageGeneratorFactoryRegistration {
+  ImageGeneratorFactory factory;
+  int32_t priority;
+};
+
 // The object that is returned to the embedder as an opaque pointer to the
 // instance of the Flutter engine.
 class EmbedderEngine {
@@ -35,7 +41,8 @@ class EmbedderEngine {
       const Shell::CreateCallback<PlatformView>& on_create_platform_view,
       const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
       std::unique_ptr<EmbedderExternalTextureResolver>
-          external_texture_resolver);
+          external_texture_resolver,
+      std::vector<ImageGeneratorFactoryRegistration> image_generators = {});
 
   ~EmbedderEngine();
 
@@ -102,7 +109,18 @@ class EmbedderEngine {
                                     const std::string& error_message,
                                     bool transient);
 
+  bool RegisterImageGenerator(ImageGeneratorFactory factory, int32_t priority);
+
   Shell& GetShell();
+
+  void AddImageGenerator(ImageGeneratorFactory factory, int32_t priority) {
+    image_generators_.push_back({std::move(factory), priority});
+  }
+
+  const std::vector<ImageGeneratorFactoryRegistration>& GetImageGenerators()
+      const {
+    return image_generators_;
+  }
 
  private:
   std::unique_ptr<EmbedderThreadHost> thread_host_;
@@ -111,6 +129,7 @@ class EmbedderEngine {
   std::unique_ptr<ShellArgs> shell_args_;
   std::unique_ptr<Shell> shell_;
   std::unique_ptr<EmbedderExternalTextureResolver> external_texture_resolver_;
+  std::vector<ImageGeneratorFactoryRegistration> image_generators_;
 
   FML_DISALLOW_COPY_AND_ASSIGN(EmbedderEngine);
 };
