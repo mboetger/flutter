@@ -216,7 +216,6 @@
     ],
     "platform_view_android.cc": [
       "common/settings.h",
-      "flutter/shell/common/shell_io_manager.h",
       "flutter/shell/gpu/gpu_surface_gl_delegate.h"
     ],
     "platform_view_android.h": [
@@ -343,7 +342,6 @@
     "flutter/shell/common/rasterizer.h",
     "flutter/shell/common/run_configuration.h",
     "flutter/shell/common/shell.h",
-    "flutter/shell/common/shell_io_manager.h",
     "flutter/shell/common/snapshot_surface_producer.h",
     "flutter/shell/common/thread_host.h",
     "flutter/shell/gpu/gpu_surface_gl_delegate.h",
@@ -393,5 +391,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 165
+  "total_allowed_internal_headers": 164
 }

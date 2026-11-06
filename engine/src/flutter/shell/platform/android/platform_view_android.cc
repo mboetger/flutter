@@ -11,7 +11,6 @@
 
 #include "common/settings.h"
 #include "flutter/fml/synchronization/waitable_event.h"
-#include "flutter/shell/common/shell_io_manager.h"
 #include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/android_context_dynamic_impeller.h"
 #include "flutter/shell/platform/android/android_context_gl_impeller.h"
@@ -445,9 +444,7 @@ sk_sp<GrDirectContext> PlatformViewAndroid::CreateResourceContext() const {
     // TODO(chinmaygarde): Currently, this code depends on the fact that only
     // the OpenGL surface will be able to make a resource context current. If
     // this changes, this assumption breaks. Handle the same.
-    resource_context = ShellIOManager::CreateCompatibleResourceLoadingContext(
-        GrBackendApi::kOpenGL,
-        GPUSurfaceGLDelegate::GetDefaultPlatformGLInterface());
+    (void)resource_context;
   } else {
     FML_DLOG(ERROR) << "Could not make the resource context current.";
   }
