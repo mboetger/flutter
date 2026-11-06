@@ -253,6 +253,12 @@ public class FlutterJNI {
 
   private native boolean nativeGetIsSoftwareRenderingEnabled();
 
+  public static native boolean nativeShouldDisableAHB();
+
+  public boolean shouldDisableAHB() {
+    return nativeShouldDisableAHB();
+  }
+
   /**
    * Checks launch settings for whether software rendering is requested.
    *

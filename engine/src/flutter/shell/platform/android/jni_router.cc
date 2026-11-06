@@ -9,19 +9,9 @@
 #include <string>
 #include <vector>
 
-#if __has_include("flutter/fml/callback_cache.h")
 #include "flutter/fml/callback_cache.h"
-#define FLUTTER_HAS_FML_CALLBACK_CACHE 1
-#else
-#define FLUTTER_HAS_FML_CALLBACK_CACHE 0
-#endif
 #include "flutter/fml/logging.h"
-#if __has_include("flutter/shell/platform/android/flutter_embedder_native.h")
 #include "flutter/shell/platform/android/flutter_embedder_native.h"
-#define FLUTTER_HAS_EMBEDDER_NATIVE 1
-#else
-#define FLUTTER_HAS_EMBEDDER_NATIVE 0
-#endif
 #include "flutter/shell/platform/android/jni_delegate.h"
 #include "flutter/shell/platform/android/jvm_invoker.h"
 
@@ -276,22 +266,15 @@ const std::vector<JNINativeMethod> kFlutterJniMethods = {
 
 // CallbackCacheProvider implementations.
 void DefaultCallbackCacheProvider::SetCachePath(const std::string& path) {
-#if FLUTTER_HAS_FML_CALLBACK_CACHE
   fml::CallbackCache::SetCachePath(path);
-#else
-  (void)path;
-#endif
 }
 
 void DefaultCallbackCacheProvider::LoadCacheFromDisk() {
-#if FLUTTER_HAS_FML_CALLBACK_CACHE
   fml::CallbackCache::LoadCacheFromDisk();
-#endif
 }
 
 std::unique_ptr<CallbackCacheProvider::CallbackInfo>
 DefaultCallbackCacheProvider::LookupCallbackInformation(int64_t handle) {
-#if FLUTTER_HAS_FML_CALLBACK_CACHE
   auto info = fml::CallbackCache::GetCallbackInformation(handle);
   if (!info) {
     return nullptr;
@@ -301,10 +284,6 @@ DefaultCallbackCacheProvider::LookupCallbackInformation(int64_t handle) {
   result->class_name = info->class_name;
   result->library_path = info->library_path;
   return result;
-#else
-  (void)handle;
-  return nullptr;
-#endif
 }
 
 void InMemoryCallbackCacheProvider::SetCachePath(const std::string& path) {

@@ -27,13 +27,7 @@ class AndroidEngineGroup {};
 #include "flutter/shell/platform/android/android_hardware_buffer.h"
 #include "flutter/shell/platform/android/android_vm_init.h"
 #include "flutter/shell/platform/android/android_vsync_waiter.h"
-namespace flutter {
-namespace android {
-class AndroidVulkanExternalTexture {};
-class DefaultAndroidVulkanTextureProvider {};
-class SurfaceTextureGlToAhbBlitter {};
-}  // namespace android
-}  // namespace flutter
+#include "flutter/shell/platform/android/android_vulkan_external_texture.h"
 #include "flutter/shell/platform/android/apk_asset_provider.h"
 #include "flutter/shell/platform/android/jni_router.h"
 
@@ -858,6 +852,10 @@ FlutterEmbedderNative::FlutterEmbedderNative(
   surface_control_ = std::make_unique<AndroidSurfaceControl>();
 #endif
   ahb_provider_ = std::make_shared<DefaultAndroidHardwareBufferProvider>();
+  vk_texture_provider_ =
+      std::make_shared<DefaultAndroidVulkanTextureProvider>();
+  surface_texture_blitter_ = std::make_unique<SurfaceTextureGlToAhbBlitter>(
+      ahb_provider_, vk_texture_provider_);
 #if FLUTTER_HAS_ANDROID_PLATFORM_VIEWS_CONTROLLER
   platform_views_controller_ = std::make_unique<AndroidPlatformViewsController>(
       jvm_invoker_.get(), task_runners_->GetPlatformTaskRunner());
@@ -2891,10 +2889,128 @@ bool FlutterEmbedderNative::AcquireOpenGLExternalTextureFrame(
 }
 
 bool FlutterEmbedderNative::AcquireVulkanExternalTextureFrame(
-    int64_t /*texture_id*/,
-    size_t /*width*/,
-    size_t /*height*/,
-    FlutterVulkanExternalTexture* /*texture_out*/) {
+    int64_t texture_id,
+    size_t width,
+    size_t height,
+    FlutterVulkanExternalTexture* texture_out) {
+  if (!texture_out || !jvm_invoker_) {
+    return false;
+  }
+  struct VulkanTextureReleaseContext {
+    std::shared_ptr<android::AndroidVulkanExternalTexture> vk_texture;
+    std::shared_ptr<android::AndroidHardwareBuffer> ahb;
+  };
+  std::lock_guard<std::mutex> lock(textures_mutex_);
+#if FLUTTER_HAS_ANDROID_SURFACE_CONTROL
+  if (vk_texture_provider_ && surface_control_ &&
+      vk_texture_provider_->GetVulkanDevice() == nullptr &&
+      surface_control_->GetVulkanDevice() != nullptr) {
+    vk_texture_provider_->SetVulkanDevice(surface_control_->GetVulkanDevice());
+  }
+#endif
+
+  auto st_it = surface_textures_.find(texture_id);
+  if (st_it != surface_textures_.end() &&
+      st_it->second.wrapper_global_ref != nullptr && surface_texture_blitter_) {
+    auto& entry = st_it->second;
+    if (!entry.attached || !entry.last_vulkan_texture ||
+        !entry.last_vulkan_texture->IsValid() ||
+        jvm_invoker_->SurfaceTextureShouldUpdate(entry.wrapper_global_ref)) {
+      surface_texture_blitter_->MakeEglContextCurrent();
+      if (!entry.attached) {
+#if FML_OS_ANDROID
+        glGenTextures(1, &entry.gl_texture_id);
+#else
+        entry.gl_texture_id = 1;
+#endif
+        jvm_invoker_->SurfaceTextureAttachToGLContext(
+            entry.wrapper_global_ref,
+            static_cast<int32_t>(entry.gl_texture_id));
+        entry.attached = true;
+      }
+      jvm_invoker_->SurfaceTextureUpdateTexImage(entry.wrapper_global_ref);
+      if (entry.gl_texture_id != 0) {
+        constexpr size_t kUvMatrixDiag0Index = 0;
+        constexpr size_t kUvMatrixDiag1Index = 5;
+        constexpr size_t kUvMatrixDiag2Index = 10;
+        constexpr size_t kUvMatrixDiag3Index = 15;
+        float uv_matrix[android::kOpenGLUvTransformMatrixElementCount] = {};
+        uv_matrix[kUvMatrixDiag0Index] = 1.0f;
+        uv_matrix[kUvMatrixDiag1Index] = 1.0f;
+        uv_matrix[kUvMatrixDiag2Index] = 1.0f;
+        uv_matrix[kUvMatrixDiag3Index] = 1.0f;
+        jvm_invoker_->SurfaceTextureGetTransformMatrix(entry.wrapper_global_ref,
+                                                       uv_matrix);
+        auto vk_tex = surface_texture_blitter_->BlitAndImport(
+            texture_id, entry.gl_texture_id, width, height, uv_matrix);
+        if (vk_tex && vk_tex->IsValid()) {
+          entry.last_vulkan_texture = std::move(vk_tex);
+        }
+      }
+      surface_texture_blitter_->ClearEglContextCurrent();
+    }
+    if (entry.last_vulkan_texture && entry.last_vulkan_texture->IsValid()) {
+      auto* release_ctx =
+          new VulkanTextureReleaseContext{entry.last_vulkan_texture, nullptr};
+      if (!entry.last_vulkan_texture->PopulateExternalTexture(
+              texture_out, release_ctx, [](void* user_data) {
+                delete static_cast<VulkanTextureReleaseContext*>(user_data);
+              })) {
+        delete release_ctx;
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  auto img_it = image_textures_.find(texture_id);
+  if (img_it != image_textures_.end() &&
+      img_it->second.entry_global_ref != nullptr && vk_texture_provider_) {
+    auto& entry = img_it->second;
+    JNIEnv* env = jvm_invoker_->GetEnv();
+    jobject j_image = jvm_invoker_->ImageTextureEntryAcquireLatestImage(
+        entry.entry_global_ref);
+    if (j_image != nullptr && env != nullptr) {
+      jobject j_hb = jvm_invoker_->ImageGetHardwareBuffer(j_image);
+      if (j_hb != nullptr && ahb_provider_) {
+        auto ahb = ahb_provider_->CreateFromJavaHardwareBuffer(env, j_hb);
+        if (ahb && ahb->IsValid()) {
+          const bool need_reimport =
+              !entry.last_ahb || !entry.last_vulkan_texture ||
+              !entry.last_vulkan_texture->IsValid() || ahb->GetId() == 0 ||
+              ahb->GetId() != entry.last_ahb->GetId();
+          if (need_reimport) {
+            auto vk_tex =
+                vk_texture_provider_->CreateFromAHardwareBuffer(ahb.get());
+            if (vk_tex && vk_tex->IsValid()) {
+              entry.last_ahb = std::move(ahb);
+              entry.last_vulkan_texture = std::move(vk_tex);
+            }
+          }
+        }
+        jvm_invoker_->HardwareBufferClose(j_hb);
+        if (env->functions && env->functions->DeleteLocalRef) {
+          env->DeleteLocalRef(j_hb);
+        }
+      }
+      if (env->functions && env->functions->DeleteLocalRef) {
+        env->DeleteLocalRef(j_image);
+      }
+    }
+    if (entry.last_vulkan_texture && entry.last_vulkan_texture->IsValid()) {
+      auto* release_ctx = new VulkanTextureReleaseContext{
+          entry.last_vulkan_texture, entry.last_ahb};
+      if (!entry.last_vulkan_texture->PopulateExternalTexture(
+              texture_out, release_ctx, [](void* user_data) {
+                delete static_cast<VulkanTextureReleaseContext*>(user_data);
+              })) {
+        delete release_ctx;
+        return false;
+      }
+      return true;
+    }
+  }
   return false;
 }
 

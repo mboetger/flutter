@@ -1009,6 +1009,57 @@ typedef bool (*FlutterVulkanPresentCallback)(
     void* /* user data */,
     const FlutterVulkanImage* /* image */);
 
+/// Component swizzle values matching `VkComponentSwizzle`.
+typedef enum {
+  kFlutterVulkanComponentSwizzleIdentity = 0,
+  kFlutterVulkanComponentSwizzleZero = 1,
+  kFlutterVulkanComponentSwizzleOne = 2,
+  kFlutterVulkanComponentSwizzleR = 3,
+  kFlutterVulkanComponentSwizzleG = 4,
+  kFlutterVulkanComponentSwizzleB = 5,
+  kFlutterVulkanComponentSwizzleA = 6,
+} FlutterVulkanComponentSwizzle;
+
+typedef struct {
+  FlutterVulkanComponentSwizzle r;
+  FlutterVulkanComponentSwizzle g;
+  FlutterVulkanComponentSwizzle b;
+  FlutterVulkanComponentSwizzle a;
+} FlutterVulkanComponentMapping;
+
+/// Optional YCbCr conversion parameters for a `FlutterVulkanExternalTexture`,
+/// matching `VkSamplerYcbcrConversionCreateInfo` and `VkExternalFormatANDROID`.
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterVulkanYcbcrConversionInfo).
+  size_t struct_size;
+  /// `VkFormat` of the image (`VK_FORMAT_UNDEFINED` when `external_format` is
+  /// non-zero).
+  uint32_t format;
+  /// `VkSamplerYcbcrModelConversion` value.
+  uint32_t ycbcr_model;
+  /// `VkSamplerYcbcrRange` value.
+  uint32_t ycbcr_range;
+  /// Channel swizzle mapping (`VkComponentMapping`).
+  FlutterVulkanComponentMapping components;
+  /// `VkChromaLocation` for X chroma samples.
+  uint32_t x_chroma_offset;
+  /// `VkChromaLocation` for Y chroma samples.
+  uint32_t y_chroma_offset;
+  /// `VkFilter` for chroma reconstruction.
+  uint32_t chroma_filter;
+  /// Whether explicit chroma reconstruction is forced (`VkBool32`).
+  bool force_explicit_reconstruction;
+  /// `VkFormatFeatureFlags` for the external format (for example, from
+  /// `VkAndroidHardwareBufferFormatPropertiesANDROID::formatFeatures`). When
+  /// non-zero and `VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_BIT`
+  /// is not set, the engine clamps `chroma_filter` to `VK_FILTER_NEAREST`.
+  uint32_t format_features;
+  /// Platform external format identifier (for example,
+  /// `VkAndroidHardwareBufferFormatPropertiesANDROID::externalFormat`), or 0 if
+  /// not using an external format.
+  uint64_t external_format;
+} FlutterVulkanYcbcrConversionInfo;
+
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterVulkanExternalTexture).
   size_t struct_size;
@@ -1030,6 +1081,10 @@ typedef struct {
   size_t width;
   /// Physical height of the texture.
   size_t height;
+  /// Optional pointer to YCbCr sampler conversion info. May be null for
+  /// standard RGB/RGBA textures. Only valid for the duration of
+  /// `external_texture_frame_callback`.
+  const FlutterVulkanYcbcrConversionInfo* ycbcr_conversion_info;
 } FlutterVulkanExternalTexture;
 
 /// Callback to provide an external texture for a given texture_id.
