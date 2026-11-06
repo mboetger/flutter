@@ -15,7 +15,6 @@
 #include "flutter/shell/common/snapshot_surface_producer.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
-#include "flutter/shell/platform/android/platform_view_android_delegate/platform_view_android_delegate.h"
 #include "flutter/shell/platform/android/surface/android_native_window.h"
 #include "flutter/shell/platform/android/surface/android_surface.h"
 #include "shell/platform/android/image_external_texture.h"
@@ -130,7 +129,6 @@ class PlatformViewAndroid final : public PlatformView {
   std::shared_ptr<AndroidContext> android_context_;
   std::shared_ptr<AndroidSurfaceFactoryImpl> surface_factory_;
 
-  PlatformViewAndroidDelegate platform_view_android_delegate_;
 
   std::unique_ptr<AndroidSurface> android_surface_;
   bool android_meets_hcpp_criteria_ = false;

@@ -97,6 +97,8 @@ source_set("flutter_embedder_native_src") {
     "android_vsync_waiter.h",
     "android_window_metrics_mapper.cc",
     "android_window_metrics_mapper.h",
+    "android_semantics_mapper.cc",
+    "android_semantics_mapper.h",
     "flutter_embedder_native.cc",
     "flutter_embedder_native.h",
     "jni_delegate.h",
@@ -133,6 +135,7 @@ executable("flutter_embedder_native_unittests") {
 
   sources = [
     "android_window_metrics_mapper_unittests.cc",
+    "android_semantics_mapper_unittests.cc",
     "flutter_embedder_native_unittests.cc",
   ]
 
@@ -247,7 +250,6 @@ source_set("flutter_shell_native_src") {
     "//flutter/shell/platform/android/context",
     "//flutter/shell/platform/android/external_view_embedder",
     "//flutter/shell/platform/android/jni",
-    "//flutter/shell/platform/android/platform_view_android_delegate",
     "//flutter/shell/platform/android/surface",
     "//flutter/shell/platform/android/surface:native_window",
     "//flutter/skia",

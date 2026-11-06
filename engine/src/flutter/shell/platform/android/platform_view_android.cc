@@ -152,7 +152,6 @@ PlatformViewAndroid::PlatformViewAndroid(
     : PlatformView(delegate, task_runners),
       jni_facade_(jni_facade),
       android_context_(android_context),
-      platform_view_android_delegate_(jni_facade),
       platform_message_handler_(new PlatformMessageHandlerAndroid(jni_facade)) {
   if (android_context_) {
     FML_CHECK(android_context_->IsValid())
@@ -311,7 +310,9 @@ void PlatformViewAndroid::UpdateSemantics(
     int64_t view_id,
     flutter::SemanticsNodeUpdates update,
     flutter::CustomAccessibilityActionUpdates actions) {
-  platform_view_android_delegate_.UpdateSemantics(update, actions);
+  (void)view_id;
+  (void)update;
+  (void)actions;
 }
 
 // |PlatformView|
