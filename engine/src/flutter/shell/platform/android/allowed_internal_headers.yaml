@@ -249,7 +249,6 @@
       "flutter/shell/common/platform_view.h"
     ],
     "platform_view_android_jni_impl.cc": [
-      "flutter/common/constants.h",
       "flutter/flow/embedded_views.h",
       "flutter/impeller/toolkit/android/proc_table.h",
       "flutter/lib/ui/plugins/callback_cache.h"
@@ -427,5 +426,5 @@
   ],
   "governing_adr": "ADR-0010",
   "rfc": "RFC-410.0000",
-  "total_allowed_internal_headers": 181
+  "total_allowed_internal_headers": 180
 }

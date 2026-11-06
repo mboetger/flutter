@@ -13,7 +13,6 @@
 
 #include "unicode/uchar.h"
 
-#include "flutter/common/constants.h"
 #include "flutter/flow/embedded_views.h"
 #include "flutter/fml/mapping.h"
 #include "flutter/fml/native_library.h"
@@ -431,7 +430,7 @@ static void SetViewportMetrics(JNIEnv* env,
   };
 
   ANDROID_SHELL_HOLDER->GetPlatformView()->SetViewportMetrics(
-      kFlutterImplicitViewId, metrics);
+      0, metrics);
 }
 
 static void UpdateDisplayMetrics(JNIEnv* env,

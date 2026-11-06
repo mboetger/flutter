@@ -95,6 +95,8 @@ source_set("flutter_embedder_native_src") {
   sources = [
     "android_vsync_waiter.cc",
     "android_vsync_waiter.h",
+    "android_window_metrics_mapper.cc",
+    "android_window_metrics_mapper.h",
     "flutter_embedder_native.cc",
     "flutter_embedder_native.h",
     "jni_delegate.h",
@@ -130,6 +132,7 @@ executable("flutter_embedder_native_unittests") {
   testonly = true
 
   sources = [
+    "android_window_metrics_mapper_unittests.cc",
     "flutter_embedder_native_unittests.cc",
   ]
 
