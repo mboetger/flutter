@@ -58,6 +58,10 @@ class PlatformViewEmbedder final : public PlatformView {
       std::function<void(intptr_t loading_unit_id)>;
   using GetScaledFontSizeCallback =
       std::function<double(double unscaled_font_size, int configuration_id)>;
+  using CreateVSyncWaiterCallback =
+      std::function<std::unique_ptr<VsyncWaiter>()>;
+  using ResolveEmbedderSurfaceCallback =
+      std::function<std::unique_ptr<EmbedderSurface>()>;
 
   struct PlatformDispatchTable {
     UpdateSemanticsCallback update_semantics_callback;  // optional
@@ -71,15 +75,24 @@ class PlatformViewEmbedder final : public PlatformView {
     ViewFocusChangeRequestCallback
         view_focus_change_request_callback;                   // optional
     GetScaledFontSizeCallback get_scaled_font_size_callback;  // optional
+    VoidCallback raster_context_setup_callback = nullptr;     // optional
+    VoidCallback raster_context_teardown_callback = nullptr;  // optional
+    void* raster_context_user_data = nullptr;                 // optional
     PlatformMessageResponseCompletionCallback
         platform_message_response_completion_callback;  // optional
     PlatformMessageEmptyResponseCompletionCallback
         platform_message_empty_response_completion_callback;  // optional
     RequestDartDeferredLibraryCallback
         request_dart_deferred_library_callback;              // optional
+    CreateVSyncWaiterCallback create_vsync_waiter_callback;  // optional
+    std::function<void(std::string)>
+        set_application_locale_callback;                            // optional
+    std::function<void(bool)> set_semantics_tree_enabled_callback;  // optional
     std::shared_ptr<PlatformMessageHandler>
         custom_platform_message_handler;  // optional
     bool enable_direct_platform_message_dispatch = false;
+    ResolveEmbedderSurfaceCallback
+        resolve_embedder_surface_callback;  // optional
   };
 
   // Create a platform view that sets up a software rasterizer.
@@ -88,6 +101,15 @@ class PlatformViewEmbedder final : public PlatformView {
       const flutter::TaskRunners& task_runners,
       const EmbedderSurfaceSoftware::SoftwareDispatchTable&
           software_dispatch_table,
+      PlatformDispatchTable platform_dispatch_table,
+      std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder);
+
+  // Creates a platform view that resolves its embedder surface on the raster
+  // thread during SetupImpellerContext().
+  PlatformViewEmbedder(
+      PlatformView::Delegate& delegate,
+      const flutter::TaskRunners& task_runners,
+      ResolveEmbedderSurfaceCallback resolve_embedder_surface_callback,
       PlatformDispatchTable platform_dispatch_table,
       std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder);
 
@@ -124,6 +146,12 @@ class PlatformViewEmbedder final : public PlatformView {
   ~PlatformViewEmbedder() override;
 
   // |PlatformView|
+  void NotifyCreated();
+
+  // |PlatformView|
+  void NotifyDestroyed() override;
+
+  // |PlatformView|
   void UpdateSemantics(
       int64_t view_id,
       flutter::SemanticsNodeUpdates update,
@@ -147,19 +175,24 @@ class PlatformViewEmbedder final : public PlatformView {
                                     const std::string error_message,
                                     bool transient) override;
 
+  void InvokePlatformMessageResponseCallback(
+      int response_id,
+      std::unique_ptr<fml::Mapping> mapping);
+
+  void InvokePlatformMessageEmptyResponseCallback(int response_id);
+
+  // |PlatformView|
+  std::shared_ptr<impeller::Context> GetImpellerContext() const override;
+
  private:
   class EmbedderPlatformMessageHandler;
+  mutable std::mutex embedder_surface_mutex_;
   std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder_;
   std::unique_ptr<EmbedderSurface> embedder_surface_;
   std::shared_ptr<EmbedderPlatformMessageHandler>
       embedder_platform_message_handler_;
   std::shared_ptr<PlatformMessageHandler> platform_message_handler_;
   PlatformDispatchTable platform_dispatch_table_;
-
-  void InvokePlatformMessageResponseCallback(
-      int response_id,
-      std::unique_ptr<fml::Mapping> mapping);
-  void InvokePlatformMessageEmptyResponseCallback(int response_id);
 
   // |PlatformView|
   std::unique_ptr<Surface> CreateRenderingSurface() override;
@@ -168,7 +201,11 @@ class PlatformViewEmbedder final : public PlatformView {
   std::shared_ptr<ExternalViewEmbedder> CreateExternalViewEmbedder() override;
 
   // |PlatformView|
-  std::shared_ptr<impeller::Context> GetImpellerContext() const override;
+  std::unique_ptr<SnapshotSurfaceProducer> CreateSnapshotSurfaceProducer()
+      override;
+
+  // |PlatformView|
+  void SetupImpellerContext() override;
 
   // |PlatformView|
   sk_sp<GrDirectContext> CreateResourceContext() const override;
@@ -187,17 +224,23 @@ class PlatformViewEmbedder final : public PlatformView {
       const std::vector<std::string>& supported_locale_data) override;
 
   // |PlatformView|
-  void SendChannelUpdate(const std::string& name, bool listening) override;
-
-  // |PlatformView|
-  void RequestViewFocusChange(const ViewFocusChangeRequest& request) override;
-
-  // |PlatformView|
   void RequestDartDeferredLibrary(intptr_t loading_unit_id) override;
 
   // |PlatformView|
   double GetScaledFontSize(double unscaled_font_size,
                            int configuration_id) const override;
+
+  // |PlatformView|
+  void SetApplicationLocale(std::string locale) override;
+
+  // |PlatformView|
+  void SetSemanticsTreeEnabled(bool enabled) override;
+
+  // |PlatformView|
+  void SendChannelUpdate(const std::string& name, bool listening) override;
+
+  // |PlatformView|
+  void RequestViewFocusChange(const ViewFocusChangeRequest& request) override;
 
   FML_DISALLOW_COPY_AND_ASSIGN(PlatformViewEmbedder);
 };

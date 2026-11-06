@@ -8,8 +8,32 @@
 #include <utility>
 
 #include "flutter/fml/make_copyable.h"
+#include "flutter/fml/synchronization/waitable_event.h"
+#include "flutter/shell/common/shell.h"
+#include "flutter/shell/common/snapshot_surface_producer.h"
 
 namespace flutter {
+
+namespace {
+
+class EmbedderSnapshotSurfaceProducer final : public SnapshotSurfaceProducer {
+ public:
+  explicit EmbedderSnapshotSurfaceProducer(
+      std::function<std::unique_ptr<Surface>()> create_surface_callback)
+      : create_surface_callback_(std::move(create_surface_callback)) {}
+
+  // |SnapshotSurfaceProducer|
+  std::unique_ptr<Surface> CreateSnapshotSurface() override {
+    return create_surface_callback_ ? create_surface_callback_() : nullptr;
+  }
+
+ private:
+  std::function<std::unique_ptr<Surface>()> create_surface_callback_;
+
+  FML_DISALLOW_COPY_AND_ASSIGN(EmbedderSnapshotSurfaceProducer);
+};
+
+}  // namespace
 
 class PlatformViewEmbedder::EmbedderPlatformMessageHandler
     : public PlatformMessageHandler,
@@ -154,6 +178,32 @@ PlatformViewEmbedder::PlatformViewEmbedder(
               : embedder_platform_message_handler_),
       platform_dispatch_table_(std::move(platform_dispatch_table)) {}
 
+PlatformViewEmbedder::PlatformViewEmbedder(
+    PlatformView::Delegate& delegate,
+    const flutter::TaskRunners& task_runners,
+    ResolveEmbedderSurfaceCallback resolve_embedder_surface_callback,
+    PlatformDispatchTable platform_dispatch_table,
+    std::shared_ptr<EmbedderExternalViewEmbedder> external_view_embedder)
+    : PlatformView(delegate, task_runners),
+      external_view_embedder_(std::move(external_view_embedder)),
+      embedder_surface_(nullptr),
+      embedder_platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? nullptr
+              : std::make_shared<EmbedderPlatformMessageHandler>(
+                    this,
+                    task_runners.GetPlatformTaskRunner(),
+                    platform_dispatch_table
+                        .enable_direct_platform_message_dispatch)),
+      platform_message_handler_(
+          platform_dispatch_table.custom_platform_message_handler
+              ? platform_dispatch_table.custom_platform_message_handler
+              : embedder_platform_message_handler_),
+      platform_dispatch_table_(std::move(platform_dispatch_table)) {
+  platform_dispatch_table_.resolve_embedder_surface_callback =
+      std::move(resolve_embedder_surface_callback);
+}
+
 #ifdef SHELL_ENABLE_GL
 PlatformViewEmbedder::PlatformViewEmbedder(
     PlatformView::Delegate& delegate,
@@ -235,6 +285,38 @@ PlatformViewEmbedder::~PlatformViewEmbedder() {
   }
 }
 
+void PlatformViewEmbedder::NotifyCreated() {
+  if (platform_dispatch_table_.raster_context_setup_callback == nullptr &&
+      platform_dispatch_table_.resolve_embedder_surface_callback == nullptr) {
+    PlatformView::NotifyCreated();
+    return;
+  }
+  static_cast<Shell&>(delegate_).OnPlatformViewCreatedAsync(
+      [this]() -> std::unique_ptr<Surface> {
+        if (platform_dispatch_table_.raster_context_setup_callback != nullptr) {
+          platform_dispatch_table_.raster_context_setup_callback(
+              platform_dispatch_table_.raster_context_user_data);
+        }
+        return CreateRenderingSurface();
+      });
+}
+
+void PlatformViewEmbedder::NotifyDestroyed() {
+  PlatformView::NotifyDestroyed();
+  if (platform_dispatch_table_.raster_context_teardown_callback != nullptr) {
+    fml::AutoResetWaitableEvent latch;
+    fml::TaskRunner::RunNowOrPostTask(
+        task_runners_.GetRasterTaskRunner(),
+        [&latch,
+         callback = platform_dispatch_table_.raster_context_teardown_callback,
+         user_data = platform_dispatch_table_.raster_context_user_data]() {
+          callback(user_data);
+          latch.Signal();
+        });
+    latch.Wait();
+  }
+}
+
 void PlatformViewEmbedder::UpdateSemantics(
     int64_t view_id,
     flutter::SemanticsNodeUpdates update,
@@ -264,6 +346,13 @@ void PlatformViewEmbedder::HandlePlatformMessage(
 
 // |PlatformView|
 std::unique_ptr<Surface> PlatformViewEmbedder::CreateRenderingSurface() {
+  std::lock_guard<std::mutex> lock(embedder_surface_mutex_);
+  if (embedder_surface_ == nullptr &&
+      platform_dispatch_table_.resolve_embedder_surface_callback != nullptr) {
+    embedder_surface_ =
+        platform_dispatch_table_.resolve_embedder_surface_callback();
+    platform_dispatch_table_.resolve_embedder_surface_callback = nullptr;
+  }
   if (embedder_surface_ == nullptr) {
     FML_LOG(ERROR) << "Embedder surface was null.";
     return nullptr;
@@ -277,15 +366,42 @@ PlatformViewEmbedder::CreateExternalViewEmbedder() {
   return external_view_embedder_;
 }
 
+// |PlatformView|
+std::unique_ptr<SnapshotSurfaceProducer>
+PlatformViewEmbedder::CreateSnapshotSurfaceProducer() {
+  return std::make_unique<EmbedderSnapshotSurfaceProducer>(
+      [this]() { return CreateRenderingSurface(); });
+}
+
 std::shared_ptr<impeller::Context> PlatformViewEmbedder::GetImpellerContext()
     const {
+  std::lock_guard<std::mutex> lock(embedder_surface_mutex_);
+  if (embedder_surface_ == nullptr) {
+    return nullptr;
+  }
   return embedder_surface_->CreateImpellerContext();
+}
+
+void PlatformViewEmbedder::SetupImpellerContext() {
+  std::lock_guard<std::mutex> lock(embedder_surface_mutex_);
+  if (embedder_surface_ == nullptr &&
+      platform_dispatch_table_.resolve_embedder_surface_callback != nullptr) {
+    embedder_surface_ =
+        platform_dispatch_table_.resolve_embedder_surface_callback();
+    platform_dispatch_table_.resolve_embedder_surface_callback = nullptr;
+  }
+  if (embedder_surface_ != nullptr) {
+    embedder_surface_->CreateImpellerContext();
+  }
 }
 
 // |PlatformView|
 sk_sp<GrDirectContext> PlatformViewEmbedder::CreateResourceContext() const {
+  std::lock_guard<std::mutex> lock(embedder_surface_mutex_);
   if (embedder_surface_ == nullptr) {
-    FML_LOG(ERROR) << "Embedder surface was null.";
+    if (platform_dispatch_table_.resolve_embedder_surface_callback == nullptr) {
+      FML_LOG(ERROR) << "Embedder surface was null.";
+    }
     return nullptr;
   }
   return embedder_surface_->CreateResourceContext();
@@ -293,8 +409,11 @@ sk_sp<GrDirectContext> PlatformViewEmbedder::CreateResourceContext() const {
 
 // |PlatformView|
 void PlatformViewEmbedder::ReleaseResourceContext() const {
+  std::lock_guard<std::mutex> lock(embedder_surface_mutex_);
   if (embedder_surface_ == nullptr) {
-    FML_LOG(ERROR) << "Embedder surface was null.";
+    if (platform_dispatch_table_.resolve_embedder_surface_callback == nullptr) {
+      FML_LOG(ERROR) << "Embedder surface was null.";
+    }
     return;
   }
   embedder_surface_->ReleaseResourceContext();
@@ -302,6 +421,10 @@ void PlatformViewEmbedder::ReleaseResourceContext() const {
 
 // |PlatformView|
 std::unique_ptr<VsyncWaiter> PlatformViewEmbedder::CreateVSyncWaiter() {
+  if (platform_dispatch_table_.create_vsync_waiter_callback) {
+    return platform_dispatch_table_.create_vsync_waiter_callback();
+  }
+
   if (!platform_dispatch_table_.vsync_callback) {
     // Superclass implementation creates a timer based fallback.
     return PlatformView::CreateVSyncWaiter();
@@ -387,6 +510,20 @@ double PlatformViewEmbedder::GetScaledFontSize(double unscaled_font_size,
         unscaled_font_size, configuration_id);
   }
   return -1.0;
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::SetApplicationLocale(std::string locale) {
+  if (platform_dispatch_table_.set_application_locale_callback != nullptr) {
+    platform_dispatch_table_.set_application_locale_callback(std::move(locale));
+  }
+}
+
+// |PlatformView|
+void PlatformViewEmbedder::SetSemanticsTreeEnabled(bool enabled) {
+  if (platform_dispatch_table_.set_semantics_tree_enabled_callback != nullptr) {
+    platform_dispatch_table_.set_semantics_tree_enabled_callback(enabled);
+  }
 }
 
 void PlatformViewEmbedder::InvokePlatformMessageResponseCallback(

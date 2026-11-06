@@ -4589,6 +4589,26 @@ TEST_F(EmbedderTest, EmbedderPrefetchDefaultFontManagerAndProcTable) {
             &FlutterEnginePrefetchDefaultFontManager);
 }
 
+TEST_F(EmbedderTest, EmbedderDeferredRendererValidation) {
+  auto& context = GetEmbedderContext<EmbedderTestContextSoftware>();
+  EmbedderConfigBuilder builder(
+      context, EmbedderConfigBuilder::InitializationPreference::kNoInitialize);
+  builder.SetAssetsPath();
+  builder.SetSnapshots();
+  builder.SetSurface(DlISize(1, 1));
+
+  FlutterRendererConfig deferred_config = {};
+  deferred_config.type = kDeferred;
+  deferred_config.deferred.struct_size = sizeof(FlutterDeferredRendererConfig);
+  deferred_config.deferred.resolve_callback = nullptr;
+
+  FlutterEngine engine = nullptr;
+  auto project_args = builder.GetProjectArgs();
+  EXPECT_EQ(FlutterEngineInitialize(FLUTTER_ENGINE_VERSION, &deferred_config,
+                                    &project_args, nullptr, &engine),
+            kInvalidArguments);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

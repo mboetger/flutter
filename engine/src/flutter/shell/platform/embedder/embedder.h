@@ -86,6 +86,10 @@ typedef enum {
   /// macOS version >= 10.14
   kMetal,
   kVulkan,
+  /// Optional renderer type where the embedder chooses the concrete renderer on
+  /// the raster thread while the engine launches. See
+  /// |FlutterDeferredRendererConfig|.
+  kDeferred,
 } FlutterRendererType;
 
 /// Additional accessibility features that may be enabled by the platform.
@@ -1178,15 +1182,52 @@ typedef struct {
   SoftwareSurfacePresentCallback surface_present_callback;
 } FlutterSoftwareRendererConfig;
 
+typedef struct FlutterRendererConfig FlutterRendererConfig;
+
+/// Callback invoked by the engine on the raster thread to resolve a deferred
+/// renderer configuration into a concrete one.
+///
+/// Embedders should prefer `kVulkan` (or `kMetal` on Apple platforms) when
+/// supported by the device and treat `kOpenGL` as a fallback.
+///
+/// @param[in]  user_data   The `user_data` passed to `FlutterEngineInitialize`
+///                         or `FlutterEngineRun`.
+/// @param[out] config_out  Zero-initialized, engine-owned storage. Set `type`
+///                         to `kVulkan`, `kMetal`, `kOpenGL`, or `kSoftware`
+///                         and populate the corresponding union member
+///                         (`kDeferred` is not allowed). All memory referenced
+///                         by the configuration must remain valid until
+///                         `FlutterEngineDeinitialize` or
+///                         `FlutterEngineShutdown` returns for this engine and
+///                         any engine spawned from it.
+/// @return     `false` if no renderer can be created.
+typedef bool (*FlutterRendererConfigResolveCallback)(
+    void* /* user_data */,
+    FlutterRendererConfig* /* config_out */);
+
 typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterDeferredRendererConfig).
+  size_t struct_size;
+  /// Required. Invoked once on the raster task runner before the engine creates
+  /// its rendering context, while the engine launches. The engine creates its
+  /// rendering surface after this callback returns, so only
+  /// `FlutterEngineDeinitialize` and `FlutterEngineShutdown` wait for it. The
+  /// callback may block, but it must not wait on the platform thread. Engines
+  /// created with `FlutterEngineSpawn` reuse the resolved configuration and
+  /// rendering context; the callback is not invoked for them.
+  FlutterRendererConfigResolveCallback resolve_callback;
+} FlutterDeferredRendererConfig;
+
+struct FlutterRendererConfig {
   FlutterRendererType type;
   union {
     FlutterOpenGLRendererConfig open_gl;
     FlutterSoftwareRendererConfig software;
     FlutterMetalRendererConfig metal;
     FlutterVulkanRendererConfig vulkan;
+    FlutterDeferredRendererConfig deferred;
   };
-} FlutterRendererConfig;
+};
 
 /// Display refers to a graphics hardware system consisting of a framebuffer,
 /// typically a monitor or a screen. This ID is unique per display and is
