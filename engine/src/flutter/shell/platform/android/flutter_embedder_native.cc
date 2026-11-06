@@ -19,11 +19,7 @@
 #include "flutter/fml/time/time_delta.h"
 #include "flutter/fml/time/time_point.h"
 #include "flutter/fml/trace_event.h"
-namespace flutter {
-namespace android {
-class AndroidEngineGroup {};
-}  // namespace android
-}  // namespace flutter
+#include "flutter/shell/platform/android/android_engine_group.h"
 #include "flutter/shell/platform/android/android_hardware_buffer.h"
 #include "flutter/shell/platform/android/android_vm_init.h"
 #include "flutter/shell/platform/android/android_vsync_waiter.h"
@@ -833,6 +829,8 @@ FlutterEmbedderNative::FlutterEmbedderNative(
       is_using_mock_proc_table_
           ? std::make_unique<APKAssetProvider>()
           : std::make_unique<APKAssetProvider>(nullptr, nullptr, "");
+  engine_group_ =
+      std::make_shared<AndroidEngineGroup>(nullptr, nullptr, &proc_table_);
 
   auto initial_vm_args = AndroidVMInit::GetGlobalVMArgs();
   if (initial_vm_args.has_value()) {
@@ -1279,7 +1277,9 @@ void FlutterEmbedderNative::Detach() {
   if (engine_ != nullptr) {
     auto handle = engine_;
     engine_ = nullptr;
-    if (proc_table_.Shutdown != nullptr) {
+    if (engine_group_ && engine_group_->IsEngineActive(handle)) {
+      engine_group_->ShutdownEngine(handle);
+    } else if (proc_table_.Shutdown != nullptr) {
       proc_table_.Shutdown(handle);
     }
   }
@@ -1572,6 +1572,9 @@ bool FlutterEmbedderNative::RunBundleAndSnapshotFromLibrary(
   if (vsync_waiter_) {
     vsync_waiter_->SetEngine(engine_);
   }
+  if (engine_group_) {
+    engine_group_->SetPrimaryEngine(engine_, engine_id);
+  }
 #if FLUTTER_HAS_ANDROID_SURFACE_CONTROL
   if (surface_control_) {
     surface_control_->SetEngineProcTable(proc_table_, engine_);
@@ -1620,14 +1623,106 @@ bool FlutterEmbedderNative::RunBundleAndSnapshotFromLibrary(
 }
 
 std::unique_ptr<FlutterEmbedderNative> FlutterEmbedderNative::Spawn(
-    JNIEnv* /*env*/,
-    jobject /*flutter_jni*/,
-    const std::string& /*entrypoint*/,
-    const std::string& /*library_url*/,
-    const std::string& /*initial_route*/,
-    const std::vector<std::string>& /*entrypoint_args*/,
-    int64_t /*engine_id*/) {
-  return nullptr;
+    JNIEnv* env,
+    jobject flutter_jni,
+    const std::string& entrypoint,
+    const std::string& library_url,
+    const std::string& initial_route,
+    const std::vector<std::string>& entrypoint_args,
+    int64_t engine_id) {
+  TRACE_EVENT0("flutter", "FlutterEmbedderNative::Spawn");
+  if (engine_ == nullptr || !engine_group_) {
+    FML_LOG(ERROR) << "Cannot spawn child engine: parent engine not running.";
+    return nullptr;
+  }
+
+  auto child = std::make_unique<FlutterEmbedderNative>(
+      is_using_mock_proc_table_ ? &proc_table_ : nullptr,
+      use_engine_owned_task_runners_);
+  child->engine_id_ = engine_id;
+  child->enable_surface_control_ = enable_surface_control_;
+  child->engine_group_ = engine_group_;
+  child->shared_egl_ = shared_egl_;
+#if FLUTTER_HAS_ANDROID_SURFACE_CONTROL
+  if (surface_control_ && child->surface_control_) {
+    child->surface_control_->ShareVulkanStateFrom(*surface_control_);
+  }
+#endif
+  if (asset_provider_) {
+    child->asset_provider_ = asset_provider_->Clone();
+  }
+  if (env != nullptr && flutter_jni != nullptr) {
+    child->Attach(env, flutter_jni);
+  }
+
+  if (!child->is_using_mock_proc_table_) {
+    auto global_vm_args = AndroidVMInit::GetGlobalVMArgs();
+    AndroidVMArgs vm_args = global_vm_args.value_or(AndroidVMArgs{});
+    int api_level = ResolveEffectiveApiLevel(global_vm_args);
+    vm_args.api_level = api_level;
+    AndroidRenderingAPI rendering_api = SelectRenderingAPI(vm_args);
+    if (!vm_args.enable_software_rendering) {
+      if (rendering_api != AndroidRenderingAPI::kImpellerVulkan &&
+          rendering_api != AndroidRenderingAPI::kImpellerAutoselect) {
+        child->InitializeAndroidEGL();
+      }
+    }
+#if FLUTTER_HAS_ANDROID_PLATFORM_VIEWS_CONTROLLER
+    if (child->platform_views_controller_) {
+      child->platform_views_controller_->SetApiLevel(api_level);
+      child->platform_views_controller_->SetHcppEnabled(
+          child->enable_surface_control_);
+    }
+#endif
+  }
+
+  AndroidEngineSpawnArgs spawn_args;
+  spawn_args.entrypoint = entrypoint.empty() ? "main" : entrypoint;
+  spawn_args.library_url = library_url;
+  spawn_args.initial_route = initial_route;
+  spawn_args.entrypoint_args = entrypoint_args;
+  spawn_args.engine_id = engine_id;
+  spawn_args.user_data = child.get();
+  const FlutterCompositor* child_compositor = nullptr;
+  if (child->is_using_mock_proc_table_) {
+    child_compositor = child->compositor_
+                           ? child->compositor_->GetEmbedderCompositor()
+                           : nullptr;
+  } else {
+    auto vm_args = AndroidVMInit::GetGlobalVMArgs().value_or(AndroidVMArgs{});
+    if (!vm_args.enable_software_rendering) {
+#if FLUTTER_HAS_ANDROID_PLATFORM_VIEWS_CONTROLLER
+      if (child->platform_views_controller_) {
+        child_compositor =
+            child->platform_views_controller_->GetEmbedderCompositor();
+      }
+#endif
+    }
+  }
+  spawn_args.compositor = child_compositor;
+
+  FLUTTER_API_SYMBOL(FlutterEngine)
+  spawned_engine = engine_group_->SpawnEngine(engine_, spawn_args);
+  if (spawned_engine == nullptr) {
+    FML_LOG(ERROR) << "Failed to spawn child engine via AndroidEngineGroup.";
+    return nullptr;
+  }
+
+  child->engine_ = spawned_engine;
+  if (child->vsync_waiter_) {
+    child->vsync_waiter_->SetEngine(spawned_engine);
+  }
+#if FLUTTER_HAS_ANDROID_SURFACE_CONTROL
+  if (child->surface_control_) {
+    child->surface_control_->SetEngineProcTable(child->proc_table_,
+                                                spawned_engine);
+  }
+#endif
+  child->UpdateDisplayMetrics(env);
+  child->FlushPendingViewportMetrics();
+  child->FlushPreLaunchStartupState();
+  child->FlushPendingStartupState();
+  return child;
 }
 
 void FlutterEmbedderNative::UpdateJavaAssetManager(

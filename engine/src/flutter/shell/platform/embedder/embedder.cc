@@ -3756,6 +3756,229 @@ FlutterEngineResult FlutterEngineRunInitialized(
 }
 
 FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
+                                           parent_engine,
+                                       const FlutterEngineSpawnInfo* spawn_info,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           spawned_engine_out) {
+  if (parent_engine == nullptr || spawn_info == nullptr ||
+      spawned_engine_out == nullptr) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Invalid arguments for FlutterEngineSpawn.");
+  }
+
+  auto parent = reinterpret_cast<flutter::EmbedderEngine*>(parent_engine);
+  if (!parent->IsValid()) {
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Parent engine must be running to spawn.");
+  }
+
+  const FlutterProjectArgs& parent_args = parent->GetSavedProjectArgs();
+  const FlutterProjectArgs* args = &parent_args;
+  void* user_data = SAFE_ACCESS(spawn_info, user_data, nullptr);
+
+  flutter::Settings settings = parent->GetShell().GetSettings();
+  if (SAFE_ACCESS(args, root_isolate_create_callback, nullptr) != nullptr) {
+    VoidCallback callback =
+        SAFE_ACCESS(args, root_isolate_create_callback, nullptr);
+    settings.root_isolate_create_callback =
+        [callback, user_data](const auto& isolate) { callback(user_data); };
+  }
+  if (SAFE_ACCESS(args, log_message_callback, nullptr) != nullptr) {
+    FlutterLogMessageCallback callback =
+        SAFE_ACCESS(args, log_message_callback, nullptr);
+    settings.log_message_callback = [callback, user_data](
+                                        const std::string& tag,
+                                        const std::string& message) {
+      callback(tag.c_str(), message.c_str(), user_data);
+    };
+  }
+
+  const FlutterCompositor* compositor = SAFE_ACCESS(
+      spawn_info, compositor, SAFE_ACCESS(args, compositor, nullptr));
+  auto external_view_embedder_result =
+      InferExternalViewEmbedderFromArgs(compositor, settings.enable_impeller);
+  if (!external_view_embedder_result.ok()) {
+    FML_LOG(ERROR) << external_view_embedder_result.status().message();
+    return LOG_EMBEDDER_ERROR(kInvalidArguments,
+                              "Compositor arguments were invalid.");
+  }
+
+  flutter::PlatformViewEmbedder::PlatformDispatchTable platform_dispatch_table =
+      CreatePlatformDispatchTable(args, user_data);
+
+  impeller::Flags impeller_flags;
+  impeller_flags.use_sdfs = settings.impeller_use_sdfs;
+  impeller_flags.top_left_default_framebuffer_origin =
+      settings.impeller_top_left_default_framebuffer_origin;
+
+  auto renderer_state = GetRendererConfigState(parent);
+  std::optional<FlutterRendererConfig> parent_config;
+  const FlutterRendererConfig* effective_renderer = nullptr;
+  auto engine_resolved_signaler = std::make_shared<OncePromiseSignaler>();
+
+  if (renderer_state && renderer_state->initial_config.type == kDeferred) {
+    effective_renderer = &renderer_state->initial_config;
+  } else {
+    parent_config = parent->GetRendererConfig();
+    if (!parent_config.has_value()) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          "Parent engine does not have a valid renderer configuration.");
+    }
+    if (!renderer_state) {
+      renderer_state = std::make_shared<SharedRendererConfigState>();
+      renderer_state->initial_config = *parent_config;
+      renderer_state->config = *parent_config;
+      renderer_state->is_resolved = true;
+      renderer_state->resolved_signaler->Signal();
+    }
+    if (parent->GetShell().GetPlatformView()) {
+      std::lock_guard<std::mutex> lock(renderer_state->mutex);
+      if (!renderer_state->impeller_context) {
+        renderer_state->impeller_context =
+            parent->GetShell().GetPlatformView()->GetImpellerContext();
+      }
+    }
+    effective_renderer = &(*parent_config);
+    engine_resolved_signaler->Signal();
+  }
+
+  auto engine_ptr_holder = std::make_shared<flutter::EmbedderEngine*>(nullptr);
+
+  auto on_create_platform_view = InferPlatformViewCreationCallback(
+      effective_renderer, user_data, platform_dispatch_table,
+      std::move(external_view_embedder_result.value()),
+      settings.enable_impeller, impeller_flags,
+      settings.enable_vulkan_validation, renderer_state, engine_ptr_holder,
+      engine_resolved_signaler);
+  if (!on_create_platform_view) {
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not infer platform view creation callback for spawned engine.");
+  }
+
+  flutter::Shell::CreateCallback<flutter::Rasterizer> on_create_rasterizer =
+      [](flutter::Shell& shell) {
+        return std::make_unique<flutter::Rasterizer>(shell);
+      };
+
+  FlutterRendererConfig texture_config = *effective_renderer;
+  if (renderer_state) {
+    std::lock_guard<std::mutex> lock(renderer_state->mutex);
+    if (renderer_state->is_resolved) {
+      texture_config = renderer_state->config;
+    }
+  }
+  auto external_texture_resolver =
+      CreateExternalTextureResolver(&texture_config, user_data);
+
+  std::shared_ptr<flutter::EmbedderThreadHost> thread_host =
+      parent->GetThreadHost();
+  const flutter::TaskRunners& task_runners = parent->GetTaskRunners();
+  auto asset_manager = parent->GetAssetManager();
+
+  flutter::RunConfiguration run_configuration =
+      asset_manager
+          ? flutter::RunConfiguration(
+                flutter::IsolateConfiguration::InferFromSettings(
+                    settings, asset_manager, nullptr,
+                    flutter::IsolateLaunchType::kExistingGroup),
+                asset_manager)
+          : flutter::RunConfiguration::InferFromSettings(
+                settings, nullptr, flutter::IsolateLaunchType::kExistingGroup);
+
+  std::string entrypoint = "main";
+  if (SAFE_ACCESS(spawn_info, entrypoint, nullptr) != nullptr &&
+      std::strlen(spawn_info->entrypoint) > 0) {
+    entrypoint = spawn_info->entrypoint;
+  } else if (SAFE_ACCESS(args, custom_dart_entrypoint, nullptr) != nullptr &&
+             std::strlen(args->custom_dart_entrypoint) > 0) {
+    entrypoint = args->custom_dart_entrypoint;
+  }
+  std::string library_uri;
+  if (SAFE_ACCESS(spawn_info, library_uri, nullptr) != nullptr &&
+      std::strlen(spawn_info->library_uri) > 0) {
+    library_uri = spawn_info->library_uri;
+  }
+  if (!library_uri.empty()) {
+    run_configuration.SetEntrypointAndLibrary(entrypoint, library_uri);
+  } else {
+    run_configuration.SetEntrypoint(entrypoint);
+  }
+
+  size_t entrypoint_argc = SAFE_ACCESS(spawn_info, entrypoint_argc, 0);
+  const char* const* entrypoint_argv =
+      SAFE_ACCESS(spawn_info, entrypoint_argv, nullptr);
+  if (entrypoint_argc > 0) {
+    if (entrypoint_argv == nullptr) {
+      return LOG_EMBEDDER_ERROR(
+          kInvalidArguments,
+          "entrypoint_argc > 0 but entrypoint_argv was null.");
+    }
+    std::vector<std::string> entrypoint_args(entrypoint_argc);
+    for (size_t i = 0; i < entrypoint_argc; ++i) {
+      entrypoint_args[i] =
+          entrypoint_argv[i] ? std::string{entrypoint_argv[i]} : std::string{};
+    }
+    run_configuration.SetEntrypointArgs(std::move(entrypoint_args));
+  }
+
+  std::string initial_route;
+  if (SAFE_ACCESS(spawn_info, initial_route, nullptr) != nullptr) {
+    initial_route = spawn_info->initial_route;
+  }
+
+  auto spawned_engine =
+      parent->Spawn(thread_host, task_runners, std::move(run_configuration),
+                    initial_route, on_create_platform_view,
+                    on_create_rasterizer, std::move(external_texture_resolver));
+  if (!spawned_engine) {
+    return LOG_EMBEDDER_ERROR(kInternalInconsistency,
+                              "Failed to spawn child shell from parent.");
+  }
+
+  *engine_ptr_holder = spawned_engine.get();
+  spawned_engine->SetRendererConfig(texture_config);
+  if (effective_renderer->type == kDeferred) {
+    spawned_engine->SetDeferredRendererResolvedFuture(
+        engine_resolved_signaler->GetFuture());
+  }
+  spawned_engine->SetSavedProjectArgs(parent_args);
+  spawned_engine->SetAssetManager(asset_manager);
+  SetRendererConfigState(spawned_engine.get(), renderer_state);
+
+  for (const auto& image_generator : parent->GetImageGenerators()) {
+    spawned_engine->AddImageGenerator(image_generator.factory,
+                                      image_generator.priority);
+  }
+
+  if (SAFE_ACCESS(args, vm_service_uri_callback, nullptr) != nullptr) {
+    FlutterVMServiceUriCallback cb =
+        SAFE_ACCESS(args, vm_service_uri_callback, nullptr);
+    spawned_engine->SetVMServiceUriCallback(
+        [cb, user_data](const std::string& uri) {
+          FlutterVMServiceUriInfo info = {
+              .struct_size = sizeof(FlutterVMServiceUriInfo),
+              .uri = uri.c_str(),
+          };
+          cb(&info, user_data);
+        });
+  }
+
+  if (!spawned_engine->NotifyCreated()) {
+    ClearRendererConfigState(spawned_engine.get());
+    return LOG_EMBEDDER_ERROR(
+        kInternalInconsistency,
+        "Could not create platform view components for spawned engine.");
+  }
+
+  *spawned_engine_out = reinterpret_cast<FLUTTER_API_SYMBOL(FlutterEngine)>(
+      spawned_engine.release());
+  return kSuccess;
+}
+
+FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineAddView(FLUTTER_API_SYMBOL(FlutterEngine)
                                              engine,
                                          const FlutterAddViewInfo* info) {
@@ -5126,6 +5349,7 @@ FlutterEngineResult FlutterEngineGetProcAddresses(
   SET_PROC(LoadDartDeferredLibrary, FlutterEngineLoadDartDeferredLibrary);
   SET_PROC(NotifyDartDeferredLibraryLoadError,
            FlutterEngineNotifyDartDeferredLibraryLoadError);
+  SET_PROC(Spawn, FlutterEngineSpawn);
   SET_PROC(PrefetchDefaultFontManager, FlutterEnginePrefetchDefaultFontManager);
 #undef SET_PROC
 

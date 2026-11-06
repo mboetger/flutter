@@ -3027,6 +3027,27 @@ typedef struct {
   VoidCallback destruction_callback;
 } FlutterCustomAssetResolver;
 
+typedef struct {
+  /// The size of this struct. Must be sizeof(FlutterEngineSpawnInfo).
+  size_t struct_size;
+  /// Optional custom Dart entrypoint name (defaults to `"main"` if null or
+  /// empty).
+  const char* entrypoint;
+  /// Optional Dart library URI containing `entrypoint` (defaults to the root
+  /// library if null or empty).
+  const char* library_uri;
+  /// Optional initial navigation route for the spawned engine's root isolate.
+  const char* initial_route;
+  /// Optional command-line arguments passed to the Dart entrypoint.
+  const char* const* entrypoint_argv;
+  /// Number of elements in `entrypoint_argv`.
+  int entrypoint_argc;
+  /// Opaque baton passed to callbacks invoked for the spawned engine.
+  void* user_data;
+  /// Optional per-engine compositor for the spawned engine.
+  const FlutterCompositor* compositor;
+} FlutterEngineSpawnInfo;
+
 typedef enum {
   kFlutterImageDecoderColorTypeRGBA8888,
   kFlutterImageDecoderColorTypeBGRA8888,
@@ -4314,6 +4335,24 @@ FlutterEngineResult FlutterEngineNotifyDartDeferredLibraryLoadError(
     const FlutterDartDeferredLibraryLoadError* error);
 
 //------------------------------------------------------------------------------
+/// @brief      Spawns a new Flutter engine instance that shares the Dart VM
+///             isolate group, font collection, asset manager, and rendering
+///             context of `parent_engine` (`Shell::Spawn`).
+///
+/// @param[in]  parent_engine       An initialized parent engine instance.
+/// @param[in]  spawn_info          Configuration for the spawned engine.
+/// @param[out] spawned_engine_out  The spawned engine handle on success.
+///
+/// @return     The result of the call.
+///
+FLUTTER_EXPORT
+FlutterEngineResult FlutterEngineSpawn(FLUTTER_API_SYMBOL(FlutterEngine)
+                                           parent_engine,
+                                       const FlutterEngineSpawnInfo* spawn_info,
+                                       FLUTTER_API_SYMBOL(FlutterEngine) *
+                                           spawned_engine_out);
+
+//------------------------------------------------------------------------------
 /// @brief      Warms up the process-wide default font manager on a background
 ///             thread before the first frame is rendered.
 ///
@@ -4463,6 +4502,10 @@ typedef FlutterEngineResult (
     *FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     const FlutterDartDeferredLibraryLoadError* error);
+typedef FlutterEngineResult (*FlutterEngineSpawnFnPtr)(
+    FLUTTER_API_SYMBOL(FlutterEngine) parent_engine,
+    const FlutterEngineSpawnInfo* spawn_info,
+    FLUTTER_API_SYMBOL(FlutterEngine) * spawned_engine_out);
 typedef FlutterEngineResult (*FlutterEnginePrefetchDefaultFontManagerFnPtr)(
     void);
 
@@ -4518,6 +4561,7 @@ typedef struct _FlutterEngineProcTable {
   FlutterEngineLoadDartDeferredLibraryFnPtr LoadDartDeferredLibrary;
   FlutterEngineNotifyDartDeferredLibraryLoadErrorFnPtr
       NotifyDartDeferredLibraryLoadError;
+  FlutterEngineSpawnFnPtr Spawn;
   FlutterEnginePrefetchDefaultFontManagerFnPtr PrefetchDefaultFontManager;
 } FlutterEngineProcTable;
 

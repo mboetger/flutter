@@ -98,6 +98,8 @@ source_set("flutter_embedder_native_src") {
     "android_mutators_mapper.h",
     "android_platform_views_controller.cc",
     "android_platform_views_controller.h",
+    "android_engine_group.cc",
+    "android_engine_group.h",
 ]
 
   check_includes = true
