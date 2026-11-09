@@ -75,6 +75,21 @@ class PlatformView {
     virtual void OnPlatformViewCreated(std::unique_ptr<Surface> surface) = 0;
 
     //--------------------------------------------------------------------------
+    /// @brief      Notifies the delegate that the platform view was created,
+    ///             deferring rendering surface construction onto the raster
+    ///             task runner so the platform thread does not block waiting on
+    ///             GPU context or swapchain initialization.
+    ///
+    /// @param[in]  surface_factory   Callable invoked on the raster task runner
+    ///                               to construct and return the rendering
+    ///                               surface, or nullptr if cancelled/failed.
+    ///
+    virtual void OnPlatformViewCreatedDeferred(
+        std::function<std::unique_ptr<Surface>()> surface_factory) {
+      FML_UNREACHABLE();
+    }
+
+    //--------------------------------------------------------------------------
     /// @brief      Notifies the delegate that the platform view was destroyed.
     ///             This is usually a sign to the rasterizer to suspend
     ///             rendering a previously configured surface and collect any
@@ -1035,6 +1050,14 @@ class PlatformView {
   virtual void SetupImpellerContext() {}
 
  protected:
+  //----------------------------------------------------------------------------
+  /// @brief      Notifies the shell that a platform view has been created,
+  ///             running `surface_factory` asynchronously on the raster task
+  ///             runner without blocking the platform thread.
+  ///
+  void NotifyCreatedDeferred(
+      std::function<std::unique_ptr<Surface>()> surface_factory);
+
   // This is the only method called on the raster task runner.
   virtual std::unique_ptr<Surface> CreateRenderingSurface();
 

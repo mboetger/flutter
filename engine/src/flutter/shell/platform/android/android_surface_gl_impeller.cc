@@ -100,11 +100,28 @@ bool AndroidSurfaceGLImpeller::IsValid() const {
 // |AndroidSurface|
 std::unique_ptr<Surface> AndroidSurfaceGLImpeller::CreateGPUSurface(
     GrDirectContext* gr_context) {
+  // Constructing `GPUSurfaceGLImpeller` and its `AiksContext` invokes GL APIs
+  // via `ReactorGLES`. If `SetNativeWindow()` failed to create an onscreen
+  // `EGLSurface`, temporarily bind a 1x1 offscreen surface so
+  // `GPUSurfaceGLImpeller` can still be initialized and a subsequent
+  // `OnScreenSurfaceResize()` can recreate the onscreen surface.
+  std::unique_ptr<impeller::egl::Surface> temp_offscreen_surface;
+  if (!onscreen_surface_ || !onscreen_surface_->IsValid()) {
+    temp_offscreen_surface = android_context_->CreateOffscreenSurface();
+    if (!temp_offscreen_surface ||
+        !android_context_->OnscreenContextMakeCurrent(
+            temp_offscreen_surface.get())) {
+      return nullptr;
+    }
+  }
   auto surface = std::make_unique<GPUSurfaceGLImpeller>(
       this,                                    // delegate
       android_context_->GetImpellerContext(),  // context
       true                                     // render to surface
   );
+  if (temp_offscreen_surface) {
+    android_context_->OnscreenContextClearCurrent();
+  }
   if (!surface->IsValid()) {
     return nullptr;
   }
@@ -254,7 +271,9 @@ bool AndroidSurfaceGLImpeller::
   }
   onscreen_surface_.reset();
   auto onscreen_surface =
-      android_context_->CreateOnscreenSurface(native_window_->handle());
+      native_window_->IsFakeWindow()
+          ? android_context_->CreateOffscreenSurface()
+          : android_context_->CreateOnscreenSurface(native_window_->handle());
   if (!onscreen_surface) {
     FML_DLOG(ERROR) << "Could not create onscreen surface.";
     return false;

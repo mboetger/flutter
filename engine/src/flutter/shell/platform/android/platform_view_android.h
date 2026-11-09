@@ -5,6 +5,7 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_PLATFORM_VIEW_ANDROID_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_PLATFORM_VIEW_ANDROID_H_
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -136,6 +137,15 @@ class PlatformViewAndroid final : public PlatformView {
 
   std::unique_ptr<AndroidSurface> android_surface_;
   std::shared_ptr<PlatformMessageHandlerAndroid> platform_message_handler_;
+  // Monotonically incremented on the platform thread in NotifyCreated and
+  // NotifyDestroyed so deferred raster tasks from a superseded or destroyed
+  // surface lifecycle skip stale swapchain creation and resize work.
+  std::atomic<uint64_t> surface_generation_{0};
+  // Accessed exclusively on the raster task runner. Tracks whether the active
+  // surface generation successfully bound a native window and rendering
+  // surface so deferred NotifyChanged tasks do not resize an uninitialized
+  // swapchain if deferred NotifyCreated failed.
+  bool has_valid_surface_ = false;
   bool android_meets_hcpp_criteria_ = false;
 
   // |PlatformView|

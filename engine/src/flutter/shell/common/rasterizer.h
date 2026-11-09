@@ -7,6 +7,7 @@
 
 #include <future>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <unordered_map>
 
@@ -571,26 +572,32 @@ class Rasterizer final : public SnapshotDelegate,
   std::optional<size_t> GetResourceCacheMaxBytes() const;
 
   //----------------------------------------------------------------------------
-  /// @brief      Enables the thread merger if the external view embedder
-  ///             supports dynamic thread merging.
+  /// @brief      Decrements the thread-merger disable depth count, re-enabling
+  ///             the raster thread merger once the count reaches zero (if a
+  ///             merger has been created).
   ///
-  /// @attention  This method is thread-safe. When the thread merger is enabled,
-  ///             the raster task queue can run in the platform thread at any
-  ///             time.
+  /// @attention  This method is thread-safe. Every call to
+  ///             `DisableThreadMergerIfNeeded` must be paired with exactly one
+  ///             call to `EnableThreadMergerIfNeeded` on the raster thread.
+  ///             When the thread merger is enabled, the raster task queue can
+  ///             run on the platform thread at any time.
   ///
-  /// @see        `ExternalViewEmbedder`
+  /// @see        `DisableThreadMergerIfNeeded`, `ExternalViewEmbedder`
   ///
   void EnableThreadMergerIfNeeded();
 
   //----------------------------------------------------------------------------
-  /// @brief      Disables the thread merger if the external view embedder
-  ///             supports dynamic thread merging.
+  /// @brief      Increments the thread-merger disable depth count and disables
+  ///             the raster thread merger immediately if it already exists, or
+  ///             ensures a merger created later by `Rasterizer::Setup` starts
+  ///             disabled.
   ///
-  /// @attention  This method is thread-safe. When the thread merger is
-  ///             disabled, the raster task queue will continue to run in the
-  ///             same thread until |EnableThreadMergerIfNeeded| is called.
+  /// @attention  This method is thread-safe. Every call must be paired with
+  ///             exactly one call to `EnableThreadMergerIfNeeded` on the raster
+  ///             thread; the merger remains disabled until all overlapping
+  ///             disable scopes have balanced.
   ///
-  /// @see        `ExternalViewEmbedder`
+  /// @see        `EnableThreadMergerIfNeeded`, `ExternalViewEmbedder`
   ///
   void DisableThreadMergerIfNeeded();
 
@@ -812,7 +819,21 @@ class Rasterizer final : public SnapshotDelegate,
   fml::closure next_frame_callback_;
   bool user_override_resource_cache_bytes_ = false;
   std::optional<size_t> max_cache_bytes_;
+  // Guards `raster_thread_merger_` and `thread_merger_disabled_count_`, which
+  // are accessed from both the platform thread (DisableThreadMergerIfNeeded,
+  // GetRasterThreadMerger) and the raster thread (Setup,
+  // EnableThreadMergerIfNeeded, Teardown, Draw).
+  // Lock order: `raster_thread_merger_mutex_` -> `RasterThreadMerger::mutex_`;
+  // never invoke external callbacks that could re-enter `Rasterizer` while
+  // holding this mutex.
+  // A disable depth count (rather than a bool) is tracked so overlapping
+  // `DisableThreadMergerIfNeeded()` scopes (e.g. `OnPlatformViewCreated` whose
+  // raster task has not yet drained when `OnPlatformViewDestroyed` arrives)
+  // keep the merger disabled until the final paired
+  // `EnableThreadMergerIfNeeded()` runs on the raster thread.
+  mutable std::mutex raster_thread_merger_mutex_;
   fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger_;
+  size_t thread_merger_disabled_count_ = 0;
   std::shared_ptr<ExternalViewEmbedder> external_view_embedder_;
   std::unique_ptr<SnapshotController> snapshot_controller_;
 

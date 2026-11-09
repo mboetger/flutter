@@ -475,6 +475,8 @@ class Shell final : public PlatformView::Delegate,
   std::set<std::string> misbehaving_message_channels_;
   const TaskRunners task_runners_;
   const fml::RefPtr<fml::RasterThreadMerger> parent_raster_thread_merger_;
+  const std::optional<fml::TaskRunnerAffineWeakPtr<Rasterizer>>
+      parent_rasterizer_;
   std::shared_ptr<ResourceCacheLimitCalculator>
       resource_cache_limit_calculator_;
   size_t resource_cache_limit_ = 0;
@@ -556,17 +558,20 @@ class Shell final : public PlatformView::Delegate,
   // How many frames have been timed since last report.
   size_t UnreportedFramesCount() const;
 
-  Shell(DartVMRef vm,
-        const TaskRunners& task_runners,
-        fml::RefPtr<fml::RasterThreadMerger> parent_merger,
-        const std::shared_ptr<ResourceCacheLimitCalculator>&
-            resource_cache_limit_calculator,
-        const Settings& settings,
-        bool is_gpu_disabled);
+  Shell(
+      DartVMRef vm,
+      const TaskRunners& task_runners,
+      fml::RefPtr<fml::RasterThreadMerger> parent_merger,
+      std::optional<fml::TaskRunnerAffineWeakPtr<Rasterizer>> parent_rasterizer,
+      const std::shared_ptr<ResourceCacheLimitCalculator>&
+          resource_cache_limit_calculator,
+      const Settings& settings,
+      bool is_gpu_disabled);
 
   static std::unique_ptr<Shell> CreateShellOnPlatformThread(
       DartVMRef vm,
       fml::RefPtr<fml::RasterThreadMerger> parent_merger,
+      std::optional<fml::TaskRunnerAffineWeakPtr<Rasterizer>> parent_rasterizer,
       std::shared_ptr<ShellIOManager> parent_io_manager,
       const std::shared_ptr<ResourceCacheLimitCalculator>&
           resource_cache_limit_calculator,
@@ -583,6 +588,7 @@ class Shell final : public PlatformView::Delegate,
       const PlatformData& platform_data,
       const TaskRunners& task_runners,
       const fml::RefPtr<fml::RasterThreadMerger>& parent_thread_merger,
+      std::optional<fml::TaskRunnerAffineWeakPtr<Rasterizer>> parent_rasterizer,
       const std::shared_ptr<ShellIOManager>& parent_io_manager,
       const std::shared_ptr<ResourceCacheLimitCalculator>&
           resource_cache_limit_calculator,
@@ -603,6 +609,10 @@ class Shell final : public PlatformView::Delegate,
 
   // |PlatformView::Delegate|
   void OnPlatformViewCreated(std::unique_ptr<Surface> surface) override;
+
+  // |PlatformView::Delegate|
+  void OnPlatformViewCreatedDeferred(
+      std::function<std::unique_ptr<Surface>()> surface_factory) override;
 
   // |PlatformView::Delegate|
   void OnPlatformViewDestroyed() override;

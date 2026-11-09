@@ -5273,6 +5273,711 @@ TEST_F(ShellTest, MakePipelineUsageJsonReportsEachPipeline) {
 #endif
 }
 
+namespace {
+
+class DeferredTestPlatformView : public PlatformView {
+ public:
+  DeferredTestPlatformView(
+      PlatformView::Delegate& delegate,
+      const TaskRunners& task_runners,
+      std::shared_ptr<ExternalViewEmbedder> external_view_embedder = nullptr,
+      fml::closure setup_impeller_callback = nullptr)
+      : PlatformView(delegate, task_runners),
+        external_view_embedder_(std::move(external_view_embedder)),
+        setup_impeller_callback_(std::move(setup_impeller_callback)) {}
+
+  void TriggerNotifyCreatedDeferred(
+      std::function<std::unique_ptr<Surface>()> surface_factory) {
+    NotifyCreatedDeferred(std::move(surface_factory));
+  }
+
+  // |PlatformView|
+  std::shared_ptr<ExternalViewEmbedder> CreateExternalViewEmbedder() override {
+    return external_view_embedder_;
+  }
+
+  // |PlatformView|
+  void SetupImpellerContext() override {
+    if (setup_impeller_callback_) {
+      setup_impeller_callback_();
+    }
+  }
+
+ private:
+  std::shared_ptr<ExternalViewEmbedder> external_view_embedder_;
+  fml::closure setup_impeller_callback_;
+};
+
+// Simulates AndroidExternalViewEmbedderWrapper on an HCPP-eligible device:
+// querying SupportsDynamicThreadMerging() requires asynchronous backend
+// initialization (SetupImpellerContext) to have already completed on the raster
+// thread and must never be invoked on the platform thread.
+class BackendDependentExternalViewEmbedder : public ExternalViewEmbedder {
+ public:
+  using EndFrameCallback =
+      std::function<void(bool, fml::RefPtr<fml::RasterThreadMerger>)>;
+
+  BackendDependentExternalViewEmbedder(
+      TaskRunners task_runners,
+      const std::atomic<bool>& backend_ready,
+      bool support_thread_merging,
+      EndFrameCallback end_frame_callback = nullptr)
+      : task_runners_(std::move(task_runners)),
+        backend_ready_(backend_ready),
+        support_thread_merging_(support_thread_merging),
+        end_frame_callback_(std::move(end_frame_callback)) {}
+
+  size_t supports_merging_calls() const {
+    return supports_merging_calls_.load();
+  }
+
+  // |ExternalViewEmbedder|
+  DlCanvas* GetRootCanvas() override { return nullptr; }
+
+  // |ExternalViewEmbedder|
+  void CancelFrame() override {}
+
+  // |ExternalViewEmbedder|
+  void BeginFrame(GrDirectContext* context,
+                  const fml::RefPtr<fml::RasterThreadMerger>&
+                      raster_thread_merger) override {}
+
+  // |ExternalViewEmbedder|
+  void PrerollCompositeEmbeddedView(
+      int64_t platform_view_id,
+      std::unique_ptr<EmbeddedViewParams> params) override {}
+
+  // |ExternalViewEmbedder|
+  DlCanvas* CompositeEmbeddedView(int64_t platform_view_id) override {
+    return nullptr;
+  }
+
+  // |ExternalViewEmbedder|
+  void PrepareFlutterView(DlISize frame_size,
+                          double device_pixel_ratio) override {}
+
+  // |ExternalViewEmbedder|
+  void EndFrame(bool should_resubmit_frame,
+                const fml::RefPtr<fml::RasterThreadMerger>&
+                    raster_thread_merger) override {
+    if (end_frame_callback_) {
+      end_frame_callback_(should_resubmit_frame, raster_thread_merger);
+    }
+  }
+
+  // |ExternalViewEmbedder|
+  bool SupportsDynamicThreadMerging() override {
+    supports_merging_calls_.fetch_add(1);
+    EXPECT_FALSE(
+        task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
+    EXPECT_TRUE(
+        task_runners_.GetRasterTaskRunner()->RunsTasksOnCurrentThread());
+    EXPECT_TRUE(backend_ready_.load());
+    return support_thread_merging_;
+  }
+
+ private:
+  TaskRunners task_runners_;
+  const std::atomic<bool>& backend_ready_;
+  bool support_thread_merging_;
+  EndFrameCallback end_frame_callback_;
+  std::atomic<size_t> supports_merging_calls_{0};
+};
+
+std::unique_ptr<::testing::NiceMock<MockSurface>> MakeValidMockSurface() {
+  auto surface = std::make_unique<::testing::NiceMock<MockSurface>>();
+  ON_CALL(*surface, IsValid()).WillByDefault(Return(true));
+  ON_CALL(*surface, MakeRenderContextCurrent()).WillByDefault([]() {
+    return std::make_unique<GLContextDefaultResult>(true);
+  });
+  ON_CALL(*surface, ClearRenderContext()).WillByDefault(Return(true));
+  ON_CALL(*surface, AcquireFrame(::testing::_))
+      .WillByDefault([](const DlISize& size) {
+        SurfaceFrame::FramebufferInfo framebuffer_info;
+        framebuffer_info.supports_readback = true;
+        return std::make_unique<SurfaceFrame>(
+            nullptr, framebuffer_info,
+            [](const SurfaceFrame&, DlCanvas*) { return true; },
+            [](const SurfaceFrame&) { return true; }, size,
+            /*context_result=*/nullptr, /*display_list_fallback=*/true);
+      });
+  return surface;
+}
+
+}  // namespace
+
+TEST_F(ShellTest, OnPlatformViewCreatedDeferredDoesNotBlockPlatformThread) {
+  Settings settings = CreateSettingsForFixture();
+  TaskRunners task_runners = GetTaskRunnersForFixture();
+
+  DeferredTestPlatformView* platform_view_ptr = nullptr;
+  ShellTest::Config config{
+      .settings = settings,
+      .task_runners = task_runners,
+      .platform_view_create_callback =
+          [&platform_view_ptr, &task_runners](Shell& shell) {
+            auto view =
+                std::make_unique<DeferredTestPlatformView>(shell, task_runners);
+            platform_view_ptr = view.get();
+            return view;
+          },
+  };
+  std::unique_ptr<Shell> shell = CreateShell(config);
+  ASSERT_NE(shell, nullptr);
+  ASSERT_NE(platform_view_ptr, nullptr);
+
+  fml::AutoResetWaitableEvent raster_entered;
+  fml::AutoResetWaitableEvent unblock_raster;
+  task_runners.GetRasterTaskRunner()->PostTask(
+      [&raster_entered, &unblock_raster]() {
+        raster_entered.Signal();
+        unblock_raster.Wait();
+      });
+  raster_entered.Wait();
+
+  std::atomic<bool> factory_ran{false};
+  fml::AutoResetWaitableEvent factory_done;
+
+  // Must return on the platform thread while the raster thread is still
+  // blocked.
+  PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+    platform_view_ptr->TriggerNotifyCreatedDeferred(
+        [&factory_ran, &factory_done]() -> std::unique_ptr<Surface> {
+          factory_ran.store(true);
+          auto surface = MakeValidMockSurface();
+          factory_done.Signal();
+          return surface;
+        });
+  });
+
+  EXPECT_FALSE(factory_ran.load());
+
+  unblock_raster.Signal();
+  factory_done.Wait();
+  EXPECT_TRUE(factory_ran.load());
+
+  PostSync(task_runners.GetRasterTaskRunner(),
+           [&]() { EXPECT_FALSE(shell->GetRasterizer()->IsTornDown()); });
+
+  ShellTest::PlatformViewNotifyDestroyed(shell.get());
+  EXPECT_TRUE(RasterizerIsTornDown(shell.get()));
+  DestroyShell(std::move(shell), task_runners);
+}
+
+TEST_F(
+    ShellTest,
+    OnPlatformViewCreatedDeferredOrderedBeforeDestroyedNeverSetsUpAfterTeardown) {
+  Settings settings = CreateSettingsForFixture();
+  TaskRunners task_runners = GetTaskRunnersForFixture();
+
+  DeferredTestPlatformView* platform_view_ptr = nullptr;
+  ShellTest::Config config{
+      .settings = settings,
+      .task_runners = task_runners,
+      .platform_view_create_callback =
+          [&platform_view_ptr, &task_runners](Shell& shell) {
+            auto view =
+                std::make_unique<DeferredTestPlatformView>(shell, task_runners);
+            platform_view_ptr = view.get();
+            return view;
+          },
+  };
+  std::unique_ptr<Shell> shell = CreateShell(config);
+  ASSERT_NE(shell, nullptr);
+
+  // Case 1: Generation-skipped factory (simulating NotifyCreated ->
+  // NotifyDestroyed before raster processes NotifyCreated).
+  {
+    fml::AutoResetWaitableEvent raster_entered;
+    fml::AutoResetWaitableEvent unblock_raster;
+    task_runners.GetRasterTaskRunner()->PostTask(
+        [&raster_entered, &unblock_raster]() {
+          raster_entered.Signal();
+          unblock_raster.Wait();
+        });
+    raster_entered.Wait();
+
+    std::atomic<uint64_t> generation{1};
+    std::atomic<bool> skipped_due_to_generation{false};
+    std::atomic<bool> created_surface{false};
+
+    PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+      const uint64_t expected_gen = generation.load();
+      platform_view_ptr->TriggerNotifyCreatedDeferred(
+          [&generation, expected_gen, &skipped_due_to_generation,
+           &created_surface]() -> std::unique_ptr<Surface> {
+            if (generation.load() != expected_gen) {
+              skipped_due_to_generation.store(true);
+              return nullptr;
+            }
+            created_surface.store(true);
+            return MakeValidMockSurface();
+          });
+      // Invalidate generation before NotifyDestroyed, matching
+      // PlatformViewAndroid::NotifyDestroyed.
+      generation.fetch_add(1);
+    });
+
+    fml::AutoResetWaitableEvent destroy_done;
+    task_runners.GetPlatformTaskRunner()->PostTask([&]() {
+      shell->GetPlatformView()->NotifyDestroyed();
+      destroy_done.Signal();
+    });
+
+    unblock_raster.Signal();
+    destroy_done.Wait();
+
+    EXPECT_TRUE(skipped_due_to_generation.load());
+    EXPECT_FALSE(created_surface.load());
+    EXPECT_TRUE(RasterizerIsTornDown(shell.get()));
+  }
+
+  // Case 2: Non-skipped factory queued immediately ahead of NotifyDestroyed:
+  // Rasterizer::Setup must still execute strictly before Rasterizer::Teardown.
+  {
+    fml::AutoResetWaitableEvent raster_entered;
+    fml::AutoResetWaitableEvent unblock_raster;
+    task_runners.GetRasterTaskRunner()->PostTask(
+        [&raster_entered, &unblock_raster]() {
+          raster_entered.Signal();
+          unblock_raster.Wait();
+        });
+    raster_entered.Wait();
+
+    std::vector<std::string> events;
+    PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+      platform_view_ptr->TriggerNotifyCreatedDeferred(
+          [&events]() -> std::unique_ptr<Surface> {
+            auto surface = MakeValidMockSurface();
+            EXPECT_CALL(*surface, MakeRenderContextCurrent())
+                .WillRepeatedly([&events]() {
+                  events.emplace_back("make_current");
+                  return std::make_unique<GLContextDefaultResult>(true);
+                });
+            EXPECT_CALL(*surface, ClearRenderContext()).WillOnce([&events]() {
+              events.emplace_back("teardown_clear");
+              return true;
+            });
+            events.emplace_back("factory");
+            return surface;
+          });
+    });
+
+    fml::AutoResetWaitableEvent destroy_done;
+    task_runners.GetPlatformTaskRunner()->PostTask([&]() {
+      shell->GetPlatformView()->NotifyDestroyed();
+      destroy_done.Signal();
+    });
+
+    unblock_raster.Signal();
+    destroy_done.Wait();
+
+    ASSERT_GE(events.size(), 3u);
+    EXPECT_EQ(events.front(), "factory");
+    EXPECT_EQ(events.back(), "teardown_clear");
+    EXPECT_TRUE(RasterizerIsTornDown(shell.get()));
+  }
+
+  DestroyShell(std::move(shell), task_runners);
+}
+
+TEST_F(ShellTest, DestroyShellWithPendingDeferredPlatformViewCreation) {
+  Settings settings = CreateSettingsForFixture();
+  TaskRunners task_runners = GetTaskRunnersForFixture();
+
+  DeferredTestPlatformView* platform_view_ptr = nullptr;
+  ShellTest::Config config{
+      .settings = settings,
+      .task_runners = task_runners,
+      .platform_view_create_callback =
+          [&platform_view_ptr, &task_runners](Shell& shell) {
+            auto view =
+                std::make_unique<DeferredTestPlatformView>(shell, task_runners);
+            platform_view_ptr = view.get();
+            return view;
+          },
+  };
+  std::unique_ptr<Shell> shell = CreateShell(config);
+  ASSERT_NE(shell, nullptr);
+
+  fml::AutoResetWaitableEvent raster_entered;
+  fml::AutoResetWaitableEvent unblock_raster;
+  task_runners.GetRasterTaskRunner()->PostTask(
+      [&raster_entered, &unblock_raster]() {
+        raster_entered.Signal();
+        unblock_raster.Wait();
+      });
+  raster_entered.Wait();
+
+  std::atomic<bool> factory_ran{false};
+  PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+    platform_view_ptr->TriggerNotifyCreatedDeferred(
+        [&factory_ran]() -> std::unique_ptr<Surface> {
+          factory_ran.store(true);
+          return MakeValidMockSurface();
+        });
+  });
+  EXPECT_FALSE(factory_ran.load());
+
+  std::thread unblocker([&unblock_raster]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    unblock_raster.Signal();
+  });
+
+  DestroyShell(std::move(shell), task_runners);
+  unblocker.join();
+
+  EXPECT_TRUE(factory_ran.load());
+}
+
+TEST_F(
+    ShellTest,
+    OnPlatformViewCreatedDeferredWithDynamicThreadMergingDoesNotDeadlockOnDestroy) {
+  Settings settings = CreateSettingsForFixture();
+  TaskRunners task_runners = GetTaskRunnersForFixture();
+
+  std::atomic<bool> end_frame_called{false};
+  std::atomic<bool> enabled_in_end_frame{true};
+  std::atomic<bool> merged_in_end_frame{false};
+  auto external_view_embedder = std::make_shared<ShellTestExternalViewEmbedder>(
+      [&end_frame_called, &enabled_in_end_frame, &merged_in_end_frame](
+          bool should_resubmit_frame,
+          fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger) {
+        ASSERT_NE(raster_thread_merger.get(), nullptr);
+        enabled_in_end_frame.store(raster_thread_merger->IsEnabled());
+        raster_thread_merger->MergeWithLease(10);
+        merged_in_end_frame.store(raster_thread_merger->IsMerged());
+        end_frame_called.store(true);
+      },
+      PostPrerollResult::kSuccess, /*support_thread_merging=*/true);
+
+  DeferredTestPlatformView* platform_view_ptr = nullptr;
+  ShellTest::Config config{
+      .settings = settings,
+      .task_runners = task_runners,
+      .platform_view_create_callback =
+          [&platform_view_ptr, &task_runners,
+           external_view_embedder](Shell& shell) {
+            auto view = std::make_unique<DeferredTestPlatformView>(
+                shell, task_runners, external_view_embedder);
+            platform_view_ptr = view.get();
+            return view;
+          },
+  };
+  std::unique_ptr<Shell> shell = CreateShell(config);
+  ASSERT_NE(shell, nullptr);
+  ASSERT_NE(platform_view_ptr, nullptr);
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("emptyMain");
+  RunEngine(shell.get(), std::move(configuration));
+
+  fml::AutoResetWaitableEvent factory_entered;
+  fml::AutoResetWaitableEvent unblock_factory;
+  std::atomic<bool> merger_was_null_in_factory{false};
+
+  // 1. Trigger deferred surface creation; its factory blocks on the raster
+  // thread (simulating the ~120 ms AiksContext creation window) before
+  // `Rasterizer::Setup` has created `raster_thread_merger_`.
+  PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+    platform_view_ptr->TriggerNotifyCreatedDeferred(
+        [&shell, &factory_entered, &unblock_factory,
+         &merger_was_null_in_factory]() -> std::unique_ptr<Surface> {
+          merger_was_null_in_factory.store(
+              shell->GetRasterizer()->GetRasterThreadMerger().get() == nullptr);
+          factory_entered.Signal();
+          unblock_factory.Wait();
+          return MakeValidMockSurface();
+        });
+  });
+
+  factory_entered.Wait();
+  EXPECT_TRUE(merger_was_null_in_factory.load());
+
+  // 2. Queue a frame from the UI thread right behind the in-flight deferred
+  // creation task on the raster thread. When drawn,
+  // `external_view_embedder->EndFrame` will request `MergeWithLease(10)`.
+  PumpOneFrame(shell.get());
+
+  // 3. While `surface_factory` is still in flight on the raster thread and no
+  // merger exists yet, `NotifyDestroyed` arrives on the platform thread. It
+  // records the pending disabled state so `Rasterizer::Setup` creates the
+  // merger already disabled, preventing `EndFrame` from merging the raster
+  // queue onto the blocked platform thread.
+  fml::AutoResetWaitableEvent destroy_started;
+  fml::AutoResetWaitableEvent destroy_done;
+  task_runners.GetPlatformTaskRunner()->PostTask(
+      [&shell, &destroy_started, &destroy_done]() {
+        destroy_started.Signal();
+        shell->GetPlatformView()->NotifyDestroyed();
+        destroy_done.Signal();
+      });
+  destroy_started.Wait();
+
+  std::thread unblocker([&unblock_factory]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    unblock_factory.Signal();
+  });
+
+  ASSERT_FALSE(destroy_done.WaitWithTimeout(fml::TimeDelta::FromSeconds(5)));
+  unblocker.join();
+
+  EXPECT_TRUE(end_frame_called.load());
+  EXPECT_FALSE(enabled_in_end_frame.load());
+  EXPECT_FALSE(merged_in_end_frame.load());
+  EXPECT_TRUE(RasterizerIsTornDown(shell.get()));
+
+  PostSync(task_runners.GetRasterTaskRunner(), [&]() {
+    auto merger = shell->GetRasterizer()->GetRasterThreadMerger();
+    ASSERT_NE(merger.get(), nullptr);
+    EXPECT_TRUE(merger->IsEnabled());
+  });
+
+  DestroyShell(std::move(shell), task_runners);
+}
+
+TEST_F(ShellTest,
+       DeferredNotifyCreatedNeverQueriesThreadMergingOnPlatformThread) {
+  Settings settings = CreateSettingsForFixture();
+  TaskRunners task_runners = GetTaskRunnersForFixture();
+
+  std::atomic<bool> backend_ready{false};
+  fml::AutoResetWaitableEvent setup_impeller_entered;
+  fml::AutoResetWaitableEvent unblock_setup_impeller;
+
+  std::atomic<bool> end_frame_called{false};
+  std::atomic<bool> merged_in_end_frame{false};
+  fml::AutoResetWaitableEvent end_frame_event;
+  auto embedder = std::make_shared<BackendDependentExternalViewEmbedder>(
+      task_runners, backend_ready, /*support_thread_merging=*/true,
+      [&end_frame_called, &merged_in_end_frame, &end_frame_event](
+          bool should_resubmit_frame,
+          fml::RefPtr<fml::RasterThreadMerger> merger) {
+        ASSERT_NE(merger.get(), nullptr);
+        if (merger->IsEnabled()) {
+          merger->MergeWithLease(1);
+        }
+        merged_in_end_frame.store(merger->IsMerged());
+        end_frame_called.store(true);
+        end_frame_event.Signal();
+      });
+
+  DeferredTestPlatformView* platform_view_ptr = nullptr;
+  ShellTest::Config config{
+      .settings = settings,
+      .task_runners = task_runners,
+      .platform_view_create_callback =
+          [&platform_view_ptr, &task_runners, embedder, &backend_ready,
+           &setup_impeller_entered, &unblock_setup_impeller](Shell& shell) {
+            auto view = std::make_unique<DeferredTestPlatformView>(
+                shell, task_runners, embedder, [&]() {
+                  setup_impeller_entered.Signal();
+                  unblock_setup_impeller.Wait();
+                  backend_ready.store(true);
+                });
+            platform_view_ptr = view.get();
+            return view;
+          },
+  };
+
+  // Shell::Create posts SetupImpellerContext to the raster runner and runs
+  // Shell::Setup on the platform runner. Shell creation must return while
+  // SetupImpellerContext is still blocked, without querying
+  // SupportsDynamicThreadMerging().
+  std::unique_ptr<Shell> shell = CreateShell(config);
+  ASSERT_NE(shell, nullptr);
+  ASSERT_NE(platform_view_ptr, nullptr);
+  setup_impeller_entered.Wait();
+  EXPECT_FALSE(backend_ready.load());
+  EXPECT_EQ(embedder->supports_merging_calls(), 0u);
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("emptyMain");
+  RunEngine(shell.get(), std::move(configuration));
+
+  // Rapid Created(deferred) -> Destroyed -> Created(deferred) sequence posted
+  // while SetupImpellerContext is still blocked on the raster thread.
+  std::atomic<uint64_t> generation{0};
+  std::atomic<bool> first_factory_skipped{false};
+  fml::AutoResetWaitableEvent second_factory_done;
+
+  PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+    const uint64_t gen1 = ++generation;
+    platform_view_ptr->TriggerNotifyCreatedDeferred(
+        [&generation, gen1,
+         &first_factory_skipped]() -> std::unique_ptr<Surface> {
+          if (generation.load() != gen1) {
+            first_factory_skipped.store(true);
+            return nullptr;
+          }
+          return MakeValidMockSurface();
+        });
+  });
+  EXPECT_FALSE(backend_ready.load());
+  EXPECT_EQ(embedder->supports_merging_calls(), 0u);
+
+  // Queue NotifyDestroyed and a second deferred creation behind it on the
+  // platform thread, then unblock SetupImpellerContext on the raster thread.
+  fml::AutoResetWaitableEvent cycle_done;
+  task_runners.GetPlatformTaskRunner()->PostTask([&]() {
+    ++generation;
+    shell->GetPlatformView()->NotifyDestroyed();
+    const uint64_t gen3 = ++generation;
+    platform_view_ptr->TriggerNotifyCreatedDeferred(
+        [&generation, gen3,
+         &second_factory_done]() -> std::unique_ptr<Surface> {
+          if (generation.load() != gen3) {
+            return nullptr;
+          }
+          auto surface = MakeValidMockSurface();
+          second_factory_done.Signal();
+          return surface;
+        });
+    cycle_done.Signal();
+  });
+
+  std::thread unblocker([&unblock_setup_impeller]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    unblock_setup_impeller.Signal();
+  });
+
+  ASSERT_FALSE(cycle_done.WaitWithTimeout(fml::TimeDelta::FromSeconds(5)));
+  ASSERT_FALSE(
+      second_factory_done.WaitWithTimeout(fml::TimeDelta::FromSeconds(5)));
+  unblocker.join();
+  PostSync(task_runners.GetRasterTaskRunner(), [] {});
+
+  EXPECT_TRUE(backend_ready.load());
+  EXPECT_TRUE(first_factory_skipped.load());
+  EXPECT_GE(embedder->supports_merging_calls(), 1u);
+
+  // Pump a frame to verify the second deferred Setup produced an enabled
+  // merger that merges on EndFrame.
+  PumpOneFrame(shell.get());
+  ASSERT_FALSE(end_frame_event.WaitWithTimeout(fml::TimeDelta::FromSeconds(5)));
+  EXPECT_TRUE(end_frame_called.load());
+  EXPECT_TRUE(merged_in_end_frame.load());
+
+  ShellTest::PlatformViewNotifyDestroyed(shell.get());
+  DestroyShell(std::move(shell), task_runners);
+}
+
+TEST_F(ShellTest, SpawnedShellSharesThreadMergerWhenParentSetupIsDeferred) {
+  Settings settings = CreateSettingsForFixture();
+  TaskRunners task_runners = GetTaskRunnersForFixture();
+
+  auto make_embedder = []() {
+    return std::make_shared<ShellTestExternalViewEmbedder>(
+        [](bool, fml::RefPtr<fml::RasterThreadMerger>) {},
+        PostPrerollResult::kSuccess, /*support_thread_merging=*/true);
+  };
+
+  DeferredTestPlatformView* parent_view_ptr = nullptr;
+  ShellTest::Config config{
+      .settings = settings,
+      .task_runners = task_runners,
+      .platform_view_create_callback =
+          [&parent_view_ptr, &task_runners, &make_embedder](Shell& shell) {
+            auto view = std::make_unique<DeferredTestPlatformView>(
+                shell, task_runners, make_embedder());
+            parent_view_ptr = view.get();
+            return view;
+          },
+  };
+  std::unique_ptr<Shell> parent_shell = CreateShell(config);
+  ASSERT_NE(parent_shell, nullptr);
+
+  auto parent_config = RunConfiguration::InferFromSettings(settings);
+  parent_config.SetEntrypoint("emptyMain");
+  RunEngine(parent_shell.get(), std::move(parent_config));
+
+  // Pause inside parent_shell's deferred surface_factory so parent_shell's
+  // Rasterizer::Setup has not yet created its RasterThreadMerger when
+  // parent_shell->Spawn() begins on the platform thread.
+  fml::AutoResetWaitableEvent parent_factory_entered;
+  fml::AutoResetWaitableEvent unblock_parent_factory;
+  std::atomic<bool> parent_merger_was_null_after_spawn_read{false};
+
+  PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+    parent_view_ptr->TriggerNotifyCreatedDeferred(
+        [&parent_shell, &parent_factory_entered, &unblock_parent_factory,
+         &parent_merger_was_null_after_spawn_read]() {
+          parent_factory_entered.Signal();
+          unblock_parent_factory.Wait();
+          parent_merger_was_null_after_spawn_read.store(
+              parent_shell->GetRasterizer()->GetRasterThreadMerger().get() ==
+              nullptr);
+          return MakeValidMockSurface();
+        });
+  });
+  parent_factory_entered.Wait();
+
+  std::unique_ptr<Shell> child_shell;
+  DeferredTestPlatformView* child_view_ptr = nullptr;
+  fml::AutoResetWaitableEvent child_setup_done;
+
+  fml::AutoResetWaitableEvent cancel_watchdog;
+  std::atomic<bool> watchdog_fired{false};
+  std::thread watchdog([&]() {
+    if (cancel_watchdog.WaitWithTimeout(fml::TimeDelta::FromSeconds(5))) {
+      watchdog_fired.store(true);
+      unblock_parent_factory.Signal();
+    }
+  });
+
+  PostSync(task_runners.GetPlatformTaskRunner(), [&]() {
+    auto child_config = RunConfiguration::InferFromSettings(settings);
+    child_config.SetEntrypoint("emptyMain");
+    child_shell = parent_shell->Spawn(
+        std::move(child_config), "",
+        [&child_view_ptr, &task_runners, &make_embedder,
+         &unblock_parent_factory](Shell& shell) {
+          // `on_create_platform_view` runs on the platform thread inside
+          // `CreateShellOnPlatformThread` after `Spawn()` has already read
+          // `parent_shell`'s `GetRasterThreadMerger()` (which is still null)
+          // and before `CreateShellOnPlatformThread` waits on the raster
+          // thread's `ShellSetupGPUSubsystem` future. Unblocking here makes the
+          // deferred-parent race deterministic without sleeps.
+          unblock_parent_factory.Signal();
+          auto view = std::make_unique<DeferredTestPlatformView>(
+              shell, task_runners, make_embedder());
+          child_view_ptr = view.get();
+          return view;
+        },
+        [](Shell& shell) { return std::make_unique<Rasterizer>(shell); });
+    ASSERT_NE(child_shell, nullptr);
+    ASSERT_NE(child_view_ptr, nullptr);
+
+    child_view_ptr->TriggerNotifyCreatedDeferred([&child_setup_done]() {
+      auto surface = MakeValidMockSurface();
+      child_setup_done.Signal();
+      return surface;
+    });
+  });
+
+  cancel_watchdog.Signal();
+  watchdog.join();
+  EXPECT_FALSE(watchdog_fired.load());
+  EXPECT_TRUE(parent_merger_was_null_after_spawn_read.load());
+
+  ASSERT_FALSE(
+      child_setup_done.WaitWithTimeout(fml::TimeDelta::FromSeconds(5)));
+
+  PostSync(task_runners.GetRasterTaskRunner(), [&]() {
+    auto parent_merger = parent_shell->GetRasterizer()->GetRasterThreadMerger();
+    auto child_merger = child_shell->GetRasterizer()->GetRasterThreadMerger();
+    ASSERT_NE(parent_merger.get(), nullptr);
+    ASSERT_NE(child_merger.get(), nullptr);
+    EXPECT_EQ(parent_merger->GetSharedRasterThreadMerger().get(),
+              child_merger->GetSharedRasterThreadMerger().get());
+  });
+
+  ShellTest::PlatformViewNotifyDestroyed(child_shell.get());
+  ShellTest::PlatformViewNotifyDestroyed(parent_shell.get());
+  DestroyShell(std::move(child_shell), task_runners);
+  DestroyShell(std::move(parent_shell), task_runners);
+}
+
 }  // namespace testing
 }  // namespace flutter
 

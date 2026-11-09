@@ -91,18 +91,30 @@ void Rasterizer::Setup(std::unique_ptr<Surface> surface) {
     compositor_context_->OnGrContextCreated();
   }
 
-  if (external_view_embedder_ &&
-      external_view_embedder_->SupportsDynamicThreadMerging() &&
-      !raster_thread_merger_) {
+  fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger =
+      GetRasterThreadMerger();
+  if (!raster_thread_merger && external_view_embedder_ &&
+      external_view_embedder_->SupportsDynamicThreadMerging()) {
     const auto platform_id =
         delegate_.GetTaskRunners().GetPlatformTaskRunner()->GetTaskQueueId();
     const auto gpu_id =
         delegate_.GetTaskRunners().GetRasterTaskRunner()->GetTaskQueueId();
-    raster_thread_merger_ = fml::RasterThreadMerger::CreateOrShareThreadMerger(
-        delegate_.GetParentRasterThreadMerger(), platform_id, gpu_id);
+    auto parent_merger = delegate_.GetParentRasterThreadMerger();
+    {
+      std::scoped_lock lock(raster_thread_merger_mutex_);
+      if (!raster_thread_merger_) {
+        raster_thread_merger_ =
+            fml::RasterThreadMerger::CreateOrShareThreadMerger(
+                parent_merger, platform_id, gpu_id);
+      }
+      if (thread_merger_disabled_count_ > 0) {
+        raster_thread_merger_->Disable();
+      }
+      raster_thread_merger = raster_thread_merger_;
+    }
   }
-  if (raster_thread_merger_) {
-    raster_thread_merger_->SetMergeUnmergeCallback([this]() {
+  if (raster_thread_merger) {
+    raster_thread_merger->SetMergeUnmergeCallback([this]() {
       // Clear the GL context after the thread configuration has changed.
       if (surface_) {
         surface_->ClearRenderContext();
@@ -136,11 +148,12 @@ void Rasterizer::Teardown() {
 
   view_records_.clear();
 
-  if (raster_thread_merger_.get() != nullptr &&
-      raster_thread_merger_.get()->IsMerged()) {
-    FML_DCHECK(raster_thread_merger_->IsEnabled());
-    raster_thread_merger_->UnMergeNowIfLastOne();
-    raster_thread_merger_->SetMergeUnmergeCallback(nullptr);
+  fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger =
+      GetRasterThreadMerger();
+  if (raster_thread_merger && raster_thread_merger->IsMerged()) {
+    FML_DCHECK(raster_thread_merger->IsEnabled());
+    raster_thread_merger->UnMergeNowIfLastOne();
+    raster_thread_merger->SetMergeUnmergeCallback(nullptr);
   }
 }
 
@@ -159,12 +172,18 @@ std::optional<DrawSurfaceStatus> Rasterizer::GetLastDrawStatus(
 }
 
 void Rasterizer::EnableThreadMergerIfNeeded() {
-  if (raster_thread_merger_) {
+  std::scoped_lock lock(raster_thread_merger_mutex_);
+  if (thread_merger_disabled_count_ > 0) {
+    --thread_merger_disabled_count_;
+  }
+  if (thread_merger_disabled_count_ == 0 && raster_thread_merger_) {
     raster_thread_merger_->Enable();
   }
 }
 
 void Rasterizer::DisableThreadMergerIfNeeded() {
+  std::scoped_lock lock(raster_thread_merger_mutex_);
+  ++thread_merger_disabled_count_;
   if (raster_thread_merger_) {
     raster_thread_merger_->Disable();
   }
@@ -255,14 +274,15 @@ void Rasterizer::DrawLastLayerTrees(
     bool should_resubmit_frame = ShouldResubmitFrame(result);
     external_view_embedder_->SetUsedThisFrame(false);
     external_view_embedder_->EndFrame(should_resubmit_frame,
-                                      raster_thread_merger_);
+                                      GetRasterThreadMerger());
   }
 }
 
 DrawStatus Rasterizer::Draw(const std::shared_ptr<FramePipeline>& pipeline) {
   TRACE_EVENT0("flutter", "GPURasterizer::Draw");
-  if (raster_thread_merger_ &&
-      !raster_thread_merger_->IsOnRasterizingThread()) {
+  fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger =
+      GetRasterThreadMerger();
+  if (raster_thread_merger && !raster_thread_merger->IsOnRasterizingThread()) {
     // we yield and let this frame be serviced on the right thread.
     return DrawStatus::kYielded;
   }
@@ -301,7 +321,7 @@ DrawStatus Rasterizer::Draw(const std::shared_ptr<FramePipeline>& pipeline) {
   if (external_view_embedder_ && external_view_embedder_->GetUsedThisFrame()) {
     external_view_embedder_->SetUsedThisFrame(false);
     external_view_embedder_->EndFrame(should_resubmit_frame,
-                                      raster_thread_merger_);
+                                      raster_thread_merger);
   }
 
   // Consume as many pipeline items as possible. But yield the event loop
@@ -615,8 +635,10 @@ Rasterizer::DoDrawResult Rasterizer::DoDraw(
   //   - |Draw| for B yields as its on the wrong thread.
   // This enqueue ensures that we attempt to consume from the right
   // thread one more time after un-merge.
-  if (raster_thread_merger_) {
-    if (raster_thread_merger_->DecrementLease() ==
+  fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger =
+      GetRasterThreadMerger();
+  if (raster_thread_merger) {
+    if (raster_thread_merger->DecrementLease() ==
         fml::RasterThreadStatus::kUnmergedNow) {
       return DoDrawResult{
           .status = DoDrawStatus::kEnqueuePipeline,
@@ -687,7 +709,7 @@ std::unique_ptr<FrameItem> Rasterizer::DrawToSurfacesUnsafe(
     FML_DCHECK(!external_view_embedder_->GetUsedThisFrame());
     external_view_embedder_->SetUsedThisFrame(true);
     external_view_embedder_->BeginFrame(surface_->GetContext(),
-                                        raster_thread_merger_);
+                                        GetRasterThreadMerger());
   }
 
   std::optional<fml::TimePoint> presentation_time = std::nullopt;
@@ -755,6 +777,8 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
     float device_pixel_ratio,
     std::optional<fml::TimePoint> presentation_time) {
   FML_DCHECK(surface_);
+  fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger =
+      GetRasterThreadMerger();
 
   DlCanvas* embedder_root_canvas = nullptr;
   if (external_view_embedder_) {
@@ -789,7 +813,7 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
       true,                           // instrumentation enabled
       frame->framebuffer_info()
           .supports_readback,           // surface supports pixel reads
-      raster_thread_merger_,            // thread merger
+      raster_thread_merger,             // thread merger
       surface_->GetAiksContext().get()  // aiks context
   );
   if (compositor_frame) {
@@ -805,7 +829,7 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
       // something that still need to be figured out.
       bool force_full_repaint =
           external_view_embedder_ &&
-          (!raster_thread_merger_ || raster_thread_merger_->IsMerged());
+          (!raster_thread_merger || raster_thread_merger->IsMerged());
 
       damage = std::make_unique<FrameDamage>();
       auto existing_damage = frame->framebuffer_info().existing_damage;
@@ -842,7 +866,7 @@ DrawSurfaceStatus Rasterizer::DrawToSurfaceUnsafe(
     frame->set_submit_info(submit_info);
 
     if (external_view_embedder_ &&
-        (!raster_thread_merger_ || raster_thread_merger_->IsMerged())) {
+        (!raster_thread_merger || raster_thread_merger->IsMerged())) {
       FML_DCHECK(!frame->IsSubmitted());
       external_view_embedder_->SubmitFlutterView(
           view_id, surface_->GetContext(), surface_->GetAiksContext(),
@@ -1166,6 +1190,7 @@ void Rasterizer::SetSnapshotSurfaceProducer(
 }
 
 fml::RefPtr<fml::RasterThreadMerger> Rasterizer::GetRasterThreadMerger() {
+  std::scoped_lock lock(raster_thread_merger_mutex_);
   return raster_thread_merger_;
 }
 

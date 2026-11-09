@@ -12,6 +12,7 @@
 #include "common/settings.h"
 #include "flutter/common/graphics/texture.h"
 #include "flutter/fml/synchronization/waitable_event.h"
+#include "flutter/fml/trace_event.h"
 #include "flutter/shell/common/shell_io_manager.h"
 #include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/android_context_dynamic_impeller.h"
@@ -183,33 +184,67 @@ PlatformViewAndroid::~PlatformViewAndroid() = default;
 
 void PlatformViewAndroid::NotifyCreated(
     fml::RefPtr<AndroidNativeWindow> native_window) {
+  TRACE_EVENT0("flutter", "PlatformViewAndroid::NotifyCreated");
   if (android_surface_) {
     InstallFirstFrameCallback();
-
-    fml::AutoResetWaitableEvent latch;
-    fml::TaskRunner::RunNowOrPostTask(
-        task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
-         native_window = std::move(native_window), jni_facade = jni_facade_]() {
-          surface->SetNativeWindow(native_window, jni_facade);
-          latch.Signal();
-        });
-    latch.Wait();
   }
 
-  PlatformView::NotifyCreated();
+  const uint64_t generation =
+      surface_generation_.fetch_add(1, std::memory_order_relaxed) + 1;
+
+  // Lifetime invariant: `this` (and `android_surface_`) is safe to capture on a
+  // task posted directly from the platform thread to the raster task runner
+  // because `Shell::~Shell()` flushes the raster task runner before destroying
+  // `platform_view_`.
+  PlatformView::NotifyCreatedDeferred(
+      [this, generation, native_window = std::move(native_window),
+       jni_facade = jni_facade_]() mutable -> std::unique_ptr<Surface> {
+        if (surface_generation_.load(std::memory_order_relaxed) != generation) {
+          return nullptr;
+        }
+        has_valid_surface_ = false;
+        if (android_surface_ && !android_surface_->SetNativeWindow(
+                                    std::move(native_window), jni_facade)) {
+          // Log and fall through to CreateRenderingSurface(): on OpenGL
+          // backends CreateGPUSurface() still succeeds without a valid onscreen
+          // EGLSurface and the subsequent NotifyChanged() recreates it via
+          // OnScreenSurfaceResize(), whereas on Vulkan CreateGPUSurface()
+          // returns nullptr when SetNativeWindow() failed so has_valid_surface_
+          // stays false and NotifyChanged() will not dereference a null
+          // swapchain.
+          FML_LOG(ERROR) << "Failed to set native window on Android surface";
+        }
+        std::unique_ptr<Surface> surface = CreateRenderingSurface();
+        const bool valid_surface = surface && surface->IsValid();
+        has_valid_surface_ = valid_surface;
+        if (!valid_surface) {
+          FML_LOG(ERROR) << "Failed to create platform view rendering surface";
+          return nullptr;
+        }
+        return surface;
+      });
 }
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
     fml::RefPtr<AndroidNativeWindow> native_window) {
+  TRACE_EVENT0("flutter", "PlatformViewAndroid::NotifySurfaceWindowChanged");
   if (android_surface_) {
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
+        [this, &latch, surface = android_surface_.get(),
          native_window = std::move(native_window), jni_facade = jni_facade_]() {
           surface->TeardownOnScreenContext();
-          surface->SetNativeWindow(native_window, jni_facade);
+          const bool set_window_ok =
+              surface->SetNativeWindow(native_window, jni_facade);
+          // Safe to query RenderingApi() here without blocking because
+          // SetupImpellerContext() precedes this task on the raster queue.
+          if (!set_window_ok && android_context_->RenderingApi() ==
+                                    AndroidRenderingAPI::kImpellerVulkan) {
+            has_valid_surface_ = false;
+          } else if (set_window_ok) {
+            has_valid_surface_ = true;
+          }
           latch.Signal();
         });
     latch.Wait();
@@ -219,13 +254,16 @@ void PlatformViewAndroid::NotifySurfaceWindowChanged(
 }
 
 void PlatformViewAndroid::NotifyDestroyed() {
+  TRACE_EVENT0("flutter", "PlatformViewAndroid::NotifyDestroyed");
+  surface_generation_.fetch_add(1, std::memory_order_relaxed);
   PlatformView::NotifyDestroyed();
 
   if (android_surface_) {
     fml::AutoResetWaitableEvent latch;
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get()]() {
+        [this, &latch, surface = android_surface_.get()]() {
+          has_valid_surface_ = false;
           surface->TeardownOnScreenContext();
           latch.Signal();
         });
@@ -234,17 +272,24 @@ void PlatformViewAndroid::NotifyDestroyed() {
 }
 
 void PlatformViewAndroid::NotifyChanged(const DlISize& size) {
+  TRACE_EVENT0("flutter", "PlatformViewAndroid::NotifyChanged");
   if (!android_surface_) {
     return;
   }
-  fml::AutoResetWaitableEvent latch;
+  const uint64_t generation =
+      surface_generation_.load(std::memory_order_relaxed);
+  // Safe to capture `this` and `android_surface_.get()` without a latch because
+  // this task is posted directly from the platform thread and `Shell::~Shell()`
+  // flushes the raster task runner before destroying `platform_view_`.
   fml::TaskRunner::RunNowOrPostTask(
-      task_runners_.GetRasterTaskRunner(),  //
-      [&latch, surface = android_surface_.get(), size]() {
+      task_runners_.GetRasterTaskRunner(),
+      [this, surface = android_surface_.get(), generation, size]() {
+        if (surface_generation_.load(std::memory_order_relaxed) != generation ||
+            !has_valid_surface_) {
+          return;
+        }
         surface->OnScreenSurfaceResize(size);
-        latch.Signal();
       });
-  latch.Wait();
 }
 
 void PlatformViewAndroid::DispatchPlatformMessage(JNIEnv* env,

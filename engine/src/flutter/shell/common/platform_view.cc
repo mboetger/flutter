@@ -84,6 +84,11 @@ void PlatformView::NotifyCreated() {
   delegate_.OnPlatformViewCreated(std::move(surface));
 }
 
+void PlatformView::NotifyCreatedDeferred(
+    std::function<std::unique_ptr<Surface>()> surface_factory) {
+  delegate_.OnPlatformViewCreatedDeferred(std::move(surface_factory));
+}
+
 void PlatformView::NotifyDestroyed() {
   delegate_.OnPlatformViewDestroyed();
 }
