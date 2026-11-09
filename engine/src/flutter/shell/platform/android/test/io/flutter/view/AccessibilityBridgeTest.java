@@ -73,6 +73,38 @@ import org.robolectric.annotation.Config;
 
 @RunWith(AndroidJUnit4.class)
 public class AccessibilityBridgeTest {
+  @Test
+  public void itDoesNotSendTypeViewSelectedOnAccessibilityFocus() {
+    View mockRootView = mock(View.class);
+    Context context = mock(Context.class);
+    when(mockRootView.getContext()).thenReturn(context);
+    when(context.getPackageName()).thenReturn("test");
+    ViewParent mockParent = mock(ViewParent.class);
+    when(mockRootView.getParent()).thenReturn(mockParent);
+
+    AccessibilityManager accessibilityManager = mock(AccessibilityManager.class);
+    when(accessibilityManager.isEnabled()).thenReturn(true);
+    @SuppressWarnings("unchecked")
+    BasicMessageChannel<Object> mockChannel = mock(BasicMessageChannel.class);
+    AccessibilityChannel accessibilityChannel =
+        new AccessibilityChannel(mockChannel, mock(FlutterJNI.class));
+    AccessibilityBridge accessibilityBridge =
+        setUpBridge(mockRootView, accessibilityChannel, accessibilityManager, null, null, null);
+    AccessibilityBridge spyAccessibilityBridge = spy(accessibilityBridge);
+
+    TestSemanticsNode testSemanticsNode = new TestSemanticsNode();
+    testSemanticsNode.id = 0;
+    testSemanticsNode.addAction(AccessibilityBridge.Action.INCREASE);
+    TestSemanticsUpdate testSemanticsUpdate = testSemanticsNode.toUpdate();
+    testSemanticsUpdate.sendUpdateToBridge(spyAccessibilityBridge);
+
+    spyAccessibilityBridge.performAction(0, AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
+
+    verify(spyAccessibilityBridge, times(1))
+        .sendAccessibilityEvent(0, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED);
+    verify(spyAccessibilityBridge, never())
+        .sendAccessibilityEvent(0, AccessibilityEvent.TYPE_VIEW_SELECTED);
+  }
 
   private static final int ACCESSIBILITY_FEATURE_NAVIGATION = 1 << 0;
   private static final int ACCESSIBILITY_FEATURE_INVERT_COLORS = 1 << 1;

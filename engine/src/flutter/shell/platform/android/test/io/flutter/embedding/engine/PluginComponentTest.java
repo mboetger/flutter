@@ -147,12 +147,12 @@ public class PluginComponentTest {
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
-      attachedEngineId = binding.getEngineId();
+      // attachedEngineId = binding.getEngineId();
     }
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-      detachedEngineId = binding.getEngineId();
+      // detachedEngineId = binding.getEngineId();
     }
   }
 

@@ -1064,12 +1064,6 @@ public class AccessibilityBridge extends AccessibilityNodeProvider {
 
           sendAccessibilityEvent(virtualViewId, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED);
 
-          if (semanticsNode.hasAction(Action.INCREASE)
-              || semanticsNode.hasAction(Action.DECREASE)) {
-            // SeekBars only announce themselves after this event.
-            sendAccessibilityEvent(virtualViewId, AccessibilityEvent.TYPE_VIEW_SELECTED);
-          }
-
           return true;
         }
       case ACTION_SHOW_ON_SCREEN:
