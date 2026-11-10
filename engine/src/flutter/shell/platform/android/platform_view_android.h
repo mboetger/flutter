@@ -146,6 +146,9 @@ class PlatformViewAndroid final : public PlatformView {
   // deferred raster tasks from a superseded or destroyed surface are skipped.
   std::atomic<uint64_t> surface_generation_{0};
   bool android_meets_hcpp_criteria_ = false;
+  // SPIKE: whether hybrid composition merges the raster thread into the
+  // platform thread while platform views are in the scene.
+  bool hybrid_composition_merges_threads_ = true;
 
   // |PlatformView|
   void UpdateSemantics(

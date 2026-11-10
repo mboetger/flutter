@@ -38,14 +38,20 @@ AndroidExternalViewEmbedder::AndroidExternalViewEmbedder(
     const AndroidContext& android_context,
     std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
     std::shared_ptr<AndroidSurfaceFactory> surface_factory,
-    const TaskRunners& task_runners)
+    const TaskRunners& task_runners,
+    bool merge_threads,
+    fml::closure schedule_frame)
     : ExternalViewEmbedder(),
       android_context_(android_context),
       jni_facade_(std::move(jni_facade)),
       surface_factory_(std::move(surface_factory)),
       surface_pool_(
           std::make_unique<SurfacePool>(/*use_new_surface_methods=*/false)),
-      task_runners_(task_runners) {}
+      task_runners_(task_runners),
+      merge_threads_(merge_threads),
+      schedule_frame_(std::move(schedule_frame)),
+      present_state_(std::make_shared<PresentState>()),
+      surface_generation_(std::make_shared<std::atomic<uint64_t>>(0)) {}
 
 // |ExternalViewEmbedder|
 void AndroidExternalViewEmbedder::PrerollCompositeEmbeddedView(
@@ -94,6 +100,11 @@ void AndroidExternalViewEmbedder::SubmitFlutterView(
   // TODO(dkwingsmt): This class only supports rendering into the implicit view.
   // Properly support multi-view in the future.
   FML_DCHECK(flutter_view_id == kFlutterImplicitViewId);
+
+  if (!merge_threads_) {
+    SubmitFlutterViewWithoutMerging(context, std::move(frame));
+    return;
+  }
 
   if (!FrameHasPlatformLayers()) {
     frame->Submit();
@@ -184,10 +195,193 @@ AndroidExternalViewEmbedder::CreateSurfaceIfNeeded(GrDirectContext* context,
   return frame;
 }
 
+void AndroidExternalViewEmbedder::SubmitFlutterViewWithoutMerging(
+    GrDirectContext* context,
+    std::unique_ptr<SurfaceFrame> frame) {
+  AddCreatedOverlayLayers(context);
+
+  if (!FrameHasPlatformLayers()) {
+    frame->Submit();
+    if (presented_platform_views_) {
+      // Lets the platform thread hide the platform views and switch the root
+      // surface back from the image reader.
+      presented_platform_views_ = false;
+      PostPlatformWork({}, /*present=*/true, /*overlays_to_create=*/0,
+                       /*schedule_frame=*/false);
+    }
+    return;
+  }
+
+  std::unordered_map<int64_t, DlRect> view_rects;
+  for (auto platform_id : composition_order_) {
+    view_rects[platform_id] = GetViewRect(platform_id);
+  }
+
+  std::unordered_map<int64_t, DlRect> overlay_layers =
+      SliceViews(frame->Canvas(),     //
+                 composition_order_,  //
+                 slices_,             //
+                 view_rects           //
+      );
+
+  const size_t available_layers = surface_pool_->GetAvailableLayerCount();
+  const size_t missing_layers = overlay_layers.size() > available_layers
+                                    ? overlay_layers.size() - available_layers
+                                    : 0;
+
+  // Overlay views can only be created on the platform thread. Rather than
+  // wait for it, skip this frame, create the overlays, and request a new frame.
+  if (presented_platform_views_ && missing_layers > 0) {
+    TRACE_EVENT_INSTANT0("flutter",
+                         "AndroidExternalViewEmbedder::SkipFrameForOverlays");
+    PostPlatformWork({}, /*present=*/false, missing_layers,
+                     /*schedule_frame=*/true);
+    return;
+  }
+
+  // Presenting the first frame with platform views switches the root surface
+  // to an image reader, but this frame would still render to the previous
+  // surface. Skip rendering it, as merged mode does before it resubmits the
+  // frame, and create the overlays it needs while presenting it. Switching
+  // surfaces schedules another frame.
+  const bool should_submit_current_frame = presented_platform_views_;
+  if (should_submit_current_frame) {
+    frame->Submit();
+  }
+
+  std::vector<PresentOp> ops;
+  for (int64_t view_id : composition_order_) {
+    // Round, rather than truncate, the bounds onto the pixel grid. See
+    // `ToPhysicalPixels` for why.
+    const DlIRect view_rect = DlIRect::Round(GetViewRect(view_id));
+    const EmbeddedViewParams& params = view_params_.at(view_id);
+    const int32_t view_width =
+        ToPhysicalPixels(params.sizePoints().width, device_pixel_ratio_);
+    const int32_t view_height =
+        ToPhysicalPixels(params.sizePoints().height, device_pixel_ratio_);
+    ops.push_back([view_id, view_rect, view_width, view_height,
+                   mutators_stack = params.mutatorsStack()](
+                      PlatformViewAndroidJNI& jni_facade) {
+      jni_facade.FlutterViewOnDisplayPlatformView(
+          view_id, view_rect.GetX(), view_rect.GetY(), view_rect.GetWidth(),
+          view_rect.GetHeight(), view_width, view_height, mutators_stack);
+    });
+
+    std::unordered_map<int64_t, DlRect>::const_iterator overlay =
+        overlay_layers.find(view_id);
+    if (!should_submit_current_frame || overlay == overlay_layers.end()) {
+      continue;
+    }
+    const DlRect rect = overlay->second;
+    std::shared_ptr<OverlayLayer> layer = surface_pool_->GetLayer(
+        context, android_context_, jni_facade_, surface_factory_);
+    std::unique_ptr<SurfaceFrame> overlay_frame =
+        layer->surface->AcquireFrame(frame_size_);
+    DlCanvas* overlay_canvas = overlay_frame->Canvas();
+    overlay_canvas->Clear(DlColor::kTransparent());
+    // Offset the picture since its absolute position on the scene is
+    // determined by the position of the overlay view.
+    overlay_canvas->Translate(-rect.GetX(), -rect.GetY());
+    slices_.at(view_id)->render_into(overlay_canvas);
+    overlay_frame->Submit();
+    ops.push_back([id = layer->id, rect](PlatformViewAndroidJNI& jni_facade) {
+      jni_facade.FlutterViewDisplayOverlaySurface(
+          id, rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight());
+    });
+  }
+  presented_platform_views_ = true;
+  PostPlatformWork(std::move(ops), /*present=*/true,
+                   should_submit_current_frame ? 0 : missing_layers,
+                   /*schedule_frame=*/false);
+}
+
+void AndroidExternalViewEmbedder::AddCreatedOverlayLayers(
+    GrDirectContext* context) {
+  if (present_state_->created_overlays.empty()) {
+    return;
+  }
+  auto created_overlays = std::move(present_state_->created_overlays);
+  present_state_->created_overlays.clear();
+  const uint64_t generation =
+      surface_generation_->load(std::memory_order_relaxed);
+  for (auto& [created_generation, overlay] : created_overlays) {
+    // |Teardown| destroyed the overlay views that were created before it.
+    if (created_generation == generation) {
+      surface_pool_->AddLayer(std::move(overlay), context, jni_facade_,
+                              surface_factory_);
+    }
+  }
+}
+
+void AndroidExternalViewEmbedder::PostPlatformWork(std::vector<PresentOp> ops,
+                                                   bool present,
+                                                   size_t overlays_to_create,
+                                                   bool schedule_frame) {
+  present_state_->pending = true;
+  const uint64_t flow_id = fml::tracing::TraceNonce();
+  TRACE_FLOW_BEGIN("flutter", "HybridCompositionPresent", flow_id);
+  task_runners_.GetPlatformTaskRunner()->PostTask(fml::MakeCopyable(
+      [jni_facade = jni_facade_, ops = std::move(ops), present,
+       overlays_to_create, schedule_frame,
+       schedule_frame_callback = schedule_frame_,
+       generation = surface_generation_->load(std::memory_order_relaxed),
+       surface_generation = surface_generation_,
+       raster_task_runner = task_runners_.GetRasterTaskRunner(),
+       weak_present_state = std::weak_ptr<PresentState>(present_state_),
+       flow_id]() mutable {
+        TRACE_EVENT0("flutter", "AndroidExternalViewEmbedder::Present");
+        TRACE_FLOW_STEP("flutter", "HybridCompositionPresent", flow_id);
+        const bool torn_down =
+            surface_generation->load(std::memory_order_relaxed) != generation;
+        std::vector<std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>>
+            overlays;
+        if (!torn_down) {
+          for (size_t i = 0; i < overlays_to_create; i++) {
+            overlays.push_back(jni_facade->FlutterViewCreateOverlaySurface());
+          }
+          if (present) {
+            jni_facade->FlutterViewBeginFrame();
+            for (const PresentOp& op : ops) {
+              op(*jni_facade);
+            }
+            jni_facade->FlutterViewEndFrame();
+          }
+        }
+        // Resume drawing from a raster task posted after any surface swap that
+        // the present requested, so that the next frame renders to the new
+        // surface.
+        raster_task_runner->PostTask(fml::MakeCopyable(
+            [weak_present_state, generation, overlays = std::move(overlays),
+             flow_id]() mutable {
+              TRACE_EVENT0("flutter",
+                           "AndroidExternalViewEmbedder::PresentDone");
+              TRACE_FLOW_END("flutter", "HybridCompositionPresent", flow_id);
+              std::shared_ptr<PresentState> present_state =
+                  weak_present_state.lock();
+              if (!present_state) {
+                return;
+              }
+              for (auto& overlay : overlays) {
+                present_state->created_overlays.emplace_back(
+                    generation, std::move(overlay));
+              }
+              present_state->pending = false;
+              std::vector<fml::closure> resume_callbacks;
+              resume_callbacks.swap(present_state->resume_callbacks);
+              for (const fml::closure& resume : resume_callbacks) {
+                resume();
+              }
+            }));
+        if (schedule_frame && !torn_down && schedule_frame_callback) {
+          schedule_frame_callback();
+        }
+      }));
+}
+
 // |ExternalViewEmbedder|
 PostPrerollResult AndroidExternalViewEmbedder::PostPrerollAction(
     const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
-  if (!FrameHasPlatformLayers()) {
+  if (!merge_threads_ || !FrameHasPlatformLayers()) {
     return PostPrerollResult::kSuccess;
   }
   if (!raster_thread_merger->IsMerged()) {
@@ -233,8 +427,9 @@ void AndroidExternalViewEmbedder::Reset() {
 void AndroidExternalViewEmbedder::BeginFrame(
     GrDirectContext* context,
     const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
-  // JNI method must be called on the platform thread.
-  if (raster_thread_merger->IsOnPlatformThread()) {
+  // JNI method must be called on the platform thread. Without thread merging,
+  // the present posted to the platform thread calls it.
+  if (merge_threads_ && raster_thread_merger->IsOnPlatformThread()) {
     jni_facade_->FlutterViewBeginFrame();
   }
 }
@@ -278,19 +473,44 @@ void AndroidExternalViewEmbedder::EndFrame(
     bool should_resubmit_frame,
     const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger) {
   surface_pool_->RecycleLayers();
-  // JNI method must be called on the platform thread.
-  if (raster_thread_merger->IsOnPlatformThread()) {
+  // JNI method must be called on the platform thread. Without thread merging,
+  // the present posted to the platform thread calls it.
+  if (merge_threads_ && raster_thread_merger->IsOnPlatformThread()) {
     jni_facade_->FlutterViewEndFrame();
   }
 }
 
 // |ExternalViewEmbedder|
 bool AndroidExternalViewEmbedder::SupportsDynamicThreadMerging() {
-  return true;
+  return merge_threads_;
+}
+
+// |ExternalViewEmbedder|
+bool AndroidExternalViewEmbedder::ReadyForNextFrame(
+    const fml::closure& resume) {
+  if (merge_threads_ || !present_state_->pending) {
+    return true;
+  }
+  // The platform thread is still presenting the previous frame, and the image
+  // readers hold that frame until it does. Defer instead of blocking.
+  TRACE_EVENT_INSTANT0("flutter", "AndroidExternalViewEmbedder::DeferFrame");
+  if (resume) {
+    present_state_->resume_callbacks.push_back(resume);
+  }
+  return false;
 }
 
 // |ExternalViewEmbedder|
 void AndroidExternalViewEmbedder::Teardown() {
+  // Presents that are still queued on the platform thread are for the surface
+  // that is being torn down.
+  surface_generation_->fetch_add(1, std::memory_order_relaxed);
+  if (!merge_threads_ && !surface_pool_->HasLayers()) {
+    // The platform thread may have created overlay views that the pool doesn't
+    // hold yet. The shell calls this method on the platform thread.
+    jni_facade_->FlutterViewDestroyOverlaySurfaces();
+    return;
+  }
   DestroySurfaces();
 }
 
@@ -309,9 +529,13 @@ void AndroidExternalViewEmbedder::DestroySurfaces() {
 }
 
 void AndroidExternalViewEmbedder::ReleaseOverlayLayers() {
+  // Overlay surfaces that the platform thread created but that the pool
+  // doesn't hold yet have the previous frame size too.
+  const bool had_created_overlays = !present_state_->created_overlays.empty();
+  present_state_->created_overlays.clear();
   std::vector<std::shared_ptr<OverlayLayer>> layers =
       surface_pool_->TakeLayers();
-  if (layers.empty()) {
+  if (layers.empty() && !had_created_overlays) {
     return;
   }
   // Release the rendering surfaces on the thread that renders into them.

@@ -62,6 +62,19 @@ class SurfacePool {
   // This method doesn't mark the layers as unused.
   std::vector<std::shared_ptr<OverlayLayer>> GetUnusedLayers();
 
+  // Returns how many more layers |GetLayer| can return before it needs to
+  // create an overlay surface in Java.
+  size_t GetAvailableLayerCount();
+
+  // Adds a layer for an overlay surface that was created in Java, for callers
+  // that create overlay surfaces on the platform thread but render on another
+  // thread. Call it on the rendering thread, before |GetLayer|.
+  void AddLayer(
+      std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> java_metadata,
+      GrDirectContext* gr_context,
+      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+      const std::shared_ptr<AndroidSurfaceFactory>& surface_factory);
+
   // Marks the layers in the pool as available for reuse.
   void RecycleLayers();
 
@@ -116,6 +129,12 @@ class SurfacePool {
 
   void DestroyLayersLocked(
       const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade);
+
+  void AddLayerLocked(
+      std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> java_metadata,
+      GrDirectContext* gr_context,
+      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+      const std::shared_ptr<AndroidSurfaceFactory>& surface_factory);
 };
 
 }  // namespace flutter

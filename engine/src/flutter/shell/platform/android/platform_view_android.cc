@@ -6,6 +6,7 @@
 
 #include <android/api-level.h>
 #include <sys/system_properties.h>
+#include <cstring>
 #include <memory>
 #include <utility>
 
@@ -173,6 +174,15 @@ PlatformViewAndroid::PlatformViewAndroid(
         delegate.OnPlatformViewGetSettings().enable_surface_control &&
         android_get_device_api_level() >= kMinAPILevelHCPP &&
         delegate.OnPlatformViewGetSettings().enable_impeller;
+    // SPIKE: `adb shell setprop debug.flutter.hc.unmerged 1` presents hybrid
+    // composition frames without merging the raster and platform threads.
+    char hc_unmerged[PROP_VALUE_MAX] = {};
+    __system_property_get("debug.flutter.hc.unmerged", hc_unmerged);
+    hybrid_composition_merges_threads_ = strcmp(hc_unmerged, "1") != 0;
+    if (!hybrid_composition_merges_threads_) {
+      FML_LOG(IMPORTANT) << "Hybrid composition without thread merging "
+                            "(debug.flutter.hc.unmerged=1).";
+    }
     FML_CHECK(android_surface_ && android_surface_->IsValid())
         << "Could not create an OpenGL, Vulkan or Software surface to set "
            "up "
@@ -469,7 +479,12 @@ std::shared_ptr<ExternalViewEmbedder>
 PlatformViewAndroid::CreateExternalViewEmbedder() {
   return std::make_shared<AndroidExternalViewEmbedderWrapper>(
       android_meets_hcpp_criteria_, *android_context_, jni_facade_,
-      surface_factory_, task_runners_);
+      surface_factory_, task_runners_, hybrid_composition_merges_threads_,
+      [weak_platform_view = GetWeakPtr()]() {
+        if (weak_platform_view) {
+          weak_platform_view->ScheduleFrame();
+        }
+      });
 }
 
 // |PlatformView|

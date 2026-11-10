@@ -63,6 +63,9 @@ enum class DrawStatus {
   kPipelineEmpty,
   // Nothing was done, because the GPU was unavailable.
   kGpuUnavailable,
+  // Nothing was done, because the external view embedder isn't ready for the
+  // next frame. The frame stays queued, and drawing resumes when it is.
+  kDeferred,
 };
 
 // The result status of drawing to a view. This is only used for unit tests.

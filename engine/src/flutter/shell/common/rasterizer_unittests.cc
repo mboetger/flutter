@@ -14,6 +14,7 @@
 #include "flutter/fml/synchronization/count_down_latch.h"
 #include "flutter/fml/time/time_point.h"
 #include "flutter/shell/common/thread_host.h"
+#include "flutter/testing/post_task_sync.h"
 #include "flutter/testing/testing.h"
 
 #include "third_party/skia/include/core/SkColorSpace.h"
@@ -95,6 +96,10 @@ class MockSurface : public Surface {
 
 class MockExternalViewEmbedder : public ExternalViewEmbedder {
  public:
+  MockExternalViewEmbedder() {
+    ON_CALL(*this, ReadyForNextFrame(_)).WillByDefault(Return(true));
+  }
+
   MOCK_METHOD(DlCanvas*, GetRootCanvas, (), (override));
   MOCK_METHOD(void, CancelFrame, (), (override));
   MOCK_METHOD(
@@ -131,6 +136,10 @@ class MockExternalViewEmbedder : public ExternalViewEmbedder {
        const fml::RefPtr<fml::RasterThreadMerger>& raster_thread_merger),
       (override));
   MOCK_METHOD(bool, SupportsDynamicThreadMerging, (), (override));
+  MOCK_METHOD(bool,
+              ReadyForNextFrame,
+              (const fml::closure& resume),
+              (override));
 };
 
 #if IMPELLER_SUPPORTS_RENDERING
@@ -705,6 +714,81 @@ TEST(RasterizerTest, externalViewEmbedderDoesntEndFrameWhenNotUsedThisFrame) {
     latch.Signal();
   });
   latch.Wait();
+}
+
+TEST(RasterizerTest, externalViewEmbedderCanDeferFrameWithoutBlocking) {
+  std::string test_name =
+      ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  ThreadHost thread_host("io.flutter.test." + test_name + ".",
+                         ThreadHost::Type::kPlatform |
+                             ThreadHost::Type::kRaster | ThreadHost::Type::kIo |
+                             ThreadHost::Type::kUi);
+  TaskRunners task_runners("test", thread_host.platform_thread->GetTaskRunner(),
+                           thread_host.raster_thread->GetTaskRunner(),
+                           thread_host.ui_thread->GetTaskRunner(),
+                           thread_host.io_thread->GetTaskRunner());
+  NiceMock<MockDelegate> delegate;
+  Settings settings;
+  ON_CALL(delegate, GetSettings()).WillByDefault(ReturnRef(settings));
+  EXPECT_CALL(delegate, GetTaskRunners())
+      .WillRepeatedly(ReturnRef(task_runners));
+  auto is_gpu_disabled_sync_switch =
+      std::make_shared<const fml::SyncSwitch>(false);
+  ON_CALL(delegate, GetIsGpuDisabledSyncSwitch())
+      .WillByDefault(Return(is_gpu_disabled_sync_switch));
+  // Discarding the layer tree makes it observable whether the frame was
+  // consumed from the pipeline without drawing anything.
+  ON_CALL(delegate, ShouldDiscardLayerTree).WillByDefault(Return(true));
+
+  std::shared_ptr<NiceMock<MockExternalViewEmbedder>> external_view_embedder =
+      std::make_shared<NiceMock<MockExternalViewEmbedder>>();
+  // Like the shell, create the rasterizer on the raster thread. Resuming uses
+  // its raster-thread weak pointer.
+  std::unique_ptr<Rasterizer> rasterizer;
+  flutter::testing::PostTaskSync(task_runners.GetRasterTaskRunner(), [&] {
+    rasterizer = std::make_unique<Rasterizer>(delegate);
+    auto surface = std::make_unique<NiceMock<MockSurface>>();
+    EXPECT_CALL(*surface, MakeRenderContextCurrent())
+        .WillOnce(
+            Return(ByMove(std::make_unique<GLContextDefaultResult>(true))));
+    rasterizer->SetExternalViewEmbedder(external_view_embedder);
+    rasterizer->Setup(std::move(surface));
+  });
+
+  fml::closure resume;
+  EXPECT_CALL(*external_view_embedder, ReadyForNextFrame(_))
+      .WillOnce([&resume](const fml::closure& callback) {
+        resume = callback;
+        return false;
+      })
+      .WillRepeatedly(Return(true));
+
+  auto pipeline = std::make_shared<FramePipeline>(/*depth=*/10);
+  fml::AutoResetWaitableEvent deferred;
+  thread_host.raster_thread->GetTaskRunner()->PostTask([&] {
+    auto layer_tree = std::make_unique<LayerTree>(/*root_layer=*/nullptr,
+                                                  /*frame_size=*/DlISize());
+    auto layer_tree_item = std::make_unique<FrameItem>(
+        SingleLayerTreeList(kImplicitViewId, std::move(layer_tree),
+                            kDevicePixelRatio),
+        CreateFinishedBuildRecorder());
+    EXPECT_TRUE(
+        pipeline->Produce().Complete(std::move(layer_tree_item)).success);
+    EXPECT_EQ(rasterizer->Draw(pipeline), DrawStatus::kDeferred);
+    // The frame is still queued.
+    EXPECT_FALSE(rasterizer->GetLastDrawStatus(kImplicitViewId).has_value());
+    deferred.Signal();
+  });
+  deferred.Wait();
+  ASSERT_TRUE(resume);
+
+  // Resuming draws the queued frame on the raster thread.
+  resume();
+  flutter::testing::PostTaskSync(task_runners.GetRasterTaskRunner(), [&] {
+    EXPECT_EQ(rasterizer->GetLastDrawStatus(kImplicitViewId),
+              DrawSurfaceStatus::kDiscarded);
+    rasterizer.reset();
+  });
 }
 
 TEST(RasterizerTest, externalViewEmbedderDoesntEndFrameWhenPipelineIsEmpty) {

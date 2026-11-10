@@ -18,9 +18,13 @@ AndroidExternalViewEmbedderWrapper::AndroidExternalViewEmbedderWrapper(
     const AndroidContext& android_context,
     std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
     std::shared_ptr<AndroidSurfaceFactory> surface_factory,
-    const TaskRunners& task_runners)
+    const TaskRunners& task_runners,
+    bool merge_hybrid_composition_threads,
+    fml::closure schedule_frame)
     : ExternalViewEmbedder(),
       meets_hcpp_criteria_(meets_hcpp_criteria),
+      merge_hybrid_composition_threads_(merge_hybrid_composition_threads),
+      schedule_frame_(std::move(schedule_frame)),
       android_context_(android_context),
       task_runners_(task_runners),
       jni_facade_(std::move(jni_facade)),
@@ -38,7 +42,8 @@ void AndroidExternalViewEmbedderWrapper::EnsureInitialized() {
         android_context_, jni_facade_, surface_factory_, task_runners_);
   } else {
     non_hcpp_view_embedder_ = std::make_unique<AndroidExternalViewEmbedder>(
-        android_context_, jni_facade_, surface_factory_, task_runners_);
+        android_context_, jni_facade_, surface_factory_, task_runners_,
+        merge_hybrid_composition_threads_, schedule_frame_);
   }
 }
 
@@ -153,6 +158,17 @@ bool AndroidExternalViewEmbedderWrapper::SupportsDynamicThreadMerging() {
     return hcpp_view_embedder_->SupportsDynamicThreadMerging();
   } else {
     return non_hcpp_view_embedder_->SupportsDynamicThreadMerging();
+  }
+}
+
+// |ExternalViewEmbedder|
+bool AndroidExternalViewEmbedderWrapper::ReadyForNextFrame(
+    const fml::closure& resume) {
+  EnsureInitialized();
+  if (hcpp_view_embedder_) {
+    return hcpp_view_embedder_->ReadyForNextFrame(resume);
+  } else {
+    return non_hcpp_view_embedder_->ReadyForNextFrame(resume);
   }
 }
 

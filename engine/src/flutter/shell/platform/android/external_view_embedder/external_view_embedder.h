@@ -5,10 +5,16 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_EXTERNAL_VIEW_EMBEDDER_EXTERNAL_VIEW_EMBEDDER_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_EXTERNAL_VIEW_EMBEDDER_EXTERNAL_VIEW_EMBEDDER_H_
 
+#include <atomic>
+#include <functional>
+#include <memory>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "flutter/common/task_runners.h"
 #include "flutter/flow/embedded_views.h"
+#include "flutter/fml/closure.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/surface_pool.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -28,11 +34,17 @@ namespace flutter {
 ///
 class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
  public:
+  // If `merge_threads` is false, frames are rasterized on the raster thread and
+  // presented on the platform thread without merging the two threads.
+  // `schedule_frame` is then called on the platform thread to request a new
+  // frame after a frame was skipped.
   AndroidExternalViewEmbedder(
       const AndroidContext& android_context,
       std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
       std::shared_ptr<AndroidSurfaceFactory> surface_factory,
-      const TaskRunners& task_runners);
+      const TaskRunners& task_runners,
+      bool merge_threads = true,
+      fml::closure schedule_frame = nullptr);
 
   // |ExternalViewEmbedder|
   void PrerollCompositeEmbeddedView(
@@ -76,6 +88,9 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
 
   // |ExternalViewEmbedder|
   bool SupportsDynamicThreadMerging() override;
+
+  // |ExternalViewEmbedder|
+  bool ReadyForNextFrame(const fml::closure& resume) override;
 
   // |ExternalViewEmbedder|
   void Teardown() override;
@@ -129,6 +144,63 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
 
   // The number of platform views in the previous frame.
   int64_t previous_frame_view_count_ = 0;
+
+  // Without thread merging, one call into Java that presents a frame on the
+  // platform thread. The calls run in z-order.
+  using PresentOp = std::function<void(PlatformViewAndroidJNI&)>;
+
+  // Without thread merging, tracks the work that the platform thread does for
+  // the raster thread. Only accessed on the raster thread.
+  struct PresentState {
+    // Whether the platform thread is presenting a frame or creating overlay
+    // surfaces. The next frame waits for it without blocking.
+    bool pending = false;
+    std::vector<fml::closure> resume_callbacks;
+    // Overlay surfaces that the platform thread created, with the surface
+    // generation they were created in. The next frame adds them to the pool.
+    std::vector<
+        std::pair<uint64_t,
+                  std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>>>
+        created_overlays;
+  };
+
+  // Whether the raster thread is merged into the platform thread while
+  // platform views are in the scene.
+  const bool merge_threads_;
+
+  // Requests a new frame. Called on the platform thread.
+  const fml::closure schedule_frame_;
+
+  // Shared with the raster tasks that finish a present.
+  const std::shared_ptr<PresentState> present_state_;
+
+  // Incremented on the platform thread by |Teardown|, so that presents posted
+  // for a torn down surface don't call into Java.
+  const std::shared_ptr<std::atomic<uint64_t>> surface_generation_;
+
+  // Without thread merging, whether the last present showed platform views,
+  // which means that Java renders the root surface to an image reader. Only
+  // accessed on the raster thread.
+  bool presented_platform_views_ = false;
+
+  // Without thread merging, renders the frame on the raster thread and posts
+  // its presentation to the platform thread.
+  void SubmitFlutterViewWithoutMerging(GrDirectContext* context,
+                                       std::unique_ptr<SurfaceFrame> frame);
+
+  // Without thread merging, adds the overlay surfaces that the platform thread
+  // created to the pool, unless the surface was torn down since.
+  void AddCreatedOverlayLayers(GrDirectContext* context);
+
+  // Without thread merging, posts work to the platform thread: creating
+  // `overlays_to_create` overlay surfaces, then the Java calls that present the
+  // current frame if `present` is true, then requesting a new frame if
+  // `schedule_frame` is true. The next frame waits for it without blocking the
+  // raster thread, see |ReadyForNextFrame|.
+  void PostPlatformWork(std::vector<PresentOp> ops,
+                        bool present,
+                        size_t overlays_to_create,
+                        bool schedule_frame);
 
   // Destroys the surfaces created from the surface factory.
   // This method schedules a task on the platform thread, and waits for

@@ -250,6 +250,13 @@ void Rasterizer::DrawLastLayerTrees(
   if (!surface_) {
     return;
   }
+  // The embedder resumes drawing from the frame pipeline once it is ready, and
+  // that pipeline holds newer content than the last layer trees.
+  if (external_view_embedder_ &&
+      !external_view_embedder_->ReadyForNextFrame(nullptr)) {
+    TRACE_EVENT_INSTANT0("flutter", "Rasterizer::DrawLastLayerTreesDeferred");
+    return;
+  }
   std::vector<std::unique_ptr<LayerTreeTask>> tasks;
   for (auto& [view_id, view_record] : view_records_) {
     if (view_record.last_successful_task) {
@@ -282,6 +289,24 @@ DrawStatus Rasterizer::Draw(const std::shared_ptr<FramePipeline>& pipeline) {
   FML_DCHECK(delegate_.GetTaskRunners()
                  .GetRasterTaskRunner()
                  ->RunsTasksOnCurrentThread());
+
+  // Leave the frame in the pipeline while the embedder isn't ready for it. The
+  // embedder resumes drawing instead of blocking the raster thread.
+  if (external_view_embedder_ &&
+      !external_view_embedder_->ReadyForNextFrame(
+          [raster_task_runner =
+               delegate_.GetTaskRunners().GetRasterTaskRunner(),
+           weak_this = weak_factory_.GetWeakPtr(),
+           weak_pipeline = std::weak_ptr<FramePipeline>(pipeline)]() {
+            raster_task_runner->PostTask([weak_this, weak_pipeline]() {
+              std::shared_ptr<FramePipeline> pipeline = weak_pipeline.lock();
+              if (weak_this && pipeline) {
+                weak_this->Draw(pipeline);
+              }
+            });
+          })) {
+    return DrawStatus::kDeferred;
+  }
 
   DoDrawResult draw_result;
   FramePipeline::Consumer consumer = [&draw_result,
