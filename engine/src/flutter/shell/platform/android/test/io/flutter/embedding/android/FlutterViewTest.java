@@ -10,11 +10,13 @@ import static junit.framework.TestCase.assertNotSame;
 import static junit.framework.TestCase.assertNull;
 import static junit.framework.TestCase.assertSame;
 import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -48,6 +50,7 @@ import android.view.ViewStructure;
 import android.view.WindowInsets;
 import android.view.autofill.AutofillValue;
 import android.widget.FrameLayout;
+import androidx.annotation.NonNull;
 import androidx.core.util.Consumer;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.core.app.ApplicationProvider;
@@ -72,6 +75,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
@@ -1017,6 +1021,123 @@ public class FlutterViewTest {
 
     imageView.closeImageReader();
     verify(mockReader, times(1)).close();
+  }
+
+  // Renders a frame into `reader` the way the engine would. Relies on Robolectric's
+  // ShadowImageReader, whose surface makes an image available when a canvas is posted.
+  private static void postFrame(@NonNull ImageReader reader) {
+    final Surface surface = reader.getSurface();
+    surface.unlockCanvasAndPost(surface.lockCanvas(null));
+  }
+
+  @Test
+  public void flutterImageView_onSizeChangedKeepsReplacedReaderOpenUntilNewReaderHasImage() {
+    final ImageReader oldReader = mock(ImageReader.class);
+    when(oldReader.getMaxImages()).thenReturn(3);
+    final Image oldImage = mock(Image.class);
+    when(oldReader.acquireLatestImage()).thenReturn(oldImage);
+
+    final FlutterImageView imageView =
+        spy(new FlutterImageView(ctx, oldReader, FlutterImageView.SurfaceKind.background));
+    doNothing().when(imageView).invalidate();
+    final FlutterJNI jni = mock(FlutterJNI.class);
+    imageView.attachToRenderer(new FlutterRenderer(jni));
+    assertTrue(imageView.acquireLatestImage());
+
+    imageView.onSizeChanged(100, 200, 0, 0);
+
+    final ImageReader newReader = imageView.getImageReader();
+    assertNotSame(oldReader, newReader);
+    verify(jni, times(1)).onSurfaceWindowChanged(newReader.getSurface());
+    // The engine can apply the swap asynchronously, so it may still render to the old reader.
+    assertFalse(imageView.acquireLatestImage());
+    verify(oldReader, times(0)).close();
+    verify(oldImage, times(0)).close();
+
+    // A frame in the new reader means that the engine no longer renders to the old one.
+    postFrame(newReader);
+    assertTrue(imageView.acquireLatestImage());
+    verify(oldImage, times(1)).close();
+    verify(oldReader, times(1)).close();
+  }
+
+  @Test
+  public void flutterImageView_closesReplacedReadersOnlyWhenNewestReaderHasImage() {
+    final ImageReader firstReader = mock(ImageReader.class);
+    when(firstReader.getMaxImages()).thenReturn(3);
+
+    final FlutterImageView imageView =
+        spy(new FlutterImageView(ctx, firstReader, FlutterImageView.SurfaceKind.background));
+    doNothing().when(imageView).invalidate();
+    imageView.attachToRenderer(new FlutterRenderer(mock(FlutterJNI.class)));
+
+    imageView.resizeIfNeeded(100, 200);
+    final ImageReader secondReader = imageView.getImageReader();
+    imageView.resizeIfNeeded(200, 100);
+
+    // A frame in a replaced reader doesn't mean that the engine swapped to the newest reader.
+    postFrame(secondReader);
+    assertFalse(imageView.acquireLatestImage());
+    verify(firstReader, times(0)).close();
+
+    postFrame(imageView.getImageReader());
+    assertTrue(imageView.acquireLatestImage());
+    verify(firstReader, times(1)).close();
+    // ShadowImageReader throws when a closed reader is asked for an image.
+    assertThrows(IllegalStateException.class, secondReader::acquireLatestImage);
+  }
+
+  @Test
+  public void flutterImageView_closeImageReaderClosesCurrentImageAndReplacedReaders() {
+    final ImageReader oldReader = mock(ImageReader.class);
+    when(oldReader.getMaxImages()).thenReturn(3);
+    final Image oldImage = mock(Image.class);
+    when(oldReader.acquireLatestImage()).thenReturn(oldImage);
+
+    final FlutterImageView imageView =
+        spy(new FlutterImageView(ctx, oldReader, FlutterImageView.SurfaceKind.background));
+    doNothing().when(imageView).invalidate();
+    imageView.attachToRenderer(new FlutterRenderer(mock(FlutterJNI.class)));
+    assertTrue(imageView.acquireLatestImage());
+
+    imageView.resizeIfNeeded(100, 200);
+    verify(oldReader, times(0)).close();
+
+    imageView.closeImageReader();
+    final InOrder inOrder = inOrder(oldImage, oldReader);
+    inOrder.verify(oldImage, times(1)).close();
+    inOrder.verify(oldReader, times(1)).close();
+  }
+
+  @Test
+  public void convertToImageView_resizedImageViewClosesReplacedReaderOnDetach() {
+    final FlutterEngine flutterEngine =
+        spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    final FlutterRenderer flutterRenderer = spy(new FlutterRenderer(mockFlutterJni));
+    when(flutterEngine.getRenderer()).thenReturn(flutterRenderer);
+
+    final ImageReader oldReader = mock(ImageReader.class);
+    when(oldReader.getMaxImages()).thenReturn(3);
+    final FlutterImageView imageView =
+        new FlutterImageView(ctx, oldReader, FlutterImageView.SurfaceKind.background);
+    final FlutterView flutterView = spy(new FlutterView(ctx));
+    when(flutterView.createImageView()).thenReturn(imageView);
+    flutterView.attachToFlutterEngine(flutterEngine);
+
+    flutterView.convertToImageView();
+    // Without a displayed frame, reverting keeps the image view, so converting again resizes it.
+    flutterView.revertImageView(() -> {});
+    flutterView.layout(0, 0, 100, 200);
+    flutterView.convertToImageView();
+
+    assertSame(imageView, flutterView.getCurrentImageSurface());
+    assertNotSame(oldReader, imageView.getImageReader());
+    verify(mockFlutterJni, times(1))
+        .onSurfaceWindowChanged(imageView.getImageReader().getSurface());
+    verify(oldReader, times(0)).close();
+
+    flutterView.detachFromFlutterEngine();
+    verify(oldReader, times(1)).close();
   }
 
   @Test

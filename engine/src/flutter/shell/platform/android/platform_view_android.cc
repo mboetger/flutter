@@ -12,6 +12,7 @@
 #include "common/settings.h"
 #include "flutter/common/graphics/texture.h"
 #include "flutter/fml/synchronization/waitable_event.h"
+#include "flutter/fml/trace_event.h"
 #include "flutter/shell/common/shell_io_manager.h"
 #include "flutter/shell/gpu/gpu_surface_gl_delegate.h"
 #include "flutter/shell/platform/android/android_context_dynamic_impeller.h"
@@ -212,17 +213,38 @@ void PlatformViewAndroid::NotifyCreated(
 
 void PlatformViewAndroid::NotifySurfaceWindowChanged(
     fml::RefPtr<AndroidNativeWindow> native_window) {
+  TRACE_EVENT0("flutter", "PlatformViewAndroid::NotifySurfaceWindowChanged");
   if (android_surface_) {
-    fml::AutoResetWaitableEvent latch;
+    const uint64_t generation = surface_generation_.load();
+    const uint64_t flow_id = fml::tracing::TraceNonce();
+    TRACE_FLOW_BEGIN("flutter", "SurfaceWindowChange", flow_id);
+    // Don't wait for the raster thread. Hybrid composition swaps the root
+    // window from platform thread work that the raster thread can be waiting
+    // on, so waiting here could deadlock. When the platform and raster threads
+    // are merged, this task runs before this method returns. Otherwise, frames
+    // already queued on the raster thread still render to the previous window,
+    // so callers must keep it alive until the new window receives a frame.
+    //
+    // Safe to capture `this` and `android_surface_.get()` without a latch, as
+    // in NotifyChanged: the task either runs inline or is queued on the
+    // unmerged raster task runner, which `Shell::~Shell()` drains before
+    // destroying `platform_view_`.
     fml::TaskRunner::RunNowOrPostTask(
         task_runners_.GetRasterTaskRunner(),
-        [&latch, surface = android_surface_.get(),
+        [this, surface = android_surface_.get(), generation, flow_id,
          native_window = std::move(native_window), jni_facade = jni_facade_]() {
+          TRACE_EVENT0("flutter",
+                       "PlatformViewAndroid::ApplySurfaceWindowChange");
+          TRACE_FLOW_END("flutter", "SurfaceWindowChange", flow_id);
+          if (surface_generation_.load() != generation) {
+            // A later NotifyCreated or NotifyDestroyed superseded this swap.
+            TRACE_EVENT0("flutter",
+                         "PlatformViewAndroid::SurfaceWindowChangeSuperseded");
+            return;
+          }
           surface->TeardownOnScreenContext();
           surface->SetNativeWindow(native_window, jni_facade);
-          latch.Signal();
         });
-    latch.Wait();
   }
 
   PlatformView::ScheduleFrame();

@@ -1429,6 +1429,9 @@ public class FlutterView extends FrameLayout
           public void onFlutterUiDisplayed() {
             renderer.removeIsDisplayingFlutterUiListener(this);
             onDone.run();
+            // Closing the image reader right after the swap above is safe only because hybrid
+            // composition merges the platform and raster threads, so the engine applied the swap
+            // before `resume()` returned and no queued frame can still render to the reader.
             if (!(renderSurface instanceof FlutterImageView) && flutterImageView != null) {
               flutterImageView.detachFromRenderer();
               releaseImageView();

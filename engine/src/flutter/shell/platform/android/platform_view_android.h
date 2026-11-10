@@ -66,6 +66,10 @@ class PlatformViewAndroid final : public PlatformView {
 
   void NotifyCreated(fml::RefPtr<AndroidNativeWindow> native_window);
 
+  // Replaces the window that the root surface renders to without waiting for
+  // the raster thread. Unless the platform and raster threads are merged,
+  // frames already queued on the raster thread still render to the previous
+  // window.
   void NotifySurfaceWindowChanged(
       fml::RefPtr<AndroidNativeWindow> native_window);
 

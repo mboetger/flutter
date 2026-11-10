@@ -646,6 +646,10 @@ public class FlutterJNI {
    * <p>In hybrid composition, the root surfaces changes from {@link
    * android.view.SurfaceHolder#getSurface()} to {@link android.media.ImageReader#getSurface()} when
    * a platform view is in the current frame.
+   *
+   * <p>This method doesn't wait for the raster thread. Unless the platform and raster threads are
+   * merged, frames that are already queued on the raster thread still render to the previous
+   * surface.
    */
   @UiThread
   public void onSurfaceWindowChanged(@NonNull Surface surface) {

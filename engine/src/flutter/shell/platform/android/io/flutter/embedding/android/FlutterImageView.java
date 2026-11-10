@@ -24,7 +24,10 @@ import androidx.annotation.VisibleForTesting;
 import io.flutter.Log;
 import io.flutter.embedding.engine.renderer.FlutterRenderer;
 import io.flutter.embedding.engine.renderer.RenderSurface;
+import io.flutter.util.TraceSection;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -41,8 +44,16 @@ import java.util.Locale;
  */
 public class FlutterImageView extends View implements RenderSurface {
   private static final String TAG = "FlutterImageView";
+  private static final String RETIRED_IMAGE_READERS_TRACE_NAME =
+      "FlutterImageView#retiredImageReaders";
+  private static int nextRetiredImageReadersTraceCookie = 0;
 
   @NonNull private ImageReader imageReader;
+  // Readers replaced by `resizeIfNeeded` that the engine may still render to. The engine can
+  // apply a surface swap asynchronously on the raster thread, so a replaced reader stays open
+  // until the current reader produces an image.
+  @NonNull private final List<ImageReader> retiredImageReaders = new ArrayList<>();
+  private int retiredImageReadersTraceCookie;
   @Nullable private Image currentImage;
   @Nullable private Bitmap currentBitmap;
   @Nullable private FlutterRenderer flutterRenderer;
@@ -211,13 +222,22 @@ public class FlutterImageView extends View implements RenderSurface {
     if (newImage != null) {
       // Only close current image after acquiring valid new image
       closeCurrentImage();
+      // The engine renders to the current reader only after it has swapped away from the
+      // retired readers, so they no longer receive frames.
+      closeRetiredImageReaders();
       currentImage = newImage;
       invalidate();
     }
     return newImage != null;
   }
 
-  /** Creates a new image reader with the provided size. */
+  /**
+   * Creates a new image reader with the provided size.
+   *
+   * <p>The replaced image reader stays open until the new one produces an image, because the engine
+   * may still render to it until it applies the surface swap. The current image stays visible until
+   * then too.
+   */
   public void resizeIfNeeded(int width, int height) {
     if (flutterRenderer == null) {
       return;
@@ -226,22 +246,43 @@ public class FlutterImageView extends View implements RenderSurface {
       return;
     }
 
-    // Close resources.
-    closeCurrentImage();
-    // Close the current image reader, then create a new one with the new size.
     // Image readers cannot be resized once created.
-    closeImageReader();
+    retireImageReader(imageReader);
     imageReader = createImageReader(width, height);
   }
 
   /**
-   * Closes the image reader associated with the current {@code FlutterImageView}.
+   * Closes the image reader associated with the current {@code FlutterImageView}, and any image
+   * readers it replaced in {@link #resizeIfNeeded(int, int)}.
    *
    * <p>Once the image reader is closed, calling {@code acquireLatestImage} will result in an {@code
    * IllegalStateException}.
    */
   public void closeImageReader() {
+    // Closing a reader invalidates the images acquired from it.
+    closeCurrentImage();
+    closeRetiredImageReaders();
     imageReader.close();
+  }
+
+  private void retireImageReader(@NonNull ImageReader reader) {
+    if (retiredImageReaders.isEmpty()) {
+      retiredImageReadersTraceCookie = nextRetiredImageReadersTraceCookie++;
+      TraceSection.beginAsyncSection(
+          RETIRED_IMAGE_READERS_TRACE_NAME, retiredImageReadersTraceCookie);
+    }
+    retiredImageReaders.add(reader);
+  }
+
+  private void closeRetiredImageReaders() {
+    if (retiredImageReaders.isEmpty()) {
+      return;
+    }
+    for (ImageReader reader : retiredImageReaders) {
+      reader.close();
+    }
+    retiredImageReaders.clear();
+    TraceSection.endAsyncSection(RETIRED_IMAGE_READERS_TRACE_NAME, retiredImageReadersTraceCookie);
   }
 
   @Override

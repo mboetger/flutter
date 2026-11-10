@@ -1165,6 +1165,10 @@ public class FlutterRenderer implements TextureRegistry {
    * <p>In hybrid composition, the root surfaces changes from {@link
    * android.view.SurfaceHolder#getSurface()} to {@link android.media.ImageReader#getSurface()} when
    * a platform view is in the current frame.
+   *
+   * <p>The engine doesn't wait for the raster thread to apply the swap. Unless the platform and
+   * raster threads are merged, frames that are already queued on the raster thread still render to
+   * the previous surface, so keep the previous surface alive until the new one receives a frame.
    */
   public void swapSurface(@NonNull Surface surface) {
     this.surface = surface;

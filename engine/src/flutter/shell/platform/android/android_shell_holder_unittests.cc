@@ -2,10 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#define FML_USED_ON_EMBEDDER
+
+#include <atomic>
+#include <chrono>
 #include <memory>
+#include <thread>
 #include <utility>
 #include <vector>
 
+#include "flutter/fml/message_loop.h"
+#include "flutter/fml/message_loop_task_queues.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/shell/common/rasterizer.h"
 #include "flutter/shell/platform/android/android_shell_holder.h"
@@ -417,5 +424,127 @@ TEST(AndroidShellHolder,
 }
 #endif  // !SLIMPELLER
 
+// Hybrid composition swaps the root window from platform thread work that the
+// raster thread can be waiting on: FlutterView#convertToImageView runs while a
+// frame presents its platform views. NotifySurfaceWindowChanged must return
+// without waiting for the raster thread, or the two threads deadlock.
+TEST(AndroidShellHolder, NotifySurfaceWindowChangedDoesNotWaitForRasterThread) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+#if defined(NDEBUG) || SLIMPELLER
+  constexpr AndroidRenderingAPI kRenderingApi =
+      AndroidRenderingAPI::kImpellerOpenGLES;
+#else
+  constexpr AndroidRenderingAPI kRenderingApi =
+      AndroidRenderingAPI::kSkiaOpenGLES;
+  settings.enable_impeller = false;
+#endif
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder =
+      std::make_unique<AndroidShellHolder>(settings, jni, kRenderingApi);
+  ASSERT_NE(holder, nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window);
+
+  const TaskRunners& task_runners =
+      holder->GetShellForTesting()->GetTaskRunners();
+  auto image_reader_window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  fml::AutoResetWaitableEvent window_changed;
+  bool raster_timed_out = false;
+  std::atomic<bool> raster_done{false};
+  // Like a hybrid composition frame, the raster thread waits for the platform
+  // thread, and the platform thread swaps the root window.
+  task_runners.GetRasterTaskRunner()->PostTask([&]() {
+    task_runners.GetPlatformTaskRunner()->PostTask([&]() {
+      holder->GetPlatformView()->NotifySurfaceWindowChanged(
+          image_reader_window);
+      window_changed.Signal();
+    });
+    raster_timed_out =
+        window_changed.WaitWithTimeout(fml::TimeDelta::FromSeconds(5));
+    raster_done = true;
+  });
+
+  // This thread is the platform thread.
+  while (!raster_done) {
+    fml::MessageLoop::GetCurrent().RunExpiredTasksNow();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_FALSE(raster_timed_out);
+
+  fml::AutoResetWaitableEvent raster_drained;
+  task_runners.GetRasterTaskRunner()->PostTask(
+      [&raster_drained]() { raster_drained.Signal(); });
+  ASSERT_FALSE(raster_drained.WaitWithTimeout(fml::TimeDelta::FromSeconds(10)));
+  // The surface now holds the new window and has released the previous one.
+  EXPECT_FALSE(image_reader_window->HasOneRef());
+  EXPECT_TRUE(window->HasOneRef());
+  holder->GetPlatformView()->NotifyDestroyed();
+}
+
+// A swap that a later NotifyDestroyed supersedes must not bind its window,
+// because the Java surface behind it may already be released.
+TEST(AndroidShellHolder, SupersededSurfaceWindowChangeIsSkipped) {
+  Settings settings;
+  settings.enable_software_rendering = false;
+#if defined(NDEBUG) || SLIMPELLER
+  constexpr AndroidRenderingAPI kRenderingApi =
+      AndroidRenderingAPI::kImpellerOpenGLES;
+#else
+  constexpr AndroidRenderingAPI kRenderingApi =
+      AndroidRenderingAPI::kSkiaOpenGLES;
+  settings.enable_impeller = false;
+#endif
+  auto jni = std::make_shared<MockPlatformViewAndroidJNI>();
+  auto holder =
+      std::make_unique<AndroidShellHolder>(settings, jni, kRenderingApi);
+  ASSERT_NE(holder, nullptr);
+  ASSERT_TRUE(holder->IsValid());
+
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifyCreated(window);
+  const TaskRunners& task_runners =
+      holder->GetShellForTesting()->GetTaskRunners();
+  fml::AutoResetWaitableEvent created;
+  task_runners.GetRasterTaskRunner()->PostTask(
+      [&created]() { created.Signal(); });
+  ASSERT_FALSE(created.WaitWithTimeout(fml::TimeDelta::FromSeconds(10)));
+
+  // Hold the raster thread until NotifyDestroyed has posted its raster work.
+  // NotifyDestroyed supersedes earlier swaps before it posts anything, so the
+  // swap below only runs after it has been superseded.
+  auto* task_queues = fml::MessageLoopTaskQueues::GetInstance();
+  const fml::TaskQueueId raster_queue =
+      task_runners.GetRasterTaskRunner()->GetTaskQueueId();
+  fml::AutoResetWaitableEvent raster_blocked;
+  fml::AutoResetWaitableEvent window_change_posted;
+  std::atomic<size_t> pending_after_window_change{0};
+  task_runners.GetRasterTaskRunner()->PostTask([&]() {
+    raster_blocked.Signal();
+    window_change_posted.Wait();
+    while (task_queues->GetNumPendingTasks(raster_queue) <=
+           pending_after_window_change) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  });
+  raster_blocked.Wait();
+
+  auto superseded_window = fml::MakeRefCounted<AndroidNativeWindow>(
+      nullptr, /*is_fake_window=*/true);
+  holder->GetPlatformView()->NotifySurfaceWindowChanged(superseded_window);
+  pending_after_window_change = task_queues->GetNumPendingTasks(raster_queue);
+  window_change_posted.Signal();
+  // Returns after the raster thread has run the swap and torn down the surface.
+  holder->GetPlatformView()->NotifyDestroyed();
+
+  // Only this test holds the superseded window. If the swap had run, the
+  // surface would still hold it after tearing down its onscreen context.
+  EXPECT_TRUE(superseded_window->HasOneRef());
+}
 }  // namespace testing
 }  // namespace flutter
