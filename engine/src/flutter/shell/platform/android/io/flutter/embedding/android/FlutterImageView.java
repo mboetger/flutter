@@ -68,6 +68,13 @@ public class FlutterImageView extends View implements RenderSurface {
   private boolean isAttachedToFlutterRenderer = false;
 
   /**
+   * Whether rendering to this {@code FlutterImageView} has been paused (for example, while {@link
+   * FlutterView#revertImageView} waits for the first frame on the restored surface before removing
+   * this view).
+   */
+  private boolean isPaused = false;
+
+  /**
    * Constructs a {@code FlutterImageView} with an {@link android.media.ImageReader} that provides
    * the Flutter UI.
    */
@@ -162,6 +169,7 @@ public class FlutterImageView extends View implements RenderSurface {
     setAlpha(1.0f);
     this.flutterRenderer = flutterRenderer;
     isAttachedToFlutterRenderer = true;
+    isPaused = false;
   }
 
   /**
@@ -183,14 +191,22 @@ public class FlutterImageView extends View implements RenderSurface {
     closeCurrentImage();
     invalidate();
     isAttachedToFlutterRenderer = false;
+    isPaused = false;
   }
 
   public void pause() {
-    // Not supported.
+    if (!isAttachedToFlutterRenderer) {
+      return;
+    }
+    isPaused = true;
   }
 
   public void resume() {
     // Not supported.
+  }
+
+  private boolean isActiveBackgroundSurface() {
+    return kind == SurfaceKind.background && isAttachedToFlutterRenderer && !isPaused;
   }
 
   /**
@@ -217,6 +233,17 @@ public class FlutterImageView extends View implements RenderSurface {
     return newImage != null;
   }
 
+  /**
+   * Drains and closes any pending images currently queued in {@link #imageReader} before
+   * reattaching a reused {@code FlutterImageView} to the renderer.
+   */
+  void drainPendingImages() {
+    final Image droppedImage = imageReader.acquireLatestImage();
+    if (droppedImage != null) {
+      droppedImage.close();
+    }
+  }
+
   /** Creates a new image reader with the provided size. */
   public void resizeIfNeeded(int width, int height) {
     if (flutterRenderer == null) {
@@ -226,12 +253,16 @@ public class FlutterImageView extends View implements RenderSurface {
       return;
     }
 
-    // Close resources.
-    closeCurrentImage();
-    // Close the current image reader, then create a new one with the new size.
-    // Image readers cannot be resized once created.
-    closeImageReader();
+    // ImageReaders cannot be resized once created. Allocate the replacement first and, when active
+    // as the background surface, move FlutterRenderer onto the new Surface before closing the old
+    // ImageReader so the raster thread is never left bound to a closed BufferQueue.
+    final ImageReader oldImageReader = imageReader;
     imageReader = createImageReader(width, height);
+    if (isActiveBackgroundSurface()) {
+      flutterRenderer.swapSurface(imageReader.getSurface());
+    }
+    closeCurrentImage();
+    oldImageReader.close();
   }
 
   /**
@@ -299,11 +330,8 @@ public class FlutterImageView extends View implements RenderSurface {
     // `SurfaceKind.overlay` isn't resized. Instead, the `FlutterImageView` instance
     // is destroyed. As a result, an instance with the new size is created by the surface
     // pool in the native side.
-    if (kind == SurfaceKind.background && isAttachedToFlutterRenderer) {
+    if (isActiveBackgroundSurface()) {
       resizeIfNeeded(width, height);
-      // Bind native window to the new surface, and create a new onscreen surface
-      // with the new size in the native side.
-      flutterRenderer.swapSurface(imageReader.getSurface());
     }
   }
 }
