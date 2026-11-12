@@ -387,5 +387,47 @@ TEST(SurfacePool, DoesNotDestroyLayersFrameSizeChangedNew) {
   ASSERT_EQ(layer_1, layer_2);
 }
 
+TEST(SurfacePool, AddLayerPopulatesAvailablePoolWithoutJniCreation) {
+  auto pool = std::make_unique<SurfacePool>(/*use_new_surface_methods=*/false);
+  auto jni_mock = std::make_shared<JNIMock>();
+  auto gr_context = GrDirectContext::MakeMock(nullptr);
+  auto android_context =
+      std::make_shared<AndroidContext>(AndroidRenderingAPI::kSoftware);
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(nullptr);
+
+  EXPECT_CALL(*jni_mock, FlutterViewCreateOverlaySurface()).Times(0);
+
+  auto surface_factory =
+      std::make_shared<TestAndroidSurfaceFactory>([gr_context, window]() {
+        auto android_surface_mock = std::make_unique<AndroidSurfaceMock>();
+        EXPECT_CALL(*android_surface_mock, CreateGPUSurface(gr_context.get()));
+        EXPECT_CALL(*android_surface_mock, SetNativeWindow(window, _));
+        EXPECT_CALL(*android_surface_mock, IsValid()).WillOnce(Return(true));
+        return android_surface_mock;
+      });
+
+  pool->SetFrameSize(DlISize(100, 100));
+  EXPECT_EQ(0UL, pool->GetAvailableLayerCount());
+
+  pool->AddLayer(
+      std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(42, window),
+      gr_context.get(), jni_mock, surface_factory);
+  EXPECT_EQ(1UL, pool->GetAvailableLayerCount());
+
+  auto layer = pool->GetLayer(gr_context.get(), *android_context, jni_mock,
+                              surface_factory);
+  ASSERT_NE(nullptr, layer);
+  EXPECT_EQ(42, layer->id);
+  EXPECT_EQ(0UL, pool->GetAvailableLayerCount());
+
+  pool->RecycleLayers();
+  EXPECT_EQ(1UL, pool->GetAvailableLayerCount());
+
+  // In legacy HC mode, changing `SetFrameSize` makes existing layers
+  // unavailable at the new size.
+  pool->SetFrameSize(DlISize(200, 200));
+  EXPECT_EQ(0UL, pool->GetAvailableLayerCount());
+}
+
 }  // namespace testing
 }  // namespace flutter

@@ -7,6 +7,7 @@
 
 #include "flutter/common/task_runners.h"
 #include "flutter/flow/embedded_views.h"
+#include "flutter/fml/closure.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder.h"
 #include "flutter/shell/platform/android/external_view_embedder/external_view_embedder_2.h"
@@ -23,12 +24,15 @@ namespace flutter {
 /// impeller context setup has completed on the raster thread.
 class AndroidExternalViewEmbedderWrapper final : public ExternalViewEmbedder {
  public:
+  // `schedule_frame` is passed to |AndroidExternalViewEmbedder| when HCPP isn't
+  // used.
   AndroidExternalViewEmbedderWrapper(
       bool meets_hcpp_criteria,
       const AndroidContext& android_context,
       std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
       std::shared_ptr<AndroidSurfaceFactory> surface_factory,
-      const TaskRunners& task_runners);
+      const TaskRunners& task_runners,
+      fml::closure schedule_frame = nullptr);
 
   // |ExternalViewEmbedder|
   void PrerollCompositeEmbeddedView(
@@ -74,6 +78,9 @@ class AndroidExternalViewEmbedderWrapper final : public ExternalViewEmbedder {
   bool SupportsDynamicThreadMerging() override;
 
   // |ExternalViewEmbedder|
+  bool ReadyForNextFrame(const fml::closure& resume) override;
+
+  // |ExternalViewEmbedder|
   void Teardown() override;
 
  private:
@@ -81,6 +88,7 @@ class AndroidExternalViewEmbedderWrapper final : public ExternalViewEmbedder {
 
   // Whether the device has hcpp mode initialized and is at least API 34.
   const bool meets_hcpp_criteria_;
+  const fml::closure schedule_frame_;
   const AndroidContext& android_context_;
   const TaskRunners& task_runners_;
   std::shared_ptr<PlatformViewAndroidJNI> jni_facade_;

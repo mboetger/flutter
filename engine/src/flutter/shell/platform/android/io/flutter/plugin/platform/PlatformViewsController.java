@@ -1420,6 +1420,13 @@ public class PlatformViewsController implements PlatformViewsAccessibilityDelega
    */
   @NonNull
   public FlutterOverlaySurface createOverlaySurface() {
+    // When creating overlay surfaces asynchronously while already rendering to the background
+    // FlutterImageView, the raster thread submits its acquired root frame without calling
+    // onEndFrame(). Drain that unpresented buffer so consecutive overlay-creation frames cannot
+    // exhaust the ImageReader's maxImages capacity.
+    if (flutterViewConvertedToImageView && flutterView != null) {
+      flutterView.drainPendingImageViewFrames();
+    }
     // Overlay surfaces have the same size as the background surface.
     //
     // This allows to reuse these surfaces in consecutive frames even

@@ -1761,4 +1761,27 @@ public class FlutterViewTest {
     flutterView.autofill(values);
     // No exception should be thrown
   }
+
+  @Test
+  public void drainPendingImageViewFrames_delegatesToFlutterImageViewWhenPresent() {
+    FlutterImageView mockImageView = mock(FlutterImageView.class);
+    FlutterView flutterView =
+        new FlutterView(ctx, new FlutterSurfaceView(ctx)) {
+          @Override
+          public FlutterImageView createImageView() {
+            return mockImageView;
+          }
+        };
+
+    // Safe no-op before convertToImageView().
+    flutterView.drainPendingImageViewFrames();
+    verify(mockImageView, never()).drainPendingImages();
+
+    FlutterEngine flutterEngine = spy(new FlutterEngine(ctx, mockFlutterLoader, mockFlutterJni));
+    flutterView.attachToFlutterEngine(flutterEngine);
+    flutterView.convertToImageView();
+
+    flutterView.drainPendingImageViewFrames();
+    verify(mockImageView, times(1)).drainPendingImages();
+  }
 }

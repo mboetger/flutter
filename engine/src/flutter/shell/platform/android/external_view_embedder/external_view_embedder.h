@@ -5,10 +5,15 @@
 #ifndef FLUTTER_SHELL_PLATFORM_ANDROID_EXTERNAL_VIEW_EMBEDDER_EXTERNAL_VIEW_EMBEDDER_H_
 #define FLUTTER_SHELL_PLATFORM_ANDROID_EXTERNAL_VIEW_EMBEDDER_EXTERNAL_VIEW_EMBEDDER_H_
 
+#include <atomic>
+#include <functional>
+#include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "flutter/common/task_runners.h"
 #include "flutter/flow/embedded_views.h"
+#include "flutter/fml/closure.h"
 #include "flutter/shell/platform/android/context/android_context.h"
 #include "flutter/shell/platform/android/external_view_embedder/surface_pool.h"
 #include "flutter/shell/platform/android/jni/platform_view_android_jni.h"
@@ -28,11 +33,18 @@ namespace flutter {
 ///
 class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
  public:
+  // Frames are rasterized on the raster thread and presented on the platform
+  // thread without merging the two threads. `schedule_frame` is called on the
+  // platform thread to request a new frame after surface conversion or async
+  // overlay surface creation.
   AndroidExternalViewEmbedder(
       const AndroidContext& android_context,
       std::shared_ptr<PlatformViewAndroidJNI> jni_facade,
       std::shared_ptr<AndroidSurfaceFactory> surface_factory,
-      const TaskRunners& task_runners);
+      const TaskRunners& task_runners,
+      fml::closure schedule_frame = nullptr);
+
+  ~AndroidExternalViewEmbedder() override;
 
   // |ExternalViewEmbedder|
   void PrerollCompositeEmbeddedView(
@@ -78,6 +90,9 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
   bool SupportsDynamicThreadMerging() override;
 
   // |ExternalViewEmbedder|
+  bool ReadyForNextFrame(const fml::closure& resume) override;
+
+  // |ExternalViewEmbedder|
   void Teardown() override;
 
   // Gets the rect based on the device pixel ratio of a platform view displayed
@@ -85,13 +100,6 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
   DlRect GetViewRect(int64_t view_id) const;
 
  private:
-  // The number of frames the rasterizer task runner will continue
-  // to run on the platform thread after no platform view is rendered.
-  //
-  // Note: this is an arbitrary number that attempts to account for cases
-  // where the platform view might be momentarily off the screen.
-  static const int kDefaultMergedLeaseDuration = 10;
-
   // Provides metadata to the Android surfaces.
   const AndroidContext& android_context_;
 
@@ -106,6 +114,50 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
 
   // The task runners.
   const TaskRunners task_runners_;
+
+  // Requests a new frame. Called on the platform thread.
+  const fml::closure schedule_frame_;
+
+  // One call into Java that presents a frame on the platform thread. The calls
+  // run in z-order.
+  using PresentOp = std::function<void(PlatformViewAndroidJNI&)>;
+
+  struct CreatedOverlay {
+    uint64_t surface_generation = 0;
+    uint64_t size_generation = 0;
+    std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> metadata;
+  };
+
+  // Tracks the work that the platform thread does for the raster thread. Only
+  // accessed on the raster thread.
+  struct PresentState {
+    // Whether the platform thread is presenting a frame or creating overlay
+    // surfaces. The next frame waits for it without blocking.
+    bool pending = false;
+    std::vector<fml::closure> resume_callbacks;
+    // Incremented whenever overlay layers are released (on resize or teardown)
+    // so overlays created for an earlier size generation are discarded even if
+    // the frame size later reverts (S1 -> S2 -> S1).
+    uint64_t size_generation = 0;
+    // Number of posted platform tasks with `overlays_to_create > 0` whose
+    // `PresentDone` callback has not yet executed on the raster thread.
+    size_t in_flight_overlay_creations = 0;
+    // Overlay surfaces that the platform thread created, tagged with the
+    // surface and size generations they were requested under.
+    std::vector<CreatedOverlay> created_overlays;
+  };
+
+  // Shared with the raster tasks that finish a present.
+  const std::shared_ptr<PresentState> present_state_;
+
+  // Incremented by |Teardown| and the destructor so that presents posted for a
+  // torn-down surface don't call into Java.
+  const std::shared_ptr<std::atomic<uint64_t>> surface_generation_;
+
+  // Whether the last present showed platform views, which means that Java
+  // renders the root surface to an image reader. Only accessed on the raster
+  // thread.
+  bool presented_platform_views_ = false;
 
   // The size of the root canvas.
   DlISize frame_size_;
@@ -127,15 +179,19 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
   // mutation stack.
   std::unordered_map<int64_t, EmbeddedViewParams> view_params_;
 
-  // The number of platform views in the previous frame.
-  int64_t previous_frame_view_count_ = 0;
+  // Adds the overlay surfaces that the platform thread created to the pool,
+  // unless the surface was torn down or resized since.
+  void AddCreatedOverlayLayers(GrDirectContext* context);
 
-  // Destroys the surfaces created from the surface factory.
-  // This method schedules a task on the platform thread, and waits for
-  // the task until it completes. Only call it where the platform thread can't
-  // be waiting for the caller, such as from |Teardown|, which the shell calls
-  // on the platform thread. Never call it from the raster thread.
-  void DestroySurfaces();
+  // Posts work to the platform thread: creating `overlays_to_create` overlay
+  // surfaces, then the Java calls that present the current frame if `present`
+  // is true, then requesting a new frame if `schedule_frame` is true. The next
+  // frame waits for it without blocking the raster thread, see
+  // |ReadyForNextFrame|.
+  void PostPlatformWork(std::vector<PresentOp> ops,
+                        bool present,
+                        size_t overlays_to_create,
+                        bool schedule_frame);
 
   // Takes the overlay layers out of the pool and releases them without waiting
   // for the platform thread. The rendering surfaces are released on the
@@ -148,13 +204,6 @@ class AndroidExternalViewEmbedder final : public ExternalViewEmbedder {
 
   // Whether the layer tree in the current frame has platform layers.
   bool FrameHasPlatformLayers();
-
-  // Creates a Surface when needed or recycles an existing one.
-  // Finally, draws the picture on the frame's canvas.
-  std::unique_ptr<SurfaceFrame> CreateSurfaceIfNeeded(GrDirectContext* context,
-                                                      int64_t view_id,
-                                                      EmbedderViewSlice* slice,
-                                                      const DlRect& rect);
 };
 
 }  // namespace flutter

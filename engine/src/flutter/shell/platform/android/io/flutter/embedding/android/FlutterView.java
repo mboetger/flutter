@@ -1488,6 +1488,16 @@ public class FlutterView extends FrameLayout
   }
 
   /**
+   * Drains and closes any unpresented buffers queued in the background {@link FlutterImageView}
+   * without replacing its currently displayed image.
+   */
+  public void drainPendingImageViewFrames() {
+    if (flutterImageView != null) {
+      flutterImageView.drainPendingImages();
+    }
+  }
+
+  /**
    * Returns true if this {@code FlutterView} is currently attached to a {@link
    * io.flutter.embedding.engine.FlutterEngine}.
    */

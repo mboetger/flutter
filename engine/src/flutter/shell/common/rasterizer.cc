@@ -135,6 +135,7 @@ void Rasterizer::Teardown() {
   }
 
   view_records_.clear();
+  deferred_last_layer_trees_recorder_.reset();
 
   if (raster_thread_merger_.get() != nullptr &&
       raster_thread_merger_.get()->IsMerged()) {
@@ -237,6 +238,23 @@ void Rasterizer::DrawLastLayerTrees(
   if (!surface_) {
     return;
   }
+  if (external_view_embedder_ &&
+      !external_view_embedder_->ReadyForNextFrame(
+          [raster_task_runner =
+               delegate_.GetTaskRunners().GetRasterTaskRunner(),
+           weak_this = weak_factory_.GetWeakPtr()]() {
+            raster_task_runner->PostTask([weak_this]() {
+              if (weak_this && weak_this->deferred_last_layer_trees_recorder_) {
+                weak_this->DrawLastLayerTrees(
+                    std::move(weak_this->deferred_last_layer_trees_recorder_));
+              }
+            });
+          })) {
+    TRACE_EVENT0("flutter", "Rasterizer::DrawLastLayerTreesDeferred");
+    deferred_last_layer_trees_recorder_ = std::move(frame_timings_recorder);
+    return;
+  }
+  deferred_last_layer_trees_recorder_.reset();
   std::vector<std::unique_ptr<LayerTreeTask>> tasks;
   for (auto& [view_id, view_record] : view_records_) {
     if (view_record.last_successful_task) {
@@ -269,6 +287,24 @@ DrawStatus Rasterizer::Draw(const std::shared_ptr<FramePipeline>& pipeline) {
   FML_DCHECK(delegate_.GetTaskRunners()
                  .GetRasterTaskRunner()
                  ->RunsTasksOnCurrentThread());
+
+  // Leave the frame in the pipeline while the embedder isn't ready for it. The
+  // embedder resumes drawing instead of blocking the raster thread.
+  if (external_view_embedder_ &&
+      !external_view_embedder_->ReadyForNextFrame(
+          [raster_task_runner =
+               delegate_.GetTaskRunners().GetRasterTaskRunner(),
+           weak_this = weak_factory_.GetWeakPtr(),
+           weak_pipeline = std::weak_ptr<FramePipeline>(pipeline)]() {
+            raster_task_runner->PostTask([weak_this, weak_pipeline]() {
+              std::shared_ptr<FramePipeline> pipeline = weak_pipeline.lock();
+              if (weak_this && pipeline) {
+                weak_this->Draw(pipeline);
+              }
+            });
+          })) {
+    return DrawStatus::kDeferred;
+  }
 
   DoDrawResult draw_result;
   FramePipeline::Consumer consumer = [&draw_result,
@@ -530,6 +566,7 @@ Rasterizer::DoDrawResult Rasterizer::DoDraw(
                  .GetRasterTaskRunner()
                  ->RunsTasksOnCurrentThread());
   frame_timings_recorder->AssertInState(FrameTimingsRecorder::State::kBuildEnd);
+  deferred_last_layer_trees_recorder_.reset();
 
   if (tasks.empty()) {
     return DoDrawResult{DoDrawStatus::kDone};

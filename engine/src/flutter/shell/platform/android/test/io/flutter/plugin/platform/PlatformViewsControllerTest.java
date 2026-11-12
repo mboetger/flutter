@@ -2283,6 +2283,59 @@ public class PlatformViewsControllerTest {
     verify(surfaceProducer, times(1)).setSize(128, 256);
   }
 
+  @Test
+  @Config(
+      shadows = {
+        ShadowFlutterSurfaceView.class,
+        ShadowFlutterJNI.class,
+        ShadowPlatformTaskQueue.class
+      })
+  public void createOverlaySurfaceDrainsPendingImageViewFramesOnlyWhenConverted() {
+    final Context context = ApplicationProvider.getApplicationContext();
+    final FlutterImageView mockImageView = mock(FlutterImageView.class);
+    when(mockImageView.acquireLatestImage()).thenReturn(true);
+
+    final FlutterView flutterView =
+        spy(
+            new FlutterView(context, new FlutterSurfaceView(context)) {
+              @Override
+              public FlutterImageView createImageView() {
+                return mockImageView;
+              }
+            });
+    flutterView.layout(0, 0, 100, 100);
+
+    final PlatformViewsController platformViewsController = new PlatformViewsController();
+    final FlutterJNI jni = new FlutterJNI();
+    jni.attachToNative();
+    platformViewsController.setFlutterJNI(jni);
+    attachToFlutterView(jni, platformViewsController, flutterView);
+
+    final int platformViewId = 0;
+    final PlatformViewFactory viewFactory = mock(PlatformViewFactory.class);
+    final PlatformView platformView = mock(PlatformView.class);
+    when(platformView.getView()).thenReturn(new View(context));
+    when(viewFactory.create(any(), eq(platformViewId), any())).thenReturn(platformView);
+    platformViewsController.getRegistry().registerViewFactory("testType", viewFactory);
+    createPlatformView(jni, platformViewsController, platformViewId, "testType", /*hybrid=*/ true);
+
+    // Before converting the root surface to a FlutterImageView (Frame 1), creating an overlay
+    // surface does not drain the background FlutterImageView.
+    platformViewsController.createOverlaySurface();
+    verify(flutterView, never()).drainPendingImageViewFrames();
+
+    // Convert the root surface to FlutterImageView via a Hybrid Composition frame.
+    platformViewsController.onBeginFrame();
+    platformViewsController.onDisplayPlatformView(
+        platformViewId, 0, 0, 100, 100, 100, 100, new FlutterMutatorsStack());
+    platformViewsController.onEndFrame();
+
+    // Creating an overlay surface while converted drains the unpresented root buffer from the
+    // skipped overlay-creation frame so maxImages cannot be exhausted.
+    platformViewsController.createOverlaySurface();
+    verify(flutterView, times(1)).drainPendingImageViewFrames();
+  }
+
   private static ByteBuffer encodeMethodCall(MethodCall call) {
     final ByteBuffer buffer = StandardMethodCodec.INSTANCE.encodeMethodCall(call);
     buffer.rewind();

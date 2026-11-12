@@ -62,6 +62,9 @@ enum class DrawStatus {
   kPipelineEmpty,
   // Nothing was done, because the GPU was unavailable.
   kGpuUnavailable,
+  // Nothing was done, because the external view embedder isn't ready for the
+  // next frame. The frame stays queued, and drawing resumes when it is.
+  kDeferred,
 };
 
 // The result status of drawing to a view. This is only used for unit tests.
@@ -814,6 +817,7 @@ class Rasterizer final : public SnapshotDelegate,
   std::optional<size_t> max_cache_bytes_;
   fml::RefPtr<fml::RasterThreadMerger> raster_thread_merger_;
   std::shared_ptr<ExternalViewEmbedder> external_view_embedder_;
+  std::unique_ptr<FrameTimingsRecorder> deferred_last_layer_trees_recorder_;
   std::unique_ptr<SnapshotController> snapshot_controller_;
 
   // WeakPtrFactory must be the last member.

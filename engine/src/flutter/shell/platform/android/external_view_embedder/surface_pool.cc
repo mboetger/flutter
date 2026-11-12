@@ -44,32 +44,10 @@ std::shared_ptr<OverlayLayer> SurfacePool::GetLayer(
   intptr_t gr_context_key = reinterpret_cast<intptr_t>(gr_context);
   // Allocate a new surface if there isn't one available.
   if (available_layer_index_ >= layers_.size()) {
-    std::unique_ptr<AndroidSurface> android_surface =
-        surface_factory->CreateSurface();
-
-    FML_CHECK(android_surface && android_surface->IsValid())
-        << "Could not create an OpenGL, Vulkan or Software surface to set up "
-           "rendering.";
-
-    std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> java_metadata =
-        use_new_surface_methods_
-            ? jni_facade->createOverlaySurface2()
-            : jni_facade->FlutterViewCreateOverlaySurface();
-
-    FML_CHECK(java_metadata->window);
-    android_surface->SetNativeWindow(java_metadata->window, jni_facade);
-    android_surface->SetupImpellerSurface();
-
-    std::unique_ptr<Surface> surface =
-        android_surface->CreateGPUSurface(gr_context);
-
-    std::shared_ptr<OverlayLayer> layer =
-        std::make_shared<OverlayLayer>(java_metadata->id,           //
-                                       std::move(android_surface),  //
-                                       std::move(surface)           //
-        );
-    layer->gr_context_key = gr_context_key;
-    layers_.push_back(layer);
+    AddLayerLocked(use_new_surface_methods_
+                       ? jni_facade->createOverlaySurface2()
+                       : jni_facade->FlutterViewCreateOverlaySurface(),
+                   gr_context, jni_facade, surface_factory);
   }
 
   std::shared_ptr<OverlayLayer> layer = layers_[available_layer_index_];
@@ -133,6 +111,57 @@ std::vector<std::shared_ptr<OverlayLayer>> SurfacePool::GetUnusedLayers() {
     results.push_back(layers_[i]);
   }
   return results;
+}
+
+size_t SurfacePool::GetAvailableLayerCount() {
+  std::lock_guard lock(mutex_);
+  if (requested_frame_size_ != current_frame_size_ &&
+      !use_new_surface_methods_) {
+    // |GetLayer| destroys the layers that have the previous frame size.
+    return 0;
+  }
+  return layers_.size() - available_layer_index_;
+}
+
+void SurfacePool::AddLayer(
+    std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> java_metadata,
+    GrDirectContext* gr_context,
+    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+    const std::shared_ptr<AndroidSurfaceFactory>& surface_factory) {
+  std::lock_guard lock(mutex_);
+  FML_DCHECK(requested_frame_size_ == current_frame_size_ || layers_.empty());
+  // The new layer has the requested frame size.
+  current_frame_size_ = requested_frame_size_;
+  AddLayerLocked(std::move(java_metadata), gr_context, jni_facade,
+                 surface_factory);
+}
+
+void SurfacePool::AddLayerLocked(
+    std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> java_metadata,
+    GrDirectContext* gr_context,
+    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
+    const std::shared_ptr<AndroidSurfaceFactory>& surface_factory) {
+  std::unique_ptr<AndroidSurface> android_surface =
+      surface_factory->CreateSurface();
+
+  FML_CHECK(android_surface && android_surface->IsValid())
+      << "Could not create an OpenGL, Vulkan or Software surface to set up "
+         "rendering.";
+
+  FML_CHECK(java_metadata->window);
+  android_surface->SetNativeWindow(java_metadata->window, jni_facade);
+  android_surface->SetupImpellerSurface();
+
+  std::unique_ptr<Surface> surface =
+      android_surface->CreateGPUSurface(gr_context);
+
+  std::shared_ptr<OverlayLayer> layer =
+      std::make_shared<OverlayLayer>(java_metadata->id,           //
+                                     std::move(android_surface),  //
+                                     std::move(surface)           //
+      );
+  layer->gr_context_key = reinterpret_cast<intptr_t>(gr_context);
+  layers_.push_back(layer);
 }
 
 void SurfacePool::SetFrameSize(DlISize frame_size) {
