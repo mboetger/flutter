@@ -679,5 +679,69 @@ TEST(SurfacePool, GetLayerReturnsNullOnAllocationOrSurfaceFailures) {
   }
 }
 
+TEST(SurfacePool, HcppDefersJavaDestroyToPlatformCleanup) {
+  auto pool = std::make_unique<SurfacePool>(/*use_new_surface_methods=*/true);
+  auto jni_mock = std::make_shared<JNIMock>();
+  auto gr_context = GrDirectContext::MakeMock(nullptr);
+  auto android_context =
+      std::make_shared<AndroidContext>(AndroidRenderingAPI::kSoftware);
+  auto window = fml::MakeRefCounted<AndroidNativeWindow>(nullptr);
+
+  auto failing_gpu_factory =
+      std::make_shared<TestAndroidSurfaceFactory>([window]() {
+        auto android_surface_mock = std::make_unique<AndroidSurfaceMock>();
+        EXPECT_CALL(*android_surface_mock, IsValid()).WillOnce(Return(true));
+        EXPECT_CALL(*android_surface_mock, SetNativeWindow(window, _));
+        EXPECT_CALL(*android_surface_mock, CreateGPUSurface(_))
+            .WillOnce(Return(ByMove(nullptr)));
+        return android_surface_mock;
+      });
+
+  // If GPU surface creation fails after createOverlaySurface2(),
+  // HasPendingDestroy() becomes true without calling destroyOverlaySurface2()
+  // on the raster thread.
+  EXPECT_CALL(*jni_mock, createOverlaySurface2())
+      .WillOnce(Return(
+          ByMove(std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(
+              0, window))));
+  EXPECT_CALL(*jni_mock, destroyOverlaySurface2()).Times(0);
+  EXPECT_EQ(pool->GetLayer(gr_context.get(), *android_context, jni_mock,
+                           failing_gpu_factory),
+            nullptr);
+  EXPECT_FALSE(pool->HasLayers());
+  EXPECT_TRUE(pool->HasPendingDestroy());
+
+  // Subsequent GetLayer() calls must not invoke destroyOverlaySurface2() off
+  // the platform thread either.
+  auto working_factory =
+      std::make_shared<TestAndroidSurfaceFactory>([gr_context, window]() {
+        auto android_surface_mock = std::make_unique<AndroidSurfaceMock>();
+        EXPECT_CALL(*android_surface_mock, IsValid()).WillOnce(Return(true));
+        EXPECT_CALL(*android_surface_mock, SetNativeWindow(window, _));
+        EXPECT_CALL(*android_surface_mock, CreateGPUSurface(gr_context.get()))
+            .WillOnce(Return(ByMove(std::make_unique<TestSurface>())));
+        return android_surface_mock;
+      });
+  EXPECT_CALL(*jni_mock, createOverlaySurface2())
+      .WillOnce(Return(
+          ByMove(std::make_unique<PlatformViewAndroidJNI::OverlayMetadata>(
+              0, window))));
+  EXPECT_NE(pool->GetLayer(gr_context.get(), *android_context, jni_mock,
+                           working_factory),
+            nullptr);
+  EXPECT_TRUE(pool->HasPendingDestroy());
+
+  // TakeLayers() marks pending destruction; DestroyPendingLayers() flushes
+  // once.
+  EXPECT_EQ(pool->TakeLayers().size(), 1u);
+  EXPECT_TRUE(pool->HasPendingDestroy());
+  ::testing::Mock::VerifyAndClearExpectations(jni_mock.get());
+
+  EXPECT_CALL(*jni_mock, destroyOverlaySurface2()).Times(1);
+  pool->DestroyPendingLayers(jni_mock);
+  EXPECT_FALSE(pool->HasPendingDestroy());
+  pool->DestroyPendingLayers(jni_mock);
+}
+
 }  // namespace testing
 }  // namespace flutter

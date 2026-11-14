@@ -121,9 +121,8 @@ class AndroidExternalViewEmbedder2 final : public ExternalViewEmbedder {
   // The set of platform views that were visible in the last frame.
   absl::flat_hash_set<int64_t> views_visible_last_frame_;
 
-  // Destroys the surfaces created from the surface factory.
-  // This method schedules a task on the platform thread, and waits for
-  // the task until it completes.
+  // Destroys GPU overlay layers on the raster thread and Java overlay surfaces
+  // on the platform thread.
   void DestroySurfaces();
 
   // Resets the state.

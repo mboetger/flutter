@@ -30,9 +30,6 @@ std::shared_ptr<OverlayLayer> SurfacePool::GetLayer(
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade,
     const std::shared_ptr<AndroidSurfaceFactory>& surface_factory) {
   std::lock_guard lock(mutex_);
-  if (pending_java_destroy_ && use_new_surface_methods_) {
-    DestroyJavaLayersLocked(jni_facade);
-  }
   if (requested_frame_size_ != current_frame_size_) {
     if (use_new_surface_methods_) {
       // The overlay surface is persistent, so resize it in place. Nothing else
@@ -114,6 +111,11 @@ bool SurfacePool::AddLayerLocked(
     return false;
   }
   android_surface->SetNativeWindow(java_metadata->window, jni_facade);
+  if (use_new_surface_methods_ && java_metadata->window->IsValid() &&
+      !requested_frame_size_.IsEmpty() &&
+      java_metadata->window->GetSize() != requested_frame_size_) {
+    android_surface->OnScreenSurfaceResize(requested_frame_size_);
+  }
   android_surface->SetupImpellerSurface();
 
   std::unique_ptr<Surface> surface =
@@ -121,6 +123,8 @@ bool SurfacePool::AddLayerLocked(
   if (!surface) {
     if (!use_new_surface_methods_) {
       retired_layer_ids_.push_back(java_metadata->id);
+    } else {
+      pending_java_destroy_ = true;
     }
     FML_LOG(ERROR) << "Could not create GPU surface for overlay layer "
                    << java_metadata->id << ".";

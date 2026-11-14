@@ -1437,9 +1437,9 @@ public class FlutterJNI {
     platformViewsController2.onEndFrame();
   }
 
+  // Called from the raster thread during SubmitFlutterView.
   @SuppressWarnings("unused")
   @SuppressLint("NewApi")
-  @UiThread
   public FlutterOverlaySurface createOverlaySurface2() {
     if (platformViewsController2 == null) {
       throw new RuntimeException(

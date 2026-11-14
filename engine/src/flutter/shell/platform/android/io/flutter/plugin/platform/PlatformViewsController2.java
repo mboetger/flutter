@@ -69,7 +69,7 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
   private PlatformViewRegistryImpl registry;
   private AndroidTouchProcessor androidTouchProcessor;
   private Context context;
-  private FlutterView flutterView;
+  private volatile FlutterView flutterView;
   private FlutterJNI flutterJNI = null;
 
   @Nullable private TextInputPlugin textInputPlugin;
@@ -126,8 +126,12 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
         mainHandler.sendMessageAtFrontOfQueue(msg);
       };
 
+  private final Object overlayLock = new Object();
   private Surface overlayerSurface = null;
   private SurfaceControl overlaySurfaceControl = null;
+  private boolean overlaySurfaceNeedsReparent = false;
+  private boolean overlaySurfaceVisible = false;
+  private boolean overlaySurfaceNeedsVisibilitySync = false;
 
   private final HashSet<Integer> viewsWithPendingSurfaceCallback = new HashSet<>();
 
@@ -289,6 +293,12 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
    */
   public void attachToView(@NonNull FlutterView newFlutterView) {
     flutterView = newFlutterView;
+    synchronized (overlayLock) {
+      if (overlaySurfaceControl != null) {
+        overlaySurfaceNeedsReparent = true;
+        overlaySurfaceNeedsVisibilitySync = true;
+      }
+    }
     // Add wrapper for platform views that are composed at the view hierarchy level.
     for (int index = 0; index < platformViewParent.size(); index++) {
       final FlutterMutatorView view = platformViewParent.valueAt(index);
@@ -803,15 +813,54 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
     activeRasterTransactions.clear();
 
     // The view or its window may detach before this posted frame runs.
+    final FlutterView view = flutterView;
     final AttachedSurfaceControl rootSurfaceControl =
-        flutterView == null ? null : flutterView.getRootSurfaceControl();
+        view == null ? null : view.getRootSurfaceControl();
     if (rootSurfaceControl == null) {
+      synchronized (overlayLock) {
+        if (overlaySurfaceControl != null) {
+          overlaySurfaceNeedsVisibilitySync = true;
+        }
+      }
       // Release the unapplied transaction and its owned fence FDs.
       tx.close();
       return;
     }
 
-    flutterView.invalidate();
+    final SurfaceControl overlayControl;
+    final boolean needsReparent;
+    final boolean needsVisibilitySync;
+    final boolean visible;
+    synchronized (overlayLock) {
+      overlayControl = overlaySurfaceControl;
+      needsReparent = overlayControl != null && overlaySurfaceNeedsReparent;
+      needsVisibilitySync = overlayControl != null && overlaySurfaceNeedsVisibilitySync;
+      visible = overlaySurfaceVisible;
+    }
+    if (needsReparent) {
+      final SurfaceControl.Transaction reparentTx =
+          rootSurfaceControl.buildReparentTransaction(overlayControl);
+      if (reparentTx != null) {
+        reparentTx.setLayer(overlayControl, 1000);
+        tx = tx.merge(reparentTx);
+        reparentTx.close();
+        synchronized (overlayLock) {
+          if (overlaySurfaceControl == overlayControl) {
+            overlaySurfaceNeedsReparent = false;
+          }
+        }
+      }
+    }
+    if (needsVisibilitySync) {
+      tx.setVisibility(overlayControl, visible);
+      synchronized (overlayLock) {
+        if (overlaySurfaceControl == overlayControl && overlaySurfaceVisible == visible) {
+          overlaySurfaceNeedsVisibilitySync = false;
+        }
+      }
+    }
+
+    view.invalidate();
     rootSurfaceControl.applyTransactionOnDraw(tx);
     // Defer the next frame until this Choreographer traversal finishes so its View mutations do
     // not overwrite this frame's layout before draw. If the traversal skips drawing (e.g. a
@@ -1005,30 +1054,65 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
 
   @RequiresApi(API_LEVELS.API_34)
   public FlutterOverlaySurface createOverlaySurface() {
-    if (overlayerSurface == null) {
-      final SurfaceControl.Builder surfaceControlBuilder = new SurfaceControl.Builder();
-      surfaceControlBuilder.setBufferSize(flutterView.getWidth(), flutterView.getHeight());
-      surfaceControlBuilder.setFormat(PixelFormat.RGBA_8888);
-      surfaceControlBuilder.setName("Flutter Overlay Surface");
-      surfaceControlBuilder.setOpaque(false);
-      surfaceControlBuilder.setHidden(false);
-      final SurfaceControl surfaceControl = surfaceControlBuilder.build();
-      final SurfaceControl.Transaction tx =
-          flutterView.getRootSurfaceControl().buildReparentTransaction(surfaceControl);
-      tx.setLayer(surfaceControl, 1000);
-      tx.apply();
-      overlayerSurface = new Surface(surfaceControl);
-      overlaySurfaceControl = surfaceControl;
+    final Surface existingSurface;
+    synchronized (overlayLock) {
+      existingSurface = overlayerSurface;
+    }
+    if (existingSurface != null) {
+      return new FlutterOverlaySurface(0, existingSurface);
     }
 
-    return new FlutterOverlaySurface(0, overlayerSurface);
+    final FlutterView view = flutterView;
+    final int width = view != null ? view.getWidth() : 0;
+    final int height = view != null ? view.getHeight() : 0;
+    final SurfaceControl.Builder surfaceControlBuilder = new SurfaceControl.Builder();
+    surfaceControlBuilder.setBufferSize(Math.max(1, width), Math.max(1, height));
+    surfaceControlBuilder.setFormat(PixelFormat.RGBA_8888);
+    surfaceControlBuilder.setName("Flutter Overlay Surface");
+    surfaceControlBuilder.setOpaque(false);
+    surfaceControlBuilder.setHidden(true);
+    final SurfaceControl surfaceControl = surfaceControlBuilder.build();
+    final Surface surface = new Surface(surfaceControl);
+
+    final Surface resultSurface;
+    final boolean duplicate;
+    synchronized (overlayLock) {
+      if (overlayerSurface == null) {
+        overlayerSurface = surface;
+        overlaySurfaceControl = surfaceControl;
+        overlaySurfaceNeedsReparent = true;
+        overlaySurfaceNeedsVisibilitySync = true;
+        duplicate = false;
+        resultSurface = overlayerSurface;
+      } else {
+        duplicate = true;
+        resultSurface = overlayerSurface;
+      }
+    }
+    if (duplicate) {
+      surface.release();
+      surfaceControl.release();
+    }
+    return new FlutterOverlaySurface(0, resultSurface);
   }
 
   public void destroyOverlaySurface() {
-    if (overlayerSurface != null) {
-      overlayerSurface.release();
+    final Surface surfaceToRelease;
+    final SurfaceControl controlToRelease;
+    synchronized (overlayLock) {
+      surfaceToRelease = overlayerSurface;
+      controlToRelease = overlaySurfaceControl;
       overlayerSurface = null;
       overlaySurfaceControl = null;
+      overlaySurfaceNeedsReparent = false;
+      overlaySurfaceNeedsVisibilitySync = false;
+      overlaySurfaceVisible = false;
+    }
+    if (surfaceToRelease != null) {
+      surfaceToRelease.release();
+    }
+    if (controlToRelease != null) {
+      controlToRelease.release();
     }
   }
 
@@ -1044,11 +1128,7 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
 
   @RequiresApi(API_LEVELS.API_34)
   private void applyShowOverlaySurface() {
-    if (overlaySurfaceControl == null) {
-      return;
-    }
-    SurfaceControl.Transaction tx = platformTransaction();
-    tx.setVisibility(overlaySurfaceControl, /*visible=*/ true);
+    applyOverlayVisibility(true);
   }
 
   @RequiresApi(API_LEVELS.API_34)
@@ -1063,11 +1143,23 @@ public class PlatformViewsController2 implements PlatformViewsAccessibilityDeleg
 
   @RequiresApi(API_LEVELS.API_34)
   private void applyHideOverlaySurface() {
-    if (overlaySurfaceControl == null) {
+    applyOverlayVisibility(false);
+  }
+
+  @UiThread
+  @RequiresApi(API_LEVELS.API_34)
+  private void applyOverlayVisibility(boolean visible) {
+    final SurfaceControl control;
+    synchronized (overlayLock) {
+      overlaySurfaceVisible = visible;
+      control = overlaySurfaceControl;
+      overlaySurfaceNeedsVisibilitySync = (control == null);
+    }
+    if (control == null) {
       return;
     }
-    SurfaceControl.Transaction tx = platformTransaction();
-    tx.setVisibility(overlaySurfaceControl, /*visible=*/ false);
+    final SurfaceControl.Transaction tx = platformTransaction();
+    tx.setVisibility(control, visible);
   }
 
   public boolean isHcppEnabled() {

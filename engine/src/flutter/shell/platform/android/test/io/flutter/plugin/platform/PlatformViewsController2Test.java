@@ -1169,6 +1169,125 @@ public class PlatformViewsController2Test {
     ShadowLooper.idleMainLooper();
   }
 
+  @Test
+  @Config(
+      shadows = {
+        ShadowFlutterJNI.class,
+        ShadowPlatformTaskQueue.class,
+        ShadowRecordingTransaction.class
+      })
+  public void createOverlaySurface_defersReparentUntilCommitActiveFrame() {
+    ShadowRecordingTransaction.reset();
+    PlatformViewsController2 controller = new PlatformViewsController2();
+    controller.setRegistry(new PlatformViewRegistryImpl());
+
+    FlutterJNI jni = new FlutterJNI();
+    jni.attachToNative();
+    FlutterView flutterView = spy(attach(jni, controller));
+    AttachedSurfaceControl rootSurfaceControl = mock(AttachedSurfaceControl.class);
+    SurfaceControl.Transaction reparentTx = new SurfaceControl.Transaction();
+    when(rootSurfaceControl.buildReparentTransaction(any(SurfaceControl.class)))
+        .thenReturn(reparentTx);
+    doReturn(rootSurfaceControl).when(flutterView).getRootSurfaceControl();
+    controller.attachToView(flutterView);
+
+    io.flutter.embedding.engine.FlutterOverlaySurface overlay1 = controller.createOverlaySurface();
+    assertNotNull(overlay1);
+    assertNotNull(overlay1.getSurface());
+    // createOverlaySurface() must not access getRootSurfaceControl() or reparent on caller thread.
+    verify(flutterView, never()).getRootSurfaceControl();
+    verify(rootSurfaceControl, never()).buildReparentTransaction(any());
+
+    // Idempotent second call returns the same overlay surface.
+    io.flutter.embedding.engine.FlutterOverlaySurface overlay2 = controller.createOverlaySurface();
+    assertSame(overlay1.getSurface(), overlay2.getSurface());
+
+    controller.showOverlaySurface();
+    controller.swapTransactions();
+    controller.onEndFrame();
+
+    verify(rootSurfaceControl, times(1)).buildReparentTransaction(any(SurfaceControl.class));
+    verify(rootSurfaceControl, times(1))
+        .applyTransactionOnDraw(any(SurfaceControl.Transaction.class));
+    assertTrue(ShadowRecordingTransaction.merged.contains(reparentTx));
+
+    // Subsequent frame does not re-reparent.
+    ShadowRecordingTransaction.reset();
+    controller.swapTransactions();
+    controller.onEndFrame();
+    verify(rootSurfaceControl, times(1)).buildReparentTransaction(any(SurfaceControl.class));
+    verify(rootSurfaceControl, times(2))
+        .applyTransactionOnDraw(any(SurfaceControl.Transaction.class));
+
+    controller.destroyOverlaySurface();
+  }
+
+  @Test
+  @Config(
+      shadows = {
+        ShadowFlutterJNI.class,
+        ShadowPlatformTaskQueue.class,
+        ShadowRecordingTransaction.class
+      })
+  public void createOverlaySurface_succeedsWhenFlutterViewIsNullAndReparentsOnAttach() {
+    PlatformViewsController2 controller = new PlatformViewsController2();
+    controller.setRegistry(new PlatformViewRegistryImpl());
+
+    io.flutter.embedding.engine.FlutterOverlaySurface overlay = controller.createOverlaySurface();
+    assertNotNull(overlay);
+    assertNotNull(overlay.getSurface());
+
+    FlutterJNI jni = new FlutterJNI();
+    jni.attachToNative();
+    FlutterView flutterView = spy(attach(jni, controller));
+    AttachedSurfaceControl rootSurfaceControl = mock(AttachedSurfaceControl.class);
+    SurfaceControl.Transaction reparentTx = new SurfaceControl.Transaction();
+    when(rootSurfaceControl.buildReparentTransaction(any(SurfaceControl.class)))
+        .thenReturn(reparentTx);
+    doReturn(rootSurfaceControl).when(flutterView).getRootSurfaceControl();
+    controller.attachToView(flutterView);
+
+    controller.showOverlaySurface();
+    controller.swapTransactions();
+    controller.onEndFrame();
+
+    verify(rootSurfaceControl, times(1)).buildReparentTransaction(any(SurfaceControl.class));
+    verify(rootSurfaceControl, times(1))
+        .applyTransactionOnDraw(any(SurfaceControl.Transaction.class));
+  }
+
+  @Test
+  @Config(
+      shadows = {
+        ShadowFlutterJNI.class,
+        ShadowPlatformTaskQueue.class,
+        ShadowRecordingTransaction.class
+      })
+  public void overlayLifecycle_handlesDestroyAndNullReparentTransaction() {
+    PlatformViewsController2 controller = new PlatformViewsController2();
+    controller.setRegistry(new PlatformViewRegistryImpl());
+
+    FlutterJNI jni = new FlutterJNI();
+    jni.attachToNative();
+    FlutterView flutterView = spy(attach(jni, controller));
+    AttachedSurfaceControl rootSurfaceControl = mock(AttachedSurfaceControl.class);
+    // Explicitly return null from buildReparentTransaction to confirm null-safety.
+    when(rootSurfaceControl.buildReparentTransaction(any(SurfaceControl.class))).thenReturn(null);
+    doReturn(rootSurfaceControl).when(flutterView).getRootSurfaceControl();
+    controller.attachToView(flutterView);
+
+    io.flutter.embedding.engine.FlutterOverlaySurface overlay1 = controller.createOverlaySurface();
+    controller.showOverlaySurface();
+    controller.swapTransactions();
+    controller.onEndFrame();
+    verify(rootSurfaceControl, times(1))
+        .applyTransactionOnDraw(any(SurfaceControl.Transaction.class));
+
+    controller.destroyOverlaySurface();
+    io.flutter.embedding.engine.FlutterOverlaySurface overlay2 = controller.createOverlaySurface();
+    assertNotSame(overlay1.getSurface(), overlay2.getSurface());
+  }
+
   private static ByteBuffer encodeMethodCall(MethodCall call) {
     final ByteBuffer buffer = StandardMethodCodec.INSTANCE.encodeMethodCall(call);
     buffer.rewind();

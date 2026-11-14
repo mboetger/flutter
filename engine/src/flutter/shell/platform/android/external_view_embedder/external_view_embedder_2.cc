@@ -11,7 +11,6 @@
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/trace_event.h"
 #include "fml/make_copyable.h"
-#include "fml/synchronization/count_down_latch.h"
 
 namespace flutter {
 
@@ -126,66 +125,56 @@ void AndroidExternalViewEmbedder2::SubmitFlutterView(
                  view_rects           //
       );
 
-  // If there is no overlay Surface, initialize one on the platform thread. This
-  // will only be done once per application launch, as the singular overlay
-  // surface is never released.
-  if (!surface_pool_->HasLayers()) {
-    std::shared_ptr<fml::CountDownLatch> latch =
-        std::make_shared<fml::CountDownLatch>(1u);
-    task_runners_.GetPlatformTaskRunner()->PostTask(
-        fml::MakeCopyable([&, latch]() {
-          surface_pool_->GetLayer(context, android_context_, jni_facade_,
-                                  surface_factory_);
-          latch->CountDown();
-        }));
-    latch->Wait();
-  }
   surface_pool_->ResetLayers();
 
-  // Create Overlay frame. If overlay surface creation failed,
-  // all this work must be skipped.
+  // Create Overlay frame. If overlay surface creation or frame acquisition
+  // fails, skip overlay drawing rather than submitting a partial overlay frame.
   std::unique_ptr<SurfaceFrame> overlay_frame;
-  if (surface_pool_->HasLayers()) {
-    for (size_t i = 0; i < composition_order_.size(); i++) {
-      int64_t view_id = composition_order_[i];
-      std::unordered_map<int64_t, DlRect>::const_iterator overlay =
-          overlay_layers.find(view_id);
+  for (size_t i = 0; i < composition_order_.size(); i++) {
+    int64_t view_id = composition_order_[i];
+    std::unordered_map<int64_t, DlRect>::const_iterator overlay =
+        overlay_layers.find(view_id);
 
-      if (overlay == overlay_layers.end()) {
-        continue;
-      }
-      if (overlay_frame == nullptr) {
-        std::shared_ptr<OverlayLayer> layer = surface_pool_->GetLayer(
-            context, android_context_, jni_facade_, surface_factory_);
-        overlay_frame = layer->surface->AcquireFrame(frame_size_);
-        overlay_frame->Canvas()->Clear(flutter::DlColor::kTransparent());
-      }
-
-      DlCanvas* overlay_canvas = overlay_frame->Canvas();
-      int restore_count = overlay_canvas->GetSaveCount();
-      overlay_canvas->Save();
-      overlay_canvas->ClipRect(overlay->second);
-
-      // For all following platform views that would cover this overlay,
-      // emulate the effect by adding a difference clip. This makes the
-      // overlays appear as if they are under the platform view, when in
-      // reality there is only a single layer.
-      for (size_t j = i + 1; j < composition_order_.size(); j++) {
-        DlRect view_rect = GetViewRect(composition_order_[j], view_params_);
-        overlay_canvas->ClipRect(view_rect, DlClipOp::kDifference);
-      }
-
-      slices_[view_id]->render_into(overlay_canvas);
-      overlay_canvas->RestoreToCount(restore_count);
+    if (overlay == overlay_layers.end()) {
+      continue;
     }
+    if (overlay_frame == nullptr) {
+      std::shared_ptr<OverlayLayer> layer = surface_pool_->GetLayer(
+          context, android_context_, jni_facade_, surface_factory_);
+      if (layer == nullptr || layer->surface == nullptr) {
+        break;
+      }
+      overlay_frame = layer->surface->AcquireFrame(frame_size_);
+      if (overlay_frame == nullptr) {
+        break;
+      }
+      overlay_frame->Canvas()->Clear(flutter::DlColor::kTransparent());
+    }
+
+    DlCanvas* overlay_canvas = overlay_frame->Canvas();
+    int restore_count = overlay_canvas->GetSaveCount();
+    overlay_canvas->Save();
+    overlay_canvas->ClipRect(overlay->second);
+
+    // For all following platform views that would cover this overlay,
+    // emulate the effect by adding a difference clip. This makes the
+    // overlays appear as if they are under the platform view, when in
+    // reality there is only a single layer.
+    for (size_t j = i + 1; j < composition_order_.size(); j++) {
+      DlRect view_rect = GetViewRect(composition_order_[j], view_params_);
+      overlay_canvas->ClipRect(view_rect, DlClipOp::kDifference);
+    }
+
+    slices_[view_id]->render_into(overlay_canvas);
+    overlay_canvas->RestoreToCount(restore_count);
   }
-  bool overlay_layer_has_content_this_frame_;
+  bool overlay_layer_has_content_this_frame;
   if (overlay_frame != nullptr) {
     overlay_frame->set_submit_info({.frame_boundary = false});
     overlay_frame->Submit();
-    overlay_layer_has_content_this_frame_ = true;
+    overlay_layer_has_content_this_frame = true;
   } else {
-    overlay_layer_has_content_this_frame_ = false;
+    overlay_layer_has_content_this_frame = false;
   }
 
   frame->Submit();
@@ -197,8 +186,8 @@ void AndroidExternalViewEmbedder2::SubmitFlutterView(
        jni_facade = jni_facade_, device_pixel_ratio = device_pixel_ratio_,
        slices = std::move(slices_),
        views_visible_last_frame = views_visible_last_frame_,
-       overlay_layer_has_content_this_frame_]() mutable -> void {
-        if (overlay_layer_has_content_this_frame_) {
+       overlay_layer_has_content_this_frame]() mutable -> void {
+        if (overlay_layer_has_content_this_frame) {
           ShowOverlayLayerIfNeeded();
         } else {
           HideOverlayLayerIfNeeded();
@@ -293,17 +282,39 @@ void AndroidExternalViewEmbedder2::Teardown() {
 
 // |ExternalViewEmbedder|
 void AndroidExternalViewEmbedder2::DestroySurfaces() {
-  if (!surface_pool_->HasLayers()) {
+  if (!surface_pool_->HasLayers() && !surface_pool_->HasPendingDestroy()) {
     return;
   }
-  fml::AutoResetWaitableEvent latch;
-  fml::TaskRunner::RunNowOrPostTask(task_runners_.GetPlatformTaskRunner(),
-                                    [&]() {
-                                      surface_pool_->DestroyLayers(jni_facade_);
-                                      latch.Signal();
-                                    });
-  latch.Wait();
-  overlay_layer_is_shown_.store(false);
+  auto take_layers = [&]() {
+    std::vector<std::shared_ptr<OverlayLayer>> layers_to_destroy =
+        surface_pool_->TakeLayers();
+    layers_to_destroy.clear();
+  };
+  if (task_runners_.GetRasterTaskRunner()->RunsTasksOnCurrentThread()) {
+    take_layers();
+  } else {
+    fml::AutoResetWaitableEvent raster_latch;
+    task_runners_.GetRasterTaskRunner()->PostTask([&]() {
+      take_layers();
+      raster_latch.Signal();
+    });
+    raster_latch.Wait();
+  }
+
+  auto destroy_java_layers = [&]() {
+    surface_pool_->DestroyPendingLayers(jni_facade_);
+    overlay_layer_is_shown_.store(false);
+  };
+  if (task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread()) {
+    destroy_java_layers();
+  } else {
+    fml::AutoResetWaitableEvent platform_latch;
+    task_runners_.GetPlatformTaskRunner()->PostTask([&]() {
+      destroy_java_layers();
+      platform_latch.Signal();
+    });
+    platform_latch.Wait();
+  }
 }
 
 void AndroidExternalViewEmbedder2::ShowOverlayLayerIfNeeded() {
