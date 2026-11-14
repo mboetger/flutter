@@ -74,6 +74,9 @@ public class FlutterImageView extends View implements RenderSurface {
    */
   private boolean isPaused = false;
 
+  /** Whether {@link #imageReader} has already been closed. */
+  private boolean isImageReaderClosed = false;
+
   /**
    * Constructs a {@code FlutterImageView} with an {@link android.media.ImageReader} that provides
    * the Flutter UI.
@@ -91,7 +94,7 @@ public class FlutterImageView extends View implements RenderSurface {
   }
 
   @VisibleForTesting
-  /*package*/ FlutterImageView(
+  public FlutterImageView(
       @NonNull Context context, @NonNull ImageReader imageReader, SurfaceKind kind) {
     super(context, null);
     this.imageReader = imageReader;
@@ -119,7 +122,7 @@ public class FlutterImageView extends View implements RenderSurface {
 
   @SuppressLint("WrongConstant") // RGBA_8888 is a valid constant.
   @NonNull
-  private static ImageReader createImageReader(int width, int height) {
+  public static ImageReader createImageReader(int width, int height) {
     if (width <= 0) {
       logW("ImageReader width must be greater than 0, but given width=%d, set width=1", width);
       width = 1;
@@ -218,7 +221,7 @@ public class FlutterImageView extends View implements RenderSurface {
    * there's an image available in the queue.
    */
   public boolean acquireLatestImage() {
-    if (!isAttachedToFlutterRenderer) {
+    if (!isAttachedToFlutterRenderer || isImageReaderClosed) {
       return false;
     }
     // 1. `acquireLatestImage()` may return null if no new image is available.
@@ -242,10 +245,32 @@ public class FlutterImageView extends View implements RenderSurface {
    * reattaching a reused {@code FlutterImageView} to the renderer.
    */
   void drainPendingImages() {
+    if (isImageReaderClosed) {
+      return;
+    }
     final Image droppedImage = imageReader.acquireLatestImage();
     if (droppedImage != null) {
       droppedImage.close();
     }
+  }
+
+  /**
+   * Replaces the underlying {@link ImageReader} when reusing a pooled overlay view, closing the
+   * previous reader if it has not already been closed.
+   */
+  public void swapImageReader(@NonNull ImageReader newImageReader) {
+    if (imageReader == newImageReader) {
+      return;
+    }
+    detachFromRenderer();
+    closeCurrentImage();
+    currentBitmap = null;
+    if (!isImageReaderClosed) {
+      imageReader.close();
+    }
+    imageReader = newImageReader;
+    isImageReaderClosed = false;
+    setAlpha(0.0f);
   }
 
   /** Creates a new image reader with the provided size. */
@@ -253,7 +278,9 @@ public class FlutterImageView extends View implements RenderSurface {
     if (flutterRenderer == null) {
       return;
     }
-    if (width == imageReader.getWidth() && height == imageReader.getHeight()) {
+    if (!isImageReaderClosed
+        && width == imageReader.getWidth()
+        && height == imageReader.getHeight()) {
       return;
     }
 
@@ -263,20 +290,24 @@ public class FlutterImageView extends View implements RenderSurface {
     // pending Image to currentBitmap before closing its reader, while letting acquireLatestImage()
     // return false until the resized ImageReader receives a matching-size frame.
     final ImageReader oldImageReader = imageReader;
+    final boolean oldReaderWasClosed = isImageReaderClosed;
     imageReader = createImageReader(width, height);
+    isImageReaderClosed = false;
     if (isActiveBackgroundSurface()) {
       flutterRenderer.swapSurface(imageReader.getSurface());
     }
-    final Image latest = oldImageReader.acquireLatestImage();
-    if (latest != null && latest != currentImage) {
-      closeCurrentImage();
-      currentImage = latest;
+    if (!oldReaderWasClosed) {
+      final Image latest = oldImageReader.acquireLatestImage();
+      if (latest != null && latest != currentImage) {
+        closeCurrentImage();
+        currentImage = latest;
+      }
+      if (currentImage != null) {
+        updateCurrentBitmap();
+        closeCurrentImage();
+      }
+      oldImageReader.close();
     }
-    if (currentImage != null) {
-      updateCurrentBitmap();
-      closeCurrentImage();
-    }
-    oldImageReader.close();
   }
 
   /**
@@ -286,7 +317,10 @@ public class FlutterImageView extends View implements RenderSurface {
    * IllegalStateException}.
    */
   public void closeImageReader() {
-    imageReader.close();
+    if (!isImageReaderClosed) {
+      imageReader.close();
+      isImageReaderClosed = true;
+    }
   }
 
   @Override
