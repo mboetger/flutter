@@ -45,14 +45,13 @@ struct OverlayLayer {
 
 class SurfacePool {
  public:
-  explicit SurfacePool(bool use_new_surface_methods);
+  SurfacePool();
 
   ~SurfacePool();
 
-  // Gets a layer from the pool if available, or allocates a new one. If
-  // |TakeLayers| left stale Java overlay surfaces pending destruction, flushes
-  // them first via `jni_facade` (requiring the platform thread whenever
-  // |HasPendingDestroy| is true or a new/resized HC layer must be created).
+  // Gets a layer from the pool if available, or allocates a new one via
+  // `createOverlaySurface2()`. If a previous recycle left stale Java overlay
+  // surfaces pending destruction, flushes them first via `jni_facade`.
   // Finally, it marks the layer as used. That is, it increments
   // `available_layer_index_`.
   std::shared_ptr<OverlayLayer> GetLayer(
@@ -68,30 +67,18 @@ class SurfacePool {
   // Marks the layers in the pool as available for reuse.
   void RecycleLayers();
 
-  // Destroys all the layers in the pool and any taken layers still awaiting
-  // destruction on the platform thread. Must be called on the platform thread
-  // when |HasLayers| or |HasPendingDestroy| is true.
+  // Destroys all the layers in the pool and any orphaned Java overlay surface
+  // still awaiting destruction on the platform thread. Must be called on the
+  // platform thread when |HasLayers| or |HasPendingDestroy| is true.
   void DestroyLayers(const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade);
 
-  // Destroys any Java overlay surfaces whose layers were removed by
-  // |TakeLayers| if they have not already been destroyed. Must be called on the
-  // platform thread.
-  void DestroyPendingLayers(
-      const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade);
-
-  // Removes all the layers from the pool and returns them without calling into
-  // Java, marking their Java overlay surfaces as pending destruction on the
-  // platform thread (via |DestroyPendingLayers|, |GetLayer|, or
-  // |DestroyLayers|).
-  std::vector<std::shared_ptr<OverlayLayer>> TakeLayers();
-
-  // Returns true if |TakeLayers| removed layers whose Java overlay surfaces
-  // have not yet been destroyed on the platform thread.
+  // Returns true if a failed layer recycle left a Java overlay surface that
+  // has not yet been destroyed on the platform thread.
   bool HasPendingDestroy();
 
   // Sets the frame size used by the layers in the pool.
-  // If the current layers in the pool have a different frame size,
-  // then they are deallocated as soon as |GetLayer| is called.
+  // Existing persistent overlay layers are resized in place on the next
+  // |GetLayer| call.
   void SetFrameSize(DlISize frame_size);
 
   // Returns true if the current pool has layers in use.
@@ -128,7 +115,6 @@ class SurfacePool {
 
   // Used to guard public methods.
   std::mutex mutex_;
-  bool use_new_surface_methods_ = false;
   bool pending_java_destroy_ = false;
   bool has_allocated_java_layers_ = false;
 

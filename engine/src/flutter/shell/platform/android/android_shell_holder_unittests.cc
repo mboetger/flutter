@@ -82,28 +82,6 @@ class MockPlatformViewAndroidJNI : public PlatformViewAndroidJNI {
               HardwareBufferClose,
               (JavaLocalRef hardware_buffer),
               (override));
-  MOCK_METHOD(void,
-              FlutterViewOnDisplayPlatformView,
-              (int view_id,
-               int x,
-               int y,
-               int width,
-               int height,
-               int viewWidth,
-               int viewHeight,
-               MutatorsStack mutators_stack),
-              (override));
-  MOCK_METHOD(void,
-              FlutterViewDisplayOverlaySurface,
-              (int surface_id, int x, int y, int width, int height),
-              (override));
-  MOCK_METHOD(void, FlutterViewBeginFrame, (), (override));
-  MOCK_METHOD(void, FlutterViewEndFrame, (), (override));
-  MOCK_METHOD(std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>,
-              FlutterViewCreateOverlaySurface,
-              (),
-              (override));
-  MOCK_METHOD(void, FlutterViewDestroyOverlaySurfaces, (), (override));
   MOCK_METHOD(
       std::unique_ptr<PlatformViewAndroidJNI::HybridImageReaderMetadata>,
       CreateHybridImageReader,

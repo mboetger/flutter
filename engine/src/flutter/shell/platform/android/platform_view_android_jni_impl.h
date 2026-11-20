@@ -90,30 +90,6 @@ class PlatformViewAndroidJNIImpl final : public PlatformViewAndroidJNI {
 
   void HardwareBufferClose(JavaLocalRef hardware_buffer) override;
 
-  void FlutterViewOnDisplayPlatformView(int view_id,
-                                        int x,
-                                        int y,
-                                        int width,
-                                        int height,
-                                        int viewWidth,
-                                        int viewHeight,
-                                        MutatorsStack mutators_stack) override;
-
-  void FlutterViewDisplayOverlaySurface(int surface_id,
-                                        int x,
-                                        int y,
-                                        int width,
-                                        int height) override;
-
-  void FlutterViewBeginFrame() override;
-
-  void FlutterViewEndFrame() override;
-
-  std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
-  FlutterViewCreateOverlaySurface() override;
-
-  void FlutterViewDestroyOverlaySurfaces() override;
-
   std::unique_ptr<PlatformViewAndroidJNI::HybridImageReaderMetadata>
   CreateHybridImageReader(int32_t width, int32_t height) override;
 

@@ -275,49 +275,6 @@ class PlatformViewAndroidJNI {
   ///
   virtual void HardwareBufferClose(JavaLocalRef hardware_buffer) = 0;
 
-  //----------------------------------------------------------------------------
-  /// @brief      Positions and sizes a platform view if using hybrid
-  ///             composition.
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual void FlutterViewOnDisplayPlatformView(
-      int view_id,
-      int x,
-      int y,
-      int width,
-      int height,
-      int viewWidth,
-      int viewHeight,
-      MutatorsStack mutators_stack) = 0;
-
-  //----------------------------------------------------------------------------
-  /// @brief      Positions and sizes an overlay surface in hybrid composition.
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual void FlutterViewDisplayOverlaySurface(int surface_id,
-                                                int x,
-                                                int y,
-                                                int width,
-                                                int height) = 0;
-
-  //----------------------------------------------------------------------------
-  /// @brief      Initiates a frame if using hybrid composition.
-  ///
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual void FlutterViewBeginFrame() = 0;
-
-  //----------------------------------------------------------------------------
-  /// @brief      Indicates that the current frame ended.
-  ///             It's used to clean up state.
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual void FlutterViewEndFrame() = 0;
-
   //------------------------------------------------------------------------------
   /// The metadata returned from Java which is converted into an |OverlayLayer|
   /// by |SurfacePool|.
@@ -335,22 +292,6 @@ class PlatformViewAndroidJNI {
     // which is the C counterpart of the `android.view.Surface` object in Java.
     const fml::RefPtr<AndroidNativeWindow> window;
   };
-
-  //----------------------------------------------------------------------------
-  /// @brief      Instantiates an overlay surface in hybrid composition and
-  ///             provides the necessary metadata to operate the surface in C.
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata>
-  FlutterViewCreateOverlaySurface() = 0;
-
-  //----------------------------------------------------------------------------
-  /// @brief      Destroys the overlay surfaces.
-  ///
-  /// @note       Must be called from the platform thread.
-  ///
-  virtual void FlutterViewDestroyOverlaySurfaces() = 0;
 
   //----------------------------------------------------------------------------
   /// Metadata returned when allocating a `HybridImageReader` for Frame-Packet

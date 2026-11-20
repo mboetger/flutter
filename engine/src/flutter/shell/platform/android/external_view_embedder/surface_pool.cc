@@ -19,8 +19,7 @@ OverlayLayer::OverlayLayer(int id,
 
 OverlayLayer::~OverlayLayer() = default;
 
-SurfacePool::SurfacePool(bool use_new_surface_methods)
-    : use_new_surface_methods_(use_new_surface_methods) {}
+SurfacePool::SurfacePool() = default;
 
 SurfacePool::~SurfacePool() = default;
 
@@ -32,24 +31,16 @@ std::shared_ptr<OverlayLayer> SurfacePool::GetLayer(
   std::lock_guard lock(mutex_);
   if (pending_java_destroy_ ||
       (layers_.empty() && has_allocated_java_layers_)) {
-    // Flush any Java overlay surfaces orphaned by an earlier |TakeLayers| call
-    // or failed layer allocation before allocating a new overlay surface.
-    // During a dynamic thread merge, an earlier-queued raster task can run on
-    // the platform thread ahead of the cleanup task posted by
-    // |ReleaseOverlayLayers|.
+    // Flush any Java overlay surface orphaned by a failed layer allocation or
+    // recycle before allocating a new overlay surface.
     DestroyJavaLayersLocked(jni_facade);
   }
   if (requested_frame_size_ != current_frame_size_) {
-    if (use_new_surface_methods_) {
-      // The overlay surface is persistent, so resize it in place. Nothing else
-      // resizes the swapchain: |Surface::AcquireFrame| ignores the size it is
-      // handed.
-      for (const std::shared_ptr<OverlayLayer>& layer : layers_) {
-        layer->android_surface->OnScreenSurfaceResize(requested_frame_size_);
-      }
-    } else {
-      // Destroy current layers in the pool if the frame size has changed.
-      DestroyLayersLocked(jni_facade);
+    // The overlay surface is persistent, so resize it in place. Nothing else
+    // resizes the swapchain: |Surface::AcquireFrame| ignores the size it is
+    // handed.
+    for (const std::shared_ptr<OverlayLayer>& layer : layers_) {
+      layer->android_surface->OnScreenSurfaceResize(requested_frame_size_);
     }
   }
   intptr_t gr_context_key = reinterpret_cast<intptr_t>(gr_context);
@@ -65,9 +56,7 @@ std::shared_ptr<OverlayLayer> SurfacePool::GetLayer(
     }
 
     std::unique_ptr<PlatformViewAndroidJNI::OverlayMetadata> java_metadata =
-        use_new_surface_methods_
-            ? jni_facade->createOverlaySurface2()
-            : jni_facade->FlutterViewCreateOverlaySurface();
+        jni_facade->createOverlaySurface2();
     if (!java_metadata) {
       FML_LOG(ERROR) << "Could not create Java overlay surface.";
       return nullptr;
@@ -156,27 +145,6 @@ void SurfacePool::DestroyLayers(
   DestroyLayersLocked(jni_facade);
 }
 
-void SurfacePool::DestroyPendingLayers(
-    const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
-  std::lock_guard lock(mutex_);
-  if (!pending_java_destroy_ &&
-      !(layers_.empty() && has_allocated_java_layers_)) {
-    return;
-  }
-  DestroyJavaLayersLocked(jni_facade);
-}
-
-std::vector<std::shared_ptr<OverlayLayer>> SurfacePool::TakeLayers() {
-  std::lock_guard lock(mutex_);
-  std::vector<std::shared_ptr<OverlayLayer>> layers;
-  layers.swap(layers_);
-  available_layer_index_ = 0;
-  if (!layers.empty() || has_allocated_java_layers_) {
-    pending_java_destroy_ = true;
-  }
-  return layers;
-}
-
 bool SurfacePool::HasPendingDestroy() {
   std::lock_guard lock(mutex_);
   return pending_java_destroy_ ||
@@ -198,11 +166,7 @@ void SurfacePool::DestroyJavaLayersLocked(
     const std::shared_ptr<PlatformViewAndroidJNI>& jni_facade) {
   pending_java_destroy_ = false;
   has_allocated_java_layers_ = false;
-  if (use_new_surface_methods_) {
-    jni_facade->destroyOverlaySurface2();
-  } else {
-    jni_facade->FlutterViewDestroyOverlaySurfaces();
-  }
+  jni_facade->destroyOverlaySurface2();
 }
 
 std::vector<std::shared_ptr<OverlayLayer>> SurfacePool::GetUnusedLayers() {

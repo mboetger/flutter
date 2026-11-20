@@ -1335,59 +1335,6 @@ public class FlutterJNI {
 
   @SuppressWarnings("unused")
   @UiThread
-  public void onDisplayOverlaySurface(int id, int x, int y, int width, int height) {
-    ensureRunningOnMainThread();
-    if (platformViewsController == null) {
-      throw new RuntimeException(
-          "platformViewsController must be set before attempting to position an overlay surface");
-    }
-    platformViewsController.onDisplayOverlaySurface(id, x, y, width, height);
-  }
-
-  @SuppressWarnings("unused")
-  @UiThread
-  public void onBeginFrame() {
-    ensureRunningOnMainThread();
-    if (platformViewsController == null) {
-      throw new RuntimeException(
-          "platformViewsController must be set before attempting to begin the frame");
-    }
-    platformViewsController.onBeginFrame();
-  }
-
-  @SuppressWarnings("unused")
-  @UiThread
-  public void onEndFrame() {
-    ensureRunningOnMainThread();
-    if (platformViewsController == null) {
-      throw new RuntimeException(
-          "platformViewsController must be set before attempting to end the frame");
-    }
-    platformViewsController.onEndFrame();
-  }
-
-  @SuppressWarnings("unused")
-  @UiThread
-  public FlutterOverlaySurface createOverlaySurface() {
-    ensureRunningOnMainThread();
-    if (platformViewsController == null) {
-      throw new RuntimeException(
-          "platformViewsController must be set before attempting to position an overlay surface");
-    }
-    return platformViewsController.createOverlaySurface();
-  }
-
-  @SuppressWarnings("unused")
-  @UiThread
-  public void destroyOverlaySurfaces() {
-    ensureRunningOnMainThread();
-    if (platformViewsController != null) {
-      platformViewsController.destroyOverlaySurfaces();
-    }
-  }
-
-  @SuppressWarnings("unused")
-  @UiThread
   public void onBeginHybridFrame(
       @Nullable Image backgroundImage, @Nullable HybridImageReader backgroundReader) {
     ensureRunningOnMainThread();
@@ -1794,26 +1741,6 @@ public class FlutterJNI {
       int loadingUnitId, @NonNull String error, boolean isTransient);
 
   // ----- End Deferred Components Support ----
-
-  // @SuppressWarnings("unused")
-  @UiThread
-  public void onDisplayPlatformView(
-      int viewId,
-      int x,
-      int y,
-      int width,
-      int height,
-      int viewWidth,
-      int viewHeight,
-      FlutterMutatorsStack mutatorsStack) {
-    ensureRunningOnMainThread();
-    if (platformViewsController == null) {
-      throw new RuntimeException(
-          "platformViewsController must be set before attempting to position a platform view");
-    }
-    platformViewsController.onDisplayPlatformView(
-        viewId, x, y, width, height, viewWidth, viewHeight, mutatorsStack);
-  }
 
   @UiThread
   public Bitmap getBitmap() {

@@ -417,8 +417,7 @@ class NativeDriverSupportPlugin :
 
     @SuppressLint("VisibleForTesting")
     private fun getOverlayLayerViewsSize(engine: FlutterEngine): Int =
-        engine.platformViewsController.overlayLayerViews.size() +
-            engine.platformViewsController.hybridOverlayViews.size()
+        engine.platformViewsController.hybridOverlayViews.size()
 
     private fun findFlutterView(root: View): FlutterView? {
         if (overrideFlutterView != null) {

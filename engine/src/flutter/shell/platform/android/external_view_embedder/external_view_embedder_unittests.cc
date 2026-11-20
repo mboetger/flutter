@@ -449,17 +449,6 @@ TEST(AndroidExternalViewEmbedder,
   FramePacketTestHarness h;
   const DlISize frame_size(kDefaultFrameExtentPx, kDefaultFrameExtentPx);
 
-  // Never invoke legacy merged-HC JNI methods.
-  EXPECT_CALL(*h.jni_mock, FlutterViewBeginFrame()).Times(0);
-  EXPECT_CALL(*h.jni_mock, FlutterViewEndFrame()).Times(0);
-  EXPECT_CALL(*h.jni_mock, FlutterViewCreateOverlaySurface()).Times(0);
-  EXPECT_CALL(*h.jni_mock,
-              FlutterViewOnDisplayPlatformView(_, _, _, _, _, _, _, _))
-      .Times(0);
-  EXPECT_CALL(*h.jni_mock, FlutterViewDisplayOverlaySurface(_, _, _, _, _))
-      .Times(0);
-  EXPECT_CALL(*h.jni_mock, FlutterViewDestroyOverlaySurfaces()).Times(0);
-
   std::vector<std::string> raster_order;
   int layer_index = 0;
   h.surface_factory = std::make_shared<TestAndroidSurfaceFactory>([&]() {

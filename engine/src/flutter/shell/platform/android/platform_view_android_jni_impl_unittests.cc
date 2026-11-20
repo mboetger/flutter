@@ -536,7 +536,7 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   constexpr DlScalar kCornerRadius = 3.0f;
   constexpr int kTestViewId = 1;
   constexpr int kTestDimension = 100;
-  // 4 mutator pushes + 1 final onDisplayPlatformView call.
+  // 4 mutator pushes + 1 final onDisplayHybridPlatformView call.
   constexpr int kExpectedVoidMethodCalls = 5;
 
   MutatorsStack stack;
@@ -547,7 +547,7 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   stack.PushClipRSE(DlRoundSuperellipse::MakeRectRadius(
       DlRect::MakeLTRB(0, 0, kRoundedExtent, kRoundedExtent), kCornerRadius));
 
-  android_jni.FlutterViewOnDisplayPlatformView(
+  android_jni.FlutterViewOnDisplayHybridPlatformView(
       kTestViewId, 0, 0, kTestDimension, kTestDimension, kTestDimension,
       kTestDimension, stack);
 
@@ -654,46 +654,40 @@ TEST_F(PlatformViewAndroidJNIImplTest,
         return nullptr;
       });
 
-  // Exercise both Classic HC (variant 0) and HCPP (variant 1) overlay creation.
-  constexpr int kOverlayMethodVariantCount = 2;
   constexpr jint kBaseOverlaySurfaceId = 42;
   constexpr int kExpectedCallObjectCallsPerOverlay = 2;
 
-  for (int variant = 0; variant < kOverlayMethodVariantCount; ++variant) {
-    from_surface_calls = 0;
-    last_surface_arg = nullptr;
-    jobject overlay_obj = nullptr;
-    jobject surface_obj = nullptr;
+  from_surface_calls = 0;
+  last_surface_arg = nullptr;
+  jobject overlay_obj = nullptr;
+  jobject surface_obj = nullptr;
 
-    EXPECT_CALL(mock_env, CallObjectMethodV(_, _, _))
-        .Times(kExpectedCallObjectCallsPerOverlay)
-        .WillOnce([&](jobject obj, jmethodID, va_list) -> jobject {
-          EXPECT_EQ(obj, kFlutterJniObj);
-          overlay_obj = tracker.AllocateNew<jobject>();
-          return overlay_obj;
-        })
-        .WillOnce([&](jobject obj, jmethodID, va_list) -> jobject {
-          EXPECT_EQ(obj, overlay_obj);
-          surface_obj = tracker.AllocateNew<jobject>();
-          return surface_obj;
-        });
-    EXPECT_CALL(mock_env, CallIntMethodV(_, _, _))
-        .WillOnce([&](jobject obj, jmethodID, va_list) -> jint {
-          EXPECT_EQ(obj, overlay_obj);
-          return kBaseOverlaySurfaceId + variant;
-        });
+  EXPECT_CALL(mock_env, CallObjectMethodV(_, _, _))
+      .Times(kExpectedCallObjectCallsPerOverlay)
+      .WillOnce([&](jobject obj, jmethodID, va_list) -> jobject {
+        EXPECT_EQ(obj, kFlutterJniObj);
+        overlay_obj = tracker.AllocateNew<jobject>();
+        return overlay_obj;
+      })
+      .WillOnce([&](jobject obj, jmethodID, va_list) -> jobject {
+        EXPECT_EQ(obj, overlay_obj);
+        surface_obj = tracker.AllocateNew<jobject>();
+        return surface_obj;
+      });
+  EXPECT_CALL(mock_env, CallIntMethodV(_, _, _))
+      .WillOnce([&](jobject obj, jmethodID, va_list) -> jint {
+        EXPECT_EQ(obj, overlay_obj);
+        return kBaseOverlaySurfaceId;
+      });
 
-    auto metadata = (variant == 0)
-                        ? android_jni.FlutterViewCreateOverlaySurface()
-                        : android_jni.createOverlaySurface2();
-    ASSERT_NE(metadata, nullptr);
-    EXPECT_EQ(metadata->id, kBaseOverlaySurfaceId + variant);
-    EXPECT_EQ(metadata->window.get(), nullptr);
-    EXPECT_EQ(from_surface_calls, 1);
-    EXPECT_EQ(last_surface_arg, surface_obj);
-    EXPECT_EQ(tracker.frames.size(), 1u);
-    EXPECT_EQ(tracker.ActiveCount(), 0u);
-  }
+  auto metadata = android_jni.createOverlaySurface2();
+  ASSERT_NE(metadata, nullptr);
+  EXPECT_EQ(metadata->id, kBaseOverlaySurfaceId);
+  EXPECT_EQ(metadata->window.get(), nullptr);
+  EXPECT_EQ(from_surface_calls, 1);
+  EXPECT_EQ(last_surface_arg, surface_obj);
+  EXPECT_EQ(tracker.frames.size(), 1u);
+  EXPECT_EQ(tracker.ActiveCount(), 0u);
 }
 
 TEST_F(PlatformViewAndroidJNIImplTest,
@@ -809,18 +803,13 @@ TEST_F(PlatformViewAndroidJNIImplTest,
         return nullptr;
       });
 
-  // Exercise both Classic HC (variant 0) and HCPP (variant 1).
-  constexpr int kOverlayMethodVariantCount = 2;
   constexpr jint kTestOverlayId = 17;
-  // Subcase 3 & 4 each invoke createOverlaySurface[2] + overlay.getSurface().
+  // Subcase 3 & 4 each invoke createOverlaySurface2 + overlay.getSurface().
   constexpr int kExpectedObjectCallsWhenOverlayCreated = 2;
 
-  for (int variant = 0; variant < kOverlayMethodVariantCount; ++variant) {
-    auto call_create = [&]() {
-      return (variant == 0) ? android_jni.FlutterViewCreateOverlaySurface()
-                            : android_jni.createOverlaySurface2();
-    };
+  auto call_create = [&]() { return android_jni.createOverlaySurface2(); };
 
+  {
     // Subcase 1: createOverlaySurface[2] throws -> clears exception, skips
     // getId / getSurface / ANativeWindow_fromSurface, returns nullptr.
     from_surface_calls = 0;
@@ -936,8 +925,9 @@ TEST_F(PlatformViewAndroidJNIImplTest,
   constexpr int kTestViewId = 3;
   constexpr int kTestDimension = 80;
 
-  // Subcase 1: FlutterViewOnDisplayPlatformView bails out immediately when
-  // NewFloatArray throws (zero SetFloatArrayRegion or CallVoidMethod calls).
+  // Subcase 1: FlutterViewOnDisplayHybridPlatformView bails out immediately
+  // when NewFloatArray throws (zero SetFloatArrayRegion or CallVoidMethod
+  // calls).
   {
     MutatorsStack stack;
     stack.PushTransform(
@@ -955,7 +945,7 @@ TEST_F(PlatformViewAndroidJNIImplTest,
     EXPECT_CALL(mock_env, SetFloatArrayRegion(_, _, _, _)).Times(0);
     EXPECT_CALL(mock_env, CallVoidMethodV(_, kRegisteredMethod, _)).Times(0);
 
-    android_jni.FlutterViewOnDisplayPlatformView(
+    android_jni.FlutterViewOnDisplayHybridPlatformView(
         kTestViewId, 0, 0, kTestDimension, kTestDimension, kTestDimension,
         kTestDimension, stack);
 
